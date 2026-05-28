@@ -1,8 +1,8 @@
-TOOLS_DIR := ../../tools
+TOOLS_DIR ?= ../../tools
 include $(TOOLS_DIR)/mk_utils.mk
 
 VHDS :=
-VHDS += ../cpu/cpu2j0_pkg.vhd
+VHDS += ../cpu2j0_pkg.vhd
 VHDS += ../../targets/data_bus_pkg.vhd
 # VHDS += ../../lib/reg_file_struct/bist_pkg.vhd
 

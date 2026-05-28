@@ -1,5 +1,8 @@
+TOOLS_DIR ?= ../../tools
+include $(TOOLS_DIR)/mk_utils.mk
+
 VHDS :=
-VHDS += ../cpu/cpu2j0_pkg.vhd
+VHDS += ../cpu2j0_pkg.vhd
 VHDS += ../../targets/data_bus_pkg.vhd
 
 VHDLS := VHDS
@@ -22,9 +25,6 @@ dcache_tb.ghw: $(VHDL_TOPS)
 
 %.vhm: %.vhmh
 	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -I. $< -o $@
-
-TOOLS_DIR := $(firstword $(wildcard ../mcu_lib/tools) $(wildcard ../../tools))
-include $(TOOLS_DIR)/ghdl.mk
 
 clean:
 	rm -f *.cf *.o $(VHDL_TOPS) *_tap *.ghw

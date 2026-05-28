@@ -1,0 +1,31 @@
+[defaults]
+pc = "INC"
+if_issue = "NO"
+sr = "HOLD"
+
+[[instr]]
+name = "CLRT"
+format = "0"
+opcode = "0000 0000 0000 1000"
+operation = "0 -> T"
+slots = [
+  { sr = "T=0" },
+]
+
+[[instr]]
+name = "ADD Rm, Rn"
+format = "nm"
+opcode = "0011 nnnn mmmm 1100"
+operation = "Rn + Rm -> Rn"
+slots = [
+  { xbus = "Rn", ybus = "Rm" },
+]
+
+[[instr]]
+name = "MOVT Rn"
+format = "n"
+opcode = "0000 nnnn 0010 1001"
+operation = "T -> Rn"
+slots = [
+  { zbus = "Rn" },
+]

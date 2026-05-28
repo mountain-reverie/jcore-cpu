@@ -103,21 +103,23 @@ architecture arch of decode_core is
   end;
 begin
 
-  decode_core : process(this,next_id_stall_a,ilevel_cap,dispatch,maskint_next,delay_jump,event_i,next_op)
-    register this when clk='1' and slot='1' and clk'event reset when rst='1';
+  decode_core : process(this,next_id_stall_a,ilevel_cap,dispatch,maskint_next,delay_jump,event_i,next_op,slot)
+    register this when clk='1' and clk'event reset when rst='1';
   begin
-    this.maskint := maskint_next;
-    if ilevel_cap = '1' then
-      this.ilevel := event_i.lvl;
-    end if;
-    if this.id_stall = '0' and this.instr_seq_zero = '1' then
-      this.op := next_op;
-    end if;
-    this.id_stall := next_id_stall_a;
-    if next_id_stall_a = '0' then
-      this.delay_slot := delay_jump;
-      this.instr_seq_zero := dispatch;
-      this.op.addr := std_logic_vector(unsigned(this.op.addr) + 1);
+    if slot='1' then
+      this.maskint := maskint_next;
+      if ilevel_cap = '1' then
+        this.ilevel := event_i.lvl;
+      end if;
+      if this.id_stall = '0' and this.instr_seq_zero = '1' then
+        this.op := next_op;
+      end if;
+      this.id_stall := next_id_stall_a;
+      if next_id_stall_a = '0' then
+        this.delay_slot := delay_jump;
+        this.instr_seq_zero := dispatch;
+        this.op.addr := std_logic_vector(unsigned(this.op.addr) + 1);
+      end if;
     end if;
   end process;
 

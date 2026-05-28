@@ -9,6 +9,12 @@
 # `-e cpu` leaves the sub-units as unbound black boxes and misses the
 # defect).
 #
+# When yosys + the ghdl plugin are available, it additionally maps each
+# configuration to real ECP5 primitives with `synth_ecp5`, catching
+# technology-mapping problems (unsupported primitives, RAM/DFF inference)
+# that the legality check does not. This step is skipped if yosys or the
+# plugin is absent.
+#
 # Scope: the synthesizable CPU core hierarchy (cpu -> decode, datapath,
 # mult, register files). The sim-only `decode_table_simple` (cpu_decode_simple)
 # and all testbenches are excluded.
@@ -95,9 +101,45 @@ synth_one() {
     echo "    PASS [$cfg]"
 }
 
+# 4. ECP5 technology mapping (yosys + ghdl-yosys-plugin). Maps the full cpu
+#    to real ECP5 primitives (LUT4 / TRELLIS_FF / CCU2C / distributed RAM),
+#    catching tech-mapping issues a legality check cannot. Uses -abc2 rather
+#    than the default abc9: abc9 hard-asserts on a pre-existing combinational
+#    loop (a slot-gated path through the two-bank register file) that classic
+#    abc, generic yosys synth, and the vendor (Xilinx) flow all tolerate.
+#    -abc2 still performs full ECP5 mapping. Runs only when yosys + the ghdl
+#    plugin are present (always in CI); skipped otherwise.
+ecp5_supported() {
+    command -v yosys >/dev/null 2>&1 && yosys -m ghdl -p 'help synth_ecp5' >/dev/null 2>&1
+}
+
+ecp5_one() {
+    local cfg="$1"
+    local ework log
+    ework="$WORK/ecp5_$cfg"
+    mkdir -p "$ework"
+    log="$WORK/$cfg.ecp5.log"
+    echo "==> synth_ecp5 $cfg"
+    if ! yosys -m ghdl -p "ghdl ${GHDL_FLAGS[*]} --workdir=$ework ${FILES[*]} -e $cfg; synth_ecp5 -abc2 -top cpu; stat" >"$log" 2>&1; then
+        echo "    FAIL [$cfg]: synth_ecp5 failed" >&2
+        grep -iE 'error|loop|assert' "$log" | head -20 | sed 's/^/         /' >&2
+        return 1
+    fi
+    local cells
+    cells=$(grep -E 'Number of cells:' "$log" | tail -1 | awk '{print $NF}')
+    echo "    PASS [$cfg] (ECP5 cells: ${cells:-?})"
+}
+
 rc=0
 synth_one cpu_decode_direct_fpga || rc=1
 synth_one cpu_decode_rom_fpga    || rc=1
+
+if ecp5_supported; then
+    ecp5_one cpu_decode_direct_fpga || rc=1
+    ecp5_one cpu_decode_rom_fpga    || rc=1
+else
+    echo "==> synth_ecp5: SKIP (yosys + ghdl plugin not available)"
+fi
 
 if [ $rc -ne 0 ]; then
     echo "synth-check: FAILED" >&2

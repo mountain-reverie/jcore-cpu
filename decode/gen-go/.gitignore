@@ -1,0 +1,11 @@
+# Generator output landing in the working directory if -o is omitted or
+# set to '.' instead of the canonical decode/. These belong in decode/,
+# not here.
+*.vhd
+*.c
+
+# Go build artifacts
+*.exe
+*.test
+*.out
+coverage.out

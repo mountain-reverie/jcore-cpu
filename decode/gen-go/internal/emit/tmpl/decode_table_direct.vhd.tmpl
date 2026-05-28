@@ -1,0 +1,64 @@
+{{ template "header" . -}}
+architecture direct_logic of decode_table is
+    signal mac_busy : mac_busy_t;
+    signal imms_12_1 : std_logic_vector(31 downto 0);
+    signal imms_8_0 : std_logic_vector(31 downto 0);
+    signal imms_8_1 : std_logic_vector(31 downto 0);
+{{- range (sortCondSigs .Direct.CondSigs) }}
+    signal {{ .Name }} : std_logic_vector({{ sub1 .Width }} downto 0);
+{{- end }}
+{{- range .Direct.ImpBits }}
+    signal {{ .Name }} : std_logic;
+{{- end }}
+    signal p : std_logic_vector(0 downto 0);
+begin
+    -- Sign extend parts of opcode
+    process(op)
+    begin
+        -- Sign extend 8 right-most bits
+        for i in 8 to 31 loop
+            imms_8_0(i) <= op.code(7);
+        end loop;
+        imms_8_0(7 downto 0) <= op.code(7 downto 0);
+        -- Sign extend 8 right-most bits shifted by 1
+        for i in 9 to 31 loop
+            imms_8_1(i) <= op.code(7);
+        end loop;
+        imms_8_1(8 downto 1) <= op.code(7 downto 0);
+        imms_8_1(0) <= '0';
+        -- Sign extend 12 right-most bits shifted by 1
+        for i in 13 to 31 loop
+            imms_12_1(i) <= op.code(11);
+        end loop;
+        imms_12_1(12 downto 1) <= op.code(11 downto 0);
+        imms_12_1(0) <= '0';
+    end process;
+    -- Mac busy muxes
+    with mac_busy select
+        ex.mac_busy <=
+            not next_id_stall when EX_NOT_STALL,
+            '1' when EX_BUSY,
+            '0' when others;
+    with mac_busy select
+        wb.mac_busy <=
+            not next_id_stall when WB_NOT_STALL,
+            '1' when WB_BUSY,
+            '0' when others;
+    p <= "0" when op.plane = NORMAL_INSTR else "1";
+{{- range .Direct.ImpBits }}
+    {{ .Name }} <= {{ .Expr }};
+{{- end }}
+{{- range .Direct.OutputExprs }}
+{{- if .IsMux }}
+    {{ .Mux.CondName }} <= {{ joinBits .Mux.Bits }};
+    with {{ .Mux.CondName }} select
+        {{ .LHS }} <=
+{{- range .Mux.Arms }}
+            {{ .Value }} when "{{ index .Codes 0 }}",
+{{- end }}
+            {{ .Mux.Default }} when others;
+{{- else }}
+    {{ .Expr }}
+{{- end }}
+{{- end }}
+end;

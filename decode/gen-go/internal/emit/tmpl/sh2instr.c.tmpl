@@ -1,0 +1,31 @@
+#include "sh2instr.h"
+#include <stdio.h>
+{{- range .Lines }}
+static int line{{ .Line }}(char *str, size_t size, uint16_t instr) {
+{{ if .Instructions -}}
+{{- range $i, $in := .Instructions -}}
+{{ if $i }} else if{{ else }}if{{ end }} ((instr & {{ hex16 $in.Mask }}) == {{ hex16 $in.Match }}) {
+  return snprintf(str, size, "{{ formatString $in.Name $in.Format }}"{{ registerArgs $in }});
+}{{- end }} else {
+  return -1;
+}
+{{ else -}}
+return -1;
+{{ end -}}
+}
+{{ end }}
+typedef int (*linefn)(char *, size_t, uint16_t);
+linefn line_fns[] = {
+  {{ range $i, $lg := .Lines }}{{ if $i }}, {{ end }}line{{ $lg.Line }}{{ end }}
+};
+int op_name(char *str, size_t size, uint16_t instr) {
+  snprintf(str, size, "ERR");
+  linefn l = line_fns[(instr >> 12) & 0xF];
+  return l(str, size, instr);
+}
+
+void print_instr(uint16_t instr) {
+  char buf[256];
+  op_name(buf, sizeof(buf), instr);
+  printf("%s", buf);
+}

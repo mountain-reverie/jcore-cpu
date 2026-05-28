@@ -1,0 +1,49 @@
+{{ template "header" . -}}
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use work.decode_pack.all;
+use work.cpu2j0_components_pack.all;
+use work.mult_pkg.all;
+package body decode_pack is
+    function predecode_rom_addr (code : std_logic_vector(15 downto 0)) return std_logic_vector is
+        variable addr : std_logic_vector(7 downto 0);
+    begin
+        case code(15 downto 12) is
+{{- range .Body.Predecode.Arms }}
+            when x"{{ printf "%X" .TopNibble }}" =>
+{{- range .ListComment }}
+                -- {{ . }}
+{{- end }}
+{{- if .LiteralAddr }}
+                addr := {{ .LiteralAddr }};
+{{- else }}
+{{- range .BitAssigns }}
+                addr({{ .Bit }}) := {{ .Expr }};
+{{- end }}
+{{- end }}
+{{ end }}
+            when others =>
+                addr := x"ff";
+
+        end case;
+        return addr;
+    end;
+    function check_illegal_delay_slot (code : std_logic_vector(15 downto 0)) return std_logic is
+    begin
+        if {{ .Body.IllegalSlot }} then
+            return '1';
+        else
+            return '0';
+        end if;
+    end;
+    function check_illegal_instruction (code : std_logic_vector(15 downto 0)) return std_logic is
+    begin
+        -- TODO: Improve detection of illegal instructions
+        if {{ .Body.IllegalInstr }} then
+            return '1';
+        else
+            return '0';
+        end if;
+    end;
+end;

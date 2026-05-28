@@ -1,0 +1,123 @@
+{{ template "header" . -}}
+architecture simple_logic of decode_table is
+    signal imm_enum : immval_t;
+    signal mac_busy : mac_busy_t;
+    signal imms_12_1 : std_logic_vector(31 downto 0);
+    signal imms_8_0 : std_logic_vector(31 downto 0);
+    signal imms_8_1 : std_logic_vector(31 downto 0);
+begin
+    -- Immediate value mux
+    with imm_enum select
+        ex.imm_val <=
+            x"fffffff0" when IMM_N16,
+            x"fffffff8" when IMM_N8,
+            x"fffffffe" when IMM_N2,
+            x"ffffffff" when IMM_N1,
+            x"00000000" when IMM_ZERO,
+            x"00000001" when IMM_P1,
+            x"00000002" when IMM_P2,
+            x"00000004" when IMM_P4,
+            x"00000008" when IMM_P8,
+            x"00000010" when IMM_P16,
+            imms_8_0 when IMM_S_8_0,
+            imms_8_1 when IMM_S_8_1,
+            imms_12_1 when IMM_S_12_1,
+            x"0000000" & op.code(3 downto 0) when IMM_U_4_0,
+            "000000000000000000000000000" & op.code(3 downto 0) & "0" when IMM_U_4_1,
+            "00000000000000000000000000" & op.code(3 downto 0) & "00" when IMM_U_4_2,
+            x"000000" & op.code(7 downto 0) when IMM_U_8_0,
+            "00000000000000000000000" & op.code(7 downto 0) & "0" when IMM_U_8_1,
+            "0000000000000000000000" & op.code(7 downto 0) & "00" when IMM_U_8_2;
+    -- Sign extend parts of opcode
+    process(op)
+    begin
+        -- Sign extend 8 right-most bits
+        for i in 8 to 31 loop
+            imms_8_0(i) <= op.code(7);
+        end loop;
+        imms_8_0(7 downto 0) <= op.code(7 downto 0);
+        -- Sign extend 8 right-most bits shifted by 1
+        for i in 9 to 31 loop
+            imms_8_1(i) <= op.code(7);
+        end loop;
+        imms_8_1(8 downto 1) <= op.code(7 downto 0);
+        imms_8_1(0) <= '0';
+        -- Sign extend 12 right-most bits shifted by 1
+        for i in 13 to 31 loop
+            imms_12_1(i) <= op.code(11);
+        end loop;
+        imms_12_1(12 downto 1) <= op.code(11 downto 0);
+        imms_12_1(0) <= '0';
+    end process;
+    -- Mac busy muxes
+    with mac_busy select
+        ex.mac_busy <=
+            '0' when NOT_BUSY,
+            not next_id_stall when EX_NOT_STALL,
+            '0' when WB_NOT_STALL,
+            '1' when EX_BUSY,
+            '0' when WB_BUSY;
+    with mac_busy select
+        wb.mac_busy <=
+            '0' when NOT_BUSY,
+            '0' when EX_NOT_STALL,
+            not next_id_stall when WB_NOT_STALL,
+            '0' when EX_BUSY,
+            '1' when WB_BUSY;
+    process(t_bcc, op)
+        variable cond : std_logic_vector(16 downto 0);
+    begin
+        cond := std_logic_vector(TO_UNSIGNED(instruction_plane_t'pos(op.plane), 1)) & op.code;
+        -- zero outputs by default
+        ilevel_cap <= '0';
+        mac_stall_sense <= '0';
+        dispatch <= '0';
+        event_ack_0 <= '0';
+        slp <= '0';
+        mac_s_latch <= '0';
+        ex_stall <= ('0', '0', '0', '0', SEL_ARITH, SEL_PREV, SEL_CLEAR, SEL_XBUS, SEL_ZBUS, '0', '0', '0', LOGIC, '0', NOP, SEL_XBUS, SEL_YBUS);
+        debug <= '0';
+        wb_stall <= ('0', '0', '0', '0', '0', SEL_XBUS, SEL_YBUS, NOP, DBUS);
+        delay_jump <= '0';
+        id <= ('0', '0', '0');
+        maskint_next <= '0';
+        ex.arith_func <= ADD;
+        ex.aluinx_sel <= SEL_XBUS;
+        ex.alumanip <= SWAP_BYTE;
+        ex.aluiny_sel <= SEL_YBUS;
+        ex.coproc_cmd <= NOP;
+        ex.arith_ci_en <= '0';
+        ex.xbus_sel <= SEL_IMM;
+        wb.regnum_w <= "00000";
+        ex.regnum_x <= "00000";
+        ex.mem_size <= BYTE;
+        ex.regnum_y <= "00000";
+        ex.regnum_z <= "00000";
+        ex.ma_wr <= '0';
+        ex.logic_sr_func <= ZERO;
+        ex.logic_func <= LOGIC_NOT;
+        ex.ybus_sel <= SEL_IMM;
+        ex.mem_lock <= '0';
+        ex.arith_sr_func <= ZERO;
+        imm_enum <= IMM_ZERO;
+        mac_busy <= NOT_BUSY;
+        -- set control signals for each opcode
+{{- range $i, $instr := .Simple.Instructions }}
+        {{ if $i }}elsif{{ else }}if{{ end }} std_match(cond, "{{ $instr.StdMatchPattern }}") then
+            -- {{ $instr.Name }} [{{ opcodeComment $instr.OpcodeHex }}]
+            -- {{ $instr.Operation }}
+            case op.addr(3 downto 0) is
+{{- range $s := $instr.Slots }}
+                when x"{{ slotHex $s.Index }}" =>
+{{- range $a := $s.Assignments }}
+                    {{ $a.LHS }} <= {{ $a.RHS }};
+{{- end }}
+
+{{- end }}
+                when others =>
+
+            end case;
+{{- end }}
+        end if;
+    end process;
+end;

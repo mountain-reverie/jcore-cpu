@@ -1,0 +1,335 @@
+{{ template "header" . }}architecture rom of decode_table is
+    signal line : std_logic_vector({{ sub1 .ROM.TotalBits }} downto 0);
+    signal addr : std_logic_vector(7 downto 0);
+    signal mac_busy : mac_busy_t;
+    signal imms_12_1 : std_logic_vector(31 downto 0);
+    signal imms_8_0 : std_logic_vector(31 downto 0);
+    signal imms_8_1 : std_logic_vector(31 downto 0);
+    type mem is array (0 to 255) of std_logic_vector({{ sub1 .ROM.TotalBits }} downto 0);
+{{ romConstBody .ROM.Words }}begin
+    -- Read microcode line on falling edge of
+    -- clock. Needs to be clocked so that xilinx
+    -- uses a RAM, and needs to be falling edge to
+    -- allow the ROM address to be computed.
+    process(clk, op)
+    begin
+        if (clk = '0' and clk'event) then
+            line <= microcode_rom(TO_INTEGER(unsigned(op.addr)));
+        end if;
+    end process;
+    -- Sign extend parts of opcode
+    process(op)
+    begin
+        -- Sign extend 8 right-most bits
+        for i in 8 to 31 loop
+            imms_8_0(i) <= op.code(7);
+        end loop;
+        imms_8_0(7 downto 0) <= op.code(7 downto 0);
+        -- Sign extend 8 right-most bits shifted by 1
+        for i in 9 to 31 loop
+            imms_8_1(i) <= op.code(7);
+        end loop;
+        imms_8_1(8 downto 1) <= op.code(7 downto 0);
+        imms_8_1(0) <= '0';
+        -- Sign extend 12 right-most bits shifted by 1
+        for i in 13 to 31 loop
+            imms_12_1(i) <= op.code(11);
+        end loop;
+        imms_12_1(12 downto 1) <= op.code(11 downto 0);
+        imms_12_1(0) <= '0';
+    end process;
+    with mac_busy select
+        ex.mac_busy <=
+            '1' when EX_BUSY,
+            not next_id_stall when EX_NOT_STALL,
+            '0' when others;
+    with mac_busy select
+        wb.mac_busy <=
+            '1' when WB_BUSY,
+            not next_id_stall when WB_NOT_STALL,
+            '0' when others;
+    with line(2 downto 0) select
+        ex_stall.wrpc_z <=
+            '1' when "010" | "100",
+            not t_bcc when "101",
+            t_bcc when "110",
+            '0' when others;
+    with line(2 downto 0) select
+        ex_stall.wrsr_z <=
+            '1' when "011",
+            '0' when others;
+    with line(2 downto 0) select
+        wb_stall.wrsr_w <=
+            '1' when "001",
+            '0' when others;
+    with line(2 downto 0) select
+        ex_stall.wrpr_pc <=
+            '1' when "100",
+            '0' when others;
+    with line(6 downto 3) select
+        wb_stall.wrmach <=
+            '1' when "0100",
+            '0' when others;
+    with line(6 downto 3) select
+        ex_stall.wrmach <=
+            '1' when "0010" | "0001",
+            '0' when others;
+    with line(6 downto 3) select
+        ex_stall.mulcom2 <=
+            MULUW when "1010",
+            MULSW when "1001",
+            MULL when "1000",
+            DMULUL when "0111",
+            DMULSL when "0110",
+            NOP when others;
+    with line(6 downto 3) select
+        wb_stall.mulcom2 <=
+            MACW when "1100",
+            MACL when "1011",
+            NOP when others;
+    with line(6 downto 3) select
+        wb_stall.macsel2 <=
+            SEL_WBUS when "1100" | "1011" | "0101",
+            SEL_YBUS when others;
+    with line(6 downto 3) select
+        ex_stall.macsel2 <=
+            SEL_ZBUS when "0011" | "0001",
+            SEL_YBUS when others;
+    with line(9 downto 7) select
+        ex_stall.mulcom1 <=
+            '1' when "110",
+            '0' when others;
+    with line(9 downto 7) select
+        wb_stall.mulcom1 <=
+            '1' when "111",
+            '0' when others;
+    with line(9 downto 7) select
+        wb_stall.macsel1 <=
+            SEL_WBUS when "100" | "111",
+            SEL_XBUS when others;
+    with line(9 downto 7) select
+        ex_stall.wrmacl <=
+            '1' when "001" | "011",
+            '0' when others;
+    with line(9 downto 7) select
+        ex_stall.macsel1 <=
+            SEL_ZBUS when "001" | "010",
+            SEL_XBUS when others;
+    with line(9 downto 7) select
+        wb_stall.wrmacl <=
+            '1' when "101",
+            '0' when others;
+    with line(12 downto 10) select
+        ex.mem_size <=
+            LONG when "001" | "100" | "101",
+            WORD when "110" | "111",
+            BYTE when others;
+    with line(12 downto 10) select
+        ex_stall.ma_issue <=
+            '1' when "001" | "010" | "011" | "100" | "110" | "111",
+            t_bcc when "101",
+            '0' when others;
+    with line(12 downto 10) select
+        ex.ma_wr <=
+            '1' when "011" | "100" | "101" | "110",
+            '0' when others;
+    with line(17 downto 13) select
+        ex.aluiny_sel <=
+            SEL_IMM when "01110" | "01011" | "11000" | "10000" | "01101" | "01100" | "10011" | "01111" | "11001" | "00010" | "10110",
+            SEL_R0 when "10100" | "10101",
+            SEL_YBUS when others;
+    with line(17 downto 13) select
+        ex.regnum_y <=
+            "10011" when "11000" | "01010",
+            "10010" when "10000" | "00011",
+            "10001" when "01101" | "00111",
+            "10000" when "01100" | "00110",
+            "10100" when "00001",
+            '0' & op.code(7 downto 4) when "10011" | "10100" | "10010",
+            '0' & op.code(11 downto 8) when "10001",
+            "00000" when others;
+    with line(17 downto 13) select
+        ex.ybus_sel <=
+            SEL_MACH when "01110" | "01000",
+            SEL_REG when "10111" | "11000" | "10000" | "01101" | "01100" | "00001" | "10011" | "01010" | "00011" | "00111" | "00110" | "10100" | "10010" | "10110" | "10001",
+            SEL_SR when "01011" | "00101",
+            SEL_MACL when "01111" | "01001",
+            SEL_PC when "11001",
+            SEL_IMM when others;
+    with line(22 downto 18) select
+        ex_stall.t_sel <=
+            SEL_SHIFT when "00111",
+            SEL_SET when "00011",
+            SEL_CARRY when "01001",
+            SEL_CLEAR when others;
+    with line(22 downto 18) select
+        ex_stall.sr_sel <=
+            SEL_DIV0U when "00010",
+            SEL_SET_T when "00001" | "00111" | "00011" | "01001",
+            SEL_LOGIC when "01011" | "01110",
+            SEL_ZBUS when "01000",
+            SEL_ARITH when "01010" | "01101" | "01100" | "00101" | "00100" | "01111" | "10000" | "00110",
+            SEL_INT_MASK when "10001",
+            SEL_PREV when others;
+    with line(22 downto 18) select
+        ex.logic_sr_func <=
+            BYTE_EQ when "01110",
+            ZERO when others;
+    with line(22 downto 18) select
+        ex.arith_sr_func <=
+            OVERUNDERFLOW when "01010",
+            UGRTER when "01101",
+            UGRTER_EQ when "01100",
+            SGRTER_EQ when "00101",
+            SGRTER when "00100",
+            DIV1 when "01111",
+            DIV0S when "10000",
+            ZERO when others;
+    with line(27 downto 23) select
+        ex.arith_func <=
+            SUB when "00011",
+            ADD when others;
+    with line(27 downto 23) select
+        ex.alumanip <=
+            SET_BIT_7 when "01001",
+            EXTEND_SBYTE when "01010",
+            EXTEND_UWORD when "01101",
+            EXTRACT when "10010",
+            EXTEND_UBYTE when "01100",
+            SWAP_WORD when "10001",
+            EXTEND_SWORD when "01011",
+            SWAP_BYTE when others;
+    with line(27 downto 23) select
+        ex_stall.shiftfunc <=
+            ARITH when "01000",
+            ROTC when "00110",
+            ROTATE when "00101",
+            LOGIC when others;
+    with line(27 downto 23) select
+        ex.logic_func <=
+            LOGIC_OR when "01111",
+            LOGIC_XOR when "00001",
+            LOGIC_AND when "00100",
+            LOGIC_NOT when others;
+    with line(30 downto 28) select
+        ex_stall.zbus_sel <=
+            SEL_LOGIC when "000",
+            SEL_WBUS when "010",
+            SEL_YBUS when "011",
+            SEL_SHIFT when "100",
+            SEL_MANIP when "101",
+            SEL_ARITH when others;
+    with line(32 downto 31) select
+        ex.xbus_sel <=
+            SEL_REG when "01",
+            SEL_PC when "11",
+            SEL_IMM when others;
+    ex_stall.wrreg_z <= line(33);
+    wb_stall.wrreg_w <= line(34);
+    slp <= line(35);
+    with line(38 downto 36) select
+        ex.regnum_z <=
+            "01111" when "000",
+            '0' & op.code(11 downto 8) when "001",
+            "10000" when "010",
+            "10001" when "011",
+            "10010" when "100",
+            "10011" when "101",
+            '0' & op.code(7 downto 4) when "110",
+            "00000" when others;
+    with line(41 downto 39) select
+        ex.regnum_x <=
+            "10100" when "000",
+            "01111" when "001",
+            '0' & op.code(11 downto 8) when "010",
+            '0' & op.code(7 downto 4) when "100",
+            "10000" when "101",
+            "10011" when "110",
+            "10001" when "111",
+            "00000" when others;
+    with line(44 downto 42) select
+        wb.regnum_w <=
+            "10011" when "000",
+            '0' & op.code(11 downto 8) when "001",
+            "10000" when "010",
+            "10001" when "011",
+            "10010" when "100",
+            "10100" when "110",
+            "01111" when "111",
+            "00000" when others;
+    with line(45 downto 45) select
+        ex_stall.mem_wdata_sel <=
+            SEL_YBUS when "1",
+            SEL_ZBUS when others;
+    ex.mem_lock <= line(46);
+    with line(48 downto 47) select
+        ex_stall.mem_addr_sel <=
+            SEL_ZBUS when "01",
+            SEL_YBUS when "10",
+            SEL_XBUS when others;
+    maskint_next <= line(49);
+    mac_stall_sense <= line(50);
+    mac_s_latch <= line(51);
+    with line(53 downto 52) select
+        mac_busy <=
+            WB_NOT_STALL when "01",
+            EX_NOT_STALL when "10",
+            WB_BUSY when "11",
+            NOT_BUSY when others;
+    id.incpc <= line(54);
+    with line(59 downto 55) select
+        ex.imm_val <=
+            x"ffffffff" when "00011",
+            x"00000001" when "00010",
+            x"fffffffe" when "00101",
+            x"00000002" when "00100",
+            x"00000004" when "00000",
+            x"fffffff8" when "00111",
+            x"00000008" when "00110",
+            x"fffffff0" when "01001",
+            x"00000010" when "01000",
+            imms_12_1 when "10001",
+            x"000000" & op.code(7 downto 0) when "01101",
+            "00000000000000000000000" & op.code(7 downto 0) & "0" when "01110",
+            "0000000000000000000000" & op.code(7 downto 0) & "00" when "01111",
+            imms_8_0 when "10010",
+            imms_8_1 when "10000",
+            x"0000000" & op.code(3 downto 0) when "01010",
+            "000000000000000000000000000" & op.code(3 downto 0) & "0" when "01011",
+            "00000000000000000000000000" & op.code(3 downto 0) & "00" when "01100",
+            x"00000000" when others;
+    ilevel_cap <= line(60);
+    id.ifadsel <= line(61);
+    with line(63 downto 62) select
+        id.if_issue <=
+            '1' when "01",
+            t_bcc when "10",
+            not t_bcc when "11",
+            '0' when others;
+    event_ack_0 <= line(64);
+    with line(66 downto 65) select
+        dispatch <=
+            '1' when "01",
+            t_bcc when "10",
+            not t_bcc when "11",
+            '0' when others;
+    delay_jump <= line(67);
+    debug <= line(68);
+    with line(69 downto 69) select
+        wb_stall.cpu_data_mux <=
+            COPROC when "1",
+            DBUS when others;
+    with line(71 downto 70) select
+        ex.coproc_cmd <=
+            STS when "01",
+            LDS when "10",
+            CLDS when "11",
+            NOP when others;
+    ex.arith_ci_en <= line(72);
+    with line(74 downto 73) select
+        ex.aluinx_sel <=
+            SEL_ZERO when "01",
+            SEL_ROTCL when "10",
+            SEL_FC when "11",
+            SEL_XBUS when others;
+end;

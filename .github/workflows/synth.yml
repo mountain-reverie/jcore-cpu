@@ -1,0 +1,34 @@
+name: synth
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+jobs:
+  synth-check:
+    runs-on: ubuntu-latest
+    # ghdl/synth:beta bundles a from-source GHDL with the --synth backend
+    # (and yosys + ghdl-yosys-plugin). The apt `ghdl` package is too old to
+    # reliably reproduce the ill-formed-clock rejection, so use this image.
+    container: ghdl/synth:beta
+    steps:
+      - name: Checkout jcore-cpu
+        uses: actions/checkout@v4
+
+      - name: Checkout jcore-soc (TOOLS_DIR / v2p)
+        uses: actions/checkout@v4
+        with:
+          repository: j-core/jcore-soc
+          path: jcore-soc
+
+      - name: Tool versions
+        run: |
+          ghdl --version | head -3
+          perl --version | head -2
+
+      - name: Run synthesis gate
+        env:
+          TOOLS_DIR: ${{ github.workspace }}/jcore-soc/tools
+        run: ./tools/synth-check.sh

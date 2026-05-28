@@ -43,25 +43,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # need all tags to compute the next patch
+          fetch-depth: 0   # full history + tags for conventional-commit analysis
 
-      - name: Compute and push next SemVer patch tag
+      # Derive the next SemVer from conventional-commit messages since the
+      # last tag: feat -> minor; fix/perf/refactor/test -> patch; a `!` or
+      # BREAKING CHANGE -> major (ietf-tools/semver-action defaults).
+      #   skipInvalidTags     : ignore the repo's non-SemVer milestone tags
+      #                         (e.g. gen-go-m4-complete).
+      #   noVersionBumpBehavior: patch — a push with no bumping commit still
+      #                          cuts a patch release (keeps a tag per green master).
+      #   noNewCommitBehavior : warn — re-runs with no new commits are a no-op
+      #                         (next == current; the tag step below is skipped).
+      # ONE-TIME SEED: fallbackTag must already exist, so create the initial
+      # tag once by hand before this job can run:
+      #     git tag -a v1.0.0 <seed-commit> -m "v1.0.0" && git push origin v1.0.0
+      - name: Compute next version (conventional commits)
+        id: semver
+        uses: ietf-tools/semver-action@v1
+        with:
+          token: ${{ github.token }}
+          branch: master
+          skipInvalidTags: true
+          noNewCommitBehavior: warn
+          noVersionBumpBehavior: patch
+          fallbackTag: v1.0.0
+
+      - name: Create and push tag
+        if: steps.semver.outputs.next != steps.semver.outputs.current
         env:
-          GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ steps.semver.outputs.next }}
         run: |
           set -euo pipefail
-          # Highest existing vMAJOR.MINOR.PATCH tag (ignores non-SemVer tags).
-          latest="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' \
-                      | sort -t. -k1.2,1n -k2,2n -k3,3n \
-                      | tail -1)"
-          if [ -z "$latest" ]; then
-            next="v1.0.0"   # seed
-          else
-            ver="${latest#v}"
-            major="${ver%%.*}"; rest="${ver#*.}"
-            minor="${rest%%.*}"; patch="${rest##*.}"
-            next="v${major}.${minor}.$((patch + 1))"
-          fi
-          echo "Latest: ${latest:-<none>}  Next: $next"
-          git tag -a "$next" -m "Release $next (synth gate green on master)"
-          git push origin "$next"
+          echo "current=${{ steps.semver.outputs.current }} next=$NEXT bump=${{ steps.semver.outputs.bump }}"
+          git tag -a "$NEXT" -m "Release $NEXT (synth gate green on master)"
+          git push origin "$NEXT"

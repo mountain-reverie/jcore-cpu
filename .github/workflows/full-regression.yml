@@ -1,0 +1,93 @@
+name: full-regression
+
+# Complete 8-step regression: runs decode/gen-go/regression.sh end-to-end
+# inside the prebuilt heavy-toolchain container (GHDL 6.x, yosys 0.44 +
+# ghdl-yosys-plugin@07a30ed, sh2-elf-gcc, opensta, Nangate45 Liberty).
+#
+# Triggered on:
+#   - push to master/main           (gates merges)
+#   - nightly schedule (08:00 UTC)  (catches toolchain drift)
+#   - manual workflow_dispatch      (re-run on demand)
+#
+# The container is built by build-ci-image.yml and published to
+# ghcr.io/<owner>/jcore-cpu-ci:latest. If the image is missing, this
+# workflow will fail at the container pull step — run build-ci-image.yml
+# first (see .github/ci/README.md).
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  schedule:
+    # 08:00 UTC every day. Cron uses UTC regardless of repo timezone.
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: full-regression-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  full-regression:
+    name: regression.sh (all 8 steps)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    container:
+      # ghcr.io normalizes registry paths to lowercase on push/pull, so a
+      # mixed-case repository_owner (e.g. "J-Core") still resolves correctly.
+      # build-ci-image.yml does the lowercase normalization at push time.
+      image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+      # The image ships every toolchain at /usr/local/bin and the Nangate45
+      # Liberty file at /opt/nangate45/nangate45.lib. No extra mounts needed.
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    env:
+      # Step 8 (openSTA) looks at NANGATE_LIB before falling back to
+      # /tmp/sky130/lib/nangate45.lib (which doesn't exist in CI).
+      NANGATE_LIB: /opt/nangate45/nangate45.lib
+      # Stable workspace for synth artifacts so a later step can upload them.
+      SYNTH_OUT: ${{ github.workspace }}/synth-out
+
+    steps:
+      - name: Checkout jcore-cpu
+        uses: actions/checkout@v4
+        with:
+          path: jcore-cpu
+
+      - name: Checkout jcore-soc (TOOLS_DIR)
+        uses: actions/checkout@v4
+        with:
+          repository: j-core/jcore-soc
+          path: jcore-soc
+
+      - name: Show toolchain versions
+        run: |
+          set -eu
+          echo "--- go ---"; go version
+          echo "--- ghdl ---"; ghdl --version | head -3
+          echo "--- yosys ---"; yosys -V | head -2
+          echo "--- sh2-elf-gcc ---"; sh2-elf-gcc --version | head -1
+          echo "--- sta ---"; sta -version 2>&1 | head -2 || true
+          echo "--- ghdl-yosys-plugin ---"; yosys -m ghdl -p 'help ghdl' 2>&1 | head -3 || true
+          echo "--- nangate45 ---"; ls -la "$NANGATE_LIB"
+
+      - name: Run full regression.sh (Steps 1-8)
+        working-directory: jcore-cpu
+        env:
+          TOOLS_DIR: ${{ github.workspace }}/jcore-soc/tools
+        run: |
+          mkdir -p "$SYNTH_OUT"
+          bash decode/gen-go/regression.sh
+
+      - name: Upload synthesis + STA artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synth-out
+          path: ${{ env.SYNTH_OUT }}
+          if-no-files-found: ignore
+          retention-days: 14

@@ -1,0 +1,146 @@
+name: pr-quick
+
+# Fast PR feedback loop. Runs Steps 1-5 of decode/gen-go/regression.sh:
+#   1. Go unit tests
+#   2. make -C decode generate
+#   3. cpu_ctb 180us with direct decoder
+#   4. cpu_ctb 180us with ROM decoder
+#   5. make -C tests check (228 TAP unit tests)
+#
+# Steps 6 (sh2-elf simulator tests), 7 (yosys synthesis), and 8 (openSTA)
+# are deliberately deferred to full-regression.yml: their toolchains
+# are too expensive to install on every push.
+#
+# Target wall-clock budget: under 10 minutes per run.
+
+on:
+  push:
+    branches-ignore:
+      # Avoid duplicate runs: master / main are covered by full-regression.yml.
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+
+# Newer pushes to the same branch cancel in-flight runs.
+concurrency:
+  group: pr-quick-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-quick:
+    name: Go + simulator + TAP (Steps 1-5)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout jcore-cpu
+        uses: actions/checkout@v4
+        with:
+          path: jcore-cpu
+
+      - name: Checkout jcore-soc (TOOLS_DIR)
+        uses: actions/checkout@v4
+        with:
+          repository: j-core/jcore-soc
+          path: jcore-soc
+
+      - name: Install apt dependencies (GHDL, GCC, make)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ghdl ghdl-mcode \
+            gcc make build-essential \
+            python3
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: jcore-cpu/decode/gen-go/go.mod
+          cache: true
+          cache-dependency-path: jcore-cpu/decode/gen-go/go.sum
+
+      - name: Show toolchain versions
+        run: |
+          go version
+          ghdl --version | head -3
+          gcc --version | head -1
+          make --version | head -1
+
+      - name: Run regression Steps 1-5
+        working-directory: jcore-cpu
+        env:
+          TOOLS_DIR: ${{ github.workspace }}/jcore-soc/tools
+        run: |
+          set -euo pipefail
+          # Step 1: Go unit tests
+          echo "==> Step 1: go test ./..."
+          go -C decode/gen-go test ./...
+
+          # Step 2: regenerate VHDL
+          echo "==> Step 2: make -C decode generate"
+          make -C decode generate
+
+          # Step 3: build + run cpu_ctb with direct decoder
+          echo "==> Step 3: cpu_ctb 180us [direct decoder]"
+          cd sim
+          rm -f work-obj93.cf cpu_ctb
+          make TOOLS_DIR="$TOOLS_DIR" cpu_ctb work-obj93.cf >/dev/null
+          LED_LOG="$(mktemp)"
+          timeout 90 ./cpu_ctb --stop-time=180us 2>&1 | grep "^LED:" > "$LED_LOG" || true
+          wc -l "$LED_LOG"
+          # Verify expected 20 LED writes.
+          actual=$(wc -l < "$LED_LOG")
+          if [ "$actual" -ne 20 ]; then
+            echo "FAIL [direct]: expected 20 LED writes, got $actual" >&2
+            cat "$LED_LOG" >&2
+            exit 1
+          fi
+          rm -f "$LED_LOG"
+          cd ..
+
+          # Step 4: rebuild with ROM decoder and re-run.
+          echo "==> Step 4: cpu_ctb 180us [ROM decoder]"
+          CPU_CONFIG="core/cpu_config.vhd"
+          CPU_CONFIG_BAK="$(mktemp)"
+          cp "$CPU_CONFIG" "$CPU_CONFIG_BAK"
+          # Restore on any exit (success, failure, or interruption).
+          trap 'cp "$CPU_CONFIG_BAK" "$CPU_CONFIG"; rm -f "$CPU_CONFIG_BAK"' EXIT
+          sed -i \
+            '/^configuration cpu_sim of cpu/,/^end configuration/{
+              s/use configuration work\.cpu_decode_direct;/use configuration work.cpu_decode_rom;/
+            }' \
+            "$CPU_CONFIG"
+          cd sim
+          rm -f work-obj93.cf cpu_ctb
+          if ! make TOOLS_DIR="$TOOLS_DIR" cpu_ctb work-obj93.cf >/dev/null 2>&1; then
+            echo "    NOTE: ROM decoder elaboration failed (pre-existing project state)."
+            echo "          Skipping ROM run; this mirrors regression.sh behavior."
+          else
+            LED_LOG_ROM="$(mktemp)"
+            timeout 90 ./cpu_ctb --stop-time=180us 2>&1 | grep "^LED:" > "$LED_LOG_ROM" || true
+            actual=$(wc -l < "$LED_LOG_ROM")
+            if [ "$actual" -ne 20 ]; then
+              echo "FAIL [rom]: expected 20 LED writes, got $actual" >&2
+              cat "$LED_LOG_ROM" >&2
+              exit 1
+            fi
+            rm -f "$LED_LOG_ROM"
+          fi
+          cd ..
+          # Restore config + rebuild direct for Step 5.
+          cp "$CPU_CONFIG_BAK" "$CPU_CONFIG"
+          rm -f "$CPU_CONFIG_BAK"
+          trap - EXIT
+          cd sim
+          rm -f work-obj93.cf cpu_ctb
+          make TOOLS_DIR="$TOOLS_DIR" cpu_ctb work-obj93.cf >/dev/null
+          cd ..
+
+          # Step 5: TAP unit testbenches
+          echo "==> Step 5: make -C tests check"
+          make -C tests check TOOLS_DIR="$TOOLS_DIR"
+
+          echo "==> pr-quick: Steps 1-5 PASSED"

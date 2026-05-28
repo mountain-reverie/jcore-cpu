@@ -1,0 +1,64 @@
+name: build-ci-image
+
+# Build and publish the heavy-toolchain Docker image used by
+# full-regression.yml. The image is ~2-3 GB and takes ~30-60 minutes
+# to build cold (sh2-elf-gcc and GHDL 6.x compile from source). Once
+# pushed to ghcr.io it is cached and reused across regression runs.
+#
+# Triggered on:
+#   - manual workflow_dispatch (most common: bump a tool version)
+#   - change to the Dockerfile or this workflow
+#
+# Tag policy:
+#   - latest          (always overwritten — used by full-regression.yml)
+#   - sha-<full-40-char-sha>  (immutable, for rollback)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - '.github/ci/Dockerfile'
+      - '.github/workflows/build-ci-image.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build + push ghcr.io image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set lowercase owner
+        id: owner
+        run: echo "name=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: .github/ci/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.owner.outputs.name }}/jcore-cpu-ci:latest
+            ghcr.io/${{ steps.owner.outputs.name }}/jcore-cpu-ci:sha-${{ github.sha }}
+          cache-from: type=registry,ref=ghcr.io/${{ steps.owner.outputs.name }}/jcore-cpu-ci:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ steps.owner.outputs.name }}/jcore-cpu-ci:buildcache,mode=max

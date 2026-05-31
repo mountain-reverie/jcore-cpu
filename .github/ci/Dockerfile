@@ -94,7 +94,8 @@ RUN set -eux; \
         arm64) goarch=arm64 ;; \
         *) echo "unsupported arch $arch" >&2; exit 1 ;; \
     esac; \
-    curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${goarch}.tar.gz" \
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 \
+        "https://go.dev/dl/go${GO_VERSION}.linux-${goarch}.tar.gz" \
         -o /tmp/go.tgz; \
     tar -C /usr/local -xzf /tmp/go.tgz; \
     rm /tmp/go.tgz

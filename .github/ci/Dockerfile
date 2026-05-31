@@ -98,7 +98,9 @@ RUN set -eux; \
         -o /tmp/go.tgz; \
     tar -C /usr/local -xzf /tmp/go.tgz; \
     rm /tmp/go.tgz
-ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
+# Include /usr/local/sbin:/usr/sbin:/sbin — ldconfig (run by the GHDL and
+# CUDD build steps below) lives in /sbin, which a bare ENV PATH drops.
+ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/sbin:/usr/bin:/bin
 
 # ---------------------------------------------------------------------------
 # 3) sh2-elf-gcc cross compiler.

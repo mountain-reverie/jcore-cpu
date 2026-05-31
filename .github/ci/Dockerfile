@@ -163,7 +163,10 @@ RUN set -eux; \
 RUN set -eux; \
     git clone --depth 1 --branch ${YOSYS_VERSION} https://github.com/YosysHQ/yosys.git /tmp/yosys; \
     cd /tmp/yosys; \
-    # yosys's Makefile recursively fetches submodules (abc) into place.
+    # abc is a git submodule, NOT vendored in the tag. A shallow clone leaves
+    # it uninitialized, and yosys 0.44's Makefile aborts at its check-git-abc
+    # guard ("Initialize the submodule ..."). Fetch it explicitly before make.
+    git submodule update --init; \
     make -j"$(nproc)" PREFIX=/usr/local; \
     make install PREFIX=/usr/local; \
     cd / && rm -rf /tmp/yosys

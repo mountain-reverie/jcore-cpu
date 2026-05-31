@@ -1,0 +1,60 @@
+name: tag-release
+
+# Auto-tag the next SemVer on a green master. This replaces the tag-release
+# job that previously lived in ci.yml: now that master's gate is the
+# full-regression workflow, tagging is chained to its success via
+# workflow_run instead of an in-workflow `needs:`.
+#
+# ietf-tools/semver-action computes the bump from conventional commits:
+# feat -> minor, fix/perf/refactor/test -> patch, breaking -> major.
+#   skipInvalidTags      : ignore the repo's non-SemVer milestone tags.
+#   noVersionBumpBehavior: patch — a no-bump push still cuts a patch.
+#   noNewCommitBehavior  : warn — no-new-commit re-runs are a no-op (guarded
+#                          below by next != current).
+# ONE-TIME SEED: fallbackTag must already exist, so create the first tag by
+# hand once: git tag -a v1.0.0 <seed-commit> -m "v1.0.0" && git push origin v1.0.0
+
+on:
+  workflow_run:
+    workflows: ["full-regression"]
+    types: [completed]
+    branches: [master]
+
+# This workflow definition is read from the default branch (master); the
+# guarded steps below only act on a successful run that was itself triggered
+# by a push to master.
+jobs:
+  tag-release:
+    name: tag release
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Tag the exact commit that passed full-regression.
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0   # full history + tags for conventional-commit analysis
+      - name: Compute next version (conventional commits)
+        id: semver
+        uses: ietf-tools/semver-action@v1.11.0
+        with:
+          token: ${{ github.token }}
+          branch: master
+          skipInvalidTags: true
+          noNewCommitBehavior: warn
+          noVersionBumpBehavior: patch
+          fallbackTag: v1.0.0
+      - name: Create and push tag
+        if: steps.semver.outputs.next != steps.semver.outputs.current
+        env:
+          NEXT: ${{ steps.semver.outputs.next }}
+        run: |
+          set -euo pipefail
+          echo "current=${{ steps.semver.outputs.current }} next=$NEXT bump=${{ steps.semver.outputs.bump }}"
+          git tag -a "$NEXT" -m "Release $NEXT (CI green on master)"
+          git push origin "$NEXT"

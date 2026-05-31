@@ -7,7 +7,7 @@
 #   - yosys 0.44
 #   - ghdl-yosys-plugin @ 07a30ed (newer commits break against GHDL 6.0.0
 #     because they call get_sname_index, which is not in GHDL 6.0.0)
-#   - opensta (apt) + Nangate45 Liberty file
+#   - CUDD + OpenSTA 2.7.0 (built from source) + Nangate45 Liberty file
 #   - Go (latest from golang.org so the regenerate step works without
 #     pulling distro Go)
 #
@@ -31,6 +31,11 @@ ARG GHDL_YOSYS_PLUGIN_COMMIT=07a30ed
 ARG BINUTILS_VERSION=2.43.1
 ARG SH2_GCC_VERSION=14.2.0
 ARG GO_VERSION=1.26.2
+# OpenSTA is not packaged for Ubuntu; built from source below. Pinned to the
+# parallaxsw/OpenSTA commit that tags release v2.7.0. OpenSTA requires CUDD,
+# also built from source (ivmai/cudd, the upstream OpenSTA dependency).
+ARG OPENSTA_COMMIT=13cd475ffa9a03f8a476b89035970226bc5b34ea
+ARG CUDD_COMMIT=38f0b8f4b8d603af89a4b7bcf6c1243dd58918d1
 ARG NANGATE_URL=https://raw.githubusercontent.com/The-OpenROAD-Project/OpenSTA/master/examples/nangate45_slow.lib.gz
 
 # ---------------------------------------------------------------------------
@@ -53,9 +58,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         unzip \
         pkg-config \
         flex \
+        libfl-dev \
         bison \
         texinfo \
         clang \
+        autoconf \
+        automake \
+        libtool \
         tcl-dev \
         tcl \
         swig \
@@ -72,7 +81,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libboost-python-dev \
         libboost-filesystem-dev \
         libeigen3-dev \
-        opensta \
         ghdl-mcode \
     && rm -rf /var/lib/apt/lists/*
 
@@ -173,7 +181,41 @@ RUN set -eux; \
     yosys -m ghdl -p 'help ghdl' >/dev/null
 
 # ---------------------------------------------------------------------------
-# 7) Nangate45 Liberty file for openSTA. Placed at a stable absolute path
+# 7) CUDD (BDD package) — a required dependency of OpenSTA. No apt package
+#     exists; built from the ivmai/cudd upstream that OpenSTA documents.
+#     autoreconf is needed because the git tree ships no configure script
+#     (autoconf/automake/libtool installed in step 1).
+# ---------------------------------------------------------------------------
+RUN set -eux; \
+    git clone https://github.com/ivmai/cudd.git /tmp/cudd; \
+    cd /tmp/cudd; \
+    git checkout ${CUDD_COMMIT}; \
+    autoreconf -i; \
+    ./configure --enable-shared --prefix=/usr/local; \
+    make -j"$(nproc)"; \
+    make install; \
+    cd / && rm -rf /tmp/cudd; \
+    ldconfig
+
+# ---------------------------------------------------------------------------
+# 8) OpenSTA (static timing) built from source. There is no apt package for
+#     OpenSTA on Ubuntu; the build deps (cmake, tcl-dev, swig, bison, flex +
+#     libfl-dev for FlexLexer.h, eigen3, zlib) are installed in step 1 and
+#     CUDD in step 7. Installs `sta` to /usr/local/bin.
+# ---------------------------------------------------------------------------
+RUN set -eux; \
+    git clone https://github.com/parallaxsw/OpenSTA.git /tmp/OpenSTA; \
+    cd /tmp/OpenSTA; \
+    git checkout ${OPENSTA_COMMIT}; \
+    mkdir build && cd build; \
+    cmake -DCMAKE_BUILD_TYPE=Release ..; \
+    make -j"$(nproc)"; \
+    make install; \
+    cd / && rm -rf /tmp/OpenSTA; \
+    sta -version
+
+# ---------------------------------------------------------------------------
+# 9) Nangate45 Liberty file for openSTA. Placed at a stable absolute path
 #     surfaced via NANGATE_LIB in full-regression.yml.
 # ---------------------------------------------------------------------------
 RUN set -eux; \

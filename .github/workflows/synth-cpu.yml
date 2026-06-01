@@ -16,6 +16,12 @@ on:
 env:
   ECP5_TARGET_MHZ: "50"
 
+# Container run: steps default to `sh` (dash), which rejects `set -o pipefail`
+# and other bashisms. Force bash (present in the image) for all run steps.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   synth-asic:
     runs-on: ubuntu-24.04

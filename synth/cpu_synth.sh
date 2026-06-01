@@ -59,11 +59,11 @@ case "$BACKEND" in
     yosys -m ghdl -p "$GHDL_ANALYZE; synth -top cpu; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_verilog $OUT/cpu_asic.v"
     ;;
   ecp5)
-    # -noabc9: the cpu has a documented false combinational SCC (datapath+decode
-    # forwarding) that abc9 rejects with 'Assert no_loops failed'. Generic abc and
-    # production Xilinx/Altera tolerate it. See synth/README.md.
-    # Strip verification cells (as above) so nextpnr-ecp5 can consume the JSON.
-    yosys -m ghdl -p "$GHDL_ANALYZE; synth_ecp5 -noabc9 -top cpu; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_ecp5.json"
+    # abc9 (synth_ecp5 default) gives timing-driven LUT mapping. It works now
+    # that the issue/slot false combinational loop is broken in core/datapath.vhm
+    # (see synth/README.md). Strip verification cells (as above) so nextpnr-ecp5
+    # can consume the JSON.
+    yosys -m ghdl -p "$GHDL_ANALYZE; synth_ecp5 -top cpu; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_ecp5.json"
     ;;
   *) echo "ERROR: unknown backend '$BACKEND' (want asic|ecp5)" >&2; exit 1 ;;
 esac

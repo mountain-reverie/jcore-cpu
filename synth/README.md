@@ -18,12 +18,24 @@ one `yosys -m ghdl` invocation to produce a netlist. All orchestration lives in
     done
 
 ## Synthesize
-    synth/cpu_synth.sh asic   # -> build/cpu_asic.v   (generic; feed to Nangate45/OpenSTA)
-    synth/cpu_synth.sh ecp5   # -> build/cpu_ecp5.json (synth_ecp5 -noabc9)
+    synth/cpu_synth.sh asic   # -> build/cpu_asic.v   (generic gate netlist)
+    synth/cpu_synth.sh ecp5   # -> build/cpu_ecp5.json (synth_ecp5 -noabc9; feed to nextpnr-ecp5)
+
+## What CI gates vs reports
+The `synth-cpu` workflow **gates** on synthesizability (`check -assert`: no
+inferred latches / multi-driver nets) and **ECP5 fit** (nextpnr place-and-route
+completes and `ecppack` produces a bitstream). Timing is **reported, not gated**
+— see Notes.
 
 ## Notes
 - Elaborates the `cpu_synth_direct` configuration (adds the `u_mult` binding the
   committed FPGA configs omit). Top entity stays `cpu`.
-- ECP5 uses `synth_ecp5 -noabc9`: the cpu has one false combinational SCC
-  (datapath+decode forwarding) that abc9 rejects; generic abc and production
-  Xilinx/Altera tolerate it. `build/scc_report.txt` records it.
+- The driver strips verification cells before writing the netlist
+  (`chformal -remove; delete t:$check t:$print`) — VHDL `assert` statements
+  otherwise become `$check`/`$assert` cells that downstream readers reject.
+- ECP5 uses `synth_ecp5 -noabc9` and nextpnr `--ignore-loops --timing-allow-fail`:
+  the cpu has one false combinational SCC (datapath+decode forwarding) that abc9
+  and nextpnr's timing analyzer reject; generic abc and production Xilinx/Altera
+  tolerate it. `build/scc_report.txt` records it. Because `-noabc9` disables
+  timing-driven mapping, the core does not reach 50 MHz on ECP5 today; meaningful
+  timing gating is a follow-up tied to breaking that false loop.

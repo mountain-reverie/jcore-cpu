@@ -14,6 +14,12 @@ on:
 
 env:
   ECP5_TARGET_MHZ: "50"
+  # Regression floor for the representative (cpu_timing_top harness) Fmax. The
+  # core measures ~42-43 MHz today; 40 gives margin for netlist drift while
+  # catching real erosion (e.g. a re-introduced false loop). nextpnr is
+  # deterministic per seed, so this does not flake. Re-baseline on intentional
+  # toolchain bumps.
+  ECP5_FMIN_MHZ: "40"
 
 # Container run: steps default to `sh` (dash), which rejects `set -o pipefail`
 # and other bashisms. Force bash (present in the image) for all run steps.
@@ -187,6 +193,28 @@ jobs:
           name: metrics-ecp5
           path: synth/metrics/*.json
           retention-days: 14
+      - name: ECP5 representative timing (cpu_timing_top) + regression gate
+        # The bare-cpu Fmax above is depressed by the unconstrained-IO harness
+        # artifact. cpu_timing_top registers the boundary to 4 IO so nextpnr
+        # reports a true register->core->register Fmax. We GATE on a floor here
+        # so the frequency can't silently erode (e.g. a re-introduced false loop).
+        # Runs after metric emit/upload so the dashboard still captures the
+        # data point even when this gate fails on a real regression.
+        run: |
+          set -euo pipefail
+          synth/cpu_synth.sh timing
+          nextpnr-ecp5 --85k --package CABGA381 --json build/cpu_timing.json \
+            --lpf synth/ulx3s_cpu.lpf --lpf-allow-unconstrained --timing-allow-fail \
+            --textcfg build/cpu_timing.config > build/nextpnr_timing.log 2>&1
+          fmax=$(grep -oE "Max frequency for clock '[^']*': [0-9.]+ MHz" build/nextpnr_timing.log \
+                 | tail -1 | grep -oE '[0-9.]+ MHz' | grep -oE '[0-9.]+' || true)
+          {
+            echo "### ECP5 representative timing (cpu_timing_top harness)"
+            echo "- Fmax: ${fmax:-?} MHz  (regression floor ${ECP5_FMIN_MHZ} MHz)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          awk -v f="${fmax:-0}" -v floor="${ECP5_FMIN_MHZ}" 'BEGIN{
+            if (f+0 < floor+0) { printf "REGRESSION: Fmax %.2f MHz < floor %s MHz\n", f, floor; exit 1 }
+            printf "OK: Fmax %.2f MHz >= floor %s MHz\n", f, floor }'
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4

@@ -18,14 +18,27 @@ one `yosys -m ghdl` invocation to produce a netlist. All orchestration lives in
     done
 
 ## Synthesize
-    synth/cpu_synth.sh asic   # -> build/cpu_asic.v   (generic gate netlist)
-    synth/cpu_synth.sh ecp5   # -> build/cpu_ecp5.json (synth_ecp5 -noabc9; feed to nextpnr-ecp5)
+    synth/cpu_synth.sh asic    # -> build/cpu_asic.v    (generic gate netlist)
+    synth/cpu_synth.sh ecp5    # -> build/cpu_ecp5.json  (bare cpu; feed to nextpnr-ecp5)
+    synth/cpu_synth.sh timing  # -> build/cpu_timing.json (cpu_timing_top harness; Fmax gate)
 
 ## What CI gates vs reports
-The `synth-cpu` workflow **gates** on synthesizability (`check -assert`: no
-inferred latches / multi-driver nets) and **ECP5 fit** (nextpnr place-and-route
-completes and `ecppack` produces a bitstream). Timing is **reported, not gated**
-— see Notes.
+The `synth-cpu` workflow **gates** on:
+- synthesizability (`check -assert`: no inferred latches / multi-driver nets),
+- **ECP5 fit** (nextpnr P&R completes and `ecppack` produces a bitstream), and
+- a **representative-Fmax floor** measured on the `cpu_timing_top` harness
+  (`ECP5_FMIN_MHZ`, currently 40), so frequency can't silently erode.
+
+The *bare-cpu* ECP5 Fmax is **reported, not gated** — it's depressed by the
+unconstrained-IO measurement artifact (see `cpu_timing_top.vhd` header).
+
+## Why two ECP5 measurements
+The bare `cpu` exposes ~348 ports as pads; synthesized alone on the sparse 85F
+that scatters the core and inflates routing, so its reported Fmax (~40 MHz) is a
+measurement artifact, **not** a logic-depth or placement-density problem (proven:
+Fmax is flat ~42 MHz across 6%–23% device utilisation). `cpu_timing_top`
+registers the boundary down to 4 IO, giving the true register→core→register
+Fmax (~42–43 MHz) that the regression gate measures.
 
 ## Notes
 - Elaborates the `cpu_synth_direct` configuration (adds the `u_mult` binding the
@@ -36,11 +49,13 @@ completes and `ecppack` produces a bitstream). Timing is **reported, not gated**
 - ECP5 uses `synth_ecp5` with **abc9** (timing-driven mapping). This works
   because the issue/slot false combinational loop is broken in
   `core/datapath.vhm` (slot_o no longer depends on `instr.issue`; the CI guards
-  that slot_o stays out of every SCC). The core reaches ~40 MHz on the 85F —
-  still under 50, so nextpnr runs with `--timing-allow-fail` and timing is
-  reported, not gated. Closing the gap to 50 MHz is separate critical-path work.
-  (A residual lighter-`opt` SCC not involving slot_o may remain; abc9 resolves
-  it, and CI synthesizes via `synth_ecp5`.)
+  that slot_o stays out of every SCC). nextpnr runs with `--timing-allow-fail`,
+  and the `cpu_timing_top` harness Fmax (~42–43 MHz) is gated against
+  `ECP5_FMIN_MHZ`. Reaching 50 MHz needs microarchitectural work (the path is
+  ~6 ns logic + ~18 ns intrinsic routing through the regfile-read/MAC-accumulate
+  datapath; the multiplier output is already registered) — deferred to a future
+  pipelining project. (A residual lighter-`opt` SCC not involving slot_o may
+  remain; abc9 resolves it, and CI synthesizes via `synth_ecp5`.)
 
 ## Synthesis metrics dashboard
 

@@ -1,0 +1,89 @@
+name: synth-cpu
+# Full-cpu synthesis for ASIC (generic + Nangate45 + OpenSTA) and ECP5
+# (synth_ecp5 + nextpnr-ecp5 + ecppack). Runs in the prebuilt CI image.
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+env:
+  ECP5_TARGET_MHZ: "50"
+  STA_PERIOD_NS: "20"          # 50 MHz
+  STA_IO_DELAY: "1.0"
+
+jobs:
+  synth-asic:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+    steps:
+      - name: Checkout jcore-cpu
+        uses: actions/checkout@v4
+      - name: Checkout jcore-soc (provides tools/v2p)
+        uses: actions/checkout@v4
+        with:
+          repository: j-core/jcore-soc
+          path: jcore-soc
+      - name: Toolchain versions
+        run: |
+          ghdl --version | head -1; yosys -V | head -1
+          yosys -m ghdl -p 'help ghdl' >/dev/null && echo "ghdl plugin OK"
+          sta -version 2>&1 | head -1 || true
+          echo "NANGATE_LIB=$NANGATE_LIB"; test -f "$NANGATE_LIB"
+      - name: Generate decoder
+        run: make -C decode generate
+      - name: Preprocess vhm -> vhd (v2p)
+        run: |
+          set -eux
+          for f in core/mult core/datapath decode/decode_core; do
+            LD_LIBRARY_PATH='' perl "$GITHUB_WORKSPACE/jcore-soc/tools/v2p" < "$f.vhm" > "$f.vhd"
+          done
+      - name: Synthesize (generic)
+        run: synth/cpu_synth.sh asic
+      - name: Tech-map to Nangate45
+        run: |
+          set -eux
+          yosys -p "
+            read_verilog build/cpu_asic.v;
+            dfflibmap -liberty $NANGATE_LIB;
+            abc -liberty $NANGATE_LIB;
+            splitnets -ports; clean -purge;
+            write_verilog build/cpu_asic_mapped.v;
+          "
+      - name: OpenSTA timing
+        run: |
+          set -eux
+          cat > build/sta_cpu.tcl <<TCL
+          read_liberty $NANGATE_LIB
+          read_verilog build/cpu_asic_mapped.v
+          link_design cpu
+          create_clock -name clk -period $STA_PERIOD_NS [get_ports clk]
+          set_input_delay  -clock clk $STA_IO_DELAY [all_inputs]
+          set_output_delay -clock clk $STA_IO_DELAY [all_outputs]
+          report_checks -path_delay max -format short
+          report_wns
+          report_tns
+          exit
+          TCL
+          sta -no_init -no_splash build/sta_cpu.tcl | tee build/sta_cpu.txt
+      - name: Gate + summary
+        run: |
+          set -eu
+          wns=$(awk '/^wns/ {print $NF; exit}' build/sta_cpu.txt)
+          tns=$(awk '/^tns/ {print $NF; exit}' build/sta_cpu.txt)
+          {
+            echo "### ASIC synth (Nangate45)"
+            echo "- WNS: ${wns:-?} ns  |  TNS: ${tns:-?} ns  (period ${STA_PERIOD_NS} ns)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          case "${wns:-}" in
+            "" ) echo "could not parse WNS"; exit 1 ;;
+            -* ) echo "WNS negative ($wns): timing not met"; exit 1 ;;
+          esac
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synth-asic
+          path: build/
+          retention-days: 14

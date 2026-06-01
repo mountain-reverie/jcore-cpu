@@ -31,11 +31,11 @@ ARG GHDL_YOSYS_PLUGIN_COMMIT=07a30ed
 ARG BINUTILS_VERSION=2.43.1
 ARG SH2_GCC_VERSION=14.2.0
 ARG GO_VERSION=1.26.2
-# OpenSTA is not packaged for Ubuntu; built from source below. Pinned to the
-# parallaxsw/OpenSTA commit that tags release v2.7.0. OpenSTA requires CUDD,
-# also built from source (ivmai/cudd, the upstream OpenSTA dependency).
+# OpenSTA is not packaged for Ubuntu; built from source below. OpenSTA requires
+# CUDD, also built from source (ivmai/cudd, the upstream OpenSTA dependency).
+# CUDD_COMMIT is ivmai/cudd HEAD (no tagged release covers the needed sources).
 ARG OPENSTA_COMMIT=13cd475ffa9a03f8a476b89035970226bc5b34ea
-ARG CUDD_COMMIT=38f0b8f4b8d603af89a4b7bcf6c1243dd58918d1
+ARG CUDD_COMMIT=f54f533303640afd5dbe47a05ebeabb3066f2a25
 ARG NANGATE_URL=https://raw.githubusercontent.com/The-OpenROAD-Project/OpenSTA/master/examples/nangate45_slow.lib.gz
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,5 @@
+# Core-only ECP5 constraint for the cpu fit/timing check.
+# Only the clock is constrained; IO is left unconstrained
+# (nextpnr is invoked with --lpf-allow-unconstrained). This is a
+# fit/timing proof of the cpu core, NOT a board-pinned bitstream.
+FREQUENCY NET "clk" 50 MHz;

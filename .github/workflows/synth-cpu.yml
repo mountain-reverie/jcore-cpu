@@ -87,3 +87,70 @@ jobs:
           name: synth-asic
           path: build/
           retention-days: 14
+
+  synth-ecp5:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+    steps:
+      - name: Checkout jcore-cpu
+        uses: actions/checkout@v4
+      - name: Checkout jcore-soc (provides tools/v2p)
+        uses: actions/checkout@v4
+        with:
+          repository: j-core/jcore-soc
+          path: jcore-soc
+      - name: Toolchain versions
+        run: |
+          ghdl --version | head -1; yosys -V | head -1
+          nextpnr-ecp5 --version; ecppack --help >/dev/null && echo "ecppack OK"
+      - name: Generate decoder
+        run: make -C decode generate
+      - name: Preprocess vhm -> vhd (v2p)
+        run: |
+          set -eux
+          for f in core/mult core/datapath decode/decode_core; do
+            LD_LIBRARY_PATH='' perl "$GITHUB_WORKSPACE/jcore-soc/tools/v2p" < "$f.vhm" > "$f.vhd"
+          done
+      - name: Synthesize (synth_ecp5 -noabc9)
+        run: synth/cpu_synth.sh ecp5
+      - name: Document the false SCC (diagnostic, non-failing)
+        run: |
+          set -eux
+          yosys -m ghdl -p "
+            ghdl --std=93 -fexplicit --ieee=synopsys --workdir=$(mktemp -d) \
+              cpu2j0_pkg.vhd core/components_pkg.vhd core/mult_pkg.vhd core/datapath_pkg.vhd \
+              decode/decode_pkg.vhd core/cpu.vhd core/mult.vhd core/datapath.vhd \
+              core/register_file.vhd core/register_file_flops.vhd core/register_file_two_bank.vhd \
+              decode/decode.vhd decode/decode_body.vhd decode/decode_table.vhd \
+              decode/decode_table_direct.vhd decode/decode_table_direct_config.vhd \
+              decode/decode_core.vhd synth/cpu_synth_config.vhd -e cpu_synth_direct;
+            hierarchy -top cpu; proc; flatten; opt; scc -nofeedback;
+          " 2>&1 | tee build/scc_report.txt | grep -E 'Found [0-9]+ SCCs' || true
+      - name: Place and route (nextpnr-ecp5, LFE5U-85F)
+        run: |
+          set -eux
+          nextpnr-ecp5 --85k --package CABGA381 \
+            --json build/cpu_ecp5.json \
+            --lpf synth/ulx3s_cpu.lpf --lpf-allow-unconstrained \
+            --textcfg build/cpu_ecp5.config \
+            --report build/cpu_ecp5_report.json \
+            2>&1 | tee build/nextpnr.log
+      - name: Pack bitstream
+        run: ecppack build/cpu_ecp5.config build/cpu_ecp5.bit
+      - name: Gate + summary
+        run: |
+          set -eu
+          fmax=$(grep -oE "Max frequency for clock '[^']*': [0-9.]+ MHz" build/nextpnr.log | tail -1 || true)
+          {
+            echo "### ECP5 synth + P&R (LFE5U-85F)"
+            echo "- ${fmax:-Fmax: see log}"
+            grep -E "Info: (Total LUT4s|Total DFFs|.*used)" build/nextpnr.log | sed 's/^/- /' | head -20 || true
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synth-ecp5
+          path: build/
+          retention-days: 14

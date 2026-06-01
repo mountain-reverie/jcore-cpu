@@ -84,9 +84,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libmpfr-dev \
         libmpc-dev \
         libisl-dev \
-        libboost-system-dev \
-        libboost-python-dev \
-        libboost-filesystem-dev \
+        libboost-all-dev \
         libeigen3-dev \
         ghdl-mcode \
     && rm -rf /var/lib/apt/lists/*
@@ -249,5 +247,28 @@ RUN set -eux; \
     sh2-elf-gcc --version | head -1; \
     sta -version 2>&1 | head -1 || true; \
     test -f "$NANGATE_LIB"
+
+# ---------------------------------------------------------------------------
+# prjtrellis (libtrellis + ecppack + ECP5 chip DB) and nextpnr-ecp5.
+# Independent of the custom yosys (nextpnr consumes JSON). Pin both to a
+# known-good ref after the first green build (replace the refs below with the
+# resolved commit SHAs).
+# ---------------------------------------------------------------------------
+ARG TRELLIS_REF=1.4
+ARG NEXTPNR_REF=nextpnr-0.7
+RUN set -eux; \
+    git clone --recursive --branch ${TRELLIS_REF} https://github.com/YosysHQ/prjtrellis /tmp/prjtrellis; \
+    cmake -S /tmp/prjtrellis/libtrellis -B /tmp/prjtrellis/libtrellis/build \
+          -DCMAKE_INSTALL_PREFIX=/usr/local; \
+    cmake --build /tmp/prjtrellis/libtrellis/build -j"$(nproc)"; \
+    cmake --install /tmp/prjtrellis/libtrellis/build; \
+    git clone --recursive --branch ${NEXTPNR_REF} https://github.com/YosysHQ/nextpnr /tmp/nextpnr; \
+    cmake -S /tmp/nextpnr -B /tmp/nextpnr/build \
+          -DARCH=ecp5 -DTRELLIS_INSTALL_PREFIX=/usr/local -DCMAKE_INSTALL_PREFIX=/usr/local; \
+    cmake --build /tmp/nextpnr/build -j"$(nproc)"; \
+    cmake --install /tmp/nextpnr/build; \
+    rm -rf /tmp/prjtrellis /tmp/nextpnr; \
+    nextpnr-ecp5 --version; \
+    ecppack --help >/dev/null
 
 CMD ["/bin/bash"]

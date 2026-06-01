@@ -33,9 +33,11 @@ completes and `ecppack` produces a bitstream). Timing is **reported, not gated**
 - The driver strips verification cells before writing the netlist
   (`chformal -remove; delete t:$check t:$print`) — VHDL `assert` statements
   otherwise become `$check`/`$assert` cells that downstream readers reject.
-- ECP5 uses `synth_ecp5 -noabc9` and nextpnr `--ignore-loops --timing-allow-fail`:
-  the cpu has one false combinational SCC (datapath+decode forwarding) that abc9
-  and nextpnr's timing analyzer reject; generic abc and production Xilinx/Altera
-  tolerate it. `build/scc_report.txt` records it. Because `-noabc9` disables
-  timing-driven mapping, the core does not reach 50 MHz on ECP5 today; meaningful
-  timing gating is a follow-up tied to breaking that false loop.
+- ECP5 uses `synth_ecp5` with **abc9** (timing-driven mapping). This works
+  because the issue/slot false combinational loop is broken in
+  `core/datapath.vhm` (slot_o no longer depends on `instr.issue`; the CI guards
+  that slot_o stays out of every SCC). The core reaches ~40 MHz on the 85F —
+  still under 50, so nextpnr runs with `--timing-allow-fail` and timing is
+  reported, not gated. Closing the gap to 50 MHz is separate critical-path work.
+  (A residual lighter-`opt` SCC not involving slot_o may remain; abc9 resolves
+  it, and CI synthesizes via `synth_ecp5`.)

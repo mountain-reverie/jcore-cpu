@@ -215,6 +215,7 @@ begin
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
           variable next_state : debug_state_t;
+          variable slot_inst_en : std_logic;
         begin
           this.debug_o.ack := '0';
 
@@ -244,11 +245,19 @@ begin
             this.m_en      := '1';
             this.data_o := NULL_DATA_O;
           end if;
+          -- Snapshot inst_o.en for the slot decision below, taken BEFORE the
+          -- debug-command block can rewrite inst_o from `instr` (to_inst_o sets
+          -- en := instr.issue). That debug write only happens when
+          -- debug_state = READY, in which case slot is forced to 0 anyway, so
+          -- using the snapshot is behaviorally identical -- but it keeps
+          -- instr.issue out of slot_o's logic cone (breaks a false comb loop).
+          slot_inst_en := this.inst_o.en;
           -- check if instruction bus transaction finished
           if this.inst_o.en = '1' and inst_i.ack = '1' then
             this.if_dr_next := inst_i.d;
             this.if_en      := '1';
             this.inst_o := NULL_INST_O;
+            slot_inst_en := '0';
           elsif this.debug_state = READY and debug_i.en = '1' then
             -- handle debug command
             case debug_i.cmd is
@@ -289,7 +298,7 @@ begin
                                 this.enter_debug(this.enter_debug'left downto 1);
           end if;
 
-          if this.data_o.en = '0' and this.inst_o.en = '0' and this.debug_state /= READY then
+          if this.data_o.en = '0' and slot_inst_en = '0' and this.debug_state /= READY then
             -- present data read by completed transactions
             if this.m_en = '1' then
               this.m_dr := this.m_dr_next;

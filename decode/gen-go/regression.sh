@@ -527,19 +527,20 @@ report_tns
 exit
 TCL
 
-        # opensta 2.0.17 errors on some yosys-emitted Verilog
-        # constructs (escaped identifiers in concat LHS); these are
-        # non-fatal and STA proceeds. We capture stdout, parse WNS/TNS
-        # at the end, and treat parse failure as a STA failure.
+        # We capture stdout and parse WNS/TNS at the end, treating parse
+        # failure as a STA failure.
         if ! timeout 30 sta -no_init -no_splash "$tcl" >"$rpt" 2>&1; then
             echo "    FAIL [$label]: opensta did not complete (timeout or fatal error). See $rpt" >&2
             tail -20 "$rpt" | sed 's/^/         /' >&2
             return 1
         fi
 
+        # report_wns/report_tns print "wns max -2.02" (newer OpenSTA prints the
+        # path-group keyword before the value); take the last field so both the
+        # "wns -2.02" and "wns max -2.02" formats parse.
         local wns tns startpoint endpoint
-        wns=$(awk '/^wns/  {print $2; exit}' "$rpt")
-        tns=$(awk '/^tns/  {print $2; exit}' "$rpt")
+        wns=$(awk '/^wns/  {print $NF; exit}' "$rpt")
+        tns=$(awk '/^tns/  {print $NF; exit}' "$rpt")
         startpoint=$(awk '/^Startpoint:/ {sub(/^Startpoint: /,""); print; exit}' "$rpt")
         endpoint=$(awk '/^Endpoint:/   {sub(/^Endpoint: /,"");   print; exit}' "$rpt")
         wns="${wns:-?}"; tns="${tns:-?}"

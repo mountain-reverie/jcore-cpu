@@ -34,7 +34,14 @@ ARG GO_VERSION=1.26.2
 # OpenSTA is not packaged for Ubuntu; built from source below. OpenSTA requires
 # CUDD, also built from source (ivmai/cudd, the upstream OpenSTA dependency).
 # CUDD_COMMIT is ivmai/cudd HEAD (no tagged release covers the needed sources).
-ARG OPENSTA_COMMIT=13cd475ffa9a03f8a476b89035970226bc5b34ea
+#
+# We use the The-OpenROAD-Project/OpenSTA fork (not parallaxsw): the parallaxsw
+# HEAD (v3.1.0) crashes with "Error: stoi" on set_input_delay over the bracketed
+# escaped port names yosys emits for the flattened decoder (\op[code][0] etc).
+# The OpenROAD fork parses them fine. OPENSTA_COMMIT is LibreLane's vetted pin
+# (librelane/nix/opensta.nix, dated 2026-02-14), which reports STA version 2.7.0.
+ARG OPENSTA_REPO=https://github.com/The-OpenROAD-Project/OpenSTA.git
+ARG OPENSTA_COMMIT=857316ff001b2a8dbbdc5996944d08a6d38c87ab
 ARG CUDD_COMMIT=f54f533303640afd5dbe47a05ebeabb3066f2a25
 ARG NANGATE_URL=https://raw.githubusercontent.com/The-OpenROAD-Project/OpenSTA/master/examples/nangate45_slow.lib.gz
 
@@ -210,7 +217,7 @@ RUN set -eux; \
 #     CUDD in step 7. Installs `sta` to /usr/local/bin.
 # ---------------------------------------------------------------------------
 RUN set -eux; \
-    git clone https://github.com/parallaxsw/OpenSTA.git /tmp/OpenSTA; \
+    git clone "${OPENSTA_REPO}" /tmp/OpenSTA; \
     cd /tmp/OpenSTA; \
     git checkout ${OPENSTA_COMMIT}; \
     mkdir build && cd build; \

@@ -51,13 +51,19 @@ GHDL_ANALYZE="ghdl --std=93 -fexplicit --ieee=synopsys --workdir=$WORK ${FILES[*
 
 case "$BACKEND" in
   asic)
-    yosys -m ghdl -p "$GHDL_ANALYZE; synth -top cpu; check -assert; stat; write_verilog $OUT/cpu_asic.v"
+    # Strip verification cells emitted from VHDL `assert` statements so the
+    # written netlist re-reads cleanly downstream: chformal -remove drops
+    # $assert/$assume/$cover; `delete t:$check t:$print` drops the $check/$print
+    # cells (ghdl 6 + yosys 0.44) whose verilog backend otherwise emits empty
+    # `initial` blocks that OpenSTA's reader rejects.
+    yosys -m ghdl -p "$GHDL_ANALYZE; synth -top cpu; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_verilog $OUT/cpu_asic.v"
     ;;
   ecp5)
     # -noabc9: the cpu has a documented false combinational SCC (datapath+decode
     # forwarding) that abc9 rejects with 'Assert no_loops failed'. Generic abc and
     # production Xilinx/Altera tolerate it. See synth/README.md.
-    yosys -m ghdl -p "$GHDL_ANALYZE; synth_ecp5 -noabc9 -top cpu; check -assert; stat; write_json $OUT/cpu_ecp5.json"
+    # Strip verification cells (as above) so nextpnr-ecp5 can consume the JSON.
+    yosys -m ghdl -p "$GHDL_ANALYZE; synth_ecp5 -noabc9 -top cpu; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_ecp5.json"
     ;;
   *) echo "ERROR: unknown backend '$BACKEND' (want asic|ecp5)" >&2; exit 1 ;;
 esac

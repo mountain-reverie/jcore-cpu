@@ -70,3 +70,32 @@ def parse_sta_report(text, period_ns):
         if crit > 0:
             out["fmax_mhz"] = 1000.0 / crit
     return out
+
+
+NEXTPNR_BLOCKS = [
+    "TRELLIS_COMB", "TRELLIS_FF", "DP16KD", "MULT18X18D",
+    "ALU54B", "TRELLIS_IO", "EHXPLLL",
+]
+
+
+def parse_nextpnr_log(text):
+    """nextpnr-ecp5 stdout -> {"util": {block: used}, "fmax": {clock: mhz}}.
+
+    Utilisation rows look like "  TRELLIS_COMB:  6789/83640  8%"; we keep the
+    `used` number. Fmax rows: "Max frequency for clock '<name>': 41.23 MHz".
+    Clock names are cleaned ($glbnet$clk -> clk) and we keep the lowest Fmax
+    seen per cleaned name (the binding constraint).
+    """
+    util, fmax = {}, {}
+    for line in text.splitlines():
+        for blk in NEXTPNR_BLOCKS:
+            m = re.search(r"\b%s:\s+(\d+)/" % re.escape(blk), line)
+            if m:
+                util[blk] = int(m.group(1))
+        m = re.search(r"Max frequency for clock '([^']+)':\s+([\d.]+)\s*MHz", line)
+        if m:
+            name = m.group(1).split("$")[-1]  # $glbnet$clk -> clk
+            val = float(m.group(2))
+            if name not in fmax or val < fmax[name]:
+                fmax[name] = val
+    return {"util": util, "fmax": fmax}

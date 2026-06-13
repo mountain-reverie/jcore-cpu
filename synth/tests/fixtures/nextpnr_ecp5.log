@@ -1,0 +1,11 @@
+Info: Device utilisation:
+Info: 	          TRELLIS_COMB:  6789/83640    8%
+Info: 	           TRELLIS_FF:  1234/83640    1%
+Info: 	         TRELLIS_RAMW:     0/10455    0%
+Info: 	               DP16KD:     2/  208    0%
+Info: 	           MULT18X18D:     1/  156    0%
+Info: 	               ALU54B:     0/   78    0%
+Info: 	           TRELLIS_IO:    42/  365   11%
+Info: 	              EHXPLLL:     0/    4    0%
+Info: Max frequency for clock '$glbnet$clk$TRELLIS_IO_IN': 41.23 MHz (PASS at 50.00 MHz)
+Info: Max frequency for clock '$glbnet$clk': 38.90 MHz (PASS at 50.00 MHz)

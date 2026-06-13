@@ -37,5 +37,21 @@ class TestYosysStat(unittest.TestCase):
         self.assertNotIn("area", got["foo"])
 
 
+class TestStaReport(unittest.TestCase):
+    def test_wns_tns(self):
+        got = metrics.parse_sta_report(read("sta_cpu.txt"), period_ns=20.0)
+        self.assertAlmostEqual(got["wns"], -4.83)
+        self.assertAlmostEqual(got["tns"], -52.10)
+
+    def test_fmax_from_critical_path(self):
+        # critical path = period - wns = 20 - (-4.83) = 24.83 ns -> 40.27 MHz
+        got = metrics.parse_sta_report(read("sta_cpu.txt"), period_ns=20.0)
+        self.assertAlmostEqual(got["fmax_mhz"], 1000.0 / 24.83, places=2)
+
+    def test_power_total_mw(self):
+        got = metrics.parse_sta_report(read("sta_cpu.txt"), period_ns=20.0)
+        self.assertAlmostEqual(got["power_mw"], 12.57, places=2)  # 1.257e-2 W
+
+
 if __name__ == "__main__":
     unittest.main()

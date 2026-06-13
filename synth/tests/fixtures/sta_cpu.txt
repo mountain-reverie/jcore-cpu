@@ -1,0 +1,23 @@
+Startpoint: u_datapath.reg_q[3] (rising edge-triggered flip-flop)
+Endpoint: u_datapath.acc_q[7] (rising edge-triggered flip-flop)
+Path Group: virt_clk
+Path Type: max
+
+  Delay    Time   Description
+---------------------------------------------------------
+   0.00    0.00   clock virt_clk (rise edge)
+  24.83   24.83   data arrival time
+  20.00   20.00   data required time
+---------------------------------------------------------
+                  slack (VIOLATED) -4.83
+
+wns max -4.83
+tns max -52.10
+
+Group                   Internal  Switching    Leakage      Total
+                           Power      Power      Power      Power
+----------------------------------------------------------------
+Sequential              4.10e-03   1.20e-03   3.00e-05   5.33e-03
+Combinational           5.00e-03   2.10e-03   4.00e-05   7.24e-03
+----------------------------------------------------------------
+Total                   9.10e-03   3.30e-03   7.00e-05   1.257e-02

@@ -8,12 +8,16 @@ window.BENCHMARK_DATA = {
           { name: "asic-nangate45 · cpu/area", unit: "um2", value: 49000, extra: "direct-rom72" },
           { name: "asic-nangate45 · datapath/area", unit: "um2", value: 20100, extra: "direct-rom72" },
           { name: "asic-nangate45 · decode/area", unit: "um2", value: 11200, extra: "direct-rom72" },
+          { name: "asic-nangate45 · mult/area", unit: "um2", value: 8500, extra: "direct-rom72" },
+          { name: "asic-nangate45 · register_file/area", unit: "um2", value: 6400, extra: "direct-rom72" },
           { name: "ecp5-lfe5u-85f · cpu/LUT4", unit: "LUT4", value: 6900, extra: "direct-rom72" } ] },
       { commit: { id: "bbb2222", message: "second", timestamp: "2026-06-11T00:00:00Z", url: "#" }, date: 1700086400000,
         benches: [
           { name: "asic-nangate45 · cpu/area", unit: "um2", value: 48210, extra: "direct-rom72" },
           { name: "asic-nangate45 · datapath/area", unit: "um2", value: 19880, extra: "direct-rom72" },
           { name: "asic-nangate45 · decode/area", unit: "um2", value: 11020, extra: "direct-rom72" },
+          { name: "asic-nangate45 · mult/area", unit: "um2", value: 8450, extra: "direct-rom72" },
+          { name: "asic-nangate45 · register_file/area", unit: "um2", value: 6300, extra: "direct-rom72" },
           { name: "ecp5-lfe5u-85f · cpu/LUT4", unit: "LUT4", value: 6789, extra: "direct-rom72" } ] }
     ],
     "synth-speed": [

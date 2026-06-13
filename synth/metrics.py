@@ -36,7 +36,7 @@ def parse_yosys_stat(text):
             continue
         m = re.search(r"Chip area for top module '\\?(\S+?)':\s+([\d.]+)", line)
         if m:
-            out[m.group(1)]["area"] = float(m.group(2))
+            out.setdefault(m.group(1), {})["area"] = float(m.group(2))
             continue
         m = re.search(r"Chip area for module '\\?(\S+?)':\s+([\d.]+)", line)
         if m and "area" not in out.get(m.group(1), {}):

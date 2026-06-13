@@ -27,6 +27,15 @@ class TestYosysStat(unittest.TestCase):
         self.assertEqual(got["cpu"]["cells"], 5678)
         self.assertAlmostEqual(got["cpu"]["area"], 48210.0)
 
+    def test_empty_input_returns_empty(self):
+        self.assertEqual(metrics.parse_yosys_stat(""), {})
+
+    def test_module_without_liberty_area_has_cells_only(self):
+        text = "=== foo ===\n   Number of cells:                 12\n"
+        got = metrics.parse_yosys_stat(text)
+        self.assertEqual(got["foo"]["cells"], 12)
+        self.assertNotIn("area", got["foo"])
+
 
 if __name__ == "__main__":
     unittest.main()

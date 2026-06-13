@@ -129,7 +129,7 @@ jobs:
           for f in core/mult core/datapath decode/decode_core; do
             LD_LIBRARY_PATH='' perl "$GITHUB_WORKSPACE/jcore-soc/tools/v2p" < "$f.vhm" > "$f.vhd"
           done
-      - name: Synthesize (synth_ecp5 -noabc9) + assert no latches
+      - name: Synthesize (synth_ecp5, abc9) + assert no latches
         run: synth/cpu_synth.sh ecp5
       - name: Guard — slot_o is not in any combinational loop
         # Regression guard for the issue/slot loop break (core/datapath.vhm):

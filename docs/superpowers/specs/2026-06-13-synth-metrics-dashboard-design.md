@@ -7,9 +7,10 @@ Status: approved (brainstorming)
 ## Goal
 
 Capture FPGA and ASIC synthesis metrics from the existing `synth-cpu` CI on
-every commit, persist them as per-commit history on the `gh-pages` branch,
-alert on regressions in pull requests, and render trend, per-block, and
-variant-comparison dashboards on GitHub Pages.
+every commit, persist them as per-commit history on the GitHub Pages site
+itself (no `gh-pages` branch — see Architecture), alert on regressions in pull
+requests, and render trend, per-block, and variant-comparison dashboards on
+GitHub Pages.
 
 The dashboard serves four purposes, all selected during brainstorming:
 
@@ -89,6 +90,15 @@ from the existing `stat`.
 custom Chart.js dashboard provides the rich per-block and variant views the
 action's fixed per-metric layout cannot.
 
+**Persistence is branch-less, matching playwright-ci-go.** GitHub Pages is
+served from **GitHub Actions** (not a `gh-pages` branch). The action runs with
+`auto-push: false` and `external-data-json-path` pointing at a local JSON file.
+History is bootstrapped each run by `curl`-ing the previously-published
+`benchmark-data.json` *back from the live Pages site*; the action appends the
+new commit; we regenerate `data.js` (`window.BENCHMARK_DATA = ...`); and the
+whole site tree is redeployed via `upload-pages-artifact` + `deploy-pages`.
+**The published site is the database.** No persistent branch to manage.
+
 ```
 synth-cpu.yml  (runs on PR + master push)
   ├─ [existing] generate decoder → v2p preprocess → cpu_synth.sh asic|ecp5
@@ -96,16 +106,24 @@ synth-cpu.yml  (runs on PR + master push)
   ├─ [NEW] synth/cpu_sta.sh        full-CPU Nangate45 map + OpenSTA → reports
   │                                (asic job only; reuses image Liberty + sta)
   ├─ [NEW] synth/metrics.sh        netlist+logs → synth/metrics/<target>.json
-  ├─ [NEW] synth/to-gha-bench.sh   canonical JSON → gha-bench-{size,speed}.json
-  └─ [NEW] publish-metrics job:
-        benchmark-action/github-action-benchmark@v1  (x2: size, speed suites)
-          ├─ PR event:     comment + alert,  auto-push = false
-          └─ push(master): append to window.BENCHMARK_DATA, auto-push = true
+  └─ [NEW] synth/to-gha-bench.sh   canonical JSON → gha-bench-{size,speed}.json
+        (metric JSON uploaded as a per-job artifact)
 
-gh-pages branch
-  ├─ dev/bench/         action's auto-generated per-metric charts (raw fallback)
-  ├─ data.js            window.BENCHMARK_DATA — full history, our source of truth
-  └─ index.html, app.js [NEW] custom dashboard reading data.js
+publish-pages job  (needs: synth-asic, synth-ecp5)
+  ├─ download metric artifacts → run to-gha-bench.sh → site/bench-{size,speed}/*.json
+  ├─ curl prior benchmark-data.json from live Pages URL (touch on first run)
+  ├─ github-action-benchmark@v1 ×2 (size: customSmallerIsBetter,
+  │     speed: customBiggerIsBetter), auto-push:false, external-data-json-path,
+  │     comment-on-alert:true, alert-threshold:110%, fail-on-alert:false
+  ├─ regenerate site/bench-*/data.js from each benchmark-data.json
+  ├─ copy custom dashboard (index.html, app.js) into site/
+  └─ PR:     stop here (comment+alert only — site NOT deployed, history intact)
+     master: upload-pages-artifact + deploy-pages  (publishes new history)
+
+Published site (the database)
+  ├─ bench-size/   {benchmark-data.json, data.js, action index.html}
+  ├─ bench-speed/  {benchmark-data.json, data.js, action index.html}
+  └─ index.html, app.js   [NEW] custom dashboard reading both data.js files
 ```
 
 ## Components
@@ -116,8 +134,10 @@ Extends the proven decoder STA flow to the whole CPU. Single responsibility:
 take the generic netlist `build/cpu_asic.v` (written by `cpu_synth.sh asic`),
 tech-map it to Nangate45 and run OpenSTA. Mirrors `regression.sh` Step 8:
 `read_verilog` → `dfflibmap -liberty $NANGATE_LIB` → `abc -liberty $NANGATE_LIB`
-→ write mapped netlist; then `sta` with a virtual clock at a target period,
-emitting `report_wns`, `report_tns`, critical-path, and `report_power`. Writes
+→ write mapped netlist; then `sta` with a virtual clock whose period is
+`1000 / ECP5_TARGET_MHZ` ns (50 MHz → 20 ns, shared with the ECP5 flow for
+cross-flow comparability; overridable), emitting `report_wns`, `report_tns`,
+critical-path, and `report_power`. Writes
 `build/cpu_asic_mapped.v` and `build/cpu_asic_sta.rpt`. Reuses the image's
 `NANGATE_LIB` and `sta`. Best-effort and non-gating: if `sta` or the Liberty
 file is absent (local dev), it prints a `WARN` and exits 0 — `metrics.sh` then
@@ -168,8 +188,9 @@ real synthesizability/fit failure.
 ### 2. Converter — `synth/to-gha-bench.sh` (new)
 
 Reads all `synth/metrics/*.json`, splits metrics by `dir`, and writes two
-files in `github-action-benchmark`'s `customSmallerIsBetter` /
-`customBiggerIsBetter` format:
+**new-result** files in `github-action-benchmark`'s `customSmallerIsBetter` /
+`customBiggerIsBetter` array format (these are the per-run inputs the action
+merges into each suite's accumulated `benchmark-data.json` history):
 
 - `build/gha-bench-size.json` — all `dir: smaller` metrics
 - `build/gha-bench-speed.json` — all `dir: bigger` metrics
@@ -184,26 +205,40 @@ variant string for future faceting.
 - `synth-asic` gains a `Full-CPU STA` step (`synth/cpu_sta.sh`) after the
   existing synth gate; `synth-asic` and `synth-ecp5` each then gain
   `Emit metrics` (runs `synth/metrics.sh`) and upload `synth/metrics/*.json`
-  as artifacts.
-- A new `publish-metrics` job `needs: [synth-asic, synth-ecp5]`, downloads both
-  metric artifacts, runs `synth/to-gha-bench.sh`, then runs
-  `benchmark-action/github-action-benchmark@v1` twice (size + speed suites)
-  with:
-  - `tool: customSmallerIsBetter` / `customBiggerIsBetter`
-  - `comment-on-alert: true`, `alert-threshold: "110%"`, `fail-on-alert: false`
-  - `auto-push: ${{ github.event_name == 'push' }}`
-  - `gh-pages-branch: gh-pages`, `benchmark-data-dir-path: dev/bench`
-- A `deploy-pages` step (or job) publishes the `dashboard/` static files
-  alongside `data.js` on `gh-pages`.
+  as a per-job artifact.
+- A new `publish-pages` job `needs: [synth-asic, synth-ecp5]`:
+  1. Downloads both metric artifacts, runs `synth/to-gha-bench.sh` →
+     `site/bench-size/` and `site/bench-speed/` benchmark input files.
+  2. Bootstraps history: for each suite, `curl --head --fail` the live
+     `https://<owner>.github.io/<repo>/bench-<kind>/benchmark-data.json`; on
+     success download it, else `touch` an empty file (first run).
+  3. Runs `benchmark-action/github-action-benchmark@v1` twice:
+     - size suite → `tool: customSmallerIsBetter`
+     - speed suite → `tool: customBiggerIsBetter`
+     - both: `auto-push: false`, `external-data-json-path: <suite>/benchmark-data.json`,
+       `comment-on-alert: true`, `alert-threshold: "110%"`, `fail-on-alert: false`.
+  4. Regenerates `data.js` for each suite
+     (`echo "window.BENCHMARK_DATA = $(cat …/benchmark-data.json)" > …/data.js`).
+  5. Copies the custom dashboard (`dashboard/*`) into `site/`.
+  6. **On `push` to master only:** `upload-pages-artifact` + `deploy-pages`
+     publishes the updated site (= the new history). On PRs the job stops after
+     step 5 — the action has already posted its comment/alert, and because the
+     site is not redeployed the published history is left untouched.
 
-PR runs comment + alert but never push history; only master pushes append to
-`window.BENCHMARK_DATA`. Standard `github-action-benchmark` behavior, keeps the
-history clean.
+This mirrors playwright-ci-go: `auto-push: false` + `external-data-json-path` +
+curl-bootstrap-from-live-site, deployed via the Actions Pages pipeline. No
+`gh-pages` branch.
+
+**Prerequisites:** repo Settings → Pages → Source = "GitHub Actions"; the
+`publish-pages` job needs `permissions: { contents: read, pages: write,
+id-token: write }` and the `comment-on-alert` step needs `pull-requests: write`.
 
 ### 4. Custom dashboard — `dashboard/` → deployed to `gh-pages` (new)
 
-Vanilla JS + Chart.js, gcc-sh-monitor style. Reads the action's `data.js`
-(`window.BENCHMARK_DATA`). Three views:
+Vanilla JS + Chart.js, gcc-sh-monitor style. Loads both suites'
+`bench-size/data.js` and `bench-speed/data.js` (each sets
+`window.BENCHMARK_DATA`; the loader captures each before loading the next).
+Three views:
 
 - **Trends** — line charts per metric over commits, faceted by target
   (asic-nangate45, ecp5-lfe5u-85f). Click a point → link to the commit.
@@ -213,8 +248,8 @@ Vanilla JS + Chart.js, gcc-sh-monitor style. Reads the action's `data.js`
   variant. Starts with a single row (`direct-rom72`) and grows as ROM-table /
   ROM-width-64 / SH-4 variants are added — no restructuring required.
 
-The action's auto-generated `dev/bench/index.html` remains reachable as a raw
-per-metric fallback.
+The action's auto-generated `bench-size/index.html` and `bench-speed/index.html`
+remain reachable as raw per-metric fallbacks.
 
 ## Data Model & Extensibility
 

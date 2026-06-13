@@ -53,10 +53,10 @@ def parse_sta_report(text, period_ns):
     """
     out = {}
     for line in text.splitlines():
-        m = re.match(r"^wns\b.*?(-?[\d.]+)\s*$", line)
+        m = re.match(r"^wns\b.*?(-?[\d.eE+-]+)\s*$", line)
         if m:
             out["wns"] = float(m.group(1))
-        m = re.match(r"^tns\b.*?(-?[\d.]+)\s*$", line)
+        m = re.match(r"^tns\b.*?(-?[\d.eE+-]+)\s*$", line)
         if m:
             out["tns"] = float(m.group(1))
         m = re.match(r"^Total\s+.*\s+([\d.eE+-]+)\s*$", line)

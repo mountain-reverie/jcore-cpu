@@ -244,6 +244,7 @@ jobs:
           done
       - name: Append size suite
         uses: benchmark-action/github-action-benchmark@v1
+        continue-on-error: true
         with:
           name: synth-size
           tool: customSmallerIsBetter
@@ -257,6 +258,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Append speed suite
         uses: benchmark-action/github-action-benchmark@v1
+        continue-on-error: true
         with:
           name: synth-speed
           tool: customBiggerIsBetter
@@ -272,8 +274,14 @@ jobs:
         run: |
           set -euo pipefail
           for kind in size speed; do
-            echo "window.BENCHMARK_DATA = $(cat site/bench-$kind/benchmark-data.json)" \
-              > "site/bench-$kind/data.js"
+            f="site/bench-$kind/benchmark-data.json"
+            # If an Append step no-op'd (empty suite / comment 403 on a fork PR),
+            # the data file may be empty. Substitute a valid empty history so the
+            # generated data.js is always parseable JavaScript.
+            if [ ! -s "$f" ]; then
+              echo '{"lastUpdate":0,"repoUrl":"","entries":{}}' > "$f"
+            fi
+            echo "window.BENCHMARK_DATA = $(cat "$f")" > "site/bench-$kind/data.js"
           done
           cp dashboard/index.html dashboard/app.js site/
           mkdir -p site/fixtures && cp dashboard/fixtures/data.js site/fixtures/

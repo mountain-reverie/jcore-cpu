@@ -69,10 +69,17 @@ class TestNextpnrLog(unittest.TestCase):
         self.assertEqual(got["util"]["MULT18X18D"], 1)
         self.assertEqual(got["util"]["TRELLIS_IO"], 42)
 
-    def test_fmax_per_clock_keeps_max(self):
+    def test_fmax_per_clock_from_fixture(self):
         got = metrics.parse_nextpnr_log(read("nextpnr_ecp5.log"))
         # bare '$glbnet$clk' is the canonical clock; cleaned name is "clk"
         self.assertAlmostEqual(got["fmax"]["clk"], 38.90)
+
+    def test_fmax_keeps_lowest_on_name_collision(self):
+        # two lines cleaning to the same name 'clk' -> keep the binding (lowest)
+        text = ("Info: Max frequency for clock '$glbnet$clk': 55.00 MHz\n"
+                "Info: Max frequency for clock '$net$clk': 40.00 MHz\n")
+        got = metrics.parse_nextpnr_log(text)
+        self.assertAlmostEqual(got["fmax"]["clk"], 40.00)
 
 
 if __name__ == "__main__":

@@ -48,6 +48,10 @@ jcore-decoder-migration-spec-v2.md
 # synth/ build artifacts (netlists, GHDL work dirs)
 build/
 
+# Python bytecode (synth/ metrics scripts + tests)
+__pycache__/
+*.pyc
+
 # Editor / OS noise
 .vscode/
 .idea/

@@ -62,6 +62,36 @@ jobs:
             echo "- gate: \`check -assert\` (no latches / multi-driver) passed"
             echo "- timing: reported on ECP5; not gated (see workflow header)"
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Full-CPU STA (Nangate45 + OpenSTA)
+        run: synth/cpu_sta.sh   # non-gating; writes build/cpu_asic_sta.rpt
+        env:
+          NANGATE_LIB: /opt/nangate45/nangate45.lib
+      - name: Emit ASIC metrics
+        continue-on-error: true
+        env:
+          NANGATE_LIB: /opt/nangate45/nangate45.lib
+        run: |
+          set -uo pipefail
+          # Per-block area from the Nangate45-mapped netlist (written by cpu_sta.sh).
+          # Guarded so a missing mapped netlist (STA skipped) never fails the step.
+          if [ -f build/cpu_asic_mapped.v ]; then
+            yosys -p "read_verilog build/cpu_asic_mapped.v; stat -liberty $NANGATE_LIB" \
+              | tee build/asic_area_stat.txt || true
+          else
+            echo "WARN: build/cpu_asic_mapped.v absent — ASIC area/timing metrics will be partial" >&2
+          fi
+          period_ns=$(awk -v m="${ECP5_TARGET_MHZ}" 'BEGIN{printf "%.4f",1000.0/m}')
+          python3 synth/metrics.py --target asic-nangate45 \
+            --commit "${GITHUB_SHA}" --out synth/metrics/asic-nangate45.json \
+            --stat build/asic_area_stat.txt --sta build/cpu_asic_sta.rpt \
+            --period-ns "$period_ns" || true
+      - name: Upload ASIC metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics-asic
+          path: synth/metrics/*.json
+          retention-days: 14
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -136,6 +166,20 @@ jobs:
             grep -E "Info:[[:space:]]+(TRELLIS_COMB|TRELLIS_FF|DP16KD|MULT18X18D|ALU54B|TRELLIS_IO|EHXPLLL):" build/nextpnr.log | sed -E 's/^Info:[[:space:]]*/    /' || true
             echo "- target ${ECP5_TARGET_MHZ} MHz is reported, not gated (see workflow header)"
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Emit ECP5 metrics
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          python3 synth/metrics.py --target ecp5-lfe5u-85f \
+            --commit "${GITHUB_SHA}" --out synth/metrics/ecp5-lfe5u-85f.json \
+            --nextpnr build/nextpnr.log || true
+      - name: Upload ECP5 metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics-ecp5
+          path: synth/metrics/*.json
+          retention-days: 14
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -143,3 +187,102 @@ jobs:
           name: synth-ecp5
           path: build/
           retention-days: 14
+
+  publish-pages:
+    needs: [synth-asic, synth-ecp5]
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+      pull-requests: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download ASIC metrics
+        uses: actions/download-artifact@v4
+        with:
+          name: metrics-asic
+          path: metrics-in
+        continue-on-error: true
+      - name: Download ECP5 metrics
+        uses: actions/download-artifact@v4
+        with:
+          name: metrics-ecp5
+          path: metrics-in
+        continue-on-error: true
+      - name: Build action inputs
+        run: |
+          set -euo pipefail
+          mkdir -p site/bench-size site/bench-speed metrics-in
+          shopt -s nullglob
+          inputs=(metrics-in/*.json)
+          if [ ${#inputs[@]} -eq 0 ]; then
+            echo "WARN: no metric artifacts found — emitting empty suites" >&2
+            echo "[]" > build-size.json; echo "[]" > build-speed.json
+          else
+            python3 synth/to_gha_bench.py "${inputs[@]}" \
+              --size-out build-size.json --speed-out build-speed.json
+          fi
+          ls -l build-size.json build-speed.json
+      - name: Bootstrap prior history from the live site
+        run: |
+          set -euo pipefail
+          base="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY##*/}"
+          for kind in size speed; do
+            url="$base/bench-$kind/benchmark-data.json"
+            if curl -fsSL --head "$url" >/dev/null 2>&1; then
+              curl -fsSL "$url" -o "site/bench-$kind/benchmark-data.json"
+              echo "fetched prior $kind history"
+            else
+              echo '{}' > "site/bench-$kind/benchmark-data.json"
+              echo "no prior $kind history (first run)"
+            fi
+          done
+      - name: Append size suite
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: synth-size
+          tool: customSmallerIsBetter
+          output-file-path: build-size.json
+          external-data-json-path: site/bench-size/benchmark-data.json
+          benchmark-data-dir-path: site/bench-size
+          alert-threshold: "110%"
+          comment-on-alert: true
+          fail-on-alert: false
+          auto-push: false
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Append speed suite
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: synth-speed
+          tool: customBiggerIsBetter
+          output-file-path: build-speed.json
+          external-data-json-path: site/bench-speed/benchmark-data.json
+          benchmark-data-dir-path: site/bench-speed
+          alert-threshold: "110%"
+          comment-on-alert: true
+          fail-on-alert: false
+          auto-push: false
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Assemble site
+        run: |
+          set -euo pipefail
+          for kind in size speed; do
+            echo "window.BENCHMARK_DATA = $(cat site/bench-$kind/benchmark-data.json)" \
+              > "site/bench-$kind/data.js"
+          done
+          cp dashboard/index.html dashboard/app.js site/
+          mkdir -p site/fixtures && cp dashboard/fixtures/data.js site/fixtures/
+      - name: Upload Pages artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: Deploy to GitHub Pages
+        id: deploy
+        if: github.event_name == 'push'
+        uses: actions/deploy-pages@v4

@@ -23,19 +23,19 @@ function loadData(src) {
 // is captured before the next overwrites it.
 function boot() {
   loadData("./bench-size/data.js")
-    .then(function (size) {
-      window.__SIZE__ = size;
-      return loadData("./bench-speed/data.js");
+    .then(function (size) { window.__SIZE__ = size; }, function () { /* size suite absent */ })
+    .then(function () { return loadData("./bench-speed/data.js"); })
+    .then(function (speed) { window.__SPEED__ = speed; }, function () { /* speed suite absent */ })
+    .then(function () {
+      if (window.__SIZE__ || window.__SPEED__) return;
+      // Local dev: no published suites — fall back to the committed fixture
+      // (one object standing in for both suites).
+      return loadData("./fixtures/data.js").then(function (d) {
+        window.__SIZE__ = d; window.__SPEED__ = d;
+      });
     })
-    .then(function (speed) {
-      window.__SPEED__ = speed;
-      render();
-    })
-    .catch(function () {
-      loadData("./fixtures/data.js")
-        .then(function (d) { window.__SIZE__ = d; window.__SPEED__ = d; render(); })
-        .catch(function (e) { console.error("no benchmark data available", e); });
-    });
+    .then(render)
+    .catch(function (e) { console.error("no benchmark data available", e); });
 }
 
 function seriesByName(data) {
@@ -71,7 +71,7 @@ function render() {
     var unit = name.indexOf("Fmax") >= 0 ? "MHz" : (name.indexOf("area") >= 0 ? "um2" : "");
     lineCard(trends, name, all[name].slice().sort(function (a, b) { return a.x - b.x; }), unit);
   });
-  renderPerBlock(size);
+  renderPerBlock();
   renderVariants(all);
 }
 
@@ -85,7 +85,7 @@ function latestBenches(data) {
   return map;
 }
 
-function renderPerBlock(size) {
+function renderPerBlock() {
   var latest = latestBenches(window.__SIZE__);
   var blocks = ["decode", "datapath", "mult", "register_file"];
   var vals = blocks.map(function (b) { var k = "asic-nangate45 · " + b + "/area"; return latest[k] ? latest[k].value : 0; });
@@ -102,7 +102,7 @@ function renderVariants(all) {
   var rows = {}, variants = {};
   Object.keys(all).forEach(function (name) {
     var pts = all[name]; if (!pts.length) return;
-    var last = pts[pts.length - 1];
+    var last = pts.slice().sort(function (a, b) { return a.x - b.x; })[pts.length - 1];
     var v = "current"; variants[v] = true;
     (rows[name] = rows[name] || {})[v] = last.y;
   });

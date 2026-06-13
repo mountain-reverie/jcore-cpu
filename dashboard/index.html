@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>jcore-cpu — Synthesis Metrics</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 1.5rem; color: #1b1b1b; }
+    h1 { font-size: 1.4rem; } h2 { font-size: 1.1rem; margin-top: 2rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1rem; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 0.75rem; }
+    table { border-collapse: collapse; } td, th { border: 1px solid #ddd; padding: 4px 8px; }
+    .muted { color: #666; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <h1>jcore-cpu synthesis metrics</h1>
+  <p class="muted">Per-commit FPGA (ECP5) &amp; ASIC (Nangate45) trends. Raw per-metric charts:
+    <a href="./bench-size/">size</a> · <a href="./bench-speed/">speed</a>.</p>
+
+  <h2>Trends</h2>
+  <div id="trends" class="grid"></div>
+
+  <h2>Per-block area (ASIC, latest)</h2>
+  <div class="card" style="max-width:640px"><canvas id="perblock"></canvas></div>
+
+  <h2>Variant comparison (latest)</h2>
+  <div id="variants"></div>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>

@@ -151,7 +151,6 @@ def _read(path):
 def main(argv=None):
     import argparse
     import json
-    import sys
 
     p = argparse.ArgumentParser(description="emit canonical synth metrics JSON")
     p.add_argument("--target", required=True, choices=["asic-nangate45", "ecp5-lfe5u-85f"])

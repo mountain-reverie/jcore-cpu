@@ -42,3 +42,31 @@ def parse_yosys_stat(text):
         if m and "area" not in out.get(m.group(1), {}):
             out[m.group(1)]["area"] = float(m.group(2))
     return out
+
+
+def parse_sta_report(text, period_ns):
+    """OpenSTA stdout -> {"wns","tns","fmax_mhz","power_mw"} (keys present only
+    when parsed). `report_wns`/`report_tns` print "wns max -4.83"; take the last
+    field so "wns -4.83" and "wns max -4.83" both parse. Fmax is derived from
+    the critical path = period - wns. Power total is the last numeric on the
+    "Total" row of report_power (Watts -> mW).
+    """
+    out = {}
+    for line in text.splitlines():
+        m = re.match(r"^wns\b.*?(-?[\d.]+)\s*$", line)
+        if m:
+            out["wns"] = float(m.group(1))
+        m = re.match(r"^tns\b.*?(-?[\d.]+)\s*$", line)
+        if m:
+            out["tns"] = float(m.group(1))
+        m = re.match(r"^Total\s+.*\s+([\d.eE+-]+)\s*$", line)
+        if m:
+            try:
+                out["power_mw"] = float(m.group(1)) * 1000.0
+            except ValueError:
+                pass
+    if "wns" in out:
+        crit = period_ns - out["wns"]  # wns<0 lengthens the path
+        if crit > 0:
+            out["fmax_mhz"] = 1000.0 / crit
+    return out

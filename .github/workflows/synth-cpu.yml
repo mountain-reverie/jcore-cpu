@@ -188,18 +188,18 @@ jobs:
           path: build/
           retention-days: 14
 
-  publish-pages:
+  # Benchmark comparison runs on PRs AND master push: it posts the regression
+  # comment/alert and assembles the site tree. It deliberately does NOT declare
+  # the github-pages environment, so a PR (which cannot deploy to that
+  # environment) is never rejected by its branch-protection rule. Deployment is
+  # confined to the separate push-only deploy-pages job below.
+  benchmark:
     needs: [synth-asic, synth-ecp5]
     if: always()
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-      pages: write
-      id-token: write
       pull-requests: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - name: Download ASIC metrics
@@ -290,7 +290,22 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
+
+  # Deployment is the ONLY consumer of the github-pages environment, and it runs
+  # only on push (the workflow's sole push trigger is master). On PRs this job is
+  # skipped entirely, so the environment's branch-protection rule is never
+  # evaluated and the run is not rejected.
+  deploy-pages:
+    needs: benchmark
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages
         id: deploy
-        if: github.event_name == 'push'
         uses: actions/deploy-pages@v4

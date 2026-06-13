@@ -60,5 +60,20 @@ class TestStaReport(unittest.TestCase):
         self.assertAlmostEqual(got["fmax_mhz"], 1000.0 / 18.50, places=2)
 
 
+class TestNextpnrLog(unittest.TestCase):
+    def test_utilisation_and_hardblocks(self):
+        got = metrics.parse_nextpnr_log(read("nextpnr_ecp5.log"))
+        self.assertEqual(got["util"]["TRELLIS_COMB"], 6789)
+        self.assertEqual(got["util"]["TRELLIS_FF"], 1234)
+        self.assertEqual(got["util"]["DP16KD"], 2)
+        self.assertEqual(got["util"]["MULT18X18D"], 1)
+        self.assertEqual(got["util"]["TRELLIS_IO"], 42)
+
+    def test_fmax_per_clock_keeps_max(self):
+        got = metrics.parse_nextpnr_log(read("nextpnr_ecp5.log"))
+        # bare '$glbnet$clk' is the canonical clock; cleaned name is "clk"
+        self.assertAlmostEqual(got["fmax"]["clk"], 38.90)
+
+
 if __name__ == "__main__":
     unittest.main()

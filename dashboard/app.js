@@ -88,6 +88,11 @@ function latestBenches(data) {
 function renderPerBlock() {
   var latest = latestBenches(window.__SIZE__);
   var blocks = ["decode", "datapath", "mult", "register_file"];
+  var present = blocks.filter(function (b) { return latest["asic-nangate45 · " + b + "/area"]; });
+  // Per-block ASIC area isn't emitted yet (the ASIC flow is flattened); keep the
+  // section hidden until at least one block reports, so we don't show zero bars.
+  if (!present.length) return;
+  document.getElementById("perblock-section").hidden = false;
   var vals = blocks.map(function (b) { var k = "asic-nangate45 · " + b + "/area"; return latest[k] ? latest[k].value : 0; });
   new Chart(document.getElementById("perblock"), {
     type: "bar",

@@ -16,14 +16,17 @@
 </head>
 <body>
   <h1>jcore-cpu synthesis metrics</h1>
-  <p class="muted">Per-commit FPGA (ECP5) &amp; ASIC (Nangate45) trends. Raw per-metric charts:
-    <a href="./bench-size/">size</a> · <a href="./bench-speed/">speed</a>.</p>
+  <p class="muted">Per-commit FPGA (ECP5) &amp; ASIC (Nangate45) trends. Raw data:
+    <a href="./bench-size/benchmark-data.json">size</a> ·
+    <a href="./bench-speed/benchmark-data.json">speed</a>.</p>
 
   <h2>Trends</h2>
   <div id="trends" class="grid"></div>
 
-  <h2>Per-block area (ASIC, latest)</h2>
-  <div class="card" style="max-width:640px"><canvas id="perblock"></canvas></div>
+  <section id="perblock-section" hidden>
+    <h2>Per-block area (ASIC, latest)</h2>
+    <div class="card" style="max-width:640px"><canvas id="perblock"></canvas></div>
+  </section>
 
   <h2>Variant comparison (latest)</h2>
   <div id="variants"></div>

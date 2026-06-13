@@ -126,15 +126,37 @@ def build_asic(stat, sta, variant, commit):
             "commit": commit, "metrics": metrics_}
 
 
-def build_ecp5(npr, variant, commit):
-    """Canonical doc for the ECP5 FPGA flow."""
+def parse_nextpnr_fmax(text):
+    """Final (post-route) Fmax in MHz from a nextpnr log: the value on the LAST
+    'Max frequency for clock' line. nextpnr prints an early placement estimate
+    and a final post-route value for the same clock; the last line is the final
+    one — matching the CI gate's `tail -1` extraction. Returns float or None.
+    """
+    val = None
+    for line in text.splitlines():
+        m = re.search(r"Max frequency for clock '[^']+':\s+([\d.]+)\s*MHz", line)
+        if m:
+            val = float(m.group(1))
+    return val
+
+
+def build_ecp5(util, fmax_rep, fmax_bare, variant, commit):
+    """Canonical doc for the ECP5 FPGA flow.
+
+    util: {block: used} from the bare-cpu nextpnr log (LUT/FF/hard blocks).
+    fmax_rep: representative Fmax (MHz) from the cpu_timing_top harness P&R —
+              the number the CI gate measures. fmax_bare: the bare-cpu Fmax,
+              depressed by the unconstrained-IO artifact. Both surfaced, labelled.
+    """
     unit_for = {"TRELLIS_COMB": "LUT4", "TRELLIS_FF": "FF"}
     metrics_ = []
-    for blk, used in sorted(npr.get("util", {}).items()):
+    for blk, used in sorted(util.items()):
         label = unit_for.get(blk, blk)
         metrics_.append(_metric("cpu/%s" % label, label, used, "smaller"))
-    for clk, mhz in sorted(npr.get("fmax", {}).items()):
-        metrics_.append(_metric("%s/Fmax" % clk, "MHz", mhz, "bigger"))
+    if fmax_rep is not None:
+        metrics_.append(_metric("cpu/Fmax (representative)", "MHz", round(fmax_rep, 2), "bigger"))
+    if fmax_bare is not None:
+        metrics_.append(_metric("cpu/Fmax (IO-unconstrained)", "MHz", round(fmax_bare, 2), "bigger"))
     return {"target": "ecp5-lfe5u-85f", "variant": variant,
             "commit": commit, "metrics": metrics_}
 
@@ -159,7 +181,8 @@ def main(argv=None):
     p.add_argument("--out", required=True)
     p.add_argument("--stat", help="yosys stat -liberty dump (asic/ecp5)")
     p.add_argument("--sta", help="OpenSTA report (asic)")
-    p.add_argument("--nextpnr", help="nextpnr-ecp5 log (ecp5)")
+    p.add_argument("--nextpnr", help="bare-cpu nextpnr-ecp5 log (util + IO-unconstrained Fmax)")
+    p.add_argument("--nextpnr-timing", help="cpu_timing_top harness nextpnr log (representative Fmax)")
     p.add_argument("--period-ns", type=float, default=20.0)
     a = p.parse_args(argv)
 
@@ -168,8 +191,10 @@ def main(argv=None):
         sta = parse_sta_report(_read(a.sta), a.period_ns) if a.sta else {}
         doc = build_asic(stat, sta, a.variant, a.commit)
     else:
-        npr = parse_nextpnr_log(_read(a.nextpnr)) if a.nextpnr else {}
-        doc = build_ecp5(npr, a.variant, a.commit)
+        bare = parse_nextpnr_log(_read(a.nextpnr)) if a.nextpnr else {"util": {}}
+        fmax_bare = parse_nextpnr_fmax(_read(a.nextpnr)) if a.nextpnr else None
+        fmax_rep = parse_nextpnr_fmax(_read(a.nextpnr_timing)) if a.nextpnr_timing else None
+        doc = build_ecp5(bare.get("util", {}), fmax_rep, fmax_bare, a.variant, a.commit)
 
     if not doc["metrics"]:
         print("WARN: no metrics parsed for %s — writing empty doc" % a.target)

@@ -1,0 +1,9 @@
+{
+  "target": "asic-nangate45",
+  "variant": "direct-rom72",
+  "commit": "abc123",
+  "metrics": [
+    {"name": "cpu/area", "unit": "um2", "value": 48210.0, "dir": "smaller"},
+    {"name": "cpu/Fmax", "unit": "MHz", "value": 40.27, "dir": "bigger"}
+  ]
+}

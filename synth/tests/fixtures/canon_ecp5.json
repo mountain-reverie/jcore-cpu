@@ -1,0 +1,9 @@
+{
+  "target": "ecp5-lfe5u-85f",
+  "variant": "direct-rom72",
+  "commit": "abc123",
+  "metrics": [
+    {"name": "cpu/LUT4", "unit": "LUT4", "value": 6789, "dir": "smaller"},
+    {"name": "clk/Fmax", "unit": "MHz", "value": 38.9, "dir": "bigger"}
+  ]
+}

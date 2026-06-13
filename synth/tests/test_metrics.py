@@ -98,14 +98,35 @@ class TestBuildCanonical(unittest.TestCase):
         self.assertIn("cpu/power", names)
 
     def test_ecp5_metrics(self):
-        npr = metrics.parse_nextpnr_log(read("nextpnr_ecp5.log"))
-        doc = metrics.build_ecp5(npr, variant="direct-rom72", commit="abc123")
+        util = metrics.parse_nextpnr_log(read("nextpnr_ecp5.log"))["util"]
+        doc = metrics.build_ecp5(util, fmax_rep=42.86, fmax_bare=27.22,
+                                 variant="direct-rom72", commit="abc123")
         self.assertEqual(doc["target"], "ecp5-lfe5u-85f")
         names = {x["name"]: x for x in doc["metrics"]}
         self.assertEqual(names["cpu/LUT4"]["value"], 6789)
         self.assertEqual(names["cpu/LUT4"]["dir"], "smaller")
         self.assertEqual(names["cpu/DP16KD"]["dir"], "smaller")
-        self.assertEqual(names["clk/Fmax"]["dir"], "bigger")
+        self.assertEqual(names["cpu/Fmax (representative)"]["value"], 42.86)
+        self.assertEqual(names["cpu/Fmax (representative)"]["dir"], "bigger")
+        self.assertEqual(names["cpu/Fmax (IO-unconstrained)"]["value"], 27.22)
+
+    def test_ecp5_omits_absent_fmax(self):
+        doc = metrics.build_ecp5({"TRELLIS_COMB": 10}, fmax_rep=None,
+                                 fmax_bare=None, variant="v", commit="c")
+        names = [m["name"] for m in doc["metrics"]]
+        self.assertEqual(names, ["cpu/LUT4"])  # no Fmax entries when unparsed
+
+
+class TestNextpnrFmax(unittest.TestCase):
+    def test_takes_last_post_route_value(self):
+        # same clock printed twice: early estimate then final post-route value;
+        # the last line is the final one (matches the gate's tail -1).
+        text = ("Info: Max frequency for clock 'clk': 29.26 MHz (FAIL at 50.00 MHz)\n"
+                "Warning: Max frequency for clock 'clk': 42.86 MHz (FAIL at 50.00 MHz)\n")
+        self.assertAlmostEqual(metrics.parse_nextpnr_fmax(text), 42.86)
+
+    def test_none_when_absent(self):
+        self.assertIsNone(metrics.parse_nextpnr_fmax("no frequency lines here\n"))
 
 
 if __name__ == "__main__":

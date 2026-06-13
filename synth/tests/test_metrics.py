@@ -52,6 +52,13 @@ class TestStaReport(unittest.TestCase):
         got = metrics.parse_sta_report(read("sta_cpu.txt"), period_ns=20.0)
         self.assertAlmostEqual(got["power_mw"], 12.57, places=2)  # 1.257e-2 W
 
+    def test_positive_slack_fmax(self):
+        # timing met: wns=+1.50 at 20ns -> crit=18.50ns -> 54.05 MHz
+        text = "wns max 1.50\ntns max 0.00\n"
+        got = metrics.parse_sta_report(text, period_ns=20.0)
+        self.assertAlmostEqual(got["wns"], 1.50)
+        self.assertAlmostEqual(got["fmax_mhz"], 1000.0 / 18.50, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()

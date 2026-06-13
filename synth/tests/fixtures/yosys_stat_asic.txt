@@ -1,0 +1,37 @@
+2. Printing statistics.
+
+=== datapath ===
+
+   Number of wires:               2100
+   Number of cells:               2345
+     $_DFF_P_                       210
+     AND2_X1                        900
+
+   Chip area for module '\datapath': 19880.000000
+
+=== decode ===
+
+   Number of wires:               1500
+   Number of cells:               1410
+     AOI21_X1                       700
+
+   Chip area for module '\decode': 11020.000000
+
+=== mult ===
+
+   Number of cells:                820
+   Chip area for module '\mult': 8450.000000
+
+=== register_file ===
+
+   Number of cells:                640
+   Chip area for module '\register_file': 6300.000000
+
+=== cpu ===
+
+   Number of wires:               9000
+   Number of cells:               5678
+
+   Chip area for module '\cpu': 2560.000000
+
+   Chip area for top module '\cpu': 48210.000000

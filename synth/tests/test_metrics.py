@@ -82,5 +82,31 @@ class TestNextpnrLog(unittest.TestCase):
         self.assertAlmostEqual(got["fmax"]["clk"], 40.00)
 
 
+class TestBuildCanonical(unittest.TestCase):
+    def test_asic_metrics_have_names_units_dirs(self):
+        stat = metrics.parse_yosys_stat(read("yosys_stat_asic.txt"))
+        sta = metrics.parse_sta_report(read("sta_cpu.txt"), period_ns=20.0)
+        doc = metrics.build_asic(stat, sta, variant="direct-rom72", commit="abc123")
+        self.assertEqual(doc["target"], "asic-nangate45")
+        self.assertEqual(doc["variant"], "direct-rom72")
+        names = {x["name"]: x for x in doc["metrics"]}
+        self.assertEqual(names["cpu/area"]["unit"], "um2")
+        self.assertEqual(names["cpu/area"]["dir"], "smaller")
+        self.assertEqual(names["datapath/area"]["value"], 19880.0)
+        self.assertEqual(names["cpu/WNS"]["dir"], "bigger")
+        self.assertEqual(names["cpu/Fmax"]["unit"], "MHz")
+        self.assertIn("cpu/power", names)
+
+    def test_ecp5_metrics(self):
+        npr = metrics.parse_nextpnr_log(read("nextpnr_ecp5.log"))
+        doc = metrics.build_ecp5(npr, variant="direct-rom72", commit="abc123")
+        self.assertEqual(doc["target"], "ecp5-lfe5u-85f")
+        names = {x["name"]: x for x in doc["metrics"]}
+        self.assertEqual(names["cpu/LUT4"]["value"], 6789)
+        self.assertEqual(names["cpu/LUT4"]["dir"], "smaller")
+        self.assertEqual(names["cpu/DP16KD"]["dir"], "smaller")
+        self.assertEqual(names["clk/Fmax"]["dir"], "bigger")
+
+
 if __name__ == "__main__":
     unittest.main()

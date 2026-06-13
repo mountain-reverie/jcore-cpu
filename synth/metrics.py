@@ -99,3 +99,89 @@ def parse_nextpnr_log(text):
             if name not in fmax or val < fmax[name]:
                 fmax[name] = val
     return {"util": util, "fmax": fmax}
+
+
+def _metric(name, unit, value, direction):
+    return {"name": name, "unit": unit, "value": value, "dir": direction}
+
+
+def build_asic(stat, sta, variant, commit):
+    """Canonical doc for the Nangate45 ASIC flow."""
+    metrics_ = []
+    for blk in BLOCKS:
+        info = stat.get(blk, {})
+        if "area" in info:
+            metrics_.append(_metric("%s/area" % blk, "um2", info["area"], "smaller"))
+        if "cells" in info:
+            metrics_.append(_metric("%s/cells" % blk, "cells", info["cells"], "smaller"))
+    if "wns" in sta:
+        metrics_.append(_metric("cpu/WNS", "ns", sta["wns"], "bigger"))
+    if "tns" in sta:
+        metrics_.append(_metric("cpu/TNS", "ns", sta["tns"], "bigger"))
+    if "fmax_mhz" in sta:
+        metrics_.append(_metric("cpu/Fmax", "MHz", round(sta["fmax_mhz"], 3), "bigger"))
+    if "power_mw" in sta:
+        metrics_.append(_metric("cpu/power", "mW", round(sta["power_mw"], 4), "smaller"))
+    return {"target": "asic-nangate45", "variant": variant,
+            "commit": commit, "metrics": metrics_}
+
+
+def build_ecp5(npr, variant, commit):
+    """Canonical doc for the ECP5 FPGA flow."""
+    unit_for = {"TRELLIS_COMB": "LUT4", "TRELLIS_FF": "FF"}
+    metrics_ = []
+    for blk, used in sorted(npr.get("util", {}).items()):
+        label = unit_for.get(blk, blk)
+        metrics_.append(_metric("cpu/%s" % label, label, used, "smaller"))
+    for clk, mhz in sorted(npr.get("fmax", {}).items()):
+        metrics_.append(_metric("%s/Fmax" % clk, "MHz", mhz, "bigger"))
+    return {"target": "ecp5-lfe5u-85f", "variant": variant,
+            "commit": commit, "metrics": metrics_}
+
+
+def _read(path):
+    try:
+        with open(path) as f:
+            return f.read()
+    except OSError as e:
+        print("WARN: cannot read %s: %s" % (path, e))
+        return ""
+
+
+def main(argv=None):
+    import argparse
+    import json
+    import sys
+
+    p = argparse.ArgumentParser(description="emit canonical synth metrics JSON")
+    p.add_argument("--target", required=True, choices=["asic-nangate45", "ecp5-lfe5u-85f"])
+    p.add_argument("--variant", default="direct-rom72")
+    p.add_argument("--commit", required=True)
+    p.add_argument("--out", required=True)
+    p.add_argument("--stat", help="yosys stat -liberty dump (asic/ecp5)")
+    p.add_argument("--sta", help="OpenSTA report (asic)")
+    p.add_argument("--nextpnr", help="nextpnr-ecp5 log (ecp5)")
+    p.add_argument("--period-ns", type=float, default=20.0)
+    a = p.parse_args(argv)
+
+    if a.target == "asic-nangate45":
+        stat = parse_yosys_stat(_read(a.stat)) if a.stat else {}
+        sta = parse_sta_report(_read(a.sta), a.period_ns) if a.sta else {}
+        doc = build_asic(stat, sta, a.variant, a.commit)
+    else:
+        npr = parse_nextpnr_log(_read(a.nextpnr)) if a.nextpnr else {}
+        doc = build_ecp5(npr, a.variant, a.commit)
+
+    if not doc["metrics"]:
+        print("WARN: no metrics parsed for %s — writing empty doc" % a.target)
+    import os
+    os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
+    with open(a.out, "w") as f:
+        json.dump(doc, f, indent=2, sort_keys=False)
+        f.write("\n")
+    print("metrics.py: wrote %d metrics to %s" % (len(doc["metrics"]), a.out))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

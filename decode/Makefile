@@ -22,10 +22,13 @@ GENERATED := \
     decode_table_rom.vhd \
     sh2instr.c
 
-.PHONY: generate clean diff
+.PHONY: generate generate-j4 clean diff
 
 generate:
 	go -C $(GEN_DIR) run ./cmd/cpugen -w $(ROM_WIDTH) -o ..
+
+generate-j4:
+	go -C $(GEN_DIR) run ./cmd/cpugen -w $(ROM_WIDTH) -overlay spec/sh4 -o ..
 
 clean:
 	rm -f $(GENERATED)

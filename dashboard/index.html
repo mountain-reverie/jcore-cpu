@@ -20,8 +20,24 @@
     <a href="./bench-size/benchmark-data.json">size</a> ·
     <a href="./bench-speed/benchmark-data.json">speed</a>.</p>
 
-  <h2>Trends</h2>
-  <div id="trends" class="grid"></div>
+  <section id="fpga-section" hidden>
+    <h2>FPGA — ECP5 (LFE5U-85F)</h2>
+    <p class="muted">Utilisation, hard blocks, and Fmax from yosys + nextpnr-ecp5.
+      <em>Representative</em> Fmax is the <code>cpu_timing_top</code> harness
+      (true register→core→register); <em>IO-unconstrained</em> is the bare-core
+      measurement artifact.</p>
+    <div id="trends-ecp5" class="grid"></div>
+  </section>
+
+  <section id="asic-section" hidden>
+    <h2>ASIC — Nangate45</h2>
+    <p class="muted"><strong>Relative tracking only, not silicon.</strong> A
+      non-timing-driven generic-synth flow on an academic slow-corner library
+      with no buffering, placement, or parasitics — the timing numbers are a
+      regression signal, <em>not</em> a real clock frequency (a real 45&nbsp;nm
+      flow would be far faster). Area/cells track design size.</p>
+    <div id="trends-asic" class="grid"></div>
+  </section>
 
   <section id="perblock-section" hidden>
     <h2>Per-block area (ASIC, latest)</h2>

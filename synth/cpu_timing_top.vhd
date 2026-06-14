@@ -49,8 +49,10 @@ architecture timing of cpu_timing_top is
   signal event_i : cpu_event_i_t;
   signal cop_i   : cop_i_t;
 
-  -- bind the core instance to the synthesis configuration (binds u_mult etc.)
-  for u_cpu : cpu use configuration work.cpu_synth_direct;
+  -- The core instance is bound by an EXTERNAL per-variant configuration
+  -- (synth/cpu_timing_config.vhd: cpu_timing_j1/j2/j4), so the representative
+  -- Fmax harness measures the selected variant (J2/J1/J4) rather than always
+  -- J2. cpu_synth.sh elaborates cpu_timing_<variant>, never this entity directly.
 begin
   -- Drive every cpu input field from acc so none fold to a constant.
   db_i.d    <= acc;

@@ -58,21 +58,22 @@ FILES=(
   decode/decode_core.vhd
   synth/cpu_synth_config.vhd
   synth/cpu_timing_top.vhd
+  synth/cpu_timing_config.vhd
 )
 
-# Map variant -> (top configuration to elaborate, extra source files). The
-# timing harness always elaborates cpu_timing_top (variant-independent); the
-# variant only selects the cpu top configuration for the asic/ecp5 backends.
+# Map variant -> (cpu top configuration, timing-harness configuration, extra
+# files). TIMING_TOP binds the harness's core instance to the variant's cpu
+# config so the representative Fmax measures the selected variant, not always J2.
 case "$SYNTH_VARIANT" in
   j2)
-    TOP="cpu_synth_direct"
+    TOP="cpu_synth_direct"; TIMING_TOP="cpu_timing_j2"
     ;;
   j1)
-    TOP="cpu_synth_j1"
+    TOP="cpu_synth_j1"; TIMING_TOP="cpu_timing_j1"
     FILES+=(core/mult_seq.vhd synth/cpu_synth_j1_config.vhd)
     ;;
   j4)
-    TOP="cpu_synth_j4"
+    TOP="cpu_synth_j4"; TIMING_TOP="cpu_timing_j4"
     FILES+=(synth/cpu_synth_j4_config.vhd)
     ;;
   *) echo "ERROR: unknown SYNTH_VARIANT '$SYNTH_VARIANT' (want j1|j2|j4)" >&2; exit 1 ;;
@@ -101,8 +102,9 @@ case "$BACKEND" in
     # core's ~348 boundary signals down to 4 IO (synth/cpu_timing_top.vhd), so
     # nextpnr places the core compactly and reports a true register->core->
     # register Fmax instead of the bare-core IO-scatter artifact. This netlist
-    # is what the ECP5 timing regression gate measures.
-    yosys -m ghdl -p "$GHDL_BASE -e cpu_timing_top; synth_ecp5 -top cpu_timing_top; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_timing.json"
+    # is what the ECP5 timing regression gate measures. Elaborates the
+    # per-variant harness config so J1/J4 measure their own core, not J2.
+    yosys -m ghdl -p "$GHDL_BASE -e $TIMING_TOP; synth_ecp5 -top cpu_timing_top; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_timing.json"
     ;;
   *) echo "ERROR: unknown backend '$BACKEND' (want asic|ecp5|timing)" >&2; exit 1 ;;
 esac

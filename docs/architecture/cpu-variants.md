@@ -20,7 +20,7 @@ never edit J2 sources.
 
 | Variant | What it is | Sim config | Synth config | Decoder | Status |
 |---|---|---|---|---|---|
-| **J2** | Baseline SH-2 core; 2–3 cycle Karatsuba multiplier (`mult(stru)`) | `cpu_j2` | `cpu_synth_j1` (alias of `cpu_synth_direct`) | `make -C decode generate` | Unchanged baseline |
+| **J2** | Baseline SH-2 core; 2–3 cycle Karatsuba multiplier (`mult(stru)`) | `cpu_j2` | `cpu_synth_direct` (`SYNTH_VARIANT=j2`) | `make -C decode generate` | Unchanged baseline |
 | **J1** | Smaller variant; sequential shift-add multiplier (`mult(seq)`, ~34 cycles/32-bit) replaces the hardware array. Same ISA; multiply stalls longer; ~9% fewer cells (≈17 059 → ≈15 542 on ECP5) | `cpu_j1` | `cpu_synth_j1` | `make -C decode generate` (same as J2) | Working; area reduction verified |
 | **J4** | SH-4 placeholder == J2 today. Separate config exists so SH-4 units attach here without touching J2 | `cpu_j4` | `cpu_synth_j4` | `make -C decode generate-j4` (byte-identical to J2 while `sh4/` overlay is empty) | Placeholder; parity with J2 verified |
 
@@ -89,15 +89,18 @@ make TAP=mult_seq_tap
 
 ### Synthesis
 
+`cpu_synth.sh` takes a backend (`asic|ecp5|timing`) and selects the variant via
+the `SYNTH_VARIANT` env var (default `j2`):
+
 ```bash
-# J2 (baseline):
-cd synth && ./cpu_synth.sh cpu_synth_direct
+# J2 (baseline), ASIC generic netlist:
+SYNTH_VARIANT=j2 synth/cpu_synth.sh asic     # == default; byte-identical to before
 
-# J1 (smaller; no hardware multiplier):
-cd synth && ./cpu_synth.sh cpu_synth_j1
+# J1 (smaller; sequential multiplier), ECP5:
+SYNTH_VARIANT=j1 synth/cpu_synth.sh ecp5
 
-# J4 (placeholder == J2 today):
-cd synth && ./cpu_synth.sh cpu_synth_j4
+# J4 (placeholder == J2 today), representative-Fmax harness:
+SYNTH_VARIANT=j4 synth/cpu_synth.sh timing
 ```
 
 CI runs a `{j1,j2,j4}` variant matrix over the synth + metrics jobs.  The

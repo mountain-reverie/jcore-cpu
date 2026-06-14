@@ -56,5 +56,11 @@ jobs:
         run: |
           set -euo pipefail
           echo "current=${{ steps.semver.outputs.current }} next=$NEXT bump=${{ steps.semver.outputs.bump }}"
+          # `git tag -a` is an annotated tag and needs a committer identity; the
+          # runner has none ("empty ident name"). Attribute releases to the repo
+          # owner via the GitHub no-reply form (<id>+<login>@users.noreply...),
+          # so the tag links to the account.
+          git config user.name "Cedric BAIL"
+          git config user.email "1481576+Bluebugs@users.noreply.github.com"
           git tag -a "$NEXT" -m "Release $NEXT (CI green on master)"
           git push origin "$NEXT"

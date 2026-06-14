@@ -15,9 +15,16 @@ func main() {
 	specDir := flag.String("spec", "spec", "directory of TOML instruction set files")
 	width := flag.Int("w", 72, "ROM width: 64 or 72")
 	outDir := flag.String("o", "", "output directory; if empty, validate only and exit")
+	overlay := flag.String("overlay", "", "optional overlay spec dir (additive, for ISA variants)")
 	flag.Parse()
 
-	s, err := spec.Load(*specDir)
+	var s *spec.Spec
+	var err error
+	if *overlay != "" {
+		s, err = spec.LoadProfile(*specDir, *overlay)
+	} else {
+		s, err = spec.Load(*specDir)
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "load:", err)
 		os.Exit(1)

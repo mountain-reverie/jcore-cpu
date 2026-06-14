@@ -8,6 +8,7 @@ default: all
 
 VHDL_TESTS := register_tap
 VHDL_TESTS += mult_tap
+VHDL_TESTS += mult_seq_tap
 VHDL_TESTS += divider_tap
 VHDL_TESTS += bshift_tap
 VHDL_TESTS += arith_tap
@@ -18,6 +19,8 @@ VHDL_TESTS += manip_tap
 
 VHDS := register_tap.vhd
 VHDS += mult_tap.vhd
+VHDS += ../core/mult_seq.vhd
+VHDS += mult_seq_tap_config.vhd
 VHDS += divider_tap.vhd
 VHDS += bshift_tap.vhd
 VHDS += arith_tap.vhd

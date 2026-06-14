@@ -21,6 +21,7 @@ tests/divider_tap
 tests/logic_tap
 tests/manip_tap
 tests/mult_tap
+tests/mult_seq_tap
 tests/register_tap
 
 # .vhm preprocessor outputs (built by sim/Makefile or jcore-soc/tools)

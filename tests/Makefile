@@ -19,8 +19,7 @@ VHDL_TESTS += manip_tap
 
 VHDS := register_tap.vhd
 VHDS += mult_tap.vhd
-VHDS += ../core/mult_seq.vhd
-VHDS += mult_seq_tap_config.vhd
+VHDS += mult_seq_tap.vhd
 VHDS += divider_tap.vhd
 VHDS += bshift_tap.vhd
 VHDS += arith_tap.vhd
@@ -39,6 +38,11 @@ VHDLS := CPU_VHDS
 include ../build.mk
 
 VHDS += $(addprefix ../, $(CPU_VHDS))
+# Analyse mult(seq) AFTER core mult(stru) so that 'stru' stays the default
+# architecture of entity 'mult' for the component-instantiated mult_tap
+# testbench.  mult_seq_tap uses a direct entity instantiation of mult(seq),
+# so it is unaffected by default-binding order either way.
+VHDS += ../core/mult_seq.vhd
 VHDS += $(TOOLS_DIR)/tests/tap/test_pkg.vhd
 
 VHDL_TOPS := $(VHDL_TESTS)

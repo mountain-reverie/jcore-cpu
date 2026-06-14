@@ -1,5 +1,6 @@
 register_tap
 mult_tap
+mult_seq_tap
 divider_tap
 bshift_tap
 arith_tap

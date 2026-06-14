@@ -39,6 +39,11 @@ architecture tb of mult_seq_tap is
   signal mac_i : mult_i_t;
   signal mac_o : mult_o_t;
 
+  -- Second multiplier instance: the J2 'stru' architecture, used as the ORACLE
+  -- for the saturating (S-bit) MAC.W cross-check below.  It is driven by the
+  -- SAME stimulus bus (mac_i) so its MACH/MACL must match the sequential one.
+  signal mac_o_ref : mult_o_t;
+
   procedure test_mult(actualh    : std_logic_vector(31 downto 0);
                       actuall    : std_logic_vector(31 downto 0);
                       expectedh  : std_logic_vector(31 downto 0);
@@ -100,10 +105,14 @@ begin
   mult_i : entity work.mult(seq)
     port map (clk => clk, rst => rst, slot => slot, a => mac_i, y => mac_o);
 
+  -- The J2 array multiplier (stru) bound explicitly as the saturating oracle.
+  mult_ref : entity work.mult(stru)
+    port map (clk => clk, rst => rst, slot => slot, a => mac_i, y => mac_o_ref);
+
   process
   begin
 
-    test_plan(7, "Mult seq (busy-aware)");
+    test_plan(12, "Mult seq (busy-aware)");
 
     -- Bypass a lot of logic, same as mult_tap.
     mac_i.s       <= '0';
@@ -191,6 +200,135 @@ begin
     mac_i.command <= NOP;
     run_to_completion(clk, mac_o.busy, "MAC.L");
     test_mult(mac_o.mach, mac_o.macl, x"40005553", x"0001555B", "test MAC.L");
+
+    --------------------------------------------------------------------
+    -- SATURATE32 cross-check: drive identical saturating MAC.W (s='1')
+    -- sequences into BOTH mult(seq) and mult(stru) and require the
+    -- sequential engine to reproduce the J2 array multiplier's MACH/MACL.
+    -- The J2 'stru' is the oracle, so no hand-computed constants are needed.
+    --
+    -- Each case:
+    --   1. seed MACH:MACL on both engines via wr_mach/wr_macl,
+    --   2. load m1 (multiplicand),
+    --   3. issue MAC.W with s='1' (multiplier in in2),
+    --   4. wait for the slow seq engine to finish (stru is long done),
+    --   5. compare seq MACH/MACL == stru MACH/MACL.
+    --------------------------------------------------------------------
+
+    -- Case A: NEGATIVE prior MACL, small positive product -> NO overflow.
+    --   prior MACL = 0x80000001, MAC.W of 1 x 1.  The old (buggy) seq path
+    --   zero-extended the negative MACL and wrongly saturated to 0x7fffffff
+    --   with a MACH-bit-0 carry; stru keeps it sign-correct.
+    mac_i.s       <= '1';
+    mac_i.wr_mach <= '1';
+    mac_i.wr_macl <= '1';
+    mac_i.in1     <= x"00000000";   -- MACH seed
+    mac_i.in2     <= x"80000001";   -- MACL seed (negative)
+    wait until rising_edge(clk);
+    mac_i.wr_mach <= '0';
+    mac_i.wr_macl <= '0';
+    mac_i.wr_m1   <= '1';
+    mac_i.in1     <= x"00000001";   -- multiplicand
+    wait until rising_edge(clk);
+    mac_i.command <= MACW;
+    mac_i.wr_m1   <= '0';
+    mac_i.in2     <= x"00000001";   -- multiplier
+    wait until rising_edge(clk);
+    mac_i.command <= NOP;
+    run_to_completion(clk, mac_o.busy, "MAC.W S neg-no-ovf");
+    test_mult(mac_o.mach, mac_o.macl, mac_o_ref.mach, mac_o_ref.macl,
+              "xchk MACWS negative MACL, no overflow");
+
+    -- Case B: POSITIVE overflow clamp.
+    --   prior MACL = 0x7fffffff (max positive), add a positive product
+    --   (0x4000 x 0x4000 = 0x10000000) -> must clamp to P32MAX and set the
+    --   MACH bit-0 carry.
+    mac_i.wr_mach <= '1';
+    mac_i.wr_macl <= '1';
+    mac_i.in1     <= x"00000000";
+    mac_i.in2     <= x"7fffffff";
+    wait until rising_edge(clk);
+    mac_i.wr_mach <= '0';
+    mac_i.wr_macl <= '0';
+    mac_i.wr_m1   <= '1';
+    mac_i.in1     <= x"00004000";
+    wait until rising_edge(clk);
+    mac_i.command <= MACW;
+    mac_i.wr_m1   <= '0';
+    mac_i.in2     <= x"00004000";
+    wait until rising_edge(clk);
+    mac_i.command <= NOP;
+    run_to_completion(clk, mac_o.busy, "MAC.W S pos-ovf");
+    test_mult(mac_o.mach, mac_o.macl, mac_o_ref.mach, mac_o_ref.macl,
+              "xchk MACWS positive overflow clamp + MACH carry");
+
+    -- Case C: NEGATIVE overflow clamp.
+    --   prior MACL = 0x80000000 (max negative), add a negative product
+    --   (0x4000 x -0x4000 = -0x10000000) -> must clamp to N32MAX.
+    mac_i.wr_mach <= '1';
+    mac_i.wr_macl <= '1';
+    mac_i.in1     <= x"00000000";
+    mac_i.in2     <= x"80000000";
+    wait until rising_edge(clk);
+    mac_i.wr_mach <= '0';
+    mac_i.wr_macl <= '0';
+    mac_i.wr_m1   <= '1';
+    mac_i.in1     <= x"00004000";   -- +0x4000
+    wait until rising_edge(clk);
+    mac_i.command <= MACW;
+    mac_i.wr_m1   <= '0';
+    mac_i.in2     <= x"ffffc000";   -- -0x4000
+    wait until rising_edge(clk);
+    mac_i.command <= NOP;
+    run_to_completion(clk, mac_o.busy, "MAC.W S neg-ovf");
+    test_mult(mac_o.mach, mac_o.macl, mac_o_ref.mach, mac_o_ref.macl,
+              "xchk MACWS negative overflow clamp");
+
+    -- Case D: NEGATIVE accumulator, negative product, NO overflow.
+    --   prior MACL = 0xffff0000, add (-0x4000) x (0x2) = -0x8000 ->
+    --   0xfffe8000, stays negative, no saturation.  Reproduces the
+    --   reviewer's 0xbfff8000-style negative-accumulate case.
+    mac_i.wr_mach <= '1';
+    mac_i.wr_macl <= '1';
+    mac_i.in1     <= x"00000000";
+    mac_i.in2     <= x"ffff0000";
+    wait until rising_edge(clk);
+    mac_i.wr_mach <= '0';
+    mac_i.wr_macl <= '0';
+    mac_i.wr_m1   <= '1';
+    mac_i.in1     <= x"ffffc000";   -- -0x4000
+    wait until rising_edge(clk);
+    mac_i.command <= MACW;
+    mac_i.wr_m1   <= '0';
+    mac_i.in2     <= x"00000002";   -- +2
+    wait until rising_edge(clk);
+    mac_i.command <= NOP;
+    run_to_completion(clk, mac_o.busy, "MAC.W S neg-acc");
+    test_mult(mac_o.mach, mac_o.macl, mac_o_ref.mach, mac_o_ref.macl,
+              "xchk MACWS negative accumulator, no overflow");
+
+    -- Case E: MACH carry-out preservation.
+    --   prior MACH = 0xa5a5a5a4 (bit 0 clear), prior MACL = 0x7fffffff,
+    --   positive overflow.  On saturation stru ORs MACH bit 0; the upper
+    --   MACH bits must be preserved -> expect 0xa5a5a5a5.
+    mac_i.wr_mach <= '1';
+    mac_i.wr_macl <= '1';
+    mac_i.in1     <= x"a5a5a5a4";
+    mac_i.in2     <= x"7fffffff";
+    wait until rising_edge(clk);
+    mac_i.wr_mach <= '0';
+    mac_i.wr_macl <= '0';
+    mac_i.wr_m1   <= '1';
+    mac_i.in1     <= x"00004000";
+    wait until rising_edge(clk);
+    mac_i.command <= MACW;
+    mac_i.wr_m1   <= '0';
+    mac_i.in2     <= x"00004000";
+    wait until rising_edge(clk);
+    mac_i.command <= NOP;
+    run_to_completion(clk, mac_o.busy, "MAC.W S mach-carry");
+    test_mult(mac_o.mach, mac_o.macl, mac_o_ref.mach, mac_o_ref.macl,
+              "xchk MACWS MACH bit-0 carry preserves high bits");
 
     test_finished("done");
 

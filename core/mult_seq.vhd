@@ -106,6 +106,7 @@ begin
     variable seed    : unsigned(63 downto 0);
     variable sum     : unsigned(63 downto 0);
     variable result  : std_logic_vector(63 downto 0);
+    variable sat32   : boolean; -- SATURATE32 overflow detected (sign-region)
   begin
     v := r;
 
@@ -266,10 +267,22 @@ begin
 
       -- Seed from current MAC value for accumulating ops; zero otherwise
       -- (MACH/MACL were zeroed at command start for plain multiplies).
+      --
+      -- IMPORTANT: the seed must be SIGN-CORRECT for the running MAC value.
+      -- mult.vhm forms acc = c + (mach & macl) where c is the SIGN-EXTENDED
+      -- product (so the running 64-bit MAC value is treated as signed); the
+      -- low half of the seed is macl regardless of use_h, and the high half is
+      -- gated by use_h.  prod above is already the sign-extended product (it is
+      -- a sign-correct 64-bit two's-complement value), matching c exactly.
       if r.accum = '1' then
         if r.use_h = '1' then
           seed := unsigned(r.mach & r.macl);
         else
+          -- SATURATE32 (MACWS) / MACW low-only path.  The high half of the
+          -- seed is zero (use_h='0', exactly mult.vhm's "mach AND 0"); the low
+          -- half is macl.  Overflow is decided below by the SIGNS of the two
+          -- 32-bit addends (product and prior macl) and the 32-bit result --
+          -- NOT by magnitude -- so a NEGATIVE prior macl is handled correctly.
           seed := unsigned(x"00000000" & r.macl);
         end if;
       else
@@ -280,14 +293,29 @@ begin
       result := std_logic_vector(sum);
 
       -- Saturation, mirroring mult.vhm SATURATE32 / SATURATE64 semantics.
+      sat32 := false;
       case r.result_op is
         when IDENTITY =>
           null;
         when SATURATE32 =>
-          if signed(result) > signed(P32MAX) then
-            result := P32MAX;
-          elsif signed(result) < signed(N32MAX) then
-            result := N32MAX;
+          -- Signed-overflow detection on the 32-bit add of the product addend
+          -- (prod[31:0], sign = prod(31)) and the prior accumulator macl
+          -- (sign = macl(31)), producing sum[31:0] (sign = sum(31)).
+          -- This is mult.vhm lines 101-113: region = macl(31) & acc(31) & '0',
+          -- with the decision keyed on c(31) (= prod(31) here):
+          --   product +  (prod(31)='0'): overflow only when macl(31)='0' and
+          --                              sum(31)='1'   -> clamp to P32MAX.
+          --   product -  (prod(31)='1'): overflow only when macl(31)='1' and
+          --                              sum(31)='0'   -> clamp to N32MAX.
+          -- No magnitude comparison, so a negative running macl is preserved.
+          if prod(31) = '0' then
+            if r.macl(31) = '0' and result(31) = '1' then
+              result := P32MAX; sat32 := true;
+            end if;
+          else
+            if r.macl(31) = '1' and result(31) = '0' then
+              result := N32MAX; sat32 := true;
+            end if;
           end if;
         when SATURATE64 =>
           if signed(result) > signed(P48MAX) then
@@ -305,11 +333,11 @@ begin
       end if;
 
       -- MACWS carry-out: on saturation the J2 sets MACH bit 0 (mult.vhm 131).
-      if r.cmd = MACWS and r.result_op = SATURATE32 then
-        if (signed(std_logic_vector(sum)) > signed(P32MAX)) or
-           (signed(std_logic_vector(sum)) < signed(N32MAX)) then
-          v.mach := r.mach or x"00000001";
-        end if;
+      -- Note this ORs into the EXISTING mach (mult.vhm: this.mach := this.mach
+      -- or x"00000001"); mach is not otherwise written on the MACWS path
+      -- (mach_en='0'), so it preserves the high bits of the prior MACH.
+      if r.cmd = MACWS and r.result_op = SATURATE32 and sat32 then
+        v.mach := r.mach or x"00000001";
       end if;
 
       v.sstate := S_IDLE;

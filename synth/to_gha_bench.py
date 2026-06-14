@@ -4,11 +4,29 @@
 Splits metrics by direction into two arrays:
   smaller -> customSmallerIsBetter   speed/bigger -> customBiggerIsBetter
 Each entry: {"name","unit","value","extra"}. `name` is prefixed with the
-target ("asic-nangate45 · cpu/area") so the action's per-metric charts and our
-dashboard can group on it; `extra` carries the variant for future faceting.
+target ("asic-nangate45 · cpu/area").
+
+Variant keying: github-action-benchmark identifies a series by its `name` only,
+so to compare like-with-like (and not flag J1's larger LUT4 as a J2 regression)
+each non-J2 variant gets a "[variant]" suffix on the name. **J2 keeps the bare
+name** so its already-published history continues uninterrupted. The dashboard
+strips the suffix to overlay J1/J2/J4 on one chart, colored by variant.
+`extra` still carries the canonical variant.
 Output order is sorted by name for deterministic diffs.
 """
 import json
+
+
+def canonical_variant(variant):
+    """Map a raw variant tag to j1/j2/j4. Legacy 'direct-rom72' and anything
+    unrecognised map to j2 (the baseline), so historical points stay on the
+    bare J2 series."""
+    v = (variant or "").lower()
+    if "j1" in v:
+        return "j1"
+    if "j4" in v:
+        return "j4"
+    return "j2"
 
 
 def convert(canon_paths):
@@ -17,12 +35,16 @@ def convert(canon_paths):
         with open(path) as f:
             doc = json.load(f)
         target, variant = doc["target"], doc.get("variant", "")
+        cvar = canonical_variant(variant)
+        # J2 keeps the bare name (continuous history); J1/J4 are suffixed so the
+        # action keys them as distinct series and compares each against itself.
+        suffix = "" if cvar == "j2" else " [%s]" % cvar
         for m in doc["metrics"]:
             entry = {
-                "name": "%s · %s" % (target, m["name"]),
+                "name": "%s · %s%s" % (target, m["name"], suffix),
                 "unit": m["unit"],
                 "value": m["value"],
-                "extra": variant,
+                "extra": cvar,
             }
             (size if m["dir"] == "smaller" else speed).append(entry)
     size.sort(key=lambda e: e["name"])

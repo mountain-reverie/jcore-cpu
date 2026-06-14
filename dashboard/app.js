@@ -15,6 +15,19 @@ function variantOf(extra) {
   return "j2"; // default incl. legacy "direct-rom72"
 }
 
+// Benchmark metric names carry a "[j1]"/"[j4]" suffix so github-action-benchmark
+// keys each variant as its own series (J2 stays bare = continuous history). The
+// dashboard derives the variant from that suffix (falling back to `extra` for
+// historical bare-J2 points) and groups on the suffix-stripped base name, so the
+// three variants overlay on one chart.
+function variantOfBench(name, extra) {
+  var m = /\s\[(j[124])\]$/.exec(name || "");
+  return m ? m[1] : variantOf(extra);
+}
+function baseName(name) {
+  return (name || "").replace(/\s\[j[124]\]$/, "");
+}
+
 // Load a script that assigns window.BENCHMARK_DATA; resolve with that value
 // captured at load time (the next load overwrites the global).
 function loadData(src) {
@@ -54,10 +67,11 @@ function seriesByName(data) {
   Object.keys(data.entries).forEach(function (suite) {
     data.entries[suite].forEach(function (run) {
       run.benches.forEach(function (b) {
-        var v = variantOf(b.extra);
-        if (!out[b.name]) out[b.name] = {};
-        if (!out[b.name][v]) out[b.name][v] = [];
-        out[b.name][v].push({ x: run.date, y: b.value, commit: run.commit });
+        var v = variantOfBench(b.name, b.extra);
+        var base = baseName(b.name);
+        if (!out[base]) out[base] = {};
+        if (!out[base][v]) out[base][v] = [];
+        out[base][v].push({ x: run.date, y: b.value, commit: run.commit });
       });
     });
   });
@@ -148,9 +162,11 @@ function latestBenches(data) {
   });
   var map = {};
   if (best) best.benches.forEach(function (b) {
-    var v = variantOf(b.extra);
-    // Keep only the J2 entry per metric; if J2 never appears, keep first seen.
-    if (!map[b.name] || v === "j2") map[b.name] = b;
+    var v = variantOfBench(b.name, b.extra);
+    var base = baseName(b.name);
+    // Key on the suffix-stripped base name; keep the J2 entry per metric (if J2
+    // never appears, keep first seen).
+    if (!map[base] || v === "j2") map[base] = b;
   });
   return map;
 }

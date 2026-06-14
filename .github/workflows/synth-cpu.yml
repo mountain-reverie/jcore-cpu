@@ -32,6 +32,10 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [j1, j2, j4]
     steps:
       - name: Checkout jcore-cpu
         uses: actions/checkout@v4
@@ -55,7 +59,9 @@ jobs:
       - name: Synthesize (generic) + assert no latches
         # cpu_synth.sh runs `check -assert` (fails on latches/multi-driver) and
         # writes build/cpu_asic.v. This step IS the synthesizability gate.
-        run: synth/cpu_synth.sh asic
+        # SYNTH_VARIANT selects the cpu top configuration (j1/j2/j4); j2 is
+        # byte-identical to the historical J2-only invocation.
+        run: SYNTH_VARIANT=${{ matrix.variant }} synth/cpu_synth.sh asic
       - name: Report cell/area stats
         run: |
           set -euo pipefail
@@ -87,6 +93,7 @@ jobs:
           fi
           period_ns=$(awk -v m="${ECP5_TARGET_MHZ}" 'BEGIN{printf "%.4f",1000.0/m}')
           python3 synth/metrics.py --target asic-nangate45 \
+            --variant "${{ matrix.variant }}" \
             --commit "${GITHUB_SHA}" --out synth/metrics/asic-nangate45.json \
             --stat build/asic_area_stat.txt --sta build/cpu_asic_sta.rpt \
             --period-ns "$period_ns" || true
@@ -94,14 +101,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: metrics-asic
+          name: metrics-asic-${{ matrix.variant }}
           path: synth/metrics/*.json
           retention-days: 14
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: synth-asic
+          name: synth-asic-${{ matrix.variant }}
           path: build/
           retention-days: 14
 
@@ -109,6 +116,10 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [j1, j2, j4]
     steps:
       - name: Checkout jcore-cpu
         uses: actions/checkout@v4
@@ -130,7 +141,9 @@ jobs:
             LD_LIBRARY_PATH='' perl "$GITHUB_WORKSPACE/jcore-soc/tools/v2p" < "$f.vhm" > "$f.vhd"
           done
       - name: Synthesize (synth_ecp5, abc9) + assert no latches
-        run: synth/cpu_synth.sh ecp5
+        # SYNTH_VARIANT selects the cpu top configuration (j1/j2/j4); j2 is
+        # byte-identical to the historical J2-only invocation.
+        run: SYNTH_VARIANT=${{ matrix.variant }} synth/cpu_synth.sh ecp5
       - name: Guard — slot_o is not in any combinational loop
         # Regression guard for the issue/slot loop break (core/datapath.vhm):
         # slot_o must stay out of every SCC. A residual SCC not involving slot_o
@@ -188,7 +201,7 @@ jobs:
         # the dashboard still captures the data point on a real regression.
         run: |
           set -uo pipefail
-          synth/cpu_synth.sh timing
+          SYNTH_VARIANT=${{ matrix.variant }} synth/cpu_synth.sh timing
           nextpnr-ecp5 --85k --package CABGA381 --json build/cpu_timing.json \
             --lpf synth/ulx3s_cpu.lpf --lpf-allow-unconstrained --timing-allow-fail \
             --textcfg build/cpu_timing.config > build/nextpnr_timing.log 2>&1 || true
@@ -205,19 +218,24 @@ jobs:
           # util + IO-unconstrained Fmax from the bare-cpu P&R (build/nextpnr.log);
           # the representative Fmax from the harness P&R (build/nextpnr_timing.log).
           python3 synth/metrics.py --target ecp5-lfe5u-85f \
+            --variant "${{ matrix.variant }}" \
             --commit "${GITHUB_SHA}" --out synth/metrics/ecp5-lfe5u-85f.json \
             --nextpnr build/nextpnr.log --nextpnr-timing build/nextpnr_timing.log || true
       - name: Upload ECP5 metrics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: metrics-ecp5
+          name: metrics-ecp5-${{ matrix.variant }}
           path: synth/metrics/*.json
           retention-days: 14
       - name: ECP5 Fmax regression gate
         # Gate on the representative harness Fmax floor so frequency can't
         # silently erode (e.g. a re-introduced false loop). Runs after emit so a
         # genuine regression still records its data point on the dashboard.
+        # The cpu_timing_top harness is variant-independent (fixed J2 config), so
+        # we gate on the j2 leg only — J1's slower/smaller results must not break
+        # the floor, and the j4 leg duplicates j2 today.
+        if: matrix.variant == 'j2'
         run: |
           set -euo pipefail
           fmax=$(grep -oE "Max frequency for clock '[^']*': [0-9.]+ MHz" build/nextpnr_timing.log \
@@ -229,7 +247,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: synth-ecp5
+          name: synth-ecp5-${{ matrix.variant }}
           path: build/
           retention-days: 14
 
@@ -247,24 +265,26 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - name: Download ASIC metrics
+      # Download every per-variant metric artifact (metrics-asic-{j1,j2,j4} and
+      # metrics-ecp5-{j1,j2,j4}). merge-multiple is intentionally OFF: each
+      # variant writes the SAME filename (asic-nangate45.json / ecp5-lfe5u-85f.json),
+      # so flattening would clobber sibling variants. Instead each artifact lands
+      # in its own subdir (metrics-in/metrics-<target>-<variant>/...), and the
+      # build step globs recursively. Each doc carries its own `variant`
+      # (== extra), so the three series overlay on the dashboard.
+      - name: Download all variant metrics
         uses: actions/download-artifact@v4
         with:
-          name: metrics-asic
-          path: metrics-in
-        continue-on-error: true
-      - name: Download ECP5 metrics
-        uses: actions/download-artifact@v4
-        with:
-          name: metrics-ecp5
+          pattern: metrics-*
           path: metrics-in
         continue-on-error: true
       - name: Build action inputs
         run: |
           set -euo pipefail
           mkdir -p site/bench-size site/bench-speed metrics-in
-          shopt -s nullglob
-          inputs=(metrics-in/*.json)
+          shopt -s nullglob globstar
+          # Recurse: each per-variant artifact lands in its own metrics-in subdir.
+          inputs=(metrics-in/**/*.json)
           if [ ${#inputs[@]} -eq 0 ]; then
             echo "WARN: no metric artifacts found — emitting empty suites" >&2
             echo "[]" > build-size.json; echo "[]" > build-speed.json

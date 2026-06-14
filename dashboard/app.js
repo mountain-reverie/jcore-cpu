@@ -63,13 +63,34 @@ function lineCard(parent, title, points, unit) {
   });
 }
 
+function unitFor(name) {
+  if (name.indexOf("Fmax") >= 0) return "MHz";
+  if (name.indexOf("WNS") >= 0 || name.indexOf("TNS") >= 0) return "ns";
+  if (name.indexOf("power") >= 0) return "mW";
+  if (name.indexOf("area") >= 0) return "um2";
+  return "";
+}
+
 function render() {
   var size = seriesByName(window.__SIZE__), speed = seriesByName(window.__SPEED__);
   var all = Object.assign({}, size, speed);
-  var trends = document.getElementById("trends");
+  // Route each metric into its target's section; strip the "<target> · " prefix
+  // from the card title since the section heading already names the target.
+  var grids = {
+    "asic-nangate45": { grid: "trends-asic", section: "asic-section", any: false },
+    "ecp5-lfe5u-85f": { grid: "trends-ecp5", section: "fpga-section", any: false }
+  };
   Object.keys(all).sort().forEach(function (name) {
-    var unit = name.indexOf("Fmax") >= 0 ? "MHz" : (name.indexOf("area") >= 0 ? "um2" : "");
-    lineCard(trends, name, all[name].slice().sort(function (a, b) { return a.x - b.x; }), unit);
+    var parts = name.split(" · ");
+    var target = parts[0];
+    var dest = grids[target] || grids["ecp5-lfe5u-85f"];  // unknown target -> FPGA
+    dest.any = true;
+    var label = parts.length > 1 ? parts.slice(1).join(" · ") : name;
+    lineCard(document.getElementById(dest.grid), label,
+             all[name].slice().sort(function (a, b) { return a.x - b.x; }), unitFor(name));
+  });
+  Object.keys(grids).forEach(function (t) {
+    if (grids[t].any) document.getElementById(grids[t].section).hidden = false;
   });
   renderPerBlock();
   renderVariants(all);

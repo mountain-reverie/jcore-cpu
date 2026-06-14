@@ -22,11 +22,11 @@ window.BENCHMARK_DATA = {
     ],
     "synth-speed": [
       { commit: { id: "aaa1111", message: "first", timestamp: "2026-06-10T00:00:00Z", url: "#" }, date: 1700000000000,
-        benches: [ { name: "asic-nangate45 · cpu/Fmax", unit: "MHz", value: 39.5, extra: "direct-rom72" },
+        benches: [ { name: "asic-nangate45 · cpu/Fmax (relative)", unit: "MHz", value: 39.5, extra: "direct-rom72" },
                    { name: "ecp5-lfe5u-85f · cpu/Fmax (representative)", unit: "MHz", value: 42.1, extra: "direct-rom72" },
                    { name: "ecp5-lfe5u-85f · cpu/Fmax (IO-unconstrained)", unit: "MHz", value: 27.0, extra: "direct-rom72" } ] },
       { commit: { id: "bbb2222", message: "second", timestamp: "2026-06-11T00:00:00Z", url: "#" }, date: 1700086400000,
-        benches: [ { name: "asic-nangate45 · cpu/Fmax", unit: "MHz", value: 40.27, extra: "direct-rom72" },
+        benches: [ { name: "asic-nangate45 · cpu/Fmax (relative)", unit: "MHz", value: 40.27, extra: "direct-rom72" },
                    { name: "ecp5-lfe5u-85f · cpu/Fmax (representative)", unit: "MHz", value: 42.86, extra: "direct-rom72" },
                    { name: "ecp5-lfe5u-85f · cpu/Fmax (IO-unconstrained)", unit: "MHz", value: 27.22, extra: "direct-rom72" } ] }
     ]

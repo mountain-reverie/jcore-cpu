@@ -48,8 +48,11 @@ def parse_sta_report(text, period_ns):
     """OpenSTA stdout -> {"wns","tns","fmax_mhz","power_mw"} (keys present only
     when parsed). `report_wns`/`report_tns` print "wns max -4.83"; take the last
     field so "wns -4.83" and "wns max -4.83" both parse. Fmax is derived from
-    the critical path = period - wns. Power total is the last numeric on the
-    "Total" row of report_power (Watts -> mW).
+    the critical path = period - wns. Power total comes from report_power's
+    "Total" row (Watts -> mW): its columns are internal/switching/leakage/total
+    and a trailing percentage, e.g. "Total 2.94e-03 1.80e-03 3.03e-04 5.04e-03
+    100.0%". We take the last numeric column, skipping a trailing "%" token
+    (older OpenSTA omits the percentage, so both formats parse).
     """
     out = {}
     for line in text.splitlines():
@@ -59,12 +62,15 @@ def parse_sta_report(text, period_ns):
         m = re.match(r"^tns\b.*?(-?[\d.eE+-]+)\s*$", line)
         if m:
             out["tns"] = float(m.group(1))
-        m = re.match(r"^Total\s+.*\s+([\d.eE+-]+)\s*$", line)
-        if m:
-            try:
-                out["power_mw"] = float(m.group(1)) * 1000.0
-            except ValueError:
-                pass
+        if re.match(r"^Total\s", line):
+            for tok in reversed(line.split()[1:]):
+                if tok.endswith("%"):
+                    continue  # trailing percentage column, not the wattage
+                try:
+                    out["power_mw"] = float(tok) * 1000.0
+                    break
+                except ValueError:
+                    break  # non-numeric where the total should be — give up
     if "wns" in out:
         crit = period_ns - out["wns"]  # wns<0 lengthens the path
         if crit > 0:
@@ -114,12 +120,16 @@ def build_asic(stat, sta, variant, commit):
             metrics_.append(_metric("%s/area" % blk, "um2", info["area"], "smaller"))
         if "cells" in info:
             metrics_.append(_metric("%s/cells" % blk, "cells", info["cells"], "smaller"))
+    # Timing is labelled "(relative)": the CI ASIC flow is non-timing-driven
+    # generic synth on an academic slow-corner library with no buffering,
+    # placement, or parasitics, so the absolute numbers are NOT real silicon
+    # frequencies — only a regression signal. (Real 45nm would clock far higher.)
     if "wns" in sta:
-        metrics_.append(_metric("cpu/WNS", "ns", sta["wns"], "bigger"))
+        metrics_.append(_metric("cpu/WNS (relative)", "ns", sta["wns"], "bigger"))
     if "tns" in sta:
-        metrics_.append(_metric("cpu/TNS", "ns", sta["tns"], "bigger"))
+        metrics_.append(_metric("cpu/TNS (relative)", "ns", sta["tns"], "bigger"))
     if "fmax_mhz" in sta:
-        metrics_.append(_metric("cpu/Fmax", "MHz", round(sta["fmax_mhz"], 3), "bigger"))
+        metrics_.append(_metric("cpu/Fmax (relative)", "MHz", round(sta["fmax_mhz"], 3), "bigger"))
     if "power_mw" in sta:
         metrics_.append(_metric("cpu/power", "mW", round(sta["power_mw"], 4), "smaller"))
     return {"target": "asic-nangate45", "variant": variant,

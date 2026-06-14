@@ -49,8 +49,16 @@ class TestStaReport(unittest.TestCase):
         self.assertAlmostEqual(got["fmax_mhz"], 1000.0 / 24.83, places=2)
 
     def test_power_total_mw(self):
+        # fixture's Total row ends in a percentage column (real OpenSTA format);
+        # the wattage is the column before it: 1.257e-2 W -> 12.57 mW.
         got = metrics.parse_sta_report(read("sta_cpu.txt"), period_ns=20.0)
-        self.assertAlmostEqual(got["power_mw"], 12.57, places=2)  # 1.257e-2 W
+        self.assertAlmostEqual(got["power_mw"], 12.57, places=2)
+
+    def test_power_total_without_percentage(self):
+        # older OpenSTA omits the percentage column — last numeric is the watts.
+        text = "Total   9.10e-03   3.30e-03   7.00e-05   1.257e-02\n"
+        got = metrics.parse_sta_report(text, period_ns=20.0)
+        self.assertAlmostEqual(got["power_mw"], 12.57, places=2)
 
     def test_positive_slack_fmax(self):
         # timing met: wns=+1.50 at 20ns -> crit=18.50ns -> 54.05 MHz
@@ -93,8 +101,8 @@ class TestBuildCanonical(unittest.TestCase):
         self.assertEqual(names["cpu/area"]["unit"], "um2")
         self.assertEqual(names["cpu/area"]["dir"], "smaller")
         self.assertEqual(names["datapath/area"]["value"], 19880.0)
-        self.assertEqual(names["cpu/WNS"]["dir"], "bigger")
-        self.assertEqual(names["cpu/Fmax"]["unit"], "MHz")
+        self.assertEqual(names["cpu/WNS (relative)"]["dir"], "bigger")
+        self.assertEqual(names["cpu/Fmax (relative)"]["unit"], "MHz")
         self.assertIn("cpu/power", names)
 
     def test_ecp5_metrics(self):

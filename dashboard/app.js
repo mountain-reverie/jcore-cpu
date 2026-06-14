@@ -6,6 +6,15 @@
 window.__SIZE__ = null;
 window.__SPEED__ = null;
 
+var VARIANT_COLOR = { j1: "#e6b800", j2: "#1f77b4", j4: "#2ca02c" }; // yellow / blue / green
+
+function variantOf(extra) {
+  var e = (extra || "").toLowerCase();
+  if (e.indexOf("j1") >= 0) return "j1";
+  if (e.indexOf("j4") >= 0) return "j4";
+  return "j2"; // default incl. legacy "direct-rom72"
+}
+
 // Load a script that assigns window.BENCHMARK_DATA; resolve with that value
 // captured at load time (the next load overwrites the global).
 function loadData(src) {
@@ -39,27 +48,50 @@ function boot() {
 }
 
 function seriesByName(data) {
-  // -> { metricName: [ {x: date, y: value, commit} ] }
+  // -> { metricName: { variant: [ {x: date, y: value, commit} ] } }
   var out = {};
   if (!data || !data.entries) return out;
   Object.keys(data.entries).forEach(function (suite) {
     data.entries[suite].forEach(function (run) {
       run.benches.forEach(function (b) {
-        (out[b.name] = out[b.name] || []).push({ x: run.date, y: b.value, commit: run.commit });
+        var v = variantOf(b.extra);
+        if (!out[b.name]) out[b.name] = {};
+        if (!out[b.name][v]) out[b.name][v] = [];
+        out[b.name][v].push({ x: run.date, y: b.value, commit: run.commit });
       });
     });
   });
   return out;
 }
 
-function lineCard(parent, title, points, unit) {
+// variantMap: { variant: [ {x,y,commit} ] } for a single metric.
+function lineCard(parent, title, variantMap, unit) {
   var card = document.createElement("div"); card.className = "card";
   var cv = document.createElement("canvas"); card.appendChild(cv); parent.appendChild(card);
+  var datasets = Object.keys(variantMap).sort().map(function (v) {
+    var pts = variantMap[v].slice().sort(function (a, b) { return a.x - b.x; });
+    var color = VARIANT_COLOR[v] || "#888888";
+    return {
+      label: v.toUpperCase(),
+      data: pts,
+      borderColor: color,
+      backgroundColor: color,
+      tension: 0.2,
+      pointRadius: 3
+    };
+  });
   new Chart(cv, {
     type: "line",
-    data: { datasets: [{ label: title + " (" + unit + ")", data: points, tension: 0.2, pointRadius: 3 }] },
-    options: { parsing: false, scales: { x: { type: "linear", ticks: { callback: function (v) { return new Date(v).toISOString().slice(0, 10); } } } },
-               plugins: { legend: { display: true }, tooltip: { callbacks: { title: function (it) { return new Date(it[0].parsed.x).toISOString().slice(0, 10); } } } } }
+    data: { datasets: datasets },
+    options: {
+      parsing: false,
+      scales: { x: { type: "linear", ticks: { callback: function (v) { return new Date(v).toISOString().slice(0, 10); } } } },
+      plugins: {
+        legend: { display: true },
+        title: { display: true, text: title + (unit ? " (" + unit + ")" : "") },
+        tooltip: { callbacks: { title: function (it) { return new Date(it[0].parsed.x).toISOString().slice(0, 10); } } }
+      }
+    }
   });
 }
 
@@ -69,6 +101,16 @@ function unitFor(name) {
   if (name.indexOf("power") >= 0) return "mW";
   if (name.indexOf("area") >= 0) return "um2";
   return "";
+}
+
+// Flatten a { variant: points } map into a single sorted point array.
+// Used by callers that need a flat list (perblock, latestBenches consumers).
+// When multiple variants exist, J2 is preferred as the reference variant;
+// fall back to the first alphabetical variant if J2 is absent.
+function flattenVariants(variantMap) {
+  var keys = Object.keys(variantMap).sort();
+  var key = variantMap["j2"] ? "j2" : keys[0];
+  return variantMap[key] ? variantMap[key].slice() : [];
 }
 
 function render() {
@@ -86,8 +128,7 @@ function render() {
     var dest = grids[target] || grids["ecp5-lfe5u-85f"];  // unknown target -> FPGA
     dest.any = true;
     var label = parts.length > 1 ? parts.slice(1).join(" · ") : name;
-    lineCard(document.getElementById(dest.grid), label,
-             all[name].slice().sort(function (a, b) { return a.x - b.x; }), unitFor(name));
+    lineCard(document.getElementById(dest.grid), label, all[name], unitFor(name));
   });
   Object.keys(grids).forEach(function (t) {
     if (grids[t].any) document.getElementById(grids[t].section).hidden = false;
@@ -98,11 +139,19 @@ function render() {
 
 function latestBenches(data) {
   // newest run across the suite -> {name: bench}
+  // The bench value is read from the J2 (reference) variant, or the first
+  // available variant when J2 is absent, to stay consistent with pre-variant
+  // behavior.
   var best = null;
   if (data && data.entries) Object.keys(data.entries).forEach(function (s) {
     data.entries[s].forEach(function (run) { if (!best || run.date > best.date) best = run; });
   });
-  var map = {}; if (best) best.benches.forEach(function (b) { map[b.name] = b; });
+  var map = {};
+  if (best) best.benches.forEach(function (b) {
+    var v = variantOf(b.extra);
+    // Keep only the J2 entry per metric; if J2 never appears, keep first seen.
+    if (!map[b.name] || v === "j2") map[b.name] = b;
+  });
   return map;
 }
 
@@ -123,17 +172,24 @@ function renderPerBlock() {
 }
 
 function renderVariants(all) {
-  // Group latest value per (variant, metric). With one variant today this is a
-  // single column; it grows as variants are added.
+  // Group latest value per (variant, metric) from the nested seriesByName shape.
+  // Each all[name] is { variant: [points] }; we pick the last point per variant.
   var rows = {}, variants = {};
   Object.keys(all).forEach(function (name) {
-    var pts = all[name]; if (!pts.length) return;
-    var last = pts.slice().sort(function (a, b) { return a.x - b.x; })[pts.length - 1];
-    var v = "current"; variants[v] = true;
-    (rows[name] = rows[name] || {})[v] = last.y;
+    var variantMap = all[name];
+    Object.keys(variantMap).forEach(function (v) {
+      var pts = variantMap[v];
+      if (!pts || !pts.length) return;
+      var last = pts.slice().sort(function (a, b) { return a.x - b.x; })[pts.length - 1];
+      variants[v] = true;
+      (rows[name] = rows[name] || {})[v] = last.y;
+    });
   });
-  var vlist = Object.keys(variants);
-  var html = "<table><tr><th>metric</th>" + vlist.map(function (v) { return "<th>" + v + "</th>"; }).join("") + "</tr>";
+  var vlist = Object.keys(variants).sort();
+  var html = "<table><tr><th>metric</th>" + vlist.map(function (v) {
+    var color = VARIANT_COLOR[v] || "";
+    return "<th" + (color ? " style=\"color:" + color + "\"" : "") + ">" + v.toUpperCase() + "</th>";
+  }).join("") + "</tr>";
   Object.keys(rows).sort().forEach(function (name) {
     html += "<tr><td>" + name + "</td>" + vlist.map(function (v) { return "<td>" + (rows[name][v] != null ? rows[name][v] : "—") + "</td>"; }).join("") + "</tr>";
   });

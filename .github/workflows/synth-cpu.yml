@@ -148,6 +148,9 @@ jobs:
         # Regression guard for the issue/slot loop break (core/datapath.vhm):
         # slot_o must stay out of every SCC. A residual SCC not involving slot_o
         # may remain (abc9 resolves it); we only fail if slot_o reappears.
+        # Elaborates cpu_synth_direct (variant-independent), so run it once on
+        # the j2 leg instead of identically across all three matrix variants.
+        if: matrix.variant == 'j2'
         run: |
           set -euo pipefail
           yosys -m ghdl -p "

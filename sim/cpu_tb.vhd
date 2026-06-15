@@ -188,6 +188,9 @@ begin
                         instrd_slaves_o(DEV_DDR), instrd_slaves_i(DEV_DDR));
 
   cpu1: configuration work.cpu_sim
+#if CONFIG_PRIV_ARCH
+            generic map(PRIV_ARCH => true)
+#endif
             port map(clk => clk, rst => rst,
                      db_o => data_master_o, db_i => data_master_i,
                      inst_o => instr_master_o, inst_i => instr_master_i,

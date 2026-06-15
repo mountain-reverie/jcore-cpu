@@ -474,6 +474,15 @@ begin
                   when SEL_CARRY =>
                     this.sr.t := arith_out(arith_out'left);
                 end case;
+              when SEL_EXCEPTION =>
+                -- SH-4 exception entry (J4): enter privileged mode, bank 1,
+                -- block further exceptions; load the interrupt mask. The old
+                -- SR is captured to SSR in the same slot via the ybus read,
+                -- which uses the registered (pre-update) SR.
+                this.sr.md := '1';
+                this.sr.rb := '1';
+                this.sr.bl := '1';
+                this.sr.int_mask := sr_ctrl.ilevel;
             end case;
 
             if mac.s_latch = '1' then this.mac_s := this.sr.s; end if;

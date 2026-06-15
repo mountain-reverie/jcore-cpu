@@ -1,0 +1,89 @@
+# SH-4 register-model exception entry/return (J4 overlay; overrides the base
+# SH-2 stack-model instructions by name). SPC = regfile 21, SSR = regfile 22.
+# See docs/priv-arch/j4-implementation-design.md §4.
+#
+# Starting with General Illegal + RTE (the pair the exctest exercises). The
+# other entries (Interrupt/Error/Slot Illegal/TRAPA) follow the same pattern
+# once these pass.
+
+[[instr]]
+  name = "General Illegal"
+  format = "d8"
+  opcode = "---- -111 dddd dddd"
+  operation = "SPC<-PC; SSR<-SR; set MD/RB/BL; PC<-(VBR+U*4)"
+  plane = "system"
+
+  [[instr.slots]]                 # PC <- PC-2 (restart = the faulting instruction)
+    alu_y = "2"
+    arith = "SUB"
+    pc = "HOLD"
+    xbus = "PC"
+    zbus = "PC"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]                 # SPC <- PC
+    pc = "HOLD"
+    ybus = "PC"
+    zbus = "SPC"
+    zbus_sel = "Y"
+
+  [[instr.slots]]                 # SSR <- SR (old), then SR <- MD/RB/BL
+    pc = "HOLD"
+    ybus = "SR"
+    zbus = "SSR"
+    zbus_sel = "Y"
+    sr = "EXCEPTION"
+
+  [[instr.slots]]                 # read handler address from VBR + U*4
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "32"
+    pc = "HOLD"
+    xbus = "U*4"
+    ybus = "VBR"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]                 # memory-read latency bubble
+    pc = "HOLD"
+
+  [[instr.slots]]                 # PC <- fetched vector
+    pc = "HOLD"
+    zbus = "PC"
+    zbus_sel = "W"
+
+  [[instr.slots]]                 # issue fetch at the handler
+    if_addy = "ZBUS"
+    if_issue = "YES"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    dispatch = "YES"
+    if_issue = "YES"
+    pc = "INC"
+
+  [[instr.slots]]
+
+[[instr]]
+  name = "RTE"
+  privileged = true
+  format = "0"
+  opcode = "0000 0000 0010 1011"
+  operation = "Delayed branch: SR<-SSR, PC<-SPC"
+  table_ref = "A.23"
+
+  [[instr.slots]]                 # SR <- SSR; fetch the delay-slot instruction
+    pc = "INC"
+    ybus = "SSR"
+    zbus_sel = "Y"
+    sr = "Z"
+
+  [[instr.slots]]                 # set up the delayed branch to SPC
+    pc = "HOLD"
+    ybus = "SPC"
+    zbus_sel = "Y"
+    delay_jmp = "SET"
+    if_addy = "ZBUS"
+
+  [[instr.slots]]
+    pc = "HOLD"

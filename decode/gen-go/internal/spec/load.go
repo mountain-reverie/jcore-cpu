@@ -42,7 +42,15 @@ func LoadProfile(base string, overlays ...string) (*Spec, error) {
 		return nil, err
 	}
 
-	// Load each overlay dir, appending instructions only.
+	// Index loaded instructions by name so an overlay can override by name.
+	nameIndex := make(map[string]int, len(out.Instrs))
+	for i, in := range out.Instrs {
+		nameIndex[in.Name] = i
+	}
+
+	// Load each overlay dir. An overlay instruction whose name matches an
+	// already-loaded instruction REPLACES it in place (ISA-variant override,
+	// e.g. J4 swapping in register-model exceptions); otherwise it is appended.
 	for _, overlayDir := range overlays {
 		overlayInstrs, _, err := readDir(overlayDir)
 		if err != nil {
@@ -50,7 +58,12 @@ func LoadProfile(base string, overlays ...string) (*Spec, error) {
 		}
 		for _, instr := range overlayInstrs {
 			applyDefaults(&instr, out.Defaults)
-			out.Instrs = append(out.Instrs, instr)
+			if idx, ok := nameIndex[instr.Name]; ok {
+				out.Instrs[idx] = instr
+			} else {
+				nameIndex[instr.Name] = len(out.Instrs)
+				out.Instrs = append(out.Instrs, instr)
+			}
 			out.Source[instr.Name] = instr.Name
 		}
 		// Record proper filenames for overlay instructions.

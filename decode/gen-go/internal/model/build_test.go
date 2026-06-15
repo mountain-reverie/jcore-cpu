@@ -13,7 +13,9 @@ import (
 // still be correct (Build skips nil lookups) but the orphan is dead
 // weight that misleads future readers.
 func TestCsvInstrOrderNoOrphans(t *testing.T) {
-	s, err := spec.Load("../../spec")
+	// Load with the sh4 overlay: csvInstrOrder includes the SH-4 R*_BANK
+	// instructions (used by `make generate-j4`), which live in spec/sh4.
+	s, err := spec.LoadProfile("../../spec", "../../spec/sh4")
 	if err != nil {
 		t.Fatal(err)
 	}

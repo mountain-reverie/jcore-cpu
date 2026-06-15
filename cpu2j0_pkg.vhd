@@ -94,8 +94,9 @@ package cpu2j0_pack is
    constant NULL_COPR_I : cop_i_t := ( d   => (others => '0'),
      ack => '1', t => '0', exc => '0');
 
-   component cpu is generic ( 
-      COPRO_DECODE : boolean := true);
+   component cpu is generic (
+      COPRO_DECODE : boolean := true;
+      PRIV_ARCH    : boolean := false);
      port (
       clk          : in  std_logic;
       rst          : in  std_logic;

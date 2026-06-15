@@ -9,16 +9,21 @@ use work.mult_pkg.all;
 package datapath_pack is
 
    -- SR bit Positions
-   constant T   : integer range 0 to 9 := 0;
-   constant S   : integer range 0 to 9 := 1;
-   constant I0  : integer range 0 to 9 := 4;
-   constant I1  : integer range 0 to 9 := 5;
-   constant I2  : integer range 0 to 9 := 6;
-   constant I3  : integer range 0 to 9 := 7;
-   constant Q   : integer range 0 to 9 := 8;
-   constant M   : integer range 0 to 9 := 9;
+   constant T   : integer range 0 to 30 := 0;
+   constant S   : integer range 0 to 30 := 1;
+   constant I0  : integer range 0 to 30 := 4;
+   constant I1  : integer range 0 to 30 := 5;
+   constant I2  : integer range 0 to 30 := 6;
+   constant I3  : integer range 0 to 30 := 7;
+   constant Q   : integer range 0 to 30 := 8;
+   constant M   : integer range 0 to 30 := 9;
+   constant BL  : integer range 0 to 30 := 28;
+   constant RB  : integer range 0 to 30 := 29;
+   constant MD  : integer range 0 to 30 := 30;
 
-   component datapath is port (
+   component datapath is
+     generic ( PRIV_ARCH : boolean := false );
+     port (
       clk         : in  std_logic;
       rst         : in  std_logic;
       debug       : in  std_logic;

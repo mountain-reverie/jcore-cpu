@@ -448,6 +448,7 @@
 
 [[instr]]
   name = "SLEEP"
+  privileged = true
   format = "0"
   opcode = "0000 0000 0001 1011"
   operation = "Sleep"
@@ -500,6 +501,7 @@
 
 [[instr]]
   name = "STC SR, Rn"
+  privileged = true
   format = "n"
   opcode = "0000 nnnn 0000 0010"
   operation = "SR?Rn"
@@ -558,6 +560,7 @@
 
 [[instr]]
   name = "STC VBR, Rn"
+  privileged = true
   format = "n"
   opcode = "0000 nnnn 0010 0010"
   operation = "VBR?Rn"
@@ -682,6 +685,7 @@
 
 [[instr]]
   name = "LDC.L @Rm+, SR"
+  privileged = true
   format = "m"
   opcode = "0100 mmmm 0000 0111"
   operation = "(Rm)?SR,Rm+4?Rm"
@@ -727,6 +731,7 @@
 
 [[instr]]
   name = "LDC Rm, SR"
+  privileged = true
   format = "m"
   opcode = "0100 mmmm 0000 1110"
   operation = "Rm ? SR"
@@ -851,6 +856,7 @@
 
 [[instr]]
   name = "LDC.L @Rm+, VBR"
+  privileged = true
   format = "m"
   opcode = "0100 mmmm 0010 0111"
   operation = "(Rm)?VBR,Rm+4?Rm"
@@ -894,6 +900,7 @@
 
 [[instr]]
   name = "LDC Rm, VBR"
+  privileged = true
   format = "m"
   opcode = "0100 mmmm 0010 1110"
   operation = "Rm ? VBR"
@@ -967,6 +974,7 @@
 
 [[instr]]
   name = "STC.L SR, @-Rn"
+  privileged = true
   format = "n"
   opcode = "0100 nnnn 0000 0011"
   operation = "Rn–4 ?Rn,SR ?(Rn)"
@@ -1077,6 +1085,7 @@
 
 [[instr]]
   name = "STC.L VBR, @-Rn"
+  privileged = true
   format = "n"
   opcode = "0100 nnnn 0010 0011"
   operation = "Rn – 4 ? Rn, VBR ? (Rn)"

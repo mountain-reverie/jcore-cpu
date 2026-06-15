@@ -207,12 +207,21 @@ def _metric(name, unit, value, direction):
     return {"name": name, "unit": unit, "value": value, "dir": direction}
 
 
-def build_asic(stat, sta, variant, commit):
-    """Canonical doc for the Nangate45 ASIC flow."""
+def build_asic(stat, sta, variant, commit, block_stat=None):
+    """Canonical doc for the Nangate45 ASIC flow.
+
+    `stat` is the primary (flattened) mapped stat: it sources the `cpu` total
+    area/cells — the long-running series — so that series stays continuous.
+    `block_stat`, when given, is a HIERARCHICAL mapped stat (modules kept) used
+    only for the per-block decode/datapath/mult/register_file/shifter breakdown;
+    the flattened netlist the timing flow produces has a single `cpu` module and
+    cannot attribute per block. With no block_stat, per-block falls back to
+    `stat` (correct only if `stat` itself is hierarchical, as in the tests)."""
     metrics_ = []
-    blocks = aggregate_blocks(stat)
+    cpu_blocks = aggregate_blocks(stat)
+    per_block = aggregate_blocks(block_stat) if block_stat is not None else cpu_blocks
     for blk in BLOCKS:
-        info = blocks.get(blk, {})
+        info = cpu_blocks.get(blk, {}) if blk == "cpu" else per_block.get(blk, {})
         if "area" in info:
             metrics_.append(_metric("%s/area" % blk, "um2", info["area"], "smaller"))
         if "cells" in info:
@@ -314,7 +323,8 @@ def main(argv=None):
     p.add_argument("--variant", default="direct-rom72")
     p.add_argument("--commit", required=True)
     p.add_argument("--out", required=True)
-    p.add_argument("--stat", help="yosys stat -liberty dump (asic/ecp5)")
+    p.add_argument("--stat", help="yosys stat -liberty dump (asic/ecp5); flattened cpu total")
+    p.add_argument("--block-stat", help="hierarchical yosys stat -liberty dump (asic) for per-block area/cells")
     p.add_argument("--sta", help="OpenSTA report (asic)")
     p.add_argument("--nextpnr", help="bare-cpu nextpnr-ecp5 log (util + IO-unconstrained Fmax)")
     p.add_argument("--nextpnr-timing", help="cpu_timing_top harness nextpnr log (representative Fmax)")
@@ -324,8 +334,9 @@ def main(argv=None):
 
     if a.target == "asic-nangate45":
         stat = parse_yosys_stat(_read(a.stat)) if a.stat else {}
+        block_stat = parse_yosys_stat(_read(a.block_stat)) if a.block_stat else None
         sta = parse_sta_report(_read(a.sta), a.period_ns) if a.sta else {}
-        doc = build_asic(stat, sta, a.variant, a.commit)
+        doc = build_asic(stat, sta, a.variant, a.commit, block_stat=block_stat)
     elif a.target == "ice40-up5k":
         parsed = parse_nextpnr_ice40_log(_read(a.nextpnr_ice40)) if a.nextpnr_ice40 else {"util": {}}
         fmax_rep = parse_nextpnr_fmax(_read(a.nextpnr_ice40)) if a.nextpnr_ice40 else None

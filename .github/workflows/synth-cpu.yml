@@ -88,7 +88,8 @@ jobs:
           NANGATE_LIB: /opt/nangate45/nangate45.lib
         run: |
           set -euo pipefail
-          # Per-block area from the Nangate45-mapped netlist (written by cpu_sta.sh).
+          # cpu TOTAL area from the flattened Nangate45-mapped netlist (written by
+          # cpu_sta.sh) — keeps the long-running cpu/area + timing series stable.
           # Guarded so a missing mapped netlist (STA skipped) never fails the step.
           if [ -f build/cpu_asic_mapped.v ]; then
             yosys -p "read_verilog build/cpu_asic_mapped.v; stat -liberty $NANGATE_LIB" \
@@ -96,11 +97,23 @@ jobs:
           else
             echo "WARN: build/cpu_asic_mapped.v absent — ASIC area/timing metrics will be partial" >&2
           fi
+          # PER-BLOCK area/cells need the HIERARCHICAL netlist (cpu_synth.sh writes
+          # build/cpu_asic.v with the RTL modules kept). Map it to Nangate WITHOUT
+          # flattening, so decode/datapath/mult/register_file/shifter each stay a
+          # module that `stat -liberty` can attribute. Fed to metrics.py as
+          # --block-stat; the flattened stat above still sources the cpu total.
+          if [ -f build/cpu_asic.v ]; then
+            yosys -p "read_verilog build/cpu_asic.v; dfflibmap -liberty $NANGATE_LIB; abc -liberty $NANGATE_LIB; stat -liberty $NANGATE_LIB" \
+              | tee build/asic_block_stat.txt || true
+          else
+            echo "WARN: build/cpu_asic.v absent — ASIC per-block metrics will be absent" >&2
+          fi
           period_ns=$(awk -v m="${ECP5_TARGET_MHZ}" 'BEGIN{printf "%.4f",1000.0/m}')
           python3 synth/metrics.py --target asic-nangate45 \
             --variant "${{ matrix.variant }}" \
             --commit "${GITHUB_SHA}" --out synth/metrics/asic-nangate45.json \
-            --stat build/asic_area_stat.txt --sta build/cpu_asic_sta.rpt \
+            --stat build/asic_area_stat.txt --block-stat build/asic_block_stat.txt \
+            --sta build/cpu_asic_sta.rpt \
             --period-ns "$period_ns" || true
       - name: Upload ASIC metrics
         if: always()

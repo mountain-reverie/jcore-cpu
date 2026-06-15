@@ -9,6 +9,9 @@ configuration cpu_decode_direct_fpga of cpu is
         for u_regfile : register_file
           use entity work.register_file(two_bank);
         end for;
+        for u_shifter : shifter
+          use entity work.shifter(comb);
+        end for;
       end for;
     end for;
   end for;
@@ -24,6 +27,9 @@ configuration cpu_decode_rom_fpga of cpu is
       for stru
         for u_regfile : register_file
           use entity work.register_file(two_bank);
+        end for;
+        for u_shifter : shifter
+          use entity work.shifter(comb);
         end for;
       end for;
     end for;
@@ -41,6 +47,9 @@ configuration cpu_sim of cpu is
         for u_regfile : register_file
           use entity work.register_file(two_bank);
         end for;
+        for u_shifter : shifter
+          use entity work.shifter(comb);
+        end for;
       end for;
     end for;
   end for;
@@ -53,6 +62,7 @@ configuration cpu_j2 of cpu is
     for u_datapath : datapath use entity work.datapath(stru);
       for stru
         for u_regfile : register_file use entity work.register_file(two_bank); end for;
+        for u_shifter : shifter use entity work.shifter(comb); end for;
       end for;
     end for;
   end for;
@@ -65,6 +75,7 @@ configuration cpu_j1 of cpu is
     for u_datapath : datapath use entity work.datapath(stru);
       for stru
         for u_regfile : register_file use entity work.register_file(two_bank); end for;
+        for u_shifter : shifter use entity work.shifter(comb); end for;
       end for;
     end for;
   end for;
@@ -80,6 +91,7 @@ configuration cpu_j4 of cpu is
     for u_datapath : datapath use entity work.datapath(stru);
       for stru
         for u_regfile : register_file use entity work.register_file(two_bank); end for;
+        for u_shifter : shifter use entity work.shifter(comb); end for;
       end for;
     end for;
   end for;

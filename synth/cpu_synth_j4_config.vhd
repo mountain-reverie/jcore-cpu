@@ -16,6 +16,9 @@ configuration cpu_synth_j4 of cpu is
         for u_regfile : register_file
           use entity work.register_file(two_bank);
         end for;
+        for u_shifter : shifter
+          use entity work.shifter(comb);
+        end for;
       end for;
     end for;
   end for;

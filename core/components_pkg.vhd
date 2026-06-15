@@ -143,6 +143,20 @@ function is_zero(a : std_logic_vector) return std_logic;
 function bshifter(a,b : std_logic_vector; c : std_logic; ops : shiftfunc_t) return std_logic_vector;
 function manip(x, y : std_logic_vector(31 downto 0); func : alumanip_t)
   return std_logic_vector;
+
+component shifter is
+  port (
+    clk   : in  std_logic;
+    rst   : in  std_logic;
+    start : in  std_logic;
+    a     : in  std_logic_vector(31 downto 0);
+    b     : in  std_logic_vector(5 downto 0);
+    t_in  : in  std_logic;
+    op    : in  shiftfunc_t;
+    y     : out std_logic_vector(31 downto 0);
+    t_out : out std_logic;
+    busy  : out std_logic);
+end component shifter;
 end package;
 
 package body cpu2j0_components_pack is

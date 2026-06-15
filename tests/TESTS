@@ -3,6 +3,7 @@ mult_tap
 mult_seq_tap
 divider_tap
 bshift_tap
+shifter_tap
 arith_tap
 logic_tap
 manip_tap

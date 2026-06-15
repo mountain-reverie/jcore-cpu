@@ -16,16 +16,27 @@ def read(name):
 
 class TestYosysStat(unittest.TestCase):
     def test_parses_per_module_cells_and_area(self):
+        # Faithful parse: keyed by the RAW GHDL-mangled module names yosys emits
+        # under `synth -top cpu` (no -flatten).
         got = metrics.parse_yosys_stat(read("yosys_stat_asic.txt"))
-        self.assertEqual(got["datapath"]["cells"], 2345)
-        self.assertAlmostEqual(got["datapath"]["area"], 19880.0)
-        self.assertEqual(got["mult"]["cells"], 820)
-        self.assertAlmostEqual(got["register_file"]["area"], 6300.0)
+        self.assertEqual(got["datapath_Bstru"]["cells"], 2345)
+        self.assertAlmostEqual(got["datapath_Bstru"]["area"], 19880.0)
+        self.assertEqual(got["mult_Bstru"]["cells"], 820)
+        self.assertAlmostEqual(got["register_file_Btwo_bank_5_21_32"]["area"], 6300.0)
 
     def test_top_uses_chip_area_for_top_module(self):
         got = metrics.parse_yosys_stat(read("yosys_stat_asic.txt"))
-        self.assertEqual(got["cpu"]["cells"], 5678)
+        # raw cpu module is the thin top-level glue (3 cells); its area is the
+        # 'top module' recursive total (48210), not the 30 glue-only area.
+        self.assertEqual(got["cpu"]["cells"], 3)
         self.assertAlmostEqual(got["cpu"]["area"], 48210.0)
+
+    def test_design_hierarchy_total_does_not_bleed(self):
+        # '=== design hierarchy ===' is the LAST section; its 5547-cell recursive
+        # total must NOT overwrite the preceding real module (shifter_Bcomb=329).
+        got = metrics.parse_yosys_stat(read("yosys_stat_asic.txt"))
+        self.assertEqual(got["shifter_Bcomb"]["cells"], 329)
+        self.assertEqual(got["design hierarchy"]["cells"], 5547)
 
     def test_empty_input_returns_empty(self):
         self.assertEqual(metrics.parse_yosys_stat(""), {})
@@ -35,6 +46,42 @@ class TestYosysStat(unittest.TestCase):
         got = metrics.parse_yosys_stat(text)
         self.assertEqual(got["foo"]["cells"], 12)
         self.assertNotIn("area", got["foo"])
+
+
+class TestAggregateBlocks(unittest.TestCase):
+    def setUp(self):
+        self.agg = metrics.aggregate_blocks(
+            metrics.parse_yosys_stat(read("yosys_stat_asic.txt")))
+
+    def test_strips_arch_suffix_to_bare_block(self):
+        self.assertEqual(self.agg["datapath"]["cells"], 2345)
+        self.assertEqual(self.agg["mult"]["cells"], 820)
+        self.assertAlmostEqual(self.agg["register_file"]["area"], 6300.0)
+
+    def test_shifter_is_its_own_block(self):
+        self.assertEqual(self.agg["shifter"]["cells"], 329)
+        self.assertAlmostEqual(self.agg["shifter"]["area"], 2600.0)
+
+    def test_decode_rolls_up_submodules(self):
+        # decode_Barch + decode_core_* + decode_table_* all fold into decode
+        self.assertEqual(self.agg["decode"]["cells"], 200 + 210 + 1000)
+        self.assertAlmostEqual(self.agg["decode"]["area"], 1500.0 + 1600.0 + 7920.0)
+
+    def test_cpu_is_whole_design_total_not_top_glue(self):
+        self.assertEqual(self.agg["cpu"]["cells"], 5547)   # design-hierarchy total
+        self.assertAlmostEqual(self.agg["cpu"]["area"], 48210.0)
+
+    def test_blocks_partition_the_design(self):
+        attributed = sum(self.agg[b]["cells"] for b in
+                         ["datapath", "decode", "mult", "register_file", "shifter"])
+        # whole-design total minus the 3-cell top-level glue
+        self.assertEqual(attributed, 5547 - 3)
+
+    def test_falls_back_to_cell_sum_without_design_hierarchy(self):
+        stat = {"cpu": {"cells": 3}, "datapath_Bstru": {"cells": 100},
+                "shifter_Bcomb": {"cells": 50}}
+        agg = metrics.aggregate_blocks(stat)
+        self.assertEqual(agg["cpu"]["cells"], 153)  # 3 + 100 + 50
 
 
 class TestStaReport(unittest.TestCase):
@@ -117,7 +164,14 @@ class TestBuildCanonical(unittest.TestCase):
         names = {x["name"]: x for x in doc["metrics"]}
         self.assertEqual(names["cpu/area"]["unit"], "um2")
         self.assertEqual(names["cpu/area"]["dir"], "smaller")
+        self.assertEqual(names["cpu/area"]["value"], 48210.0)
+        self.assertEqual(names["cpu/cells"]["value"], 5547)
         self.assertEqual(names["datapath/area"]["value"], 19880.0)
+        # the extracted shifter is surfaced as its own block
+        self.assertEqual(names["shifter/cells"]["value"], 329)
+        self.assertAlmostEqual(names["shifter/area"]["value"], 2600.0)
+        # decode rolls up its sub-modules rather than reporting only the wrapper
+        self.assertEqual(names["decode/cells"]["value"], 1410)
         self.assertEqual(names["cpu/WNS (relative)"]["dir"], "bigger")
         self.assertEqual(names["cpu/Fmax (relative)"]["unit"], "MHz")
         self.assertIn("cpu/power", names)

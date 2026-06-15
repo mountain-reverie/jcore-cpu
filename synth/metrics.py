@@ -7,23 +7,32 @@ is best-effort: a missing field yields no metric rather than an error.
 """
 import re
 
-# Modules whose per-block area/utilisation we surface (spec). Order is stable
-# for deterministic output.
-BLOCKS = ["cpu", "decode", "datapath", "mult", "register_file"]
+# Canonical blocks whose per-block area/utilisation we surface (spec). Order is
+# stable for deterministic output. "shifter" became its own block when the
+# barrel shifter was extracted from datapath into entity work.shifter.
+BLOCKS = ["cpu", "decode", "datapath", "mult", "register_file", "shifter"]
 
 
 def parse_yosys_stat(text):
     """yosys `stat -liberty` dump -> {module: {"cells": int, "area": float}}.
 
-    Per-module `=== name ===` sections carry "Number of cells" and
-    "Chip area for module '\\name'". The top module also prints
-    "Chip area for top module" (total incl. submodules) which we prefer for
-    the top.
+    Faithful per-section parse, keyed by the RAW module name as yosys prints it.
+    Under `synth -top cpu` (no -flatten) the ghdl-yosys plugin keeps the RTL
+    hierarchy, so names are GHDL-mangled: `datapath_Bstru`, `shifter_Bcomb`,
+    `register_file_Btwo_bank_5_21_32`, etc. (entity `_B` architecture). The
+    trailing `=== design hierarchy ===` pseudo-section carries the recursive
+    total; it is captured under its own key (the header is matched in full so it
+    does NOT bleed its total into the previous real module). Use aggregate_blocks
+    to roll these raw modules up to BLOCKS.
+
+    Each section carries "Number of cells" and "Chip area for module '\\name'".
+    The top module also prints "Chip area for top module" (total incl.
+    submodules) which we prefer for the top.
     """
     out = {}
     cur = None
     for line in text.splitlines():
-        m = re.match(r"^=== (\S+) ===", line)
+        m = re.match(r"^=== (.+?) ===\s*$", line)
         if m:
             cur = m.group(1)
             out.setdefault(cur, {})
@@ -42,6 +51,62 @@ def parse_yosys_stat(text):
         if m and "area" not in out.get(m.group(1), {}):
             out[m.group(1)]["area"] = float(m.group(2))
     return out
+
+
+def _canonical(module):
+    """GHDL-mangled module name -> base entity. Strips the `_B<arch>` suffix the
+    ghdl-yosys plugin appends: `datapath_Bstru` -> `datapath`,
+    `register_file_Btwo_bank_5_21_32` -> `register_file`, `shifter_Bcomb` ->
+    `shifter`. Names with no `_B` (e.g. `cpu`) pass through unchanged."""
+    return module.split("_B", 1)[0]
+
+
+def _block_for(base):
+    """Map a base entity name to the BLOCK that owns it: an exact match, or a
+    `block_` prefix so a block's nested sub-modules fold into it (decode_core /
+    decode_table -> decode). `cpu` is excluded here; it is the whole-design
+    total, handled by aggregate_blocks, not the thin top-level glue module."""
+    for blk in BLOCKS:
+        if blk == "cpu":
+            continue
+        if base == blk or base.startswith(blk + "_"):
+            return blk
+    return None
+
+
+def aggregate_blocks(stat):
+    """Roll a faithful per-module stat (parse_yosys_stat) up to BLOCKS.
+
+    Each block sums its own module plus any nested sub-modules (so `decode`
+    includes decode_core + decode_table). Sibling blocks that nest inside
+    another (register_file, shifter live under datapath) stay separate — they
+    are their own BLOCKS, and yosys counts each module's OWN cells only, so the
+    per-block sums partition the design without double-counting. `cpu` is the
+    whole-design total: cells from the `design hierarchy` recursive count (else
+    the sum of all module cells), area from `Chip area for top module`.
+    """
+    agg = {}
+    total_cells = 0
+    for mod, info in stat.items():
+        if mod == "design hierarchy":
+            continue
+        if "cells" in info:
+            total_cells += info["cells"]
+        blk = _block_for(_canonical(mod))
+        if blk is None:
+            continue
+        d = agg.setdefault(blk, {})
+        if "cells" in info:
+            d["cells"] = d.get("cells", 0) + info["cells"]
+        if "area" in info:
+            d["area"] = round(d.get("area", 0.0) + info["area"], 6)
+    dh = stat.get("design hierarchy", {})
+    cpu = agg.setdefault("cpu", {})
+    cpu["cells"] = dh.get("cells", total_cells)
+    top = stat.get("cpu", {})
+    if "area" in top:
+        cpu["area"] = top["area"]
+    return agg
 
 
 def parse_sta_report(text, period_ns):
@@ -145,8 +210,9 @@ def _metric(name, unit, value, direction):
 def build_asic(stat, sta, variant, commit):
     """Canonical doc for the Nangate45 ASIC flow."""
     metrics_ = []
+    blocks = aggregate_blocks(stat)
     for blk in BLOCKS:
-        info = stat.get(blk, {})
+        info = blocks.get(blk, {})
         if "area" in info:
             metrics_.append(_metric("%s/area" % blk, "um2", info["area"], "smaller"))
         if "cells" in info:

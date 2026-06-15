@@ -18,7 +18,7 @@ configuration cpu_synth_j1 of cpu is
           use entity work.register_file(two_bank);
         end for;
         for u_shifter : shifter
-          use entity work.shifter(comb);
+          use entity work.shifter(seq);
         end for;
       end for;
     end for;

@@ -52,6 +52,8 @@ architecture stru of datapath is
 	subtype reg_t is std_logic_vector(31 downto 0);
 	signal gpf_zwd, pc, reg_x, reg_y, reg_0, xbus, ybus, ybus_temp, zbus, wbus : std_logic_vector(31 downto 0);
 	signal sr : sr_t;
+	-- regfile addresses after SH-4 bank remapping (pass-through on J2)
+	signal num_x_r, num_y_r, num_z_r, num_w_r : regnum_t;
 	signal sfto : std_logic;
 	signal shift_b : std_logic_vector(5 downto 0);
 	signal shift_y : std_logic_vector(31 downto 0);
@@ -90,6 +92,30 @@ architecture stru of datapath is
           end if;
           return r;
         end to_slv;
+
+        -- Regfile depth: J4 (PRIV_ARCH) needs 8 extra slots for bank-1 R0-R7
+        -- at indices 24-31; J2 keeps 21 (bit-identical).
+        function rf_depth(priv : boolean) return integer is
+        begin
+          if priv then return 32; else return 21; end if;
+        end function;
+
+        -- SH-4 register banking: when privileged and RB=1, architectural R0-R7
+        -- ("00nnn") map to bank-1 ("11nnn"), and R*_BANK operands ("11nnn") map
+        -- to bank-0 ("00nnn") -- always the opposite bank. One symmetric swap of
+        -- addr(4 downto 3) does both. R8-R15 ("01") and system regs ("10xxx")
+        -- are unbanked.
+        function bank_remap(a : regnum_t; sr_md, sr_rb : std_logic) return regnum_t is
+          variable r : regnum_t := a;
+        begin
+          if sr_md = '1' and sr_rb = '1' then
+            if    a(4 downto 3) = "00" then r(4 downto 3) := "11";
+            elsif a(4 downto 3) = "11" then r(4 downto 3) := "00";
+            end if;
+          end if;
+          return r;
+        end function;
+        constant REGFILE_DEPTH : integer := rf_depth(PRIV_ARCH);
 	-- A bit vector from a single bit
 	function to_slv(b : std_logic; s : integer) return std_logic_vector is
 	  variable r : std_logic_vector(s-1 downto 0);
@@ -177,14 +203,19 @@ begin
 	ybus <= ybus_override.d when ybus_override.en = '1' else ybus_temp;
 
 	gpf_zwd <= pc when pc_ctrl.wrpr = '1' else zbus;
+	-- SH-4 register-bank remap on the four address ports; pass-through on J2.
+	num_x_r <= bank_remap(reg.num_x, sr.md, sr.rb) when PRIV_ARCH else reg.num_x;
+	num_y_r <= bank_remap(reg.num_y, sr.md, sr.rb) when PRIV_ARCH else reg.num_y;
+	num_z_r <= bank_remap(reg.num_z, sr.md, sr.rb) when PRIV_ARCH else reg.num_z;
+	num_w_r <= bank_remap(reg.num_w, sr.md, sr.rb) when PRIV_ARCH else reg.num_w;
 	u_regfile : register_file
           generic map (ADDR_WIDTH => 5,
-                       NUM_REGS => 21,
+                       NUM_REGS => REGFILE_DEPTH,
                        REG_WIDTH => 32)
-          port map(clk => clk, rst => rst, ce => slot_o, addr_ra => reg.num_x, dout_a => reg_x,
-                   addr_rb => reg.num_y, dout_b => reg_y, dout_0 => reg_0,
-                   we_wb => reg.wr_w, w_addr_wb => reg.num_w, din_wb => wbus, 
-                   we_ex => reg.wr_z, w_addr_ex => reg.num_z, din_ex => gpf_zwd,
+          port map(clk => clk, rst => rst, ce => slot_o, addr_ra => num_x_r, dout_a => reg_x,
+                   addr_rb => num_y_r, dout_b => reg_y, dout_0 => reg_0,
+                   we_wb => reg.wr_w, w_addr_wb => num_w_r, din_wb => wbus,
+                   we_ex => reg.wr_z, w_addr_ex => num_z_r, din_ex => gpf_zwd,
                    wr_data_o => reg_wr_data_o);
 -- setup arithmetic inputs function
 	with func.alu.inx_sel select

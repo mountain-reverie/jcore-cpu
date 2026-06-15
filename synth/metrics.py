@@ -107,6 +107,37 @@ def parse_nextpnr_log(text):
     return {"util": util, "fmax": fmax}
 
 
+NEXTPNR_ICE40_BLOCKS = [
+    "ICESTORM_LC", "ICESTORM_RAM", "ICESTORM_DSP", "ICESTORM_SPRAM",
+    "SB_IO", "SB_GB",
+]
+
+
+def parse_nextpnr_ice40_log(text):
+    """nextpnr-ice40 stdout -> {"util": {block: used}, "fmax": {clock: mhz}}.
+
+    Utilisation rows look like "  ICESTORM_LC:  6789/ 5280  128%"; we keep the
+    `used` number. On iCE40 a logic cell (ICESTORM_LC) holds one LUT4 + one FF,
+    so the up5k "5,280 LUT4" budget is the LC count — that is what build_ice40
+    surfaces as cpu/SB_LUT4. Fmax rows reuse the ECP5 format; clock names are
+    cleaned ($glbnet$clk -> clk) and the lowest per name is kept (the binding
+    post-route constraint, matching the gate's tail behaviour).
+    """
+    util, fmax = {}, {}
+    for line in text.splitlines():
+        for blk in NEXTPNR_ICE40_BLOCKS:
+            m = re.search(r"\b%s:\s+(\d+)/" % re.escape(blk), line)
+            if m:
+                util[blk] = int(m.group(1))
+        m = re.search(r"Max frequency for clock '([^']+)':\s+([\d.]+)\s*MHz", line)
+        if m:
+            name = m.group(1).split("$")[-1]  # $glbnet$clk -> clk
+            val = float(m.group(2))
+            if name not in fmax or val < fmax[name]:
+                fmax[name] = val
+    return {"util": util, "fmax": fmax}
+
+
 def _metric(name, unit, value, direction):
     return {"name": name, "unit": unit, "value": value, "dir": direction}
 

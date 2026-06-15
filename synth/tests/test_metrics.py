@@ -90,6 +90,23 @@ class TestNextpnrLog(unittest.TestCase):
         self.assertAlmostEqual(got["fmax"]["clk"], 40.00)
 
 
+class TestNextpnrIce40Log(unittest.TestCase):
+    def test_utilisation_logic_cells_and_hardblocks(self):
+        got = metrics.parse_nextpnr_ice40_log(read("nextpnr_ice40.log"))
+        # ICESTORM_LC is the logic-cell count == the up5k "LUT4" budget figure
+        self.assertEqual(got["util"]["ICESTORM_LC"], 6789)
+        self.assertEqual(got["util"]["ICESTORM_RAM"], 4)
+        self.assertEqual(got["util"]["ICESTORM_DSP"], 0)
+        self.assertEqual(got["util"]["SB_IO"], 4)
+
+    def test_fmax_keeps_lowest_post_route(self):
+        got = metrics.parse_nextpnr_ice40_log(read("nextpnr_ice40.log"))
+        self.assertAlmostEqual(got["fmax"]["clk"], 21.34)
+
+    def test_empty_input_has_empty_util(self):
+        self.assertEqual(metrics.parse_nextpnr_ice40_log(""), {"util": {}, "fmax": {}})
+
+
 class TestBuildCanonical(unittest.TestCase):
     def test_asic_metrics_have_names_units_dirs(self):
         stat = metrics.parse_yosys_stat(read("yosys_stat_asic.txt"))

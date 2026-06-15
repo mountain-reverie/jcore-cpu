@@ -264,8 +264,8 @@ RUN set -eux; \
     cmake --build /tmp/prjtrellis/libtrellis/build -j"$(nproc)"; \
     cmake --install /tmp/prjtrellis/libtrellis/build; \
     git clone --recursive --branch ${ICESTORM_REF} https://github.com/YosysHQ/icestorm /tmp/icestorm; \
-    make -C /tmp/icestorm -j"$(nproc)" PREFIX=/usr/local; \
-    make -C /tmp/icestorm install PREFIX=/usr/local; \
+    make -C /tmp/icestorm ICEPROG=0 -j"$(nproc)" PREFIX=/usr/local; \
+    make -C /tmp/icestorm ICEPROG=0 install PREFIX=/usr/local; \
     git clone --recursive --branch ${NEXTPNR_REF} https://github.com/YosysHQ/nextpnr /tmp/nextpnr; \
     cmake -S /tmp/nextpnr -B /tmp/nextpnr/build \
           -DARCH="ecp5;ice40" \

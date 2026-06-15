@@ -50,10 +50,17 @@ ENTRY(start)
         nop
         nop
 
-        ! user mode: this privileged instruction must trap -> handler -> _done
+        ! user mode: execute a privileged instruction.
         ldc     r0, vbr
-        ! only reached if the instruction did NOT trap:
+        ! Fall-through = the instruction did NOT trap.
+#if CONFIG_PRIV_ARCH
+        ! J4: a GENERAL_ILLEGAL trap was required; not trapping is a failure.
         bra     _fail_loop
+#else
+        ! J2/J1: no privilege model, so LDC VBR must execute normally (no trap).
+        ! Reaching here is the correct, expected result.
+        bra     _done
+#endif
         nop
 
 ENTRY(_done)
@@ -71,10 +78,16 @@ ENTRY(_fail_loop)
         nop
 
         ! Minimal exception handler. Reached via the trampoline below; runs in
-        ! user mode (PM0), so uses only the non-privileged BRA. The trap firing
-        ! is the success condition.
+        ! user mode (PM0), so uses only the non-privileged BRA.
 ENTRY(exception_handler)
+#if CONFIG_PRIV_ARCH
+        ! J4: the trap firing is exactly what we wanted -> success.
         bra     _done
+#else
+        ! J2/J1: no privileged-instruction trap must ever fire. Reaching the
+        ! handler means PM0 leaked into a non-PRIV_ARCH build -> failure.
+        bra     _fail_loop
+#endif
         nop
 
         .align 2

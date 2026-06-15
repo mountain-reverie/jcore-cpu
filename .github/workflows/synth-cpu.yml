@@ -46,7 +46,12 @@ jobs:
           path: jcore-soc
       - name: Toolchain versions
         run: |
+          # Version banners pipe into head; under -o pipefail the producer's
+          # SIGPIPE (exit 141) when head closes the pipe early would flake the
+          # step. Disable pipefail for the banners; keep it for the plugin gate.
+          set +o pipefail
           ghdl --version | head -1; yosys -V | head -1
+          set -o pipefail
           yosys -m ghdl -p 'help ghdl' >/dev/null && echo "ghdl plugin OK"
       - name: Generate decoder
         run: make -C decode generate
@@ -130,7 +135,12 @@ jobs:
           path: jcore-soc
       - name: Toolchain versions
         run: |
+          # Version banners pipe into head; under -o pipefail the producer's
+          # SIGPIPE (exit 141) when head closes the pipe early would flake the
+          # step. Disable pipefail for the banners; keep it for the tool gate.
+          set +o pipefail
           ghdl --version | head -1; yosys -V | head -1
+          set -o pipefail
           nextpnr-ecp5 --version; ecppack --help >/dev/null && echo "ecppack OK"
       - name: Generate decoder
         run: make -C decode generate

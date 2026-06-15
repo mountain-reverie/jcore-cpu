@@ -14,9 +14,12 @@
 --   4. once busy falls, samples MACH/MACL and checks against the expected
 --      product (the same expected constants mult_tap uses).
 --
--- It uses a direct entity instantiation of work.mult(seq), so the sequential
--- architecture is bound unambiguously regardless of analysis order (no
--- reliance on which architecture happens to be the "default" for 'mult').
+-- Both architectures are instantiated (direct entity binding, so each is bound
+-- unambiguously regardless of analysis order) and driven by the SAME stimulus.
+-- Every functional vector is checked against the golden constants on BOTH the
+-- sequential (seq) and the J2 array (stru) multiplier, and the saturating MAC.W
+-- cases cross-check seq against stru. So this one busy-aware harness validates
+-- both mult units (and any future architecture wired in the same way).
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -112,7 +115,9 @@ begin
   process
   begin
 
-    test_plan(12, "Mult seq (busy-aware)");
+    -- 7 functional vectors checked on BOTH architectures (seq + stru) against
+    -- the golden constants, plus 5 saturating seq-vs-stru cross-checks = 19.
+    test_plan(19, "Mult seq+stru (busy-aware)");
 
     -- Bypass a lot of logic, same as mult_tap.
     mac_i.s       <= '0';
@@ -136,7 +141,8 @@ begin
     mac_i.command <= NOP;
     mac_i.wr_m1   <= '0';
     run_to_completion(clk, mac_o.busy, "DMULS.L");
-    test_mult(mac_o.mach, mac_o.macl, x"ffffffff", x"ffff5556", "test DMULS.L");
+    test_mult(mac_o.mach, mac_o.macl, x"ffffffff", x"ffff5556", "test DMULS.L (seq)");
+    test_mult(mac_o_ref.mach, mac_o_ref.macl, x"ffffffff", x"ffff5556", "test DMULS.L (stru)");
 
     -------------------------------------------------------------- DMULU.L
     mac_i.command <= DMULUL;
@@ -145,7 +151,8 @@ begin
     mac_i.command <= NOP;
     mac_i.wr_m1   <= '0';
     run_to_completion(clk, mac_o.busy, "DMULU.L");
-    test_mult(mac_o.mach, mac_o.macl, x"00005554", x"ffff5556", "test DMULU.L");
+    test_mult(mac_o.mach, mac_o.macl, x"00005554", x"ffff5556", "test DMULU.L (seq)");
+    test_mult(mac_o_ref.mach, mac_o_ref.macl, x"00005554", x"ffff5556", "test DMULU.L (stru)");
 
     -------------------------------------------------------------- MUL.L
     mac_i.command <= MULL;
@@ -154,7 +161,8 @@ begin
     mac_i.command <= NOP;
     mac_i.wr_m1   <= '0';
     run_to_completion(clk, mac_o.busy, "MUL.L");
-    test_equal(mac_o.macl, x"ffff5556", "test MUL.L");
+    test_equal(mac_o.macl, x"ffff5556", "test MUL.L (seq)");
+    test_equal(mac_o_ref.macl, x"ffff5556", "test MUL.L (stru)");
 
     -------------------------------------------------------------- MULS.W
     mac_i.command <= MULSW;
@@ -163,7 +171,8 @@ begin
     mac_i.command <= NOP;
     mac_i.wr_m1   <= '0';
     run_to_completion(clk, mac_o.busy, "MULS.W");
-    test_equal(mac_o.macl, x"ffff5556", "test MULS.W");
+    test_equal(mac_o.macl, x"ffff5556", "test MULS.W (seq)");
+    test_equal(mac_o_ref.macl, x"ffff5556", "test MULS.W (stru)");
 
     -------------------------------------------------------------- MULU.W
     mac_i.command <= MULUW;
@@ -174,7 +183,8 @@ begin
     mac_i.command <= NOP;
     mac_i.wr_m1   <= '0';
     run_to_completion(clk, mac_o.busy, "MULU.W");
-    test_equal(mac_o.macl, x"00015554", "test MULU.W");
+    test_equal(mac_o.macl, x"00015554", "test MULU.W (seq)");
+    test_equal(mac_o_ref.macl, x"00015554", "test MULU.W (stru)");
 
     -------------------------------------------------------------- MAC.W
     -- Load m1 first (one slot), then issue MAC.W with the second operand.
@@ -187,7 +197,8 @@ begin
     wait until rising_edge(clk);
     mac_i.command <= NOP;
     run_to_completion(clk, mac_o.busy, "MAC.W");
-    test_equal(mac_o.macl, x"0001555a", "test MAC.W");
+    test_equal(mac_o.macl, x"0001555a", "test MAC.W (seq)");
+    test_equal(mac_o_ref.macl, x"0001555a", "test MAC.W (stru)");
 
     -------------------------------------------------------------- MAC.L
     mac_i.wr_m1   <= '1';
@@ -199,7 +210,8 @@ begin
     wait until rising_edge(clk);
     mac_i.command <= NOP;
     run_to_completion(clk, mac_o.busy, "MAC.L");
-    test_mult(mac_o.mach, mac_o.macl, x"40005553", x"0001555B", "test MAC.L");
+    test_mult(mac_o.mach, mac_o.macl, x"40005553", x"0001555B", "test MAC.L (seq)");
+    test_mult(mac_o_ref.mach, mac_o_ref.macl, x"40005553", x"0001555B", "test MAC.L (stru)");
 
     --------------------------------------------------------------------
     -- SATURATE32 cross-check: drive identical saturating MAC.W (s='1')

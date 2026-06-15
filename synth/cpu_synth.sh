@@ -48,6 +48,7 @@ FILES=(
   decode/decode_pkg.vhd
   core/cpu.vhd
   core/mult.vhd
+  core/shifter.vhd
   core/datapath.vhd
   core/register_file.vhd
   core/register_file_flops.vhd

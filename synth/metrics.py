@@ -230,10 +230,19 @@ def build_asic(stat, sta, variant, commit, block_stat=None):
     # generic synth on an academic slow-corner library with no buffering,
     # placement, or parasitics, so the absolute numbers are NOT real silicon
     # frequencies — only a regression signal. (Real 45nm would clock far higher.)
+    #
+    # WNS/TNS are reported as positive VIOLATION magnitudes (max(0, -slack)),
+    # smaller-is-better, NOT raw negative slack. github-action-benchmark's
+    # regression ratio (prev/curr) is sign-broken for negative values, so raw
+    # slack made a timing *improvement* (e.g. -3.34 -> -2.74 ns) false-alarm as a
+    # 1.22x regression. As a violation magnitude the same improvement is
+    # 3.34 -> 2.74 ns (a real decrease) and compares correctly; 0 means timing met.
     if "wns" in sta:
-        metrics_.append(_metric("cpu/WNS (relative)", "ns", sta["wns"], "bigger"))
+        metrics_.append(_metric("cpu/WNS violation (relative)", "ns",
+                                round(max(0.0, -sta["wns"]), 3), "smaller"))
     if "tns" in sta:
-        metrics_.append(_metric("cpu/TNS (relative)", "ns", sta["tns"], "bigger"))
+        metrics_.append(_metric("cpu/TNS violation (relative)", "ns",
+                                round(max(0.0, -sta["tns"]), 3), "smaller"))
     if "fmax_mhz" in sta:
         metrics_.append(_metric("cpu/Fmax (relative)", "MHz", round(sta["fmax_mhz"], 3), "bigger"))
     if "power_mw" in sta:

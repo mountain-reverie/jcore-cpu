@@ -503,6 +503,11 @@ var csvInstrOrder = []string{
 	"TRAPA #imm",
 	"ADD #imm, Rn",
 	"MOV #imm, Rn",
+	// SH-4 privileged-architecture overlay (spec/sh4, generate-j4 only). These
+	// are ignored by the base J2 generation (not in the base spec) and ordered
+	// here for the J4 ROM layout.
+	"LDC Rm, Rn_BANK",
+	"STC Rm_BANK, Rn",
 	// System-plane instructions (at end, in CSV row order):
 	"General Illegal",
 	"Slot Illegal",

@@ -1,0 +1,39 @@
+# SH-4 register-bank access (R*_BANK). Privileged; bank register in opcode[6:4]
+# (the RBANK operand -> bank-1 region 24-31), GPR in opcode[11:8]. Bit 7 = 1
+# distinguishes these from the SR/GBR/VBR LDC/STC variants.
+# See docs/priv-arch/j4-implementation-design.md (PM1).
+#
+# Only the register-register variants are provided in PM1: the base SH-2
+# microcode ROM is ~250/256 entries full, and the multi-slot LDC.L/STC.L
+# R*_BANK variants (5 more slots) overflow it. They are deferred until the
+# microcode ROM is given headroom (tracked for a later milestone). The reg-reg
+# moves are sufficient to exercise banking and to save/restore the inactive
+# bank via a GPR.
+
+[[instr]]
+  name = "LDC Rm, Rn_BANK"
+  privileged = true
+  format = "m"
+  opcode = "0100 mmmm 1nnn 1110"
+  operation = "Rm -> Rn_BANK"
+
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "Rm"
+    zbus = "RBANK"
+    zbus_sel = "Y"
+
+[[instr]]
+  name = "STC Rm_BANK, Rn"
+  privileged = true
+  format = "n"
+  opcode = "0000 nnnn 1mmm 0010"
+  operation = "Rm_BANK -> Rn"
+
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "RBANK"
+    zbus = "Rn"
+    zbus_sel = "Y"

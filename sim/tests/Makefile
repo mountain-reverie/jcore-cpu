@@ -4,7 +4,10 @@ AR = sh2-elf-ar
 OBJCOPY = sh2-elf-objcopy
 RANLIB = sh2-elf-ranlib
 LIBGCC = `sh2-elf-gcc -print-file-name=libgcc.a`
-CFLAGS = -m2 -g -Os -Wall -Iinclude
+# Must match the DUT's PRIV_ARCH generic (see ../Makefile). 0 = J2/J1 (no
+# privilege; privmode expects no trap), 1 = J4 (privmode expects the trap).
+CONFIG_PRIV_ARCH ?= 0
+CFLAGS = -m2 -g -Os -Wall -Iinclude -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH)
 LDFLAGS = -T sh32.x -Map main.map
 
 all: interrupts.img rte.img privmode.img

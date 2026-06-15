@@ -4,6 +4,7 @@ $(VHDLS) += core/cpu.vhd
 $(VHDLS) += core/mult_pkg.vhd
 $(VHDLS) += core/mult.vhd
 $(VHDLS) += core/datapath_pkg.vhd
+$(VHDLS) += core/shifter.vhd
 $(VHDLS) += core/datapath.vhd
 $(VHDLS) += core/register_file.vhd
 

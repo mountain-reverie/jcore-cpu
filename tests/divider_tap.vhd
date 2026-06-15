@@ -72,7 +72,8 @@ architecture tb  of divider_tap is
            s => '0',
            m => m,
            q => q,
-           t => t);
+           t => t,
+           others => '0');
     arith_func := ADD;
     if m = q then
       arith_func := SUB;
@@ -104,7 +105,8 @@ architecture tb  of divider_tap is
            s => '0',
            m => state.m,
            q => state.q,
-           t => state.t);
+           t => state.t,
+           others => '0');
     arith_func := ADD;
     if state.m = state.q then
       arith_func := SUB;

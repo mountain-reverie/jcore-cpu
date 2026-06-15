@@ -591,6 +591,10 @@ func assignSR(v string, out AssignMap) error {
 		out[SigSrSel] = "SEL_DIV0U"
 	case "INT_MASK":
 		out[SigSrSel] = "SEL_INT_MASK"
+	case "EXCEPTION":
+		// SH-4 exception entry: set MD/RB/BL (interrupt mask handled separately
+		// via INT_MASK for interrupts).
+		out[SigSrSel] = "SEL_EXCEPTION"
 	case "HOLD", "":
 		// HOLD means don't change SR — no signals emitted.
 	default:

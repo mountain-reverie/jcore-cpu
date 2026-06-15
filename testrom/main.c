@@ -2,6 +2,11 @@
 
 extern char version_string[];
 
+/* UART helpers defined in uartlite.c / uart16550.c. Declared here because
+ * gcc 14 treats implicit function declarations as errors by default. */
+void uart_tx(unsigned char data);
+void uart_set_baudrate(void);
+
 char ram0[256]; /* working ram for CPU tests */
 
 void

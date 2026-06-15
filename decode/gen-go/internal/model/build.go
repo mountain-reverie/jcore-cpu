@@ -508,6 +508,10 @@ var csvInstrOrder = []string{
 	// here for the J4 ROM layout.
 	"LDC Rm, Rn_BANK",
 	"STC Rm_BANK, Rn",
+	"STC SSR, Rn",
+	"STC SPC, Rn",
+	"LDC Rm, SSR",
+	"LDC Rm, SPC",
 	// System-plane instructions (at end, in CSV row order):
 	"General Illegal",
 	"Slot Illegal",

@@ -79,7 +79,7 @@ function seriesByName(data) {
 }
 
 // variantMap: { variant: [ {x,y,commit} ] } for a single metric.
-function lineCard(parent, title, variantMap, unit) {
+function lineCard(parent, title, variantMap, unit, budget) {
   var card = document.createElement("div"); card.className = "card";
   var cv = document.createElement("canvas"); card.appendChild(cv); parent.appendChild(card);
   var datasets = Object.keys(variantMap).sort().map(function (v) {
@@ -94,6 +94,23 @@ function lineCard(parent, title, variantMap, unit) {
       pointRadius: 3
     };
   });
+  if (budget) {
+    // Flat reference line spanning the data's x-range at y = budget.
+    var xs = [];
+    datasets.forEach(function (d) { d.data.forEach(function (p) { xs.push(p.x); }); });
+    if (xs.length) {
+      var xmin = Math.min.apply(null, xs), xmax = Math.max.apply(null, xs);
+      datasets.push({
+        label: "up5k budget (" + budget + ")",
+        data: [{ x: xmin, y: budget }, { x: xmax, y: budget }],
+        borderColor: "#d62728",
+        borderDash: [6, 4],
+        pointRadius: 0,
+        fill: false,
+        tension: 0
+      });
+    }
+  }
   new Chart(cv, {
     type: "line",
     data: { datasets: datasets },
@@ -134,7 +151,8 @@ function render() {
   // from the card title since the section heading already names the target.
   var grids = {
     "asic-nangate45": { grid: "trends-asic", section: "asic-section", any: false },
-    "ecp5-lfe5u-85f": { grid: "trends-ecp5", section: "fpga-section", any: false }
+    "ecp5-lfe5u-85f": { grid: "trends-ecp5", section: "fpga-section", any: false },
+    "ice40-up5k": { grid: "trends-ice40", section: "ice40-section", any: false }
   };
   Object.keys(all).sort().forEach(function (name) {
     var parts = name.split(" · ");
@@ -142,7 +160,8 @@ function render() {
     var dest = grids[target] || grids["ecp5-lfe5u-85f"];  // unknown target -> FPGA
     dest.any = true;
     var label = parts.length > 1 ? parts.slice(1).join(" · ") : name;
-    lineCard(document.getElementById(dest.grid), label, all[name], unitFor(name));
+    var budget = (name === "ice40-up5k · cpu/SB_LUT4") ? 5280 : null;
+    lineCard(document.getElementById(dest.grid), label, all[name], unitFor(name), budget);
   });
   Object.keys(grids).forEach(function (t) {
     if (grids[t].any) document.getElementById(grids[t].section).hidden = false;

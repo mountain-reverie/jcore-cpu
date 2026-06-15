@@ -9,6 +9,7 @@ end shifter_tap;
 
 architecture tb of shifter_tap is
   signal clk, rst, start, t_in, t_out, busy : std_logic := '0';
+  signal sel : std_logic := '0';
   signal a, y : std_logic_vector(31 downto 0) := (others => '0');
   signal b    : std_logic_vector(5 downto 0)  := (others => '0');
   signal op   : shiftfunc_t := logic;
@@ -24,7 +25,7 @@ architecture tb of shifter_tap is
   end function;
 begin
   u : entity work.shifter(comb)
-    port map (clk => clk, rst => rst, start => start,
+    port map (clk => clk, rst => rst, start => start, sel => sel,
               a => a, b => b, t_in => t_in, op => op,
               y => y, t_out => t_out, busy => busy);
 

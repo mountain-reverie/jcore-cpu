@@ -332,7 +332,7 @@ func AssignSlot(instr spec.Instr, slot spec.Slot) (AssignMap, error) {
 // assignXBus, assignYBus, assignZBus, and assignWBus. Adding a new named
 // register requires updating this slice, RegnumVHDL, and the VHDL enum —
 // the bus functions themselves need no further edits.
-var namedRegs = []string{"R0", "R15", "GBR", "VBR", "PR", "TEMP0", "TEMP1"}
+var namedRegs = []string{"R0", "R15", "GBR", "VBR", "PR", "TEMP0", "TEMP1", "RBANK"}
 
 // isNamedReg reports whether the (already upper-cased) value is one of
 // the canonical named registers in namedRegs.
@@ -1113,6 +1113,9 @@ func RegnumVHDL(tag string) string {
 		return "'0' & op.code(11 downto 8)"
 	case "RB":
 		return "'0' & op.code(7 downto 4)"
+	case "RBANK":
+		// R*_BANK: inactive-bank GPR, number in opcode[6:4]; bank-1 region = 24-31
+		return `"11" & op.code(6 downto 4)`
 	}
 	if v, ok := namedRegVHDL[tag]; ok {
 		return v

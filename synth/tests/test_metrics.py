@@ -176,6 +176,25 @@ class TestBuildCanonical(unittest.TestCase):
         self.assertEqual(names["cpu/Fmax (relative)"]["unit"], "MHz")
         self.assertIn("cpu/power", names)
 
+    def test_asic_cpu_from_flat_stat_blocks_from_hierarchical(self):
+        # CI feeds a flattened mapped stat (single cpu module = total) as --stat
+        # for series continuity, and a hierarchical mapped stat as --block-stat
+        # for the per-block breakdown. cpu must come from the flat one, the
+        # blocks from the hierarchical one.
+        flat = ("=== cpu ===\n   Number of cells:               9000\n"
+                "   Chip area for top module '\\cpu': 70000.000000\n")
+        doc = metrics.build_asic(
+            metrics.parse_yosys_stat(flat), {}, "j2", "c",
+            block_stat=metrics.parse_yosys_stat(read("yosys_stat_asic.txt")))
+        names = {m["name"]: m for m in doc["metrics"]}
+        # cpu total: from the flat stat, NOT the hierarchical 5547/48210
+        self.assertEqual(names["cpu/cells"]["value"], 9000)
+        self.assertEqual(names["cpu/area"]["value"], 70000.0)
+        # per-block: from the hierarchical block_stat
+        self.assertEqual(names["shifter/cells"]["value"], 329)
+        self.assertEqual(names["datapath/area"]["value"], 19880.0)
+        self.assertEqual(names["decode/cells"]["value"], 1410)
+
     def test_ecp5_metrics(self):
         util = metrics.parse_nextpnr_log(read("nextpnr_ecp5.log"))["util"]
         doc = metrics.build_ecp5(util, fmax_rep=42.86, fmax_bare=27.22,

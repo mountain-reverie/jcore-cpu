@@ -53,6 +53,7 @@ architecture stru of datapath is
 	signal sr : sr_t;
 	signal sfto : std_logic;
 	signal shift_b : std_logic_vector(5 downto 0);
+	signal shift_sel : std_logic;
 	signal shift_y : std_logic_vector(31 downto 0);
 	signal shift_busy : std_logic;  -- always '0' for shifter(comb); drives the
 	                                -- pipeline stall when shifter(seq) binds in Step 2b
@@ -211,8 +212,9 @@ begin
 	-- latches the operands in shifter(seq) (Step 2b). shift_y feeds zbus on
 	-- SEL_SHIFT; t_out is the shifted-out bit captured into sr.t (was sfto).
 	shift_b <= ybus(31) & ybus(4 downto 0);
+	shift_sel <= '1' when buses.z_sel = SEL_SHIFT else '0';
 	u_shifter : shifter port map (
-	  clk => clk, rst => rst, start => slot_o,
+	  clk => clk, rst => rst, start => slot_o, sel => shift_sel,
 	  a => xbus, b => shift_b,
 	  t_in => sr.t, op => func.shift,
 	  y => shift_y, t_out => sfto, busy => shift_busy);

@@ -141,6 +141,27 @@ class TestBuildCanonical(unittest.TestCase):
         names = [m["name"] for m in doc["metrics"]]
         self.assertEqual(names, ["cpu/LUT4"])  # no Fmax entries when unparsed
 
+    def test_ice40_metrics_map_lc_to_lut4(self):
+        util = metrics.parse_nextpnr_ice40_log(read("nextpnr_ice40.log"))["util"]
+        doc = metrics.build_ice40(util, fmax_rep=21.34,
+                                  variant="j1", commit="abc123")
+        self.assertEqual(doc["target"], "ice40-up5k")
+        self.assertEqual(doc["variant"], "j1")
+        names = {x["name"]: x for x in doc["metrics"]}
+        # ICESTORM_LC -> cpu/SB_LUT4 (the budget figure), smaller-is-better
+        self.assertEqual(names["cpu/SB_LUT4"]["value"], 6789)
+        self.assertEqual(names["cpu/SB_LUT4"]["dir"], "smaller")
+        self.assertEqual(names["cpu/EBR"]["value"], 4)
+        self.assertEqual(names["cpu/SB_MAC16"]["value"], 0)
+        self.assertEqual(names["cpu/Fmax (representative)"]["value"], 21.34)
+        self.assertEqual(names["cpu/Fmax (representative)"]["dir"], "bigger")
+
+    def test_ice40_omits_absent_blocks_and_fmax(self):
+        doc = metrics.build_ice40({"ICESTORM_LC": 4912}, fmax_rep=None,
+                                  variant="j1", commit="c")
+        names = [m["name"] for m in doc["metrics"]]
+        self.assertEqual(names, ["cpu/SB_LUT4"])  # only what was parsed
+
 
 class TestNextpnrFmax(unittest.TestCase):
     def test_takes_last_post_route_value(self):

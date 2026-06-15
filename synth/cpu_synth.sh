@@ -8,11 +8,13 @@
 #   2. vhm->vhd preprocessing via v2p has produced:
 #        core/mult.vhd  core/datapath.vhd  decode/decode_core.vhd
 #
-# Usage: synth/cpu_synth.sh <asic|ecp5|timing>
+# Usage: synth/cpu_synth.sh <asic|ecp5|timing|ice40>
 #   asic   -> build/cpu_asic.v    (generic netlist)
 #   ecp5   -> build/cpu_ecp5.json  (synth_ecp5/abc9 netlist of the bare cpu)
 #   timing -> build/cpu_timing.json (synth_ecp5 of the cpu_timing_top harness;
 #             the netlist the ECP5 Fmax regression gate is measured on)
+#   ice40  -> build/cpu_ice40.json (synth_ice40 of the cpu_timing_top harness;
+#             the netlist nextpnr-ice40 P&Rs on the up5k for the fit gauge)
 #
 # Variant selection (env var SYNTH_VARIANT, default j2):
 #   j2 -> elaborate cpu_synth_direct (the default; J2 hardware multiplier).
@@ -24,7 +26,7 @@
 # original J2-only script (so the existing J2 dashboard series is unbroken).
 set -euo pipefail
 
-BACKEND="${1:?usage: cpu_synth.sh <asic|ecp5|timing>}"
+BACKEND="${1:?usage: cpu_synth.sh <asic|ecp5|timing|ice40>}"
 SYNTH_VARIANT="${SYNTH_VARIANT:-j2}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -106,6 +108,15 @@ case "$BACKEND" in
     # per-variant harness config so J1/J4 measure their own core, not J2.
     yosys -m ghdl -p "$GHDL_BASE -e $TIMING_TOP; synth_ecp5 -top cpu_timing_top; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_timing.json"
     ;;
-  *) echo "ERROR: unknown backend '$BACKEND' (want asic|ecp5|timing)" >&2; exit 1 ;;
+  ice40)
+    # iCE40 up5k fit gauge. The bare cpu cannot P&R on up5k (too many
+    # unconstrained boundary IO), so synthesize the cpu_timing_top harness — the
+    # same one the ECP5 representative-Fmax path uses (boundary registered to 4
+    # IO). nextpnr-ice40 (run by the caller) then places & routes it on the up5k
+    # and reports ICESTORM_LC/RAM/DSP utilisation + Fmax. Elaborates the
+    # per-variant harness config so J1 measures its own core.
+    yosys -m ghdl -p "$GHDL_BASE -e $TIMING_TOP; synth_ice40 -dsp -top cpu_timing_top; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_ice40.json"
+    ;;
+  *) echo "ERROR: unknown backend '$BACKEND' (want asic|ecp5|timing|ice40)" >&2; exit 1 ;;
 esac
 echo "cpu_synth.sh: $BACKEND OK"

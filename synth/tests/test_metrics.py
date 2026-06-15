@@ -90,6 +90,23 @@ class TestNextpnrLog(unittest.TestCase):
         self.assertAlmostEqual(got["fmax"]["clk"], 40.00)
 
 
+class TestNextpnrIce40Log(unittest.TestCase):
+    def test_utilisation_logic_cells_and_hardblocks(self):
+        got = metrics.parse_nextpnr_ice40_log(read("nextpnr_ice40.log"))
+        # ICESTORM_LC is the logic-cell count == the up5k "LUT4" budget figure
+        self.assertEqual(got["util"]["ICESTORM_LC"], 6789)
+        self.assertEqual(got["util"]["ICESTORM_RAM"], 4)
+        self.assertEqual(got["util"]["ICESTORM_DSP"], 0)
+        self.assertEqual(got["util"]["SB_IO"], 4)
+
+    def test_fmax_keeps_lowest_post_route(self):
+        got = metrics.parse_nextpnr_ice40_log(read("nextpnr_ice40.log"))
+        self.assertAlmostEqual(got["fmax"]["clk"], 21.34)
+
+    def test_empty_input_has_empty_util(self):
+        self.assertEqual(metrics.parse_nextpnr_ice40_log(""), {"util": {}, "fmax": {}})
+
+
 class TestBuildCanonical(unittest.TestCase):
     def test_asic_metrics_have_names_units_dirs(self):
         stat = metrics.parse_yosys_stat(read("yosys_stat_asic.txt"))
@@ -123,6 +140,27 @@ class TestBuildCanonical(unittest.TestCase):
                                  fmax_bare=None, variant="v", commit="c")
         names = [m["name"] for m in doc["metrics"]]
         self.assertEqual(names, ["cpu/LUT4"])  # no Fmax entries when unparsed
+
+    def test_ice40_metrics_map_lc_to_lut4(self):
+        util = metrics.parse_nextpnr_ice40_log(read("nextpnr_ice40.log"))["util"]
+        doc = metrics.build_ice40(util, fmax_rep=21.34,
+                                  variant="j1", commit="abc123")
+        self.assertEqual(doc["target"], "ice40-up5k")
+        self.assertEqual(doc["variant"], "j1")
+        names = {x["name"]: x for x in doc["metrics"]}
+        # ICESTORM_LC -> cpu/SB_LUT4 (the budget figure), smaller-is-better
+        self.assertEqual(names["cpu/SB_LUT4"]["value"], 6789)
+        self.assertEqual(names["cpu/SB_LUT4"]["dir"], "smaller")
+        self.assertEqual(names["cpu/EBR"]["value"], 4)
+        self.assertEqual(names["cpu/SB_MAC16"]["value"], 0)
+        self.assertEqual(names["cpu/Fmax (representative)"]["value"], 21.34)
+        self.assertEqual(names["cpu/Fmax (representative)"]["dir"], "bigger")
+
+    def test_ice40_omits_absent_blocks_and_fmax(self):
+        doc = metrics.build_ice40({"ICESTORM_LC": 4912}, fmax_rep=None,
+                                  variant="j1", commit="c")
+        names = [m["name"] for m in doc["metrics"]]
+        self.assertEqual(names, ["cpu/SB_LUT4"])  # only what was parsed
 
 
 class TestNextpnrFmax(unittest.TestCase):

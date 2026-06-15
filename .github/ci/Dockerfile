@@ -249,12 +249,13 @@ RUN set -eux; \
     test -f "$NANGATE_LIB"
 
 # ---------------------------------------------------------------------------
-# prjtrellis (libtrellis + ecppack + ECP5 chip DB) and nextpnr-ecp5.
-# Independent of the custom yosys (nextpnr consumes JSON). Pin both to a
-# known-good ref after the first green build (replace the refs below with the
-# resolved commit SHAs).
+# FPGA P&R backends: prjtrellis (ECP5 chip DB + ecppack) and icestorm (iCE40
+# chip DB + icepack), plus a single nextpnr built for BOTH arches. nextpnr
+# consumes JSON, so it is independent of the custom yosys. Pin refs to a
+# known-good commit after the first green build.
 # ---------------------------------------------------------------------------
 ARG TRELLIS_REF=1.4
+ARG ICESTORM_REF=main
 ARG NEXTPNR_REF=nextpnr-0.7
 RUN set -eux; \
     git clone --recursive --branch ${TRELLIS_REF} https://github.com/YosysHQ/prjtrellis /tmp/prjtrellis; \
@@ -262,13 +263,21 @@ RUN set -eux; \
           -DCMAKE_INSTALL_PREFIX=/usr/local; \
     cmake --build /tmp/prjtrellis/libtrellis/build -j"$(nproc)"; \
     cmake --install /tmp/prjtrellis/libtrellis/build; \
+    git clone --recursive --branch ${ICESTORM_REF} https://github.com/YosysHQ/icestorm /tmp/icestorm; \
+    make -C /tmp/icestorm ICEPROG=0 -j"$(nproc)" PREFIX=/usr/local; \
+    make -C /tmp/icestorm ICEPROG=0 install PREFIX=/usr/local; \
     git clone --recursive --branch ${NEXTPNR_REF} https://github.com/YosysHQ/nextpnr /tmp/nextpnr; \
     cmake -S /tmp/nextpnr -B /tmp/nextpnr/build \
-          -DARCH=ecp5 -DTRELLIS_INSTALL_PREFIX=/usr/local -DCMAKE_INSTALL_PREFIX=/usr/local; \
+          -DARCH="ecp5;ice40" \
+          -DTRELLIS_INSTALL_PREFIX=/usr/local \
+          -DICESTORM_INSTALL_PREFIX=/usr/local \
+          -DCMAKE_INSTALL_PREFIX=/usr/local; \
     cmake --build /tmp/nextpnr/build -j"$(nproc)"; \
     cmake --install /tmp/nextpnr/build; \
-    rm -rf /tmp/prjtrellis /tmp/nextpnr; \
+    rm -rf /tmp/prjtrellis /tmp/icestorm /tmp/nextpnr; \
     nextpnr-ecp5 --version; \
-    ecppack --help >/dev/null
+    nextpnr-ice40 --version; \
+    ecppack --help >/dev/null; \
+    icepack --help >/dev/null 2>&1 || true
 
 CMD ["/bin/bash"]

@@ -107,6 +107,37 @@ def parse_nextpnr_log(text):
     return {"util": util, "fmax": fmax}
 
 
+NEXTPNR_ICE40_BLOCKS = [
+    "ICESTORM_LC", "ICESTORM_RAM", "ICESTORM_DSP", "ICESTORM_SPRAM",
+    "SB_IO", "SB_GB",
+]
+
+
+def parse_nextpnr_ice40_log(text):
+    """nextpnr-ice40 stdout -> {"util": {block: used}, "fmax": {clock: mhz}}.
+
+    Utilisation rows look like "  ICESTORM_LC:  6789/ 5280  128%"; we keep the
+    `used` number. On iCE40 a logic cell (ICESTORM_LC) holds one LUT4 + one FF,
+    so the up5k "5,280 LUT4" budget is the LC count — that is what build_ice40
+    surfaces as cpu/SB_LUT4. Fmax rows reuse the ECP5 format; clock names are
+    cleaned ($glbnet$clk -> clk) and the lowest per name is kept (the binding
+    post-route constraint, matching the gate's tail behaviour).
+    """
+    util, fmax = {}, {}
+    for line in text.splitlines():
+        for blk in NEXTPNR_ICE40_BLOCKS:
+            m = re.search(r"\b%s:\s+(\d+)/" % re.escape(blk), line)
+            if m:
+                util[blk] = int(m.group(1))
+        m = re.search(r"Max frequency for clock '([^']+)':\s+([\d.]+)\s*MHz", line)
+        if m:
+            name = m.group(1).split("$")[-1]  # $glbnet$clk -> clk
+            val = float(m.group(2))
+            if name not in fmax or val < fmax[name]:
+                fmax[name] = val
+    return {"util": util, "fmax": fmax}
+
+
 def _metric(name, unit, value, direction):
     return {"name": name, "unit": unit, "value": value, "dir": direction}
 
@@ -171,6 +202,33 @@ def build_ecp5(util, fmax_rep, fmax_bare, variant, commit):
             "commit": commit, "metrics": metrics_}
 
 
+# nextpnr-ice40 utilisation block -> canonical series name. ICESTORM_LC is the
+# logic-cell count, which on up5k IS the "5,280 LUT4" budget, so it surfaces as
+# the cpu/SB_LUT4 series the dashboard tracks. nextpnr folds FFs into LCs, so
+# there is no separate SB_DFF figure on this target.
+ICE40_CANON = [
+    ("ICESTORM_LC", "SB_LUT4"),
+    ("ICESTORM_RAM", "EBR"),
+    ("ICESTORM_DSP", "SB_MAC16"),
+]
+
+
+def build_ice40(util, fmax_rep, variant, commit):
+    """Canonical doc for the iCE40 up5k FPGA flow (cpu_timing_top harness P&R).
+
+    util: {block: used} from the nextpnr-ice40 log. fmax_rep: representative
+    Fmax (MHz) from the same P&R, reported (no declared up5k clock yet).
+    """
+    metrics_ = []
+    for blk, label in ICE40_CANON:
+        if blk in util:
+            metrics_.append(_metric("cpu/%s" % label, label, util[blk], "smaller"))
+    if fmax_rep is not None:
+        metrics_.append(_metric("cpu/Fmax (representative)", "MHz", round(fmax_rep, 2), "bigger"))
+    return {"target": "ice40-up5k", "variant": variant,
+            "commit": commit, "metrics": metrics_}
+
+
 def _read(path):
     try:
         with open(path) as f:
@@ -185,7 +243,8 @@ def main(argv=None):
     import json
 
     p = argparse.ArgumentParser(description="emit canonical synth metrics JSON")
-    p.add_argument("--target", required=True, choices=["asic-nangate45", "ecp5-lfe5u-85f"])
+    p.add_argument("--target", required=True,
+                   choices=["asic-nangate45", "ecp5-lfe5u-85f", "ice40-up5k"])
     p.add_argument("--variant", default="direct-rom72")
     p.add_argument("--commit", required=True)
     p.add_argument("--out", required=True)
@@ -193,6 +252,7 @@ def main(argv=None):
     p.add_argument("--sta", help="OpenSTA report (asic)")
     p.add_argument("--nextpnr", help="bare-cpu nextpnr-ecp5 log (util + IO-unconstrained Fmax)")
     p.add_argument("--nextpnr-timing", help="cpu_timing_top harness nextpnr log (representative Fmax)")
+    p.add_argument("--nextpnr-ice40", help="nextpnr-ice40 up5k log (util + representative Fmax)")
     p.add_argument("--period-ns", type=float, default=20.0)
     a = p.parse_args(argv)
 
@@ -200,6 +260,10 @@ def main(argv=None):
         stat = parse_yosys_stat(_read(a.stat)) if a.stat else {}
         sta = parse_sta_report(_read(a.sta), a.period_ns) if a.sta else {}
         doc = build_asic(stat, sta, a.variant, a.commit)
+    elif a.target == "ice40-up5k":
+        parsed = parse_nextpnr_ice40_log(_read(a.nextpnr_ice40)) if a.nextpnr_ice40 else {"util": {}}
+        fmax_rep = parse_nextpnr_fmax(_read(a.nextpnr_ice40)) if a.nextpnr_ice40 else None
+        doc = build_ice40(parsed.get("util", {}), fmax_rep, a.variant, a.commit)
     else:
         bare = parse_nextpnr_log(_read(a.nextpnr)) if a.nextpnr else {"util": {}}
         fmax_bare = parse_nextpnr_fmax(_read(a.nextpnr)) if a.nextpnr else None

@@ -172,7 +172,12 @@ class TestBuildCanonical(unittest.TestCase):
         self.assertAlmostEqual(names["shifter/area"]["value"], 2600.0)
         # decode rolls up its sub-modules rather than reporting only the wrapper
         self.assertEqual(names["decode/cells"]["value"], 1410)
-        self.assertEqual(names["cpu/WNS (relative)"]["dir"], "bigger")
+        # WNS/TNS are positive violation magnitudes, smaller-is-better (so the
+        # action's ratio compares correctly), not raw negative slack.
+        self.assertEqual(names["cpu/WNS violation (relative)"]["dir"], "smaller")
+        self.assertEqual(names["cpu/WNS violation (relative)"]["value"], 4.83)  # -(-4.83)
+        self.assertEqual(names["cpu/TNS violation (relative)"]["value"], 52.10)  # -(-52.10)
+        self.assertNotIn("cpu/WNS (relative)", names)  # old sign-broken series dropped
         self.assertEqual(names["cpu/Fmax (relative)"]["unit"], "MHz")
         self.assertIn("cpu/power", names)
 
@@ -194,6 +199,26 @@ class TestBuildCanonical(unittest.TestCase):
         self.assertEqual(names["shifter/cells"]["value"], 329)
         self.assertEqual(names["datapath/area"]["value"], 19880.0)
         self.assertEqual(names["decode/cells"]["value"], 1410)
+
+    def test_wns_violation_smaller_when_timing_improves(self):
+        # The bug: a slack improvement (-3.34 -> -2.74 ns) false-alarmed because
+        # raw negative slack increased. As a violation magnitude it correctly
+        # DECREASES (3.34 -> 2.74), which the smaller-is-better ratio reads as better.
+        worse = metrics.build_asic({}, {"wns": -3.34, "tns": -400.67}, "j2", "old")
+        better = metrics.build_asic({}, {"wns": -2.74, "tns": -306.66}, "j2", "new")
+        wv = {m["name"]: m for m in worse["metrics"]}
+        bv = {m["name"]: m for m in better["metrics"]}
+        self.assertEqual(wv["cpu/WNS violation (relative)"]["value"], 3.34)
+        self.assertEqual(bv["cpu/WNS violation (relative)"]["value"], 2.74)
+        self.assertLess(bv["cpu/WNS violation (relative)"]["value"],
+                        wv["cpu/WNS violation (relative)"]["value"])
+
+    def test_met_timing_reports_zero_violation(self):
+        # Positive slack (timing met) -> 0 violation, never negative.
+        doc = metrics.build_asic({}, {"wns": 1.50, "tns": 0.0}, "j2", "c")
+        names = {m["name"]: m for m in doc["metrics"]}
+        self.assertEqual(names["cpu/WNS violation (relative)"]["value"], 0.0)
+        self.assertEqual(names["cpu/TNS violation (relative)"]["value"], 0.0)
 
     def test_ecp5_metrics(self):
         util = metrics.parse_nextpnr_log(read("nextpnr_ecp5.log"))["util"]

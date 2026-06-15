@@ -1,0 +1,7 @@
+# iCE40 UltraPlus 5K (up5k), SG48 package — pins for the cpu_timing_top harness.
+# Only 4 IO exist (clk/rst/ti/sout); exact pins are immaterial to the fit gauge,
+# they just need to be valid SG48 IO so nextpnr-ice40 places & routes.
+set_io clk  35
+set_io rst  2
+set_io ti   3
+set_io sout 4

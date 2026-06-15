@@ -297,17 +297,24 @@ jobs:
       - name: Synthesize (synth_ice40, cpu_timing_top harness)
         run: SYNTH_VARIANT=${{ matrix.variant }} synth/cpu_synth.sh ice40
       - name: Place and route (nextpnr-ice40, up5k) — non-gating
-        # Report-only: --timing-allow-fail keeps P&R completing (and reporting
-        # Fmax) without a declared up5k clock. We do NOT gate on fit. The "|| true"
-        # plus the util parse below mean a routing failure simply yields no
-        # ICESTORM_LC metric, so the milestone never fires on a failed P&R.
+        # Report-only: --timing-allow-fail keeps P&R completing (a timing-only
+        # miss stays exit 0 = P&R completed) without a declared up5k clock. We do
+        # NOT gate CI on fit. But we DO capture nextpnr's real exit status into
+        # build/pnr_ok so the milestone's --pnr-ok guard is honest: nextpnr prints
+        # the utilisation table after PLACEMENT, before ROUTING, so a run where
+        # placement fits but routing fails would still emit ICESTORM_LC. Without
+        # this flag the milestone could false-fire on that case.
         run: |
           set -uo pipefail
-          nextpnr-ice40 --up5k --package sg48 \
-            --json build/cpu_ice40.json \
-            --pcf synth/up5k_cpu.pcf --pcf-allow-unconstrained \
-            --timing-allow-fail \
-            --asc build/cpu_ice40.asc > build/nextpnr_ice40.log 2>&1 || true
+          if nextpnr-ice40 --up5k --package sg48 \
+               --json build/cpu_ice40.json \
+               --pcf synth/up5k_cpu.pcf --pcf-allow-unconstrained \
+               --timing-allow-fail \
+               --asc build/cpu_ice40.asc > build/nextpnr_ice40.log 2>&1; then
+            echo true > build/pnr_ok
+          else
+            echo false > build/pnr_ok
+          fi
           tail -40 build/nextpnr_ice40.log
       - name: Report util + Fmax
         run: |
@@ -326,12 +333,19 @@ jobs:
             --variant "${{ matrix.variant }}" \
             --commit "${GITHUB_SHA}" --out synth/metrics/ice40-up5k.json \
             --nextpnr-ice40 build/nextpnr_ice40.log || true
+          # Carry the real P&R exit status alongside the metric so the (cross-job)
+          # milestone evaluate step can honour --pnr-ok. The suite builder globs
+          # only *.json, so this marker never pollutes the benchmark data.
+          cp -f build/pnr_ok synth/metrics/ice40-up5k.pnr_ok 2>/dev/null \
+            || echo false > synth/metrics/ice40-up5k.pnr_ok
       - name: Upload iCE40 metrics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: metrics-ice40-${{ matrix.variant }}
-          path: synth/metrics/*.json
+          path: |
+            synth/metrics/*.json
+            synth/metrics/*.pnr_ok
           retention-days: 14
       - name: Upload artifacts
         if: always()
@@ -457,8 +471,13 @@ jobs:
             echo "no ice40 metrics artifact — skipping milestone"
             echo "fire=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
+          # Pass --pnr-ok only when nextpnr actually completed P&R (placement AND
+          # routing), propagated from the synth-ice40 job via the artifact.
+          pnr_ok=$(cat metrics-in/metrics-ice40-j1/ice40-up5k.pnr_ok 2>/dev/null || echo false)
+          pnr_flag=""
+          [ "$pnr_ok" = "true" ] && pnr_flag="--pnr-ok"
           fire=$(python3 synth/ice40_fit.py --current "$cur" \
-                   --history ice40_prev_history.json --pnr-ok \
+                   --history ice40_prev_history.json $pnr_flag \
                    --dashboard-url "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY##*/}/" \
                    --out ice40_milestone.md | sed -n 's/^fire=//p')
           echo "fire=${fire:-false}" >> "$GITHUB_OUTPUT"
@@ -471,7 +490,9 @@ jobs:
             const fs = require('fs');
             const marker = '<!-- ice40-up5k-fit-milestone -->';
             const body = fs.readFileSync('ice40_milestone.md', 'utf8');
-            const { data: comments } = await github.rest.issues.listComments({
+            // Paginate: a busy PR can exceed one page, and the marker may be on
+            // an earlier page — missing it would double-post the milestone.
+            const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner, repo: context.repo.repo,
               issue_number: context.issue.number, per_page: 100,
             });

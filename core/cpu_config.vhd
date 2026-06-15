@@ -75,7 +75,7 @@ configuration cpu_j1 of cpu is
     for u_datapath : datapath use entity work.datapath(stru);
       for stru
         for u_regfile : register_file use entity work.register_file(two_bank); end for;
-        for u_shifter : shifter use entity work.shifter(comb); end for;
+        for u_shifter : shifter use entity work.shifter(seq); end for;
       end for;
     end for;
   end for;

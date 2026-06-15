@@ -71,12 +71,19 @@ begin
     if left = '1' then cnt := mag5; else cnt := to_unsigned(32, 6) - mag5; end if;
     -- step1/bitout use dir='0'=left (the b(5) convention); `left` is its inverse.
     y1 := step1(a, not left, op, t_in);
+    -- t1 = bit shifted out by a SINGLE step (= comb's sfto: a MSB/LSB by dir).
+    -- Only single-bit shifts (cnt<=1) set sr.t, so for multi-bit shifts t_out is
+    -- don't-care; tout is latched = t1 and matches comb (the proven reference).
     if left = '1' then t1 := a(31); else t1 := a(0); end if;
     -- Accept on `sel` (the registered EX shift-select), NOT on `start`/slot:
     -- busy must depend only on registered signals so it can drive the
     -- combinational slot-stretch (busy -> slot_o=0) without forming a loop
     -- through slot_o. The FSM steps one bit every CLOCK while the slot is
     -- stretched (the pipeline, including this shift in EX, is frozen).
+    -- Gating accept on `start`(=slot_o) instead would close that loop, so we
+    -- gate on `sel` (registered EX z-bus select). No re-accept of a finished
+    -- shift: on the final step slot_o fires AND the EX pipeline advances on the
+    -- same edge, so by the next cycle `sel` reflects the NEXT instruction.
     accept := (r.st = IDLE) and (sel = '1');
 
     -- defaults (don't-care when not a shift / not selected)

@@ -7,6 +7,7 @@ default: all
 # Add VHDL test benches entity names 
 
 VHDL_TESTS := register_tap
+VHDL_TESTS += register_ebr_tap
 VHDL_TESTS += mult_tap
 VHDL_TESTS += mult_seq_tap
 VHDL_TESTS += divider_tap
@@ -20,6 +21,7 @@ VHDL_TESTS += manip_tap
 # Add VHDL files used by the test benches
 
 VHDS := register_tap.vhd
+VHDS += register_ebr_tap.vhd
 VHDS += mult_tap.vhd
 VHDS += mult_seq_tap.vhd
 VHDS += divider_tap.vhd
@@ -47,6 +49,8 @@ VHDS += $(addprefix ../, $(CPU_VHDS))
 # testbench.  mult_seq_tap uses a direct entity instantiation of mult(seq),
 # so it is unaffected by default-binding order either way.
 VHDS += ../core/mult_seq.vhd
+VHDS += ../core/register_file_flops.vhd
+VHDS += ../core/register_file_ebr.vhd
 VHDS += $(TOOLS_DIR)/tests/tap/test_pkg.vhd
 
 VHDL_TOPS := $(VHDL_TESTS)

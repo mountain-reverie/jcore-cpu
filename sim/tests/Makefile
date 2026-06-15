@@ -7,10 +7,11 @@ LIBGCC = `sh2-elf-gcc -print-file-name=libgcc.a`
 CFLAGS = -m2 -g -Os -Wall -Iinclude
 LDFLAGS = -T sh32.x -Map main.map
 
-all: interrupts.img rte.img
+all: interrupts.img rte.img privmode.img
 
 interrupts.elf: interrupts.o
 rte.elf: rte.o
+privmode.elf: privmode.o
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@

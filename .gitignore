@@ -45,6 +45,7 @@ sim/tests/*.map
 # Working/scratch files at repo root — not part of the build
 insns.json
 jcore-decoder-migration-spec-v2.md
+docs/superpowers
 
 # synth/ build artifacts (netlists, GHDL work dirs)
 build/

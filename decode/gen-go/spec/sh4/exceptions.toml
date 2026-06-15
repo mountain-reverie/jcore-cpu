@@ -2,39 +2,132 @@
 # SH-2 stack-model instructions by name). SPC = regfile 21, SSR = regfile 22.
 # See docs/priv-arch/j4-implementation-design.md §4.
 #
-# Starting with General Illegal + RTE (the pair the exctest exercises). The
-# other entries (Interrupt/Error/Slot Illegal/TRAPA) follow the same pattern
-# once these pass.
+# Fused entry: SPC <- PC(-adjust) in one slot (zbus=SPC, zbus_sel=ARITH), then
+# SSR<-SR + SEL_EXCEPTION, then the VBR+U*4 vector fetch -> PC. No stack pushes
+# (frees ROM vs the SH-2 model). ALL six entries use this model so the
+# register-model RTE returns correctly. Tested: TRAPA (exctest), General Illegal
+# (privmode); others are structurally identical.
 
+# ---- Interrupt (maskable: capture level, set IMASK) ----
 [[instr]]
-  name = "General Illegal"
+  name = "Interrupt"
   format = "d8"
-  opcode = "---- -111 dddd dddd"
-  operation = "SPC<-PC; SSR<-SR; set MD/RB/BL; PC<-(VBR+U*4)"
+  opcode = "---- -000 dddd dddd"
+  operation = ""
   plane = "system"
 
-  [[instr.slots]]                 # PC <- PC-2 (restart = the faulting instruction)
+  [[instr.slots]]
+    event = "ack"
+    ilevel_capture = "Y"
     alu_y = "2"
     arith = "SUB"
     pc = "HOLD"
     xbus = "PC"
-    zbus = "PC"
-    zbus_sel = "ARITH"
-
-  [[instr.slots]]                 # SPC <- PC
-    pc = "HOLD"
-    ybus = "PC"
     zbus = "SPC"
-    zbus_sel = "Y"
-
-  [[instr.slots]]                 # SSR <- SR (old), then SR <- MD/RB/BL
+    zbus_sel = "ARITH"
+  [[instr.slots]]
     pc = "HOLD"
     ybus = "SR"
     zbus = "SSR"
     zbus_sel = "Y"
     sr = "EXCEPTION"
+  [[instr.slots]]
+    pc = "HOLD"
+    sr = "INT_MASK"
+  [[instr.slots]]
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "32"
+    pc = "HOLD"
+    xbus = "VBR"
+    ybus = "U*4"
+    zbus_sel = "ARITH"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+    zbus = "PC"
+    zbus_sel = "W"
+  [[instr.slots]]
+    if_addy = "ZBUS"
+    if_issue = "YES"
+    pc = "HOLD"
+  [[instr.slots]]
+    dispatch = "YES"
+    if_issue = "YES"
+    pc = "INC"
+  [[instr.slots]]
 
-  [[instr.slots]]                 # read handler address from VBR + U*4
+# ---- Error (event-driven; no IMASK) ----
+[[instr]]
+  name = "Error"
+  format = "d8"
+  opcode = "---- -001 dddd dddd"
+  operation = ""
+  plane = "system"
+
+  [[instr.slots]]
+    event = "ack"
+    alu_y = "2"
+    arith = "SUB"
+    pc = "HOLD"
+    xbus = "PC"
+    zbus = "SPC"
+    zbus_sel = "ARITH"
+  [[instr.slots]]
+    pc = "HOLD"
+    ybus = "SR"
+    zbus = "SSR"
+    zbus_sel = "Y"
+    sr = "EXCEPTION"
+  [[instr.slots]]
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "32"
+    pc = "HOLD"
+    xbus = "VBR"
+    ybus = "U*4"
+    zbus_sel = "ARITH"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+    zbus = "PC"
+    zbus_sel = "W"
+  [[instr.slots]]
+    if_addy = "ZBUS"
+    if_issue = "YES"
+    pc = "HOLD"
+  [[instr.slots]]
+    dispatch = "YES"
+    if_issue = "YES"
+    pc = "INC"
+  [[instr.slots]]
+
+# ---- Slot Illegal ----
+[[instr]]
+  name = "Slot Illegal"
+  format = "d8"
+  opcode = "---- -110 dddd dddd"
+  operation = ""
+  plane = "system"
+
+  [[instr.slots]]
+    alu_y = "0"
+    arith = "ADD"
+    pc = "HOLD"
+    xbus = "PC"
+    zbus = "SPC"
+    zbus_sel = "ARITH"
+  [[instr.slots]]
+    pc = "HOLD"
+    ybus = "SR"
+    zbus = "SSR"
+    zbus_sel = "Y"
+    sr = "EXCEPTION"
+  [[instr.slots]]
     arith = "ADD"
     ma_addy = "ZBUS"
     ma_op = "READ"
@@ -43,27 +136,114 @@
     xbus = "U*4"
     ybus = "VBR"
     zbus_sel = "ARITH"
-
-  [[instr.slots]]                 # memory-read latency bubble
+  [[instr.slots]]
     pc = "HOLD"
-
-  [[instr.slots]]                 # PC <- fetched vector
+  [[instr.slots]]
     pc = "HOLD"
     zbus = "PC"
     zbus_sel = "W"
-
-  [[instr.slots]]                 # issue fetch at the handler
+  [[instr.slots]]
     if_addy = "ZBUS"
     if_issue = "YES"
     pc = "HOLD"
-
   [[instr.slots]]
     dispatch = "YES"
     if_issue = "YES"
     pc = "INC"
-
   [[instr.slots]]
 
+# ---- General Illegal (restart = faulting instruction, PC-2) ----
+[[instr]]
+  name = "General Illegal"
+  format = "d8"
+  opcode = "---- -111 dddd dddd"
+  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; PC<-(VBR+U*4)"
+  plane = "system"
+
+  [[instr.slots]]
+    alu_y = "2"
+    arith = "SUB"
+    pc = "HOLD"
+    xbus = "PC"
+    zbus = "SPC"
+    zbus_sel = "ARITH"
+  [[instr.slots]]
+    pc = "HOLD"
+    ybus = "SR"
+    zbus = "SSR"
+    zbus_sel = "Y"
+    sr = "EXCEPTION"
+  [[instr.slots]]
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "32"
+    pc = "HOLD"
+    xbus = "U*4"
+    ybus = "VBR"
+    zbus_sel = "ARITH"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+    zbus = "PC"
+    zbus_sel = "W"
+  [[instr.slots]]
+    if_addy = "ZBUS"
+    if_issue = "YES"
+    pc = "HOLD"
+  [[instr.slots]]
+    dispatch = "YES"
+    if_issue = "YES"
+    pc = "INC"
+  [[instr.slots]]
+
+# ---- TRAPA #imm (SPC = next instruction; vector = VBR+imm*4) ----
+[[instr]]
+  name = "TRAPA #imm"
+  format = "i8"
+  opcode = "1100 0011 iiii iiii"
+  operation = "SPC<-PC; SSR<-SR; MD/RB/BL; PC<-(VBR+imm*4)"
+
+  [[instr.slots]]
+    alu_y = "0"
+    arith = "ADD"
+    pc = "HOLD"
+    xbus = "PC"
+    zbus = "SPC"
+    zbus_sel = "ARITH"
+  [[instr.slots]]
+    pc = "HOLD"
+    ybus = "SR"
+    zbus = "SSR"
+    zbus_sel = "Y"
+    sr = "EXCEPTION"
+  [[instr.slots]]
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "32"
+    pc = "HOLD"
+    xbus = "U*4"
+    ybus = "VBR"
+    zbus_sel = "ARITH"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+    zbus = "PC"
+    zbus_sel = "W"
+  [[instr.slots]]
+    if_addy = "ZBUS"
+    if_issue = "YES"
+    pc = "HOLD"
+  [[instr.slots]]
+    dispatch = "YES"
+    if_issue = "YES"
+    pc = "INC"
+  [[instr.slots]]
+
+# ---- RTE: SR <- SSR, PC <- SPC (delayed branch) ----
 [[instr]]
   name = "RTE"
   privileged = true
@@ -72,18 +252,69 @@
   operation = "Delayed branch: SR<-SSR, PC<-SPC"
   table_ref = "A.23"
 
-  [[instr.slots]]                 # SR <- SSR; fetch the delay-slot instruction
+  [[instr.slots]]
     pc = "INC"
     ybus = "SSR"
     zbus_sel = "Y"
     sr = "Z"
-
-  [[instr.slots]]                 # set up the delayed branch to SPC
+  [[instr.slots]]
     pc = "HOLD"
     ybus = "SPC"
     zbus_sel = "Y"
     delay_jmp = "SET"
     if_addy = "ZBUS"
-
   [[instr.slots]]
     pc = "HOLD"
+
+# ---- Privileged software access to SSR/SPC (design §5 Tier-1) ----
+[[instr]]
+  name = "STC SSR, Rn"
+  privileged = true
+  format = "n"
+  opcode = "0000 nnnn 0011 0010"
+  operation = "SSR -> Rn"
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "SSR"
+    zbus = "Rn"
+    zbus_sel = "Y"
+
+[[instr]]
+  name = "STC SPC, Rn"
+  privileged = true
+  format = "n"
+  opcode = "0000 nnnn 0100 0010"
+  operation = "SPC -> Rn"
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "SPC"
+    zbus = "Rn"
+    zbus_sel = "Y"
+
+[[instr]]
+  name = "LDC Rm, SSR"
+  privileged = true
+  format = "m"
+  opcode = "0100 mmmm 0011 1110"
+  operation = "Rm -> SSR"
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "Rm"
+    zbus = "SSR"
+    zbus_sel = "Y"
+
+[[instr]]
+  name = "LDC Rm, SPC"
+  privileged = true
+  format = "m"
+  opcode = "0100 mmmm 0100 1110"
+  operation = "Rm -> SPC"
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "Rm"
+    zbus = "SPC"
+    zbus_sel = "Y"

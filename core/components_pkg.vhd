@@ -24,6 +24,7 @@ type alumanip_t is (SWAP_BYTE, SWAP_WORD, EXTEND_UBYTE, EXTEND_UWORD, EXTEND_SBY
 type sr_t is record
    t, s, q, m : std_logic;
    int_mask : std_logic_vector(3 downto 0);
+   md, rb, bl : std_logic;   -- SH-4 privileged-arch bits (MD=30, RB=29, BL=28)
 end record;
 
 -- if size becomes part of the bus, mem_size_t will move into cpu2j0_pack
@@ -72,7 +73,7 @@ type datapath_reg_t is record
    ybus_override : ybus_val_pipeline_t;
 end record;
 
-constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", others => '0'), mac_s => '0', data_o_size => BYTE, data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
+constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), mac_s => '0', data_o_size => BYTE, data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
 
 subtype regnum_t is std_logic_vector(4 downto 0);
 component register_file is

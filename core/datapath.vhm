@@ -6,7 +6,8 @@ use work.cpu2j0_components_pack.all;
 use work.datapath_pack.all;
 use work.decode_pack.all;
 
-entity datapath is 
+entity datapath is
+	generic ( PRIV_ARCH : boolean := false );
 	port (
 		     clk : in std_logic;
 		     rst : in std_logic;
@@ -71,12 +72,18 @@ architecture stru of datapath is
           variable r : sr_t;
         begin
           r.m := a(M);  r.q := a(Q);  r.int_mask := a(I3 downto I0);  r.s := a(S);  r.t := a(T);
+          r.md := a(MD);  r.rb := a(RB);  r.bl := a(BL);
           return r;
         end to_sr;
         function to_slv(sr : sr_t) return std_logic_vector is
           variable r : std_logic_vector(31 downto 0) := (others => '0');
         begin
           r(M) := sr.m; r(Q) := sr.q; r(I3 downto I0) := sr.int_mask; r(S) := sr.s; r(T) := sr.t;
+          -- MD/RB/BL only observable on a privileged-arch (J4) build; a J2 build
+          -- (PRIV_ARCH=false) leaves bits 28-30 zero so STC SR is bit-identical.
+          if PRIV_ARCH then
+            r(MD) := sr.md; r(RB) := sr.rb; r(BL) := sr.bl;
+          end if;
           return r;
         end to_slv;
 	-- A bit vector from a single bit
@@ -310,6 +317,10 @@ begin
               this.if_dr := this.if_dr_next;
               this.illegal_delay_slot := check_illegal_delay_slot(this.if_dr);
               this.illegal_instr := check_illegal_instruction(this.if_dr);
+              if PRIV_ARCH then
+                this.illegal_instr := this.illegal_instr or
+                  (privileged(this.if_dr) and not this.sr.md);
+              end if;
               this.if_en := '0';
             end if;
             this.slot := '1';

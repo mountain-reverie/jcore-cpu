@@ -52,6 +52,9 @@ architecture stru of datapath is
 	signal gpf_zwd, pc, reg_x, reg_y, reg_0, xbus, ybus, ybus_temp, zbus, wbus : std_logic_vector(31 downto 0);
 	signal sr : sr_t;
 	signal sfto : std_logic;
+	signal shift_b : std_logic_vector(5 downto 0);
+	signal shift_y : std_logic_vector(31 downto 0);
+	signal shift_busy : std_logic;
 	-- alu ports
 	signal aluiny, aluinx : std_logic_vector(31 downto 0);
 
@@ -197,13 +200,17 @@ begin
         with buses.z_sel select zbus <=
           arith_out(31 downto 0)                           when SEL_ARITH,
           logic_out                                        when SEL_LOGIC,
-          bshifter(xbus, ybus(31) & ybus(4 downto 0),
-                   sr.t, func.shift)                       when SEL_SHIFT,
+          shift_y                                          when SEL_SHIFT,
           manip(xbus, ybus, func.alu.manip)                when SEL_MANIP,
           ybus                                             when SEL_YBUS,
           wbus                                             when SEL_WBUS;
 
-	sfto <= xbus(xbus'left) when ybus(31) = '0' else xbus(xbus'right);
+	shift_b <= ybus(31) & ybus(4 downto 0);
+	u_shifter : shifter port map (
+	  clk => clk, rst => rst, start => slot_o,
+	  a => xbus, b => shift_b,
+	  t_in => sr.t, op => func.shift,
+	  y => shift_y, t_out => sfto, busy => shift_busy);
 
 	with mac.sel1 select macin1 <= xbus when SEL_XBUS, zbus when SEL_ZBUS, wbus when others;
 	with mac.sel2 select macin2 <= ybus when SEL_YBUS, zbus when SEL_ZBUS, wbus when others;

@@ -124,7 +124,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [j1, j2, j4]
+        variant: [j2, j4]   # J1's authoritative FPGA target is iCE40 up5k (see synth-ice40)
     steps:
       - name: Checkout jcore-cpu
         uses: actions/checkout@v4
@@ -264,13 +264,90 @@ jobs:
           path: build/
           retention-days: 14
 
+  synth-ice40:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [j1]   # iCE40 up5k is J1's authoritative target only
+    steps:
+      - name: Checkout jcore-cpu
+        uses: actions/checkout@v4
+      - name: Checkout jcore-soc (provides tools/v2p)
+        uses: actions/checkout@v4
+        with:
+          repository: j-core/jcore-soc
+          path: jcore-soc
+      - name: Toolchain versions
+        run: |
+          set +o pipefail
+          ghdl --version | head -1; yosys -V | head -1
+          set -o pipefail
+          nextpnr-ice40 --version
+      - name: Generate decoder
+        run: make -C decode generate
+      - name: Preprocess vhm -> vhd (v2p)
+        run: |
+          set -eux
+          for f in core/mult core/datapath decode/decode_core; do
+            LD_LIBRARY_PATH='' perl "$GITHUB_WORKSPACE/jcore-soc/tools/v2p" < "$f.vhm" > "$f.vhd"
+          done
+      - name: Synthesize (synth_ice40, cpu_timing_top harness)
+        run: SYNTH_VARIANT=${{ matrix.variant }} synth/cpu_synth.sh ice40
+      - name: Place and route (nextpnr-ice40, up5k) — non-gating
+        # Report-only: --timing-allow-fail keeps P&R completing (and reporting
+        # Fmax) without a declared up5k clock. We do NOT gate on fit. The "|| true"
+        # plus the util parse below mean a routing failure simply yields no
+        # ICESTORM_LC metric, so the milestone never fires on a failed P&R.
+        run: |
+          set -uo pipefail
+          nextpnr-ice40 --up5k --package sg48 \
+            --json build/cpu_ice40.json \
+            --pcf synth/up5k_cpu.pcf --pcf-allow-unconstrained \
+            --timing-allow-fail \
+            --asc build/cpu_ice40.asc > build/nextpnr_ice40.log 2>&1 || true
+          tail -40 build/nextpnr_ice40.log
+      - name: Report util + Fmax
+        run: |
+          set -eu
+          {
+            echo "### iCE40 up5k P&R (cpu_timing_top harness) — variant ${{ matrix.variant }}"
+            grep -E "Info:[[:space:]]+(ICESTORM_LC|ICESTORM_RAM|ICESTORM_DSP|SB_IO|SB_GB):" build/nextpnr_ice40.log | sed -E 's/^Info:[[:space:]]*/    /' || true
+            grep -oE "Max frequency for clock '[^']*': [0-9.]+ MHz" build/nextpnr_ice40.log | tail -1 | sed 's/^/- Fmax: /' || true
+            echo "- budget (report-only): SB_LUT4 < 5280, EBR <= 30, SB_MAC16 <= 8"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Emit iCE40 metrics
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          python3 synth/metrics.py --target ice40-up5k \
+            --variant "${{ matrix.variant }}" \
+            --commit "${GITHUB_SHA}" --out synth/metrics/ice40-up5k.json \
+            --nextpnr-ice40 build/nextpnr_ice40.log || true
+      - name: Upload iCE40 metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics-ice40-${{ matrix.variant }}
+          path: synth/metrics/*.json
+          retention-days: 14
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synth-ice40-${{ matrix.variant }}
+          path: build/
+          retention-days: 14
+
   # Benchmark comparison runs on PRs AND master push: it posts the regression
   # comment/alert and assembles the site tree. It deliberately does NOT declare
   # the github-pages environment, so a PR (which cannot deploy to that
   # environment) is never rejected by its branch-protection rule. Deployment is
   # confined to the separate push-only deploy-pages job below.
   benchmark:
-    needs: [synth-asic, synth-ecp5]
+    needs: [synth-asic, synth-ecp5, synth-ice40]
     if: always()
     runs-on: ubuntu-24.04
     permissions:
@@ -320,6 +397,13 @@ jobs:
               echo "no prior $kind history (first run)"
             fi
           done
+      - name: Snapshot prior history for the iCE40 milestone (pre-append)
+        run: |
+          if [ -s site/bench-size/benchmark-data.json ]; then
+            cp -f site/bench-size/benchmark-data.json ice40_prev_history.json
+          else
+            echo '{"entries":{}}' > ice40_prev_history.json
+          fi
       - name: Append size suite
         uses: benchmark-action/github-action-benchmark@v1
         continue-on-error: true
@@ -363,6 +447,43 @@ jobs:
           done
           cp dashboard/index.html dashboard/app.js site/
           mkdir -p site/fixtures && cp dashboard/fixtures/data.js site/fixtures/
+      - name: iCE40 up5k fit milestone — evaluate
+        id: ice40_fit
+        if: github.event_name == 'pull_request'
+        run: |
+          set -uo pipefail
+          cur=$(ls metrics-in/metrics-ice40-j1/*.json 2>/dev/null | head -1 || true)
+          if [ -z "${cur:-}" ]; then
+            echo "no ice40 metrics artifact — skipping milestone"
+            echo "fire=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          fire=$(python3 synth/ice40_fit.py --current "$cur" \
+                   --history ice40_prev_history.json --pnr-ok \
+                   --dashboard-url "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY##*/}/" \
+                   --out ice40_milestone.md | sed -n 's/^fire=//p')
+          echo "fire=${fire:-false}" >> "$GITHUB_OUTPUT"
+          echo "milestone fire=${fire:-false}"
+      - name: iCE40 up5k fit milestone — comment
+        if: github.event_name == 'pull_request' && steps.ice40_fit.outputs.fire == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- ice40-up5k-fit-milestone -->';
+            const body = fs.readFileSync('ice40_milestone.md', 'utf8');
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.issue.number, per_page: 100,
+            });
+            if (comments.some(c => c.body && c.body.includes(marker))) {
+              core.info('iCE40 fit milestone comment already present — skipping');
+              return;
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.issue.number, body,
+            });
+            core.info('posted iCE40 up5k fit milestone comment');
       - name: Upload Pages artifact
         if: github.event_name == 'push'
         uses: actions/upload-pages-artifact@v3

@@ -34,6 +34,18 @@ _sim_instr_end: .long 0
 
         .section .text
 ENTRY(start)
+        ! Establish a known register bank (RB=0 -> bank 0) before using GPRs.
+        ! SH-4 reset leaves RB=1; on a J4 build that would put our scratch in
+        ! the uninitialised bank 1, and dropping to user mode (banking off ->
+        ! bank 0) would then read undefined values. Harmless on a J2 build.
+        stc     sr, r0
+        mov.l   p_rbclear, r1  ! 0xDFFFFFFF (clear SR bit 29 = RB)
+        and     r1, r0
+        ldc     r0, sr
+        nop
+        nop
+        nop
+
         ! point VBR at our exception vector base
         mov.l   p_vbr_base, r0
         ldc     r0, vbr        ! privileged, but MD=1 here -> must NOT trap
@@ -93,6 +105,7 @@ ENTRY(exception_handler)
         .align 2
 p_vbr_base:    .long vbr_base
 p_mdmask:      .long 0xBFFFFFFF
+p_rbclear:     .long 0xDFFFFFFF
 p_test_result: .long TEST_RESULT_ADDRESS
 
         ! Per-vector entry stubs (from rte.S): vector N enters at +N*6, pushes

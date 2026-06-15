@@ -23,13 +23,14 @@ type Slot map[string]string
 
 // Instr is one logical instruction with one or more slots.
 type Instr struct {
-	Name      string `toml:"name"`
-	Format    string `toml:"format"`
-	Opcode    string `toml:"opcode"`
-	Operation string `toml:"operation"`
-	Plane     string `toml:"plane,omitempty"` // "" (default) or "system" (microcode-only, excluded from disassembler)
-	TableRef  string `toml:"table_ref,omitempty"`
-	Slots     []Slot `toml:"slots"`
+	Name       string `toml:"name"`
+	Format     string `toml:"format"`
+	Opcode     string `toml:"opcode"`
+	Operation  string `toml:"operation"`
+	Plane      string `toml:"plane,omitempty"` // "" (default) or "system" (microcode-only, excluded from disassembler)
+	TableRef   string `toml:"table_ref,omitempty"`
+	Privileged bool   `toml:"privileged,omitempty"` // true => illegal-instruction trap when SR.MD=0
+	Slots      []Slot `toml:"slots"`
 }
 
 // File represents the contents of one TOML file under spec/.

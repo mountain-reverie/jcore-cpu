@@ -26,6 +26,7 @@
 
 [[instr]]
   name = "RTE"
+  privileged = true
   format = "0"
   opcode = "0000 0000 0010 1011"
   operation = "Delayed branch, stack -> PC/SR"

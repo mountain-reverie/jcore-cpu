@@ -299,4 +299,12 @@ package body decode_pack is
             return '0';
         end if;
     end;
+    function privileged (code : std_logic_vector(15 downto 0)) return std_logic is
+    begin
+        if ((not code(0) and code(1) and not code(2) and not code(3) and not code(4) and not code(6) and not code(7) and not code(12) and not code(13) and not code(14) and not code(15)) or (not code(0) and code(1) and code(2) and code(3) and not code(4) and not code(6) and not code(7) and not code(12) and not code(13) and code(14) and not code(15)) or (code(0) and code(1) and not code(2) and code(3) and not code(4) and code(5) and not code(6) and not code(7) and not code(8) and not code(9) and not code(10) and not code(11) and not code(12) and not code(13) and not code(14) and not code(15)) or (code(0) and code(1) and not code(2) and code(3) and code(4) and not code(5) and not code(6) and not code(7) and not code(8) and not code(9) and not code(10) and not code(11) and not code(12) and not code(13) and not code(14) and not code(15)) or (code(0) and code(1) and not code(3) and not code(4) and not code(6) and not code(7) and not code(12) and not code(13) and code(14) and not code(15))) = '1' then
+            return '1';
+        else
+            return '0';
+        end if;
+    end;
 end;

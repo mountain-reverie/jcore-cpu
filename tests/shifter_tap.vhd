@@ -30,8 +30,10 @@ begin
 
   process
   begin
-    test_plan(15, "yahoo");
+    test_plan(16, "shifter entity");
     test_comment("shifter(comb) entity: result");
+    a <= x"12345678"; b <= enc(0);   t_in <= '0'; op <= arith;  wait for 1 ns;
+    test_equal(y, x"12345678", "shift by 0 is identity");
     a <= x"00000001"; b <= enc(4);   t_in <= '0'; op <= arith;  wait for 1 ns;
     test_equal(y, x"00000010", "arith 1 left by 4");
     a <= x"7fffffff"; b <= enc(1);   op <= arith;               wait for 1 ns;

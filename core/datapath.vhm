@@ -54,7 +54,8 @@ architecture stru of datapath is
 	signal sfto : std_logic;
 	signal shift_b : std_logic_vector(5 downto 0);
 	signal shift_y : std_logic_vector(31 downto 0);
-	signal shift_busy : std_logic;
+	signal shift_busy : std_logic;  -- always '0' for shifter(comb); drives the
+	                                -- pipeline stall when shifter(seq) binds in Step 2b
 	-- alu ports
 	signal aluiny, aluinx : std_logic_vector(31 downto 0);
 
@@ -205,6 +206,10 @@ begin
           ybus                                             when SEL_YBUS,
           wbus                                             when SEL_WBUS;
 
+	-- Shifter: shift_b is {direction, magnitude[4:0]} = ybus(31) & ybus(4..0).
+	-- start pulses once per CPU slot (slot_o); ignored by shifter(comb), it
+	-- latches the operands in shifter(seq) (Step 2b). shift_y feeds zbus on
+	-- SEL_SHIFT; t_out is the shifted-out bit captured into sr.t (was sfto).
 	shift_b <= ybus(31) & ybus(4 downto 0);
 	u_shifter : shifter port map (
 	  clk => clk, rst => rst, start => slot_o,

@@ -18,8 +18,9 @@
 #
 # Variant selection (env var SYNTH_VARIANT, default j2):
 #   j2 -> elaborate cpu_synth_direct (the default; J2 hardware multiplier).
-#   j1 -> elaborate cpu_synth_j1 (sequential mult(seq), no hw multiplier);
-#         adds core/mult_seq.vhd + synth/cpu_synth_j1_config.vhd to the file list.
+#   j1 -> elaborate cpu_synth_j1 (sequential mult(seq) + shifter(seq), no hw
+#         multiplier/barrel); adds core/mult_seq.vhd + core/shifter_seq.vhd +
+#         synth/cpu_synth_j1_config.vhd to the file list.
 #   j4 -> elaborate cpu_synth_j4 (== J2 today);
 #         adds synth/cpu_synth_j4_config.vhd to the file list.
 # When SYNTH_VARIANT is unset or j2 the synth commands are byte-identical to the
@@ -73,7 +74,7 @@ case "$SYNTH_VARIANT" in
     ;;
   j1)
     TOP="cpu_synth_j1"; TIMING_TOP="cpu_timing_j1"
-    FILES+=(core/mult_seq.vhd synth/cpu_synth_j1_config.vhd)
+    FILES+=(core/mult_seq.vhd core/shifter_seq.vhd synth/cpu_synth_j1_config.vhd)
     ;;
   j4)
     TOP="cpu_synth_j4"; TIMING_TOP="cpu_timing_j4"

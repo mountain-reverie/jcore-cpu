@@ -252,6 +252,7 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 	instrLogicNormal := make(map[string]logic.LogicMap, len(allInstrs))
 	instrLogicAll := make(map[string]logic.LogicMap, len(allInstrs))
 	writesPC := make(map[string]bool)
+	privileged := make(map[string]bool)
 	instrAddrs := make(map[string]int)
 
 	// Build a first-addr lookup by scanning slotMetas (already in ROM order).
@@ -269,6 +270,9 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 		instrLogicAll[si.Name] = logic.OpToLogicMap(plane, si.Opcode)
 		if si.Plane != "system" {
 			instrLogicNormal[si.Name] = instrLogicAll[si.Name]
+			if si.Privileged {
+				privileged[si.Name] = true
+			}
 			// Detect "writes PC": walk slots looking for SigWrpcZ == "1".
 			for _, slot := range si.Slots {
 				if len(slot) == 0 {
@@ -285,7 +289,7 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 			}
 		}
 	}
-	d.Body = BuildBody(instrAddrs, instrLogicNormal, writesPC)
+	d.Body = BuildBody(instrAddrs, instrLogicNormal, writesPC, privileged)
 	d.Simple = BuildSimple(s, instrLogicAll, slotAssigns)
 	d.Direct = BuildDirect(s, instrLogicAll, slotAssigns)
 	d.Entity = BuildEntity(d.Package)

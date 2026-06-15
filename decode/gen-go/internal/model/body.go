@@ -14,6 +14,7 @@ type Body struct {
 	Predecode    PredecodeFunc
 	IllegalSlot  string // single boolean expression text for the function body
 	IllegalInstr string // boolean expression text for the simpler check
+	Privileged   string // boolean expression text for the privileged() predicate
 }
 
 // PredecodeFunc represents predecode_rom_addr's case-statement body.
@@ -54,12 +55,44 @@ type PredecodeBitAssign struct {
 //
 // writesPC is the set of instruction names that write PC (branches);
 // drives check_illegal_delay_slot.
-func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, writesPC map[string]bool) *Body {
+func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, writesPC map[string]bool, privileged map[string]bool) *Body {
 	body := &Body{}
 	body.Predecode = buildPredecode(instrAddrs, instrLogic)
 	body.IllegalSlot = buildIllegalSlot(instrLogic, writesPC)
 	body.IllegalInstr = `code(15 downto 8) = x"ff"`
+	body.Privileged = buildPrivileged(instrLogic, privileged)
 	return body
+}
+
+// buildPrivileged produces the boolean expression for the privileged()
+// predicate: the OR of all instructions marked privileged, reduced via QMC.
+// Mirrors buildIllegalSlot — strips the plane ("p") bits since the VHDL
+// signature is (code : std_logic_vector(15 downto 0)) with no plane param.
+// Returns "false" when no instruction is privileged.
+func buildPrivileged(lm map[string]logic.LogicMap, privileged map[string]bool) string {
+	var maps []logic.LogicMap
+	names := make([]string, 0, len(privileged))
+	for n := range privileged {
+		if _, ok := lm[n]; ok {
+			names = append(names, n)
+		}
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		stripped := logic.LogicMap{}
+		for k, v := range lm[n] {
+			if k.Sig != "p" {
+				stripped[k] = v
+			}
+		}
+		maps = append(maps, stripped)
+	}
+	reduced := logic.ReduceImplicants(maps)
+	expr := orJoin(reduced, map[string]string{"i": "code"})
+	if expr == "" {
+		return "false"
+	}
+	return "(" + expr + ") = '1'"
 }
 
 // predecodeInstr is an internal type used during predecode table construction.

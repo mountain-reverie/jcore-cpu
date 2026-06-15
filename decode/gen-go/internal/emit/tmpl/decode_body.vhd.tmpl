@@ -46,4 +46,12 @@ package body decode_pack is
             return '0';
         end if;
     end;
+    function privileged (code : std_logic_vector(15 downto 0)) return std_logic is
+    begin
+        if {{ .Body.Privileged }} then
+            return '1';
+        else
+            return '0';
+        end if;
+    end;
 end;

@@ -274,6 +274,7 @@ package decode_pack is
     function predecode_rom_addr (code : std_logic_vector(15 downto 0)) return std_logic_vector;
     function check_illegal_delay_slot (code : std_logic_vector(15 downto 0)) return std_logic;
     function check_illegal_instruction (code : std_logic_vector(15 downto 0)) return std_logic;
+    function privileged (code : std_logic_vector(15 downto 0)) return std_logic;
     type decode_core_reg_t is
         record
             maskint : std_logic;

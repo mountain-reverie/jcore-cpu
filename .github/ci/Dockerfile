@@ -255,7 +255,7 @@ RUN set -eux; \
 # known-good commit after the first green build.
 # ---------------------------------------------------------------------------
 ARG TRELLIS_REF=1.4
-ARG ICESTORM_REF=master
+ARG ICESTORM_REF=main
 ARG NEXTPNR_REF=nextpnr-0.7
 RUN set -eux; \
     git clone --recursive --branch ${TRELLIS_REF} https://github.com/YosysHQ/prjtrellis /tmp/prjtrellis; \

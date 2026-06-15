@@ -1,37 +1,54 @@
-2. Printing statistics.
+2.47. Printing statistics.
 
-=== datapath ===
+=== cpu ===
+
+   Number of wires:               9000
+   Number of cells:                  3
+
+   Chip area for module '\cpu': 30.000000
+
+=== datapath_Bstru ===
 
    Number of wires:               2100
    Number of cells:               2345
      $_DFF_P_                       210
      AND2_X1                        900
 
-   Chip area for module '\datapath': 19880.000000
+   Chip area for module '\datapath_Bstru': 19880.000000
 
-=== decode ===
+=== decode_Barch ===
 
-   Number of wires:               1500
-   Number of cells:               1410
-     AOI21_X1                       700
+   Number of cells:                200
+   Chip area for module '\decode_Barch': 1500.000000
 
-   Chip area for module '\decode': 11020.000000
+=== decode_core_Barch_1_7b7173a846209ae0b859b138e5be90c988fc1dd9 ===
 
-=== mult ===
+   Number of cells:                210
+   Chip area for module '\decode_core_Barch_1_7b7173a846209ae0b859b138e5be90c988fc1dd9': 1600.000000
+
+=== decode_table_Bdirect_logic ===
+
+   Number of cells:               1000
+   Chip area for module '\decode_table_Bdirect_logic': 7920.000000
+
+=== mult_Bstru ===
 
    Number of cells:                820
-   Chip area for module '\mult': 8450.000000
+   Chip area for module '\mult_Bstru': 8450.000000
 
-=== register_file ===
+=== register_file_Btwo_bank_5_21_32 ===
 
    Number of cells:                640
-   Chip area for module '\register_file': 6300.000000
+   Chip area for module '\register_file_Btwo_bank_5_21_32': 6300.000000
 
-=== cpu ===
+=== shifter_Bcomb ===
 
-   Number of wires:               9000
-   Number of cells:               5678
+   Number of cells:                329
+   Chip area for module '\shifter_Bcomb': 2600.000000
 
-   Chip area for module '\cpu': 2560.000000
+=== design hierarchy ===
+
+   Number of wires:              30000
+   Number of cells:               5547
 
    Chip area for top module '\cpu': 48210.000000

@@ -52,7 +52,8 @@ entity datapath is
 		     illegal_instr : out std_logic;
 		     copreg : in std_logic_vector(7 downto 0);
 		     cop_i : in cop_i_t;
-		     cop_o : out cop_o_t
+		     cop_o : out cop_o_t;
+		     priv_o : out cpu_priv_o_t := NULL_PRIV_O  -- SH-4 EXPEVT/INTEVT/TRA (J4)
 	     );
 end entity datapath;
 
@@ -573,6 +574,11 @@ begin
 	pc <= this'register.pc;
 	sr <= this'register.sr;
 	priv_regs <= this'register.priv;
+	-- Export the SH-4 cause registers (J4). Constant-0 on a non-PRIV_ARCH build
+	-- so J1/J2 boards see a tied-off port.
+	priv_o.expevt <= priv_regs.expevt when PRIV_ARCH else (others => '0');
+	priv_o.intevt <= priv_regs.intevt when PRIV_ARCH else (others => '0');
+	priv_o.tra    <= priv_regs.tra    when PRIV_ARCH else (others => '0');
 	mac_s <= this'register.mac_s;
         db_lock <= this'register.data_o_lock;
         db_o <= this'register.data_o;

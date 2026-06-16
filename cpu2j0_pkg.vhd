@@ -37,6 +37,15 @@ package cpu2j0_pack is
       rdy  : std_logic;
    end record;
 
+   -- SH-4 exception-cause export (J4). All zero on a non-PRIV_ARCH build; the
+   -- PM3-SoC companion maps these as P4 MMIO. Left open on non-J4 boards.
+   type cpu_priv_o_t is record
+      expevt : std_logic_vector(11 downto 0);
+      intevt : std_logic_vector(11 downto 0);
+      tra    : std_logic_vector(9 downto 0);
+   end record;
+   constant NULL_PRIV_O : cpu_priv_o_t := (others => (others => '0'));
+
    type cpu_debug_cmd_t is (BREAK, STEP, INSERT, CONTINUE);
 
    type cpu_debug_i_t is record
@@ -110,7 +119,8 @@ package cpu2j0_pack is
       event_o      : out cpu_event_o_t;
       event_i      : in  cpu_event_i_t;
       cop_o        : out cop_o_t;
-      cop_i        : in  cop_i_t);
+      cop_i        : in  cop_i_t;
+      priv_o       : out cpu_priv_o_t := NULL_PRIV_O);
    end component cpu;
 
    function loopback_bus(b : cpu_data_o_t) return cpu_data_i_t;

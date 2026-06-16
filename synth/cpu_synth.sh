@@ -77,8 +77,13 @@ case "$SYNTH_VARIANT" in
     FILES+=(core/mult_seq.vhd core/shifter_seq.vhd synth/cpu_synth_j1_config.vhd)
     ;;
   j4)
-    TOP="cpu_synth_j4"; TIMING_TOP="cpu_timing_j4"
-    FILES+=(synth/cpu_synth_j4_config.vhd)
+    if [ "${DECODER:-direct}" = "rom" ]; then
+      TOP="cpu_synth_j4_rom"; TIMING_TOP="cpu_timing_j4"
+      FILES+=(synth/cpu_synth_j4_rom_config.vhd decode/decode_table_rom.vhd decode/decode_table_rom_config.vhd)
+    else
+      TOP="cpu_synth_j4"; TIMING_TOP="cpu_timing_j4"
+      FILES+=(synth/cpu_synth_j4_config.vhd)
+    fi
     ;;
   *) echo "ERROR: unknown SYNTH_VARIANT '$SYNTH_VARIANT' (want j1|j2|j4)" >&2; exit 1 ;;
 esac

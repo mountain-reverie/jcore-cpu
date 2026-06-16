@@ -1,15 +1,17 @@
 name: pr-quick
 
-# Fast PR feedback loop. Runs Steps 1-5 of decode/gen-go/regression.sh:
+# Fast PR feedback loop. Runs Steps 1-5 of decode/gen-go/regression.sh, plus a
+# J1 sequential-multiplier in-pipeline check:
 #   1. Go unit tests
 #   2. make -C decode generate
 #   3. cpu_ctb 180us with direct decoder
 #   4. cpu_ctb 180us with ROM decoder
 #   5. make -C tests check (228 TAP unit tests)
+#   6. cpu_ctb with mult(seq) -- the ONLY functional guard for the J1
+#      sequential multiplier (cpu_j1 is never otherwise simulated).
 #
-# Steps 6 (sh2-elf simulator tests), 7 (yosys synthesis), and 8 (openSTA)
-# are deliberately deferred to full-regression.yml: their toolchains
-# are too expensive to install on every push.
+# Steps 7 (yosys synthesis) and 8 (openSTA) are deliberately deferred to
+# full-regression.yml: their toolchains are too expensive on every push.
 #
 # Target wall-clock budget: under 10 minutes per run.
 
@@ -143,4 +145,55 @@ jobs:
           echo "==> Step 5: make -C tests check"
           make -C tests check TOOLS_DIR="$TOOLS_DIR"
 
-          echo "==> pr-quick: Steps 1-5 PASSED"
+          # Step 6: J1 sequential-multiplier in-pipeline functional check.
+          # The broken mult(seq) silently DROPPED back-to-back MAC.L (which issue
+          # their command from the writeback stage, draining past any front
+          # stall) and hung at LED 0x33 -- BEFORE the multiply tests. The
+          # slot-stretch fix serialises them, so the multiply tests (0x41..0x47)
+          # now pass in-pipeline. cpu_j1 is never otherwise simulated (the
+          # testrom above runs on the comb J2 multiplier), so this is the only
+          # functional guard against this class of J1 regression.
+          echo "==> Step 6: cpu_ctb [mult(seq), J1 sequential multiplier]"
+          CPU_CONFIG="core/cpu_config.vhd"
+          CPU_CONFIG_BAK="$(mktemp)"
+          cp "$CPU_CONFIG" "$CPU_CONFIG_BAK"
+          trap 'cp "$CPU_CONFIG_BAK" "$CPU_CONFIG"; rm -f "$CPU_CONFIG_BAK"' EXIT
+          # Bind only cpu_sim's multiplier to mult(seq) (leave the fast comb
+          # shifter / two_bank regfile, so the multiplier is the slow unit).
+          sed -i \
+            '/^configuration cpu_sim of cpu is/,/^end configuration/{
+              s|^  for stru$|  for stru\n    for u_mult : mult use entity work.mult(seq); end for;|
+            }' \
+            "$CPU_CONFIG"
+          cd sim
+          rm -f work-obj93.cf cpu_ctb
+          make TOOLS_DIR="$TOOLS_DIR" cpu_ctb work-obj93.cf >/dev/null
+          # mult_seq.vhd is not in the sim VHDS list; import it for elaboration.
+          ghdl -i --std=93 --work=work ../core/mult_seq.vhd
+          LED_LOG_J1="$(mktemp)"
+          # mult(seq) is ~32 cycles/multiply (the multiply tests run slower), so
+          # allow extra sim time; the whole testrom still finishes in seconds.
+          # Line-buffer so the trace survives the timeout.
+          timeout 720 stdbuf -oL ./cpu_ctb --stop-time=220us 2>&1 \
+            | stdbuf -oL grep "^LED:" > "$LED_LOG_J1" || true
+          echo "    mult(seq) LED trace:"; sed 's/^/      /' "$LED_LOG_J1"
+          # Proof: the FULL testrom passes (20 LED writes, ending 0x62) -- exactly
+          # the same trace as the direct/ROM runs above on the J2 multiplier. This
+          # includes the multiply tests (0x41..0x47); the broken mult(seq) dropped
+          # back-to-back MAC.L and hung at 0x33 (only 9 LED writes).
+          actual=$(wc -l < "$LED_LOG_J1")
+          if [ "$actual" -ne 20 ]; then
+            echo "FAIL [mult(seq)]: expected 20 LED writes (full testrom), got $actual" >&2
+            echo "      J1 sequential multiplier regressed (broken version hangs at 0x33 = 9 writes)" >&2
+            exit 1
+          fi
+          if ! grep -qi "WRITE 0x47 " "$LED_LOG_J1"; then
+            echo "FAIL [mult(seq)]: multiply tests (..0x47) not reached -- J1 regressed" >&2
+            exit 1
+          fi
+          echo "    mult(seq): full testrom passed (20 writes, multiply tests 0x41..0x47 incl.)"
+          rm -f "$LED_LOG_J1"
+          cd ..
+          cp "$CPU_CONFIG_BAK" "$CPU_CONFIG"; rm -f "$CPU_CONFIG_BAK"; trap - EXIT
+
+          echo "==> pr-quick: Steps 1-6 PASSED"

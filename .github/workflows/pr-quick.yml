@@ -6,9 +6,17 @@ name: pr-quick
 #   2. make -C decode generate
 #   3. cpu_ctb 180us with direct decoder
 #   4. cpu_ctb 180us with ROM decoder
+#   4b. J4 (sh4 overlay, PRIV_ARCH=1) decoder elaboration gate
 #   5. make -C tests check (228 TAP unit tests)
 #   6. cpu_ctb with mult(seq) -- the ONLY functional guard for the J1
 #      sequential multiplier (cpu_j1 is never otherwise simulated).
+#
+# Step 4b elaborates the J4-overlay decoder (all three architectures:
+# simple/direct/rom). `make -C decode generate-j4` succeeding does NOT mean
+# the generated VHDL elaborates — the IMM_P256 constant-immediate blocker
+# generated cleanly but failed to elaborate, and nothing built the overlay
+# decoder, so the break was invisible until a local J4 build. This step
+# closes that gap.
 #
 # Steps 7 (yosys synthesis) and 8 (openSTA) are deliberately deferred to
 # full-regression.yml: their toolchains are too expensive on every push.
@@ -197,3 +205,31 @@ jobs:
           cp "$CPU_CONFIG_BAK" "$CPU_CONFIG"; rm -f "$CPU_CONFIG_BAK"; trap - EXIT
 
           echo "==> pr-quick: Steps 1-6 PASSED"
+
+      - name: J4 overlay decoder elaboration (Step 4b)
+        working-directory: jcore-cpu
+        env:
+          TOOLS_DIR: ${{ github.workspace }}/jcore-soc/tools
+        run: |
+          set -euo pipefail
+          # Generate the J4 (sh4 overlay) decoder and analyze the DUT with
+          # CONFIG_PRIV_ARCH=1. Building work-obj93.cf runs `ghdl -a` over all
+          # three decoder architectures (decode_table_{simple,direct,rom}.vhd)
+          # against the overlay-generated tables. This is the elaboration gate
+          # the base steps don't exercise: a constant-immediate (or any other)
+          # overlay codegen break that generates cleanly but won't elaborate
+          # fails HERE rather than silently on a developer's local J4 build.
+          echo "==> generate-j4 (sh4 overlay)"
+          make -C decode generate-j4
+          echo "==> analyze J4 DUT [CONFIG_PRIV_ARCH=1] — all three decoders"
+          cd sim
+          rm -f work-obj93.cf cpu_tb.vhh cpu_ctb
+          make TOOLS_DIR="$TOOLS_DIR" CONFIG_PRIV_ARCH=1 work-obj93.cf >/dev/null
+          cd ..
+          # Restore the base (production, PRIV_ARCH=0) decoder so the working
+          # tree matches the committed generated files, and assert the base
+          # output is byte-identical (generate-j4 must not perturb base).
+          echo "==> restore base decoder + verify byte-identical"
+          make -C decode generate
+          make -C decode diff
+          echo "==> Step 4b: J4 overlay elaboration PASSED"

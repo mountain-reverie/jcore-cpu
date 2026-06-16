@@ -16,8 +16,8 @@ NANGATE_LIB="${NANGATE_LIB:-/opt/nangate45/nangate45.lib}"
 TARGET_MHZ="${ECP5_TARGET_MHZ:-50}"
 PERIOD_NS="$(awk -v m="$TARGET_MHZ" 'BEGIN{printf "%.4f", 1000.0/m}')"
 
-# cpu+cache variants (j2c/j4c) have a different top (cpu_cache_timing_top) with
-# two clocks (clk125 cpu-side, clk200 mem-side); the bare cpu has one `clk`.
+# cpu+cache variants (j2c/j4c) have a different top (cpu_cache_timing_top); both
+# it and the bare cpu expose a single `clk` port.
 SYNTH_VARIANT="${SYNTH_VARIANT:-j2}"
 case "$SYNTH_VARIANT" in
   j2c|j4c) STA_TOP="cpu_cache_timing_top" ;;
@@ -52,16 +52,11 @@ if ! yosys -p "read_verilog $OUT/cpu_asic.v; synth -top $STA_TOP -flatten; dffli
   exit 0
 fi
 
-# 2) Static timing. Virtual clock + the design clock(s) at PERIOD_NS. cpu+cache
-# is dual-clock (clk125 cpu-side / clk200 mem-side, asynchronous CDC so the
-# half-cycle/CDC paths are not timed across domains); the bare cpu has one clk.
-if [ "$STA_TOP" = "cpu_cache_timing_top" ]; then
-  CLOCKS_TCL="create_clock -name clk125 -period $PERIOD_NS [get_ports clk125]
-create_clock -name clk200 -period $PERIOD_NS [get_ports clk200]
-set_clock_groups -asynchronous -group {clk125} -group {clk200}"
-else
-  CLOCKS_TCL="create_clock -name clk -period $PERIOD_NS [get_ports clk]"
-fi
+# 2) Static timing. Virtual clock + the design clock at PERIOD_NS. Both the bare
+# cpu and the cpu+cache harness expose a single `clk` port (the cache's
+# clk125/clk200 are tied to it inside cpu_cache_timing_top), so the design is one
+# clock domain and the cache_clkmode package alone selects the CDC structure.
+CLOCKS_TCL="create_clock -name clk -period $PERIOD_NS [get_ports clk]"
 TCL="$(mktemp)"; trap 'rm -f "$TCL"' EXIT
 cat > "$TCL" <<TCL
 read_liberty $NANGATE_LIB

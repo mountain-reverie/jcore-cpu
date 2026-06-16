@@ -31,6 +31,9 @@ BACKEND="${1:?usage: cpu_synth.sh <asic|ecp5|timing|ice40>}"
 SYNTH_VARIANT="${SYNTH_VARIANT:-j2}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+# jcore-soc checkout (provides the cache's lib/ + components/ deps for j2c/j4c).
+# CI checks it out to $ROOT/jcore-soc; override JCORE_SOC for local runs.
+JCORE_SOC="${JCORE_SOC:-$ROOT/jcore-soc}"
 
 OUT="$ROOT/build"; mkdir -p "$OUT"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
@@ -69,6 +72,9 @@ FILES=(
 # Map variant -> (cpu top configuration, timing-harness configuration, extra
 # files). TIMING_TOP binds the harness's core instance to the variant's cpu
 # config so the representative Fmax measures the selected variant, not always J2.
+# CPUTOP = the synth -top cell; CACHE=1 marks the cpu+cache variants (which add
+# the cache file chain + drive the SAME_CLOCK generic per backend).
+CPUTOP="cpu"; CACHE=0
 case "$SYNTH_VARIANT" in
   j2)
     TOP="cpu_synth_direct"; TIMING_TOP="cpu_timing_j2"
@@ -92,10 +98,61 @@ case "$SYNTH_VARIANT" in
       FILES+=(synth/cpu_synth_j4_config.vhd)
     fi
     ;;
-  *) echo "ERROR: unknown SYNTH_VARIANT '$SYNTH_VARIANT' (want j1|j2|j4)" >&2; exit 1 ;;
+  j2c|j4c)
+    CACHE=1; CPUTOP="cpu_cache_timing_top"
+    if [ "$SYNTH_VARIANT" = j4c ]; then
+      TOP="cpu_cache_timing_j4"; FILES+=(synth/cpu_synth_j4_config.vhd)
+    else
+      TOP="cpu_cache_timing_j2"
+    fi
+    TIMING_TOP="$TOP"
+    # cache cores are vhm; preprocess like the cpu cores (uses jcore-soc's v2p).
+    for f in cache/dcache_ccl cache/dcache_mcl cache/icache_ccl cache/icache_mcl; do
+      LD_LIBRARY_PATH='' perl "$JCORE_SOC/tools/v2p" < "$f.vhm" > "$f.vhd"
+    done
+    # cache dependency chain (proven order; jcore-soc provides lib/ + components/,
+    # jcore-cpu provides sim/data_bus_pkg + cache/ + the harness).
+    FILES+=(
+      synth/cpu_cache_config.vhd
+      sim/data_bus_pkg.vhd
+      "$JCORE_SOC/components/ddr2/ddrc_cnt_pkg.vhd"
+      cache/cache_pkg.vhd
+      "$JCORE_SOC/lib/reg_file_struct/bist_pkg.vhd"
+      "$JCORE_SOC/components/dma/dma_pkg.vhd"
+      "$JCORE_SOC/lib/memory_tech_lib/memory_pkg.vhd"
+      "$JCORE_SOC/lib/memory_tech_lib/ram_1rw.vhd"
+      "$JCORE_SOC/lib/memory_tech_lib/ram_2rw.vhd"
+      "$JCORE_SOC/lib/memory_tech_lib/tech/inferred/ram_1rw_infer.vhd"
+      "$JCORE_SOC/lib/memory_tech_lib/tech/inferred/ram_2rw_infer.vhd"
+      cache/dcache_adapter.vhd
+      cache/icache_adapter.vhd
+      cache/dcache_ram.vhd
+      cache/icache_ram.vhd
+      cache/dcache_ccl.vhd
+      cache/dcache_mcl.vhd
+      cache/icache_ccl.vhd
+      cache/icache_mcl.vhd
+      cache/dcache.vhd
+      cache/icache.vhd
+      cache/cache_config_fpga.vhd
+      synth/cpu_cache_timing_top.vhd
+      synth/cpu_cache_timing_config.vhd
+    )
+    ;;
+  *) echo "ERROR: unknown SYNTH_VARIANT '$SYNTH_VARIANT' (want j1|j2|j4|j2c|j4c)" >&2; exit 1 ;;
 esac
 
 GHDL_BASE="ghdl --std=93 -fexplicit --ieee=synopsys --workdir=$WORK ${FILES[*]}"
+
+# Per-backend SAME_CLOCK for the cpu+cache variants: ecp5 (FPGA) = single-clock
+# (true), asic = dual-clock (false, the real ASIC config). Empty for bare cpu.
+GEN=""
+if [ "$CACHE" = 1 ]; then
+  case "$BACKEND" in
+    ecp5|ice40) GEN="-gSAME_CLOCK=true" ;;
+    *)          GEN="-gSAME_CLOCK=false" ;;
+  esac
+fi
 
 case "$BACKEND" in
   asic)
@@ -104,14 +161,14 @@ case "$BACKEND" in
     # $assert/$assume/$cover; `delete t:$check t:$print` drops the $check/$print
     # cells (ghdl 6 + yosys 0.44) whose verilog backend otherwise emits empty
     # `initial` blocks that OpenSTA's reader rejects.
-    yosys -m ghdl -p "$GHDL_BASE -e $TOP; synth -top cpu; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_verilog $OUT/cpu_asic.v"
+    yosys -m ghdl -p "$GHDL_BASE -e $TOP $GEN; synth -top $CPUTOP; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_verilog $OUT/cpu_asic.v"
     ;;
   ecp5)
     # abc9 (synth_ecp5 default) gives timing-driven LUT mapping. It works now
     # that the issue/slot false combinational loop is broken in core/datapath.vhm
     # (see synth/README.md). Strip verification cells (as above) so nextpnr-ecp5
     # can consume the JSON.
-    yosys -m ghdl -p "$GHDL_BASE -e $TOP; synth_ecp5 -top cpu; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_ecp5.json"
+    yosys -m ghdl -p "$GHDL_BASE -e $TOP $GEN; synth_ecp5 -top $CPUTOP; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_ecp5.json"
     ;;
   timing)
     # Representative Fmax benchmark: the cpu_timing_top harness registers the

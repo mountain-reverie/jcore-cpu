@@ -1,8 +1,14 @@
 -- Cross-check TAP for the J1 block-RAM register file, register_file(ebr).
--- register_file(flops) (async-read, proven) is the ORACLE: both are driven by
--- identical stimulus and ebr's falling-edge-read result, sampled late in the
--- slot, must match flops for every read port every cycle. Mirrors
--- tests/shifter_seq_tap.vhd.
+-- register_file(two_bank) (async-read, proven -- the arch ebr replaces in J1)
+-- is the ORACLE: both are driven by identical stimulus and ebr's
+-- falling-edge-read result, sampled late in the slot, must match two_bank for
+-- every read port every cycle. Mirrors tests/shifter_seq_tap.vhd.
+--
+-- two_bank (NOT flops) is the oracle on purpose: like ebr, it does NOT reset
+-- the register RAM (block RAM has no reset), so an unwritten register reads 'U'
+-- in both -- a true match. flops zero-fills its RAM on reset, which would flag
+-- false mismatches on reads of never-written registers and mask the one thing
+-- under test: that the falling-edge read reproduces the async read.
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -22,7 +28,7 @@ architecture tb of register_ebr_tap is
   signal din_wb, din_ex : std_logic_vector(31 downto 0) := (others => '0');
   signal we_wb, we_ex : std_logic := '0';
 
-  -- ebr (DUT) and flops (oracle) outputs
+  -- ebr (DUT) and two_bank (oracle) outputs
   signal a_e, b_e, z_e : std_logic_vector(31 downto 0);
   signal a_f, b_f, z_f : std_logic_vector(31 downto 0);
 
@@ -66,9 +72,9 @@ architecture tb of register_ebr_tap is
   procedure check(signal ae, af, be, bf, ze, zf : in std_logic_vector(31 downto 0);
                   desc : string) is
   begin
-    test_equal(ae, af, desc & " : dout_a == flops");
-    test_equal(be, bf, desc & " : dout_b == flops");
-    test_equal(ze, zf, desc & " : dout_0 == flops");
+    test_equal(ae, af, desc & " : dout_a == two_bank");
+    test_equal(be, bf, desc & " : dout_b == two_bank");
+    test_equal(ze, zf, desc & " : dout_0 == two_bank");
   end procedure;
 begin
   clk_gen : process begin
@@ -83,7 +89,7 @@ begin
       dout_0 => z_e, we_wb => we_wb, w_addr_wb => w_addr_wb, din_wb => din_wb,
       we_ex => we_ex, w_addr_ex => w_addr_ex, din_ex => din_ex, wr_data_o => open);
 
-  oracle : entity work.register_file(flops)
+  oracle : entity work.register_file(two_bank)
     generic map (ADDR_WIDTH => 5, NUM_REGS => 16, REG_WIDTH => 32)
     port map (clk => clk, rst => rst, ce => slot,
       addr_ra => addr_ra, dout_a => a_f, addr_rb => addr_rb, dout_b => b_f,
@@ -92,7 +98,7 @@ begin
 
   process
   begin
-    test_plan(3 * S'length, "register_file ebr vs flops cross-check");
+    test_plan(3 * S'length, "register_file ebr vs two_bank cross-check");
     rst <= '1'; slot <= '0';
     wait until rising_edge(clk);
     wait until rising_edge(clk);

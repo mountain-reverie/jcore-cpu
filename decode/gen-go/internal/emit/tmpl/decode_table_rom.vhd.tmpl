@@ -1,11 +1,11 @@
 {{ template "header" . }}architecture rom of decode_table is
     signal line : std_logic_vector({{ sub1 .ROM.TotalBits }} downto 0);
-    signal addr : std_logic_vector(7 downto 0);
+    signal addr : std_logic_vector({{ sub1 .AddressBits }} downto 0);
     signal mac_busy : mac_busy_t;
     signal imms_12_1 : std_logic_vector(31 downto 0);
     signal imms_8_0 : std_logic_vector(31 downto 0);
     signal imms_8_1 : std_logic_vector(31 downto 0);
-    type mem is array (0 to 255) of std_logic_vector({{ sub1 .ROM.TotalBits }} downto 0);
+    type mem is array (0 to {{ romTop .AddressBits }}) of std_logic_vector({{ sub1 .ROM.TotalBits }} downto 0);
 {{ romConstBody .ROM.Words }}begin
     -- Read microcode line on falling edge of
     -- clock. Needs to be clocked so that xilinx

@@ -49,6 +49,10 @@ func lastIdx(v interface{}) int {
 // sub1 returns n-1. Used in templates to compute Hi bit index from TotalBits.
 func sub1(n int) int { return n - 1 }
 
+// romTop returns the top ROM index for a given address width: 2^addrBits - 1.
+// Used in decode_table_rom.vhd for the "array (0 to romTop)" bound.
+func romTop(addrBits int) int { return (1 << addrBits) - 1 }
+
 // ROMLine is one logical line in the ROM constant body. Text is the
 // pre-formatted VHDL text for one or more consecutive ROM entries
 // belonging to the same instruction; the renderer indents each line
@@ -68,7 +72,7 @@ type ROMLine struct {
 // "constant microcode_rom..." through the closing ");", ready to embed
 // into the architecture body. Each line is 4-space indented. Lines end
 // with \n.
-func romConstBody(words [256]model.ROMWord) string {
+func romConstBody(words []model.ROMWord) string {
 	lines := romLines(words)
 	if len(lines) == 0 {
 		return "    constant microcode_rom : mem := ();\n"
@@ -81,7 +85,7 @@ func romConstBody(words [256]model.ROMWord) string {
 	return b.String()
 }
 
-// romLines converts a 256-entry ROM word array into logical lines for
+// romLines converts the ROM word slice into logical lines for
 // the ROM constant body. Each instruction's slots are collapsed onto one
 // line with a trailing "-- InstrName" comment. Unused trailing entries
 // (all-zero with no comment after the last instruction) are emitted as
@@ -91,17 +95,18 @@ func romConstBody(words [256]model.ROMWord) string {
 // Consecutive words with empty Comment followed by one with a non-empty
 // Comment form one group (the multi-slot instruction). Words with Comment=""
 // that are not part of any group are trailing zeros.
-func romLines(words [256]model.ROMWord) []ROMLine {
+func romLines(words []model.ROMWord) []ROMLine {
 	var lines []ROMLine
 
+	n := len(words)
 	i := 0
-	for i < 256 {
+	for i < n {
 		start := i
 		// Advance past intermediate slots (Comment == "").
-		for i < 256 && words[i].Comment == "" {
+		for i < n && words[i].Comment == "" {
 			i++
 		}
-		if i < 256 {
+		if i < n {
 			// words[i].Comment != "": this is the last slot of an instruction.
 			// Group is [start..i].
 			var b strings.Builder
@@ -113,11 +118,11 @@ func romLines(words [256]model.ROMWord) []ROMLine {
 			i++
 		} else {
 			// Ran out of addressed words before finding a comment. This means
-			// [start..255] are all trailing zeros. Emit as the closing line.
+			// [start..n-1] are all trailing zeros. Emit as the closing line.
 			var b strings.Builder
-			for j := start; j < 256; j++ {
+			for j := start; j < n; j++ {
 				fmt.Fprintf(&b, "%d => \"%s\"", j, words[j].Bits)
-				if j < 255 {
+				if j < n-1 {
 					b.WriteString(", ")
 				}
 			}
@@ -127,7 +132,7 @@ func romLines(words [256]model.ROMWord) []ROMLine {
 		}
 	}
 
-	// All 256 words consumed with instructions — highly unlikely but handle it:
+	// All words consumed with instructions — highly unlikely but handle it:
 	// close the last line (which currently ends with ", -- InstrName").
 	// Rewrite the last entry's trailing comma to ");".
 	if len(lines) > 0 {

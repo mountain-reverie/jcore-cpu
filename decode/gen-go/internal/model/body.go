@@ -15,6 +15,8 @@ type Body struct {
 	IllegalSlot  string // single boolean expression text for the function body
 	IllegalInstr string // boolean expression text for the simpler check
 	Privileged   string // boolean expression text for the privileged() predicate
+	AddrSentinel string // VHDL literal for the predecode "unknown opcode" default
+	// (the all-ones address — a reserved, unused slot)
 }
 
 // PredecodeFunc represents predecode_rom_addr's case-statement body.
@@ -55,12 +57,13 @@ type PredecodeBitAssign struct {
 //
 // writesPC is the set of instruction names that write PC (branches);
 // drives check_illegal_delay_slot.
-func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, writesPC map[string]bool, privileged map[string]bool) *Body {
+func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, writesPC map[string]bool, privileged map[string]bool, addrBits int) *Body {
 	body := &Body{}
-	body.Predecode = buildPredecode(instrAddrs, instrLogic)
+	body.Predecode = buildPredecode(instrAddrs, instrLogic, addrBits)
 	body.IllegalSlot = buildIllegalSlot(instrLogic, writesPC)
 	body.IllegalInstr = `code(15 downto 8) = x"ff"`
 	body.Privileged = buildPrivileged(instrLogic, privileged)
+	body.AddrSentinel = addrLit((1<<addrBits)-1, addrBits)
 	return body
 }
 
@@ -103,7 +106,7 @@ type predecodeInstr struct {
 	lo12 logic.LogicMap // lower 12 bits LogicMap (top nibble removed; for QMC)
 }
 
-func buildPredecode(addrs map[string]int, lm map[string]logic.LogicMap) PredecodeFunc {
+func buildPredecode(addrs map[string]int, lm map[string]logic.LogicMap, addrBits int) PredecodeFunc {
 	// Group instruction names by top-nibble of opcode.
 	groups := [16][]predecodeInstr{}
 	for name, m := range lm {
@@ -135,15 +138,15 @@ func buildPredecode(addrs map[string]int, lm map[string]logic.LogicMap) Predecod
 			arm.ListComment = append(arm.ListComment, fmt.Sprintf(
 				"%s => %s  %s",
 				nibbleSpaced16Bit(in.full),
-				fmt.Sprintf("%08b", in.addr),
+				fmt.Sprintf("%0*b", addrBits, in.addr),
 				in.name))
 		}
 		if len(g) == 0 {
-			arm.LiteralAddr = `x"00"`
+			arm.LiteralAddr = addrLit(0, addrBits)
 		} else if len(g) == 1 {
-			arm.LiteralAddr = fmt.Sprintf(`x"%02x"`, g[0].addr)
+			arm.LiteralAddr = addrLit(g[0].addr, addrBits)
 		} else {
-			arm.BitAssigns = buildAddrBitAssigns(g)
+			arm.BitAssigns = buildAddrBitAssigns(g, addrBits)
 		}
 		pf.Arms[nib] = arm
 	}
@@ -155,10 +158,10 @@ func buildPredecode(addrs map[string]int, lm map[string]logic.LogicMap) Predecod
 // {minterms where bit=0, AND'd as "not (...)"}. Reduce both candidate
 // sets via logic.ReduceImplicants then choose the cheaper. The "lo12"
 // LogicMaps already exclude the top nibble (op.code(11 downto 0)).
-func buildAddrBitAssigns(g []predecodeInstr) []PredecodeBitAssign {
+func buildAddrBitAssigns(g []predecodeInstr, addrBits int) []PredecodeBitAssign {
 	var out []PredecodeBitAssign
 	sigs := map[string]string{"i": "code"}
-	for bit := 0; bit < 8; bit++ {
+	for bit := 0; bit < addrBits; bit++ {
 		var onSet, offSet []logic.LogicMap
 		for _, in := range g {
 			if (in.addr>>bit)&1 == 1 {

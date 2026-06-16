@@ -7,7 +7,7 @@ use work.cpu2j0_components_pack.all;
 use work.mult_pkg.all;
 package body decode_pack is
     function predecode_rom_addr (code : std_logic_vector(15 downto 0)) return std_logic_vector is
-        variable addr : std_logic_vector(7 downto 0);
+        variable addr : std_logic_vector({{ sub1 .AddressBits }} downto 0);
     begin
         case code(15 downto 12) is
 {{- range .Body.Predecode.Arms }}
@@ -24,7 +24,7 @@ package body decode_pack is
 {{- end }}
 {{ end }}
             when others =>
-                addr := x"ff";
+                addr := {{ .Body.AddrSentinel }};
 
         end case;
         return addr;

@@ -309,3 +309,45 @@
     ybus = "Rm"
     zbus = "SPC"
     zbus_sel = "Y"
+
+# ---- Privileged read of the SH-4 cause registers (PM3; control space
+#      0000nnnn ssss 0010, ssss = 0101/0110/0111; SR/GBR/VBR/SSR/SPC take
+#      0000-0100). Read-only: the registers are hardware-set on entry. ----
+[[instr]]
+  name = "STC EXPEVT, Rn"
+  privileged = true
+  format = "n"
+  opcode = "0000 nnnn 0101 0010"
+  operation = "EXPEVT -> Rn"
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "EXPEVT"
+    zbus = "Rn"
+    zbus_sel = "Y"
+
+[[instr]]
+  name = "STC INTEVT, Rn"
+  privileged = true
+  format = "n"
+  opcode = "0000 nnnn 0110 0010"
+  operation = "INTEVT -> Rn"
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "INTEVT"
+    zbus = "Rn"
+    zbus_sel = "Y"
+
+[[instr]]
+  name = "STC TRA, Rn"
+  privileged = true
+  format = "n"
+  opcode = "0000 nnnn 0111 0010"
+  operation = "TRA -> Rn"
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "TRA"
+    zbus = "Rn"
+    zbus_sel = "Y"

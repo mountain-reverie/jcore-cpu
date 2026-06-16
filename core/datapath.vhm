@@ -59,6 +59,7 @@ architecture stru of datapath is
 	-- zbus except the SEL_SHIFT (shifter) source is a don't-care (see below).
 	signal zbus_mac : std_logic_vector(31 downto 0);
 	signal sr : sr_t;
+	signal priv_regs : priv_reg_t;   -- SH-4 EXPEVT/INTEVT/TRA (J4); 0 on J1/J2
 	-- regfile addresses after SH-4 bank remapping (pass-through on J2)
 	signal num_x_r, num_y_r, num_z_r, num_w_r : regnum_t;
 	signal sfto : std_logic;
@@ -207,7 +208,11 @@ architecture stru of datapath is
 begin
 	-- Multiplexors for the internal buses
 	with buses.x_sel select xbus      <= reg_x when SEL_REG, pc when SEL_PC,                                                                 buses.imm_val when others;
-	with buses.y_sel select ybus_temp <= reg_y when SEL_REG, pc when SEL_PC, mach when SEL_MACH, macl when SEL_MACL, to_slv(sr) when SEL_SR, buses.imm_val when others;
+	with buses.y_sel select ybus_temp <= reg_y when SEL_REG, pc when SEL_PC, mach when SEL_MACH, macl when SEL_MACL, to_slv(sr) when SEL_SR,
+	                                     (x"00000" & priv_regs.expevt) when SEL_EXPEVT,
+	                                     (x"00000" & priv_regs.intevt) when SEL_INTEVT,
+	                                     (x"00000" & "00" & priv_regs.tra) when SEL_TRA,
+	                                     buses.imm_val when others;
 	ybus <= ybus_override.d when ybus_override.en = '1' else ybus_temp;
 
 	gpf_zwd <= pc when pc_ctrl.wrpr = '1' else zbus;
@@ -557,6 +562,7 @@ begin
 
 	pc <= this'register.pc;
 	sr <= this'register.sr;
+	priv_regs <= this'register.priv;
 	mac_s <= this'register.mac_s;
         db_lock <= this'register.data_o_lock;
         db_o <= this'register.data_o;

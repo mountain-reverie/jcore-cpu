@@ -436,6 +436,13 @@ func assignYBus(v, rn, rm string, out AssignMap) error {
 		out[SigYbusSel] = "SEL_MACL"
 	case up == "SR":
 		out[SigYbusSel] = "SEL_SR"
+	case up == "EXPEVT":
+		// SH-4 cause-register read (J4): STC EXPEVT/INTEVT/TRA, Rn.
+		out[SigYbusSel] = "SEL_EXPEVT"
+	case up == "INTEVT":
+		out[SigYbusSel] = "SEL_INTEVT"
+	case up == "TRA":
+		out[SigYbusSel] = "SEL_TRA"
 	default:
 		if isConstStr(v) {
 			out[SigYbusSel] = "SEL_IMM"

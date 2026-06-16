@@ -21,6 +21,26 @@ func addrBitsForSlots(numSlots int) int {
 	return max(8, bits.Len(uint(numSlots)))
 }
 
+// setOperationAddrWidth rewrites the operation_t.addr field type to a
+// std_logic_vector of the given microcode address width. It errors if the
+// operation_t.addr field is absent, so a rename of the record or field can't
+// silently leave the emitted address width wrong.
+func setOperationAddrWidth(pkg *Package, addrBits int) error {
+	for ri := range pkg.Records {
+		if pkg.Records[ri].Name != "operation_t" {
+			continue
+		}
+		for fi := range pkg.Records[ri].Fields {
+			f := &pkg.Records[ri].Fields[fi]
+			if len(f.Names) == 1 && f.Names[0] == "addr" {
+				f.Type = fmt.Sprintf("std_logic_vector(%d downto 0)", addrBits-1)
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("operation_t.addr field not found in package records")
+}
+
 // addrLit renders a microcode ROM address as a VHDL std_logic_vector literal
 // of width addrBits. Widths divisible by 4 use a hex literal (x"..") so the
 // 8-bit case reproduces the legacy x"%02x" form byte-for-byte; other widths
@@ -252,16 +272,8 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 
 	// Set operation_t.addr to the computed width (newStaticPackage built it at
 	// the default 8-bit; for addrBits==8 this rewrites the identical string).
-	for ri := range pkg.Records {
-		if pkg.Records[ri].Name != "operation_t" {
-			continue
-		}
-		for fi := range pkg.Records[ri].Fields {
-			f := &pkg.Records[ri].Fields[fi]
-			if len(f.Names) == 1 && f.Names[0] == "addr" {
-				f.Type = fmt.Sprintf("std_logic_vector(%d downto 0)", addrBits-1)
-			}
-		}
+	if err := setOperationAddrWidth(pkg, addrBits); err != nil {
+		return nil, err
 	}
 
 	// Build the 2^addrBits-entry ROM (power of two so the all-ones sentinel

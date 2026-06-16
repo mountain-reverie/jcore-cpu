@@ -98,8 +98,9 @@ begin
   end process;
 
   stim : process
-    variable errors : integer := 0;
-    variable testno : integer := 0;
+    variable errors  : integer := 0;
+    variable testno  : integer := 0;
+    variable ref_mem : mem_t := init_mem;          -- golden architectural memory
     procedure tick is begin wait until rising_edge(clk125); end procedure;
     procedure do_load(addr : std_logic_vector(31 downto 0); expect : word_t) is
       variable got : word_t;
@@ -117,12 +118,39 @@ begin
       end if;
       tick;
     end procedure;
+    procedure do_store(addr : std_logic_vector(31 downto 0);
+                       data : word_t; be : std_logic_vector(3 downto 0)) is
+    begin
+      ibus_o <= (en=>'1', a=>addr, rd=>'0', wr=>'1', we=>be, d=>data);
+      loop tick; exit when ibus_i.ack = '1'; end loop;
+      ibus_o <= NULL_DATA_O;
+      for i in 0 to 3 loop
+        if be(i) = '1' then
+          ref_mem(widx(addr))(8*i+7 downto 8*i) := data(8*i+7 downto 8*i);
+        end if;
+      end loop;
+      tick;
+    end procedure;
+    procedure chk_load(addr : std_logic_vector(31 downto 0)) is
+    begin do_load(addr, ref_mem(widx(addr))); end procedure;
   begin
     wait until rst = '0';
     for i in 0 to 4 loop tick; end loop;
     -- cold miss: word 0 refills from DDR -> expect init_word(0); next word -> hit
     do_load(x"00000000", init_word(0));
     do_load(x"00000004", init_word(1));
+    -- store-hit (line resident), then verify
+    do_store(x"00000000", x"CAFEBABE", "1111"); chk_load(x"00000000");
+    -- partial (byte-enable) store
+    do_store(x"00000004", x"000000AA", "0001"); chk_load(x"00000004");
+    -- store-miss (WFILL) to a fresh line
+    do_store(x"00001000", x"12345678", "1111"); chk_load(x"00001000");
+    -- eviction: 0x2000 apart collide in the direct-mapped index
+    chk_load(x"00000000");                 -- line A resident
+    chk_load(x"00002000");                 -- line B evicts A (same index)
+    do_store(x"00002000", x"DEADBEEF", "1111");
+    chk_load(x"00000000");                 -- A reloads (B's write-back intact)
+    chk_load(x"00002000");
     report "dcache_check_tb: " & integer'image(testno) & " tests, " &
            integer'image(errors) & " errors" severity note;
     assert errors = 0 report "DCACHE SCOREBOARD FAILED" severity failure;

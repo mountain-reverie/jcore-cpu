@@ -595,6 +595,13 @@ func assignSR(v string, out AssignMap) error {
 		// SH-4 exception entry: set MD/RB/BL (interrupt mask handled separately
 		// via INT_MASK for interrupts).
 		out[SigSrSel] = "SEL_EXCEPTION"
+	case "EXPEVT":
+		// SH-4 cause capture: latch the slot immediate into EXPEVT (J4).
+		out[SigSrSel] = "SEL_EXPEVT"
+	case "INTEVT":
+		out[SigSrSel] = "SEL_INTEVT"
+	case "TRA":
+		out[SigSrSel] = "SEL_TRA"
 	case "HOLD", "":
 		// HOLD means don't change SR — no signals emitted.
 	default:

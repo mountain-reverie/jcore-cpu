@@ -26,7 +26,7 @@ package decode_pack is
     type mem_addr_sel_t is (SEL_XBUS, SEL_YBUS, SEL_ZBUS);
     type mem_wdata_sel_t is (SEL_ZBUS, SEL_YBUS);
     type reg_sel_t is (SEL_R0, SEL_R15, SEL_RA, SEL_RB);
-    type sr_sel_t is (SEL_PREV, SEL_WBUS, SEL_ZBUS, SEL_DIV0U, SEL_ARITH, SEL_LOGIC, SEL_INT_MASK, SEL_SET_T, SEL_EXCEPTION);
+    type sr_sel_t is (SEL_PREV, SEL_WBUS, SEL_ZBUS, SEL_DIV0U, SEL_ARITH, SEL_LOGIC, SEL_INT_MASK, SEL_SET_T, SEL_EXCEPTION, SEL_EXPEVT, SEL_INTEVT, SEL_TRA);
     type t_sel_t is (SEL_CLEAR, SEL_SET, SEL_SHIFT, SEL_CARRY);
     type xbus_sel_t is (SEL_IMM, SEL_REG, SEL_PC);
     type ybus_sel_t is (SEL_IMM, SEL_REG, SEL_MACH, SEL_MACL, SEL_PC, SEL_SR);

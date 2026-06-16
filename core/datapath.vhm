@@ -513,6 +513,14 @@ begin
                 this.sr.md := '1';
                 this.sr.rb := '1';
                 this.sr.bl := '1';
+              when SEL_EXPEVT =>
+                -- SH-4 cause capture (J4): latch the slot immediate (the
+                -- exception code) into EXPEVT. J1/J2 never select this.
+                this.priv.expevt := buses.imm_val(11 downto 0);
+              when SEL_INTEVT =>
+                this.priv.intevt := buses.imm_val(11 downto 0);
+              when SEL_TRA =>
+                this.priv.tra := buses.imm_val(9 downto 0);
             end case;
 
             if mac.s_latch = '1' then this.mac_s := this.sr.s; end if;

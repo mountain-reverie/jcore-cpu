@@ -98,7 +98,8 @@ begin
 
   process
   begin
-    test_plan(3 * S'length, "register_file ebr vs two_bank cross-check");
+    -- 3*S'length stimulus checks + 9 stretched-slot (ce=0) checks below.
+    test_plan(3 * S'length + 9, "register_file ebr vs two_bank cross-check");
     rst <= '1'; slot <= '0';
     wait until rising_edge(clk);
     wait until rising_edge(clk);
@@ -112,6 +113,30 @@ begin
       wait for 1 ns;   -- let ebr's q_a/q_b settle, then both are comparable
       check(a_e, a_f, b_e, b_f, z_e, z_f, "cycle " & integer'image(i));
     end loop;
+
+    -- Stretched-slot coverage (ce=0): the J1-unique case. During a shifter(seq)
+    -- slot-stretch ce=0, so writes freeze (ce-gated, identical to two_bank)
+    -- while ebr's read process is FREE-RUNNING -- it re-latches q_a/q_b on every
+    -- falling edge regardless of ce. With the read address held (the frozen
+    -- pipeline holds reg.num_x), q must re-latch the same value and stay equal
+    -- to two_bank's async read, and a pending write must NOT commit. Drive a
+    -- known commit, then hold ce=0 for three cycles with the read held and a
+    -- suppressed EX write asserted, comparing ebr vs two_bank each cycle.
+    wait until rising_edge(clk);            -- commit cycle (ce still '1')
+    addr_ra <= "00001"; addr_rb <= "00010";
+    we_wb <= '1'; w_addr_wb <= "00001"; din_wb <= x"deadbeef"; we_ex <= '0';
+    wait until rising_edge(clk);            -- reg1 := deadbeef commits here
+    we_wb <= '0';
+    slot <= '0';                            -- stall: ce=0, writes frozen
+    we_ex <= '1'; w_addr_ex <= "00001"; din_ex <= x"00000000";  -- must not commit
+    for i in 0 to 2 loop
+      wait until falling_edge(clk);
+      wait for 1 ns;
+      check(a_e, a_f, b_e, b_f, z_e, z_f, "stretch ce=0 " & integer'image(i));
+      wait until rising_edge(clk);          -- ce=0: no commit, no ex_pipes shift
+    end loop;
+    we_ex <= '0'; slot <= '1';
+
     test_finished("done");
     wait for 40 ns; ENDSIM := true; wait;
   end process;

@@ -1,0 +1,21 @@
+-- Per-variant configurations of the cpu_cache_timing_top harness. Each binds the
+-- harness's u_cpu to the matching cpu synth configuration (J2 baseline / J4
+-- placeholder) and binds u_icache/u_dcache to the fpga adapter configs (which
+-- bind the inferred RAMs). The SAME_CLOCK generic flows from the harness generic
+-- map (set by cpu_synth.sh per backend: true on ecp5, false on asic), not here.
+-- cpu_synth.sh elaborates cpu_cache_timing_<variant>.
+configuration cpu_cache_timing_j2 of cpu_cache_timing_top is
+  for timing
+    for u_cpu : cpu use configuration work.cpu_synth_direct; end for;
+    for u_icache : icache_adapter use configuration work.icache_adapter_fpga; end for;
+    for u_dcache : dcache_adapter use configuration work.dcache_adapter_fpga; end for;
+  end for;
+end configuration;
+
+configuration cpu_cache_timing_j4 of cpu_cache_timing_top is
+  for timing
+    for u_cpu : cpu use configuration work.cpu_synth_j4; end for;
+    for u_icache : icache_adapter use configuration work.icache_adapter_fpga; end for;
+    for u_dcache : dcache_adapter use configuration work.dcache_adapter_fpga; end for;
+  end for;
+end configuration;

@@ -35,14 +35,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [j1, j2, j4]
+        variant: [j1, j2, j4, j2c, j4c]   # *c = cpu+cache (ASIC dual-clock)
     steps:
       - name: Checkout jcore-cpu
         uses: actions/checkout@v4
-      - name: Checkout jcore-soc (provides tools/v2p)
+      - name: Checkout jcore-soc (tools/v2p + cache lib deps)
         uses: actions/checkout@v4
         with:
-          repository: j-core/jcore-soc
+          repository: mountain-reverie/jcore-soc
           path: jcore-soc
       - name: Toolchain versions
         run: |
@@ -82,6 +82,7 @@ jobs:
         run: synth/cpu_sta.sh   # non-gating; writes build/cpu_asic_sta.rpt
         env:
           NANGATE_LIB: /opt/nangate45/nangate45.lib
+          SYNTH_VARIANT: ${{ matrix.variant }}   # selects top + clock SDC (cpu vs cpu+cache)
       - name: Emit ASIC metrics
         continue-on-error: true
         env:
@@ -137,14 +138,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [j2, j4]   # J1's authoritative FPGA target is iCE40 up5k (see synth-ice40)
+        variant: [j2, j4, j2c, j4c]   # J1 -> iCE40 (synth-ice40); *c = cpu+cache (FPGA single-clock)
     steps:
       - name: Checkout jcore-cpu
         uses: actions/checkout@v4
-      - name: Checkout jcore-soc (provides tools/v2p)
+      - name: Checkout jcore-soc (tools/v2p + cache lib deps)
         uses: actions/checkout@v4
         with:
-          repository: j-core/jcore-soc
+          repository: mountain-reverie/jcore-soc
           path: jcore-soc
       - name: Toolchain versions
         run: |
@@ -288,10 +289,10 @@ jobs:
     steps:
       - name: Checkout jcore-cpu
         uses: actions/checkout@v4
-      - name: Checkout jcore-soc (provides tools/v2p)
+      - name: Checkout jcore-soc (tools/v2p + cache lib deps)
         uses: actions/checkout@v4
         with:
-          repository: j-core/jcore-soc
+          repository: mountain-reverie/jcore-soc
           path: jcore-soc
       - name: Toolchain versions
         run: |

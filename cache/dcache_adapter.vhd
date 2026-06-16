@@ -6,6 +6,7 @@ use work.cpu2j0_pack.all;
 use work.data_bus_pack.all;
 
 entity dcache_adapter is
+  generic (SAME_CLOCK : boolean := false);  -- pass-through to dcache
   port (
     clk125 : in std_logic;
     clk200 : in std_logic;
@@ -31,7 +32,9 @@ architecture arch of dcache_adapter is
   signal dcache_my : mem_o_t;
 begin
 
-  u_dcache : dcache port map(
+  u_dcache : dcache
+    generic map (SAME_CLOCK => SAME_CLOCK)
+    port map(
     clk125 => clk125,
     clk200 => clk200,
     rst    => rst,

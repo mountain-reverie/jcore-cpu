@@ -6,6 +6,7 @@ use work.cpu2j0_pack.all;
 use work.data_bus_pack.all;
 
 entity icache_adapter is
+  generic (SAME_CLOCK : boolean := false);  -- pass-through to icache
   port (
     clk125 : in std_logic;
     clk200 : in std_logic;
@@ -32,7 +33,9 @@ begin
   icccra.ic_onm <= ctrl.en;
   icccra.ic_inv <= ctrl.inv;
 
-  u_icache : icache port map(
+  u_icache : icache
+    generic map (SAME_CLOCK => SAME_CLOCK)
+    port map(
     clk125 => clk125,
     clk200 => clk200,
     rst    => rst,

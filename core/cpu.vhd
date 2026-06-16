@@ -82,6 +82,7 @@ begin
       reg => reg, func => func, sr_ctrl => sr, mac => mac, mem => mem, pc_ctrl => pc,
       buses => buses, coproc => coproc, instr => instr,
       macin1 => mac_i.in1, macin2 => mac_i.in2, mach => mac_o.mach, macl => mac_o.macl,
+      mult_stall => mac_o.slot_stall,
       mac_s => mac_i.s,
       t_bcc => t_bcc, ibit => ibit, if_dr => if_dr, if_stall => if_stall,
       mask_int => mask_int,

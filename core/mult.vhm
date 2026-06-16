@@ -157,4 +157,7 @@ architecture stru of mult is
   -- drive the outputs
   y.mach <= this'register.mach;
   y.macl <= this'register.macl;
+  -- The J2 array multiplier never stretches the slot (it finishes fast enough
+  -- that a following mult op always finds it free); only J1's mult(seq) does.
+  y.slot_stall <= '0';
 end stru;

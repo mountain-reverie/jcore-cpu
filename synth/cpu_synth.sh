@@ -71,6 +71,13 @@ FILES=(
 # cpu_timing_* harness is bare-cpu only; j2c/j4c use cpu_cache_timing_*. CACHE=1
 # marks the cpu+cache variants.
 CPUTOP="cpu"; TIMINGCELL="cpu_timing_top"; CACHE=0
+# The cache adapters instantiate icache/dcache as VHDL *components* (bound via
+# cache_pack), so ghdl needs --syn-binding to bind them to their entities and
+# synthesize their bodies -- without it ghdl emits empty blackbox modules that
+# nextpnr rejects (and generic asic synth silently drops, hiding the cache). The
+# bare cpu has no unbound components, so this flag is added ONLY for j2c/j4c to
+# keep the bare-variant synth byte-identical to the established dashboard series.
+SYN_BINDING=""
 case "$SYNTH_VARIANT" in
   j2)
     TOP="cpu_synth_direct"; TIMING_TOP="cpu_timing_j2"
@@ -99,6 +106,7 @@ case "$SYNTH_VARIANT" in
     ;;
   j2c|j4c)
     CACHE=1; CPUTOP="cpu_cache_timing_top"; TIMINGCELL="cpu_cache_timing_top"
+    SYN_BINDING="--syn-binding"
     if [ "$SYNTH_VARIANT" = j4c ]; then TOP="cpu_cache_timing_j4"
     else TOP="cpu_cache_timing_j2"; fi
     TIMING_TOP="$TOP"
@@ -148,7 +156,7 @@ case "$SYNTH_VARIANT" in
   *) echo "ERROR: unknown SYNTH_VARIANT '$SYNTH_VARIANT' (want j1|j2|j4|j2c|j4c)" >&2; exit 1 ;;
 esac
 
-GHDL_BASE="ghdl --std=93 -fexplicit --ieee=synopsys --workdir=$WORK ${FILES[*]}"
+GHDL_BASE="ghdl --std=93 -fexplicit --ieee=synopsys $SYN_BINDING --workdir=$WORK ${FILES[*]}"
 
 case "$BACKEND" in
   asic)

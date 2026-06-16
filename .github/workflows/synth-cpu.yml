@@ -200,12 +200,16 @@ jobs:
           # ~40 MHz (< 50) result reported rather than failing. We GATE on fit
           # (P&R must complete) and REPORT timing. No `| tee`, so set -e fails the
           # step on a real P&R/fit error.
+          # Always surface the nextpnr log, even on a hard P&R/fit error -- the
+          # redirect would otherwise swallow it (set -e kills the step before the
+          # tail), leaving the CI log empty. Tail then re-raise the real rc.
           nextpnr-ecp5 --85k --package CABGA381 \
             --json build/cpu_ecp5.json \
             --lpf synth/ulx3s_cpu.lpf --lpf-allow-unconstrained \
             --timing-allow-fail \
             --textcfg build/cpu_ecp5.config \
-            --report build/cpu_ecp5_report.json > build/nextpnr.log 2>&1
+            --report build/cpu_ecp5_report.json > build/nextpnr.log 2>&1 \
+            || { rc=$?; tail -80 build/nextpnr.log; exit $rc; }
           tail -60 build/nextpnr.log
       - name: Pack bitstream — fit gate
         run: ecppack build/cpu_ecp5.config build/cpu_ecp5.bit && ls -l build/cpu_ecp5.bit

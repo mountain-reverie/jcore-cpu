@@ -21,13 +21,14 @@ use work.data_bus_pack.all;
 use work.cache_pack.all;
 
 entity cpu_cache_timing_top is
-  -- No generic: the cache CDC form comes from the cache_clkmode package the
-  -- build analyzes (sc/dc), so ghdl bakes the constant and yosys sees no params.
-  port ( clk125 : in  std_logic;   -- cpu + cache cpu-side clock
-         clk200 : in  std_logic;   -- cache mem-side clock (= clk125 if single-clock)
-         rst    : in  std_logic;
-         ti     : in  std_logic;    -- serial entropy in (keeps inputs non-constant)
-         sout   : out std_logic );  -- serial reduction out (keeps outputs observed)
+  -- ONE clock: the cache's clk125/clk200 are tied to it, so the design is a
+  -- single clock domain for P&R/STA. The cache CDC *form* (single- vs dual-clock
+  -- structure) comes from the cache_clkmode package the build analyzes (sc/dc) --
+  -- no generic, so ghdl bakes the constant and yosys sees no params.
+  port ( clk  : in  std_logic;    -- single clock (drives cpu + cache clk125/clk200)
+         rst  : in  std_logic;
+         ti   : in  std_logic;     -- serial entropy in (keeps inputs non-constant)
+         sout : out std_logic );   -- serial reduction out (keeps outputs observed)
 end entity;
 
 architecture timing of cpu_cache_timing_top is
@@ -86,7 +87,7 @@ begin
   dc_ddr_i.d <= acc; dc_ddr_i.ack <= acc(22);
 
   u_cpu : cpu
-    port map ( clk => clk125, rst => rst,
+    port map ( clk => clk, rst => rst,
                db_o => db_o, db_lock => db_lock, db_i => db_i,
                inst_o => inst_o, inst_i => inst_i,
                debug_o => debug_o, debug_i => debug_i,
@@ -95,7 +96,7 @@ begin
 
   u_icache : icache_adapter
    
-    port map ( clk125 => clk125, clk200 => clk200, rst => rst,
+    port map ( clk125 => clk, clk200 => clk, rst => rst,
                ctrl => ic_ctrl,
                ibus_o => inst_o, ibus_i => inst_i,
                dbus_o => ic_ddr_o, dbus_ddrburst => ic_burst,
@@ -103,7 +104,7 @@ begin
 
   u_dcache : dcache_adapter
    
-    port map ( clk125 => clk125, clk200 => clk200, rst => rst,
+    port map ( clk125 => clk, clk200 => clk, rst => rst,
                ctrl => dc_ctrl,
                ibus_o => db_o, lock => db_lock, ibus_i => db_i,
                snpc_o => dc_snpc_o, snpc_i => NULL_SNOOP_IO,
@@ -113,8 +114,8 @@ begin
 
   -- Fold cpu non-cache outputs + the cache DDR-side outputs into acc each clk125
   -- cycle (every bit influences acc, so cpu + both caches are preserved).
-  process(clk125) begin
-    if rising_edge(clk125) then
+  process(clk) begin
+    if rising_edge(clk) then
       if rst = '1' then
         acc <= (others => '0');
       else

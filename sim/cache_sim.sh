@@ -53,6 +53,9 @@ FILES=(
 for f in "${FILES[@]}"; do echo "--- analyze $(basename "$f")"; $G "$f"; done
 echo "=== run ($MODE) ==="
 # mcode backend: elaborate+run via -r (no standalone binary from -e).
+RUNLOG="$WORK/run.log"
 ghdl -r $GHDLFLAGS --workdir="$WORK" "$TOP" \
-  --assert-level=error --stop-time=2ms
+  --assert-level=error --stop-time=2ms 2>&1 | tee "$RUNLOG"
+# A hung load would run to stop-time and exit 0; require the explicit pass line.
+grep -q "ALL TESTS PASSED" "$RUNLOG" || { echo "ERROR: '$MODE' did not reach ALL TESTS PASSED" >&2; exit 1; }
 echo "cache_sim.sh: $MODE OK"

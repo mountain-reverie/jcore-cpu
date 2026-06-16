@@ -49,7 +49,8 @@ VHDS += $(addprefix ../, $(CPU_VHDS))
 # testbench.  mult_seq_tap uses a direct entity instantiation of mult(seq),
 # so it is unaffected by default-binding order either way.
 VHDS += ../core/mult_seq.vhd
-VHDS += ../core/register_file_flops.vhd
+# register_file(two_bank) -- the ebr cross-check oracle -- already arrives via
+# build.mk (CPU_VHDS); ebr is added explicitly until Task 4 moves it there.
 VHDS += ../core/register_file_ebr.vhd
 VHDS += $(TOOLS_DIR)/tests/tap/test_pkg.vhd
 

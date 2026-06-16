@@ -74,8 +74,14 @@ case "$SYNTH_VARIANT" in
     TOP="cpu_synth_direct"; TIMING_TOP="cpu_timing_j2"
     ;;
   j1)
+    # J1 binds the ROM decoder (cpu_synth_j1_config.vhd -> cpu_decode_rom), so the
+    # rom microcode table + its config must be in the file list (like the j4-rom
+    # case below). The direct table files are already in the base FILES list; both
+    # decoder configs may coexist in the library since only cpu_decode_rom is bound.
     TOP="cpu_synth_j1"; TIMING_TOP="cpu_timing_j1"
-    FILES+=(core/mult_seq.vhd core/shifter_seq.vhd synth/cpu_synth_j1_config.vhd)
+    FILES+=(core/mult_seq.vhd core/shifter_seq.vhd \
+            decode/decode_table_rom.vhd decode/decode_table_rom_config.vhd \
+            synth/cpu_synth_j1_config.vhd)
     ;;
   j4)
     if [ "${DECODER:-direct}" = "rom" ]; then

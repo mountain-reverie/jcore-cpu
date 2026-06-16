@@ -15,7 +15,7 @@ configuration cpu_synth_j1 of cpu is
       use entity work.datapath(stru);
       for stru
         for u_regfile : register_file
-          use entity work.register_file(two_bank);
+          use entity work.register_file(ebr);
         end for;
         for u_shifter : shifter
           use entity work.shifter(seq);

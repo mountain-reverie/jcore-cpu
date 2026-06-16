@@ -1,0 +1,16 @@
+# Test overlay: override a system instruction to use a large numeric
+# immediate (IMM_P256 = 0x100), mirroring PM3's VBR+0x100 fixed-vector
+# slot. Drives the three-decoder constant-immediate path end-to-end.
+[[instr]]
+  name = "General Illegal"
+  opcode = "---- -111 dddd dddd"
+  operation = ""
+  plane = "system"
+
+  [[instr.slots]]
+    pc = "HOLD"
+    arith = "ADD"
+    xbus = "VBR"
+    ybus = "256"
+    zbus = "PC"
+    zbus_sel = "ARITH"

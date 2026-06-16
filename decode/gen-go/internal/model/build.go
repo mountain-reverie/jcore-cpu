@@ -302,6 +302,17 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 
 	d.ROM = rom
 
+	// Extra immediate constants (present in the spec but not hardcoded in the
+	// simple/rom decoder templates) need generated imm-mux arms. Empty for the
+	// production spec; non-empty for ISA overlays that introduce new constants
+	// (e.g. PM3's IMM_P256). Needs both ImmValLiterals (the immval_t set) and
+	// the ROM encoding (for the rom imm-field codes).
+	extraImm, err := buildExtraImmConsts(pkg.ImmValLiterals, enc)
+	if err != nil {
+		return nil, err
+	}
+	d.ExtraImmConsts = extraImm
+
 	// Build per-instruction LogicMaps for downstream consumers. Two maps:
 	//   - instrLogicNormal: non-system instructions only (plane=0). Fed to
 	//     BuildBody since predecode_rom_addr and check_illegal_delay_slot

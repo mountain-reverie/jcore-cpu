@@ -58,4 +58,10 @@ type Decoder struct {
 	// the port list taken from the "decode" component in Package.Components.
 	// Populated by Build after the Package.
 	Entity *DecodeEntity
+
+	// ExtraImmConsts are immediate constants present in the spec but NOT
+	// hardcoded in the simple/rom decoder templates (e.g. PM3's IMM_P256).
+	// The simple/rom templates emit one extra imm-mux arm per entry. Empty
+	// for the production spec (keeping those templates byte-identical).
+	ExtraImmConsts []ExtraImmConst
 }

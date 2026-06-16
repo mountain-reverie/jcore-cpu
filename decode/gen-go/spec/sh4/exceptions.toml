@@ -3,20 +3,23 @@
 # See docs/priv-arch/j4-implementation-design.md §4 and
 # docs/priv-arch/pm3-fixed-vectors-expevt-design.md.
 #
-# Entry: SPC <- PC(-adjust) in one slot (zbus=SPC, zbus_sel=ARITH), then
-# SSR<-SR + SEL_EXCEPTION, then a DIRECT fixed-vector jump
-# PC <- VBR+0x100 (general exceptions) or VBR+0x600 (interrupt). No vector-table
-# memory read (the SH-4 model: handler code lives at the fixed offset), and no
-# stack pushes. ALL six entries use the register model so the register-model RTE
-# returns correctly. Tested: TRAPA (trapatest/exctest), General Illegal
-# (privmode); others are structurally identical.
+# Entry: SPC <- PC(-adjust) (zbus=SPC, zbus_sel=ARITH), then SSR<-SR +
+# SEL_EXCEPTION, then capture the SH-4 cause code into EXPEVT/INTEVT(/TRA) via a
+# constant-immediate slot, then a DIRECT fixed-vector jump PC <- VBR+0x100
+# (general exceptions) or VBR+0x600 (interrupt). No vector-table memory read and
+# no stack pushes. ALL six entries use the register model so the register-model
+# RTE returns correctly.
+#
+# SH-4 cause codes (EXPEVT, decimal in spec): TRAPA 0x160=352 (+TRA=imm<<2),
+# General Illegal 0x180=384, Slot Illegal 0x1A0=416, Error 0x100=256 (write
+# address error); Interrupt INTEVT = the d8 event vector (op.code(7:0)).
 
 # ---- Interrupt (maskable: capture level, set IMASK) ----
 [[instr]]
   name = "Interrupt"
   format = "d8"
   opcode = "---- -000 dddd dddd"
-  operation = "SPC<-PC; SSR<-SR; MD/RB/BL; IMASK; PC<-VBR+0x600"
+  operation = "SPC<-PC; SSR<-SR; MD/RB/BL; IMASK; INTEVT<-vec; PC<-VBR+0x600"
   plane = "system"
 
   [[instr.slots]]
@@ -37,6 +40,10 @@
   [[instr.slots]]
     pc = "HOLD"
     sr = "INT_MASK"
+  [[instr.slots]]                 # INTEVT <- d8 event vector
+    xbus = "U"
+    sr = "INTEVT"
+    pc = "HOLD"
   [[instr.slots]]
     xbus = "VBR"
     ybus = "1536"
@@ -59,7 +66,7 @@
   name = "Error"
   format = "d8"
   opcode = "---- -001 dddd dddd"
-  operation = "SPC<-PC; SSR<-SR; MD/RB/BL; PC<-VBR+0x100"
+  operation = "SPC<-PC; SSR<-SR; MD/RB/BL; EXPEVT<-0x100; PC<-VBR+0x100"
   plane = "system"
 
   [[instr.slots]]
@@ -76,6 +83,10 @@
     zbus = "SSR"
     zbus_sel = "Y"
     sr = "EXCEPTION"
+  [[instr.slots]]                 # EXPEVT <- 0x100 (write address error)
+    xbus = "256"
+    sr = "EXPEVT"
+    pc = "HOLD"
   [[instr.slots]]
     xbus = "VBR"
     ybus = "256"
@@ -98,7 +109,7 @@
   name = "Slot Illegal"
   format = "d8"
   opcode = "---- -110 dddd dddd"
-  operation = "SPC<-PC; SSR<-SR; MD/RB/BL; PC<-VBR+0x100"
+  operation = "SPC<-PC; SSR<-SR; MD/RB/BL; EXPEVT<-0x1A0; PC<-VBR+0x100"
   plane = "system"
 
   [[instr.slots]]
@@ -114,6 +125,10 @@
     zbus = "SSR"
     zbus_sel = "Y"
     sr = "EXCEPTION"
+  [[instr.slots]]                 # EXPEVT <- 0x1A0
+    xbus = "416"
+    sr = "EXPEVT"
+    pc = "HOLD"
   [[instr.slots]]
     xbus = "VBR"
     ybus = "256"
@@ -136,7 +151,7 @@
   name = "General Illegal"
   format = "d8"
   opcode = "---- -111 dddd dddd"
-  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; PC<-VBR+0x100"
+  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x180; PC<-VBR+0x100"
   plane = "system"
 
   [[instr.slots]]
@@ -152,6 +167,10 @@
     zbus = "SSR"
     zbus_sel = "Y"
     sr = "EXCEPTION"
+  [[instr.slots]]                 # EXPEVT <- 0x180
+    xbus = "384"
+    sr = "EXPEVT"
+    pc = "HOLD"
   [[instr.slots]]
     xbus = "VBR"
     ybus = "256"
@@ -170,12 +189,12 @@
   [[instr.slots]]
 
 # ---- TRAPA #imm (SPC = next instruction; all imm vector to VBR+0x100; the
-#      handler reads TRA (Phase B) to recover imm) ----
+#      handler reads TRA to recover imm) ----
 [[instr]]
   name = "TRAPA #imm"
   format = "i8"
   opcode = "1100 0011 iiii iiii"
-  operation = "SPC<-PC; SSR<-SR; MD/RB/BL; PC<-VBR+0x100"
+  operation = "SPC<-PC; SSR<-SR; MD/RB/BL; EXPEVT<-0x160; TRA<-imm<<2; PC<-VBR+0x100"
 
   [[instr.slots]]
     alu_y = "0"
@@ -190,6 +209,14 @@
     zbus = "SSR"
     zbus_sel = "Y"
     sr = "EXCEPTION"
+  [[instr.slots]]                 # EXPEVT <- 0x160
+    xbus = "352"
+    sr = "EXPEVT"
+    pc = "HOLD"
+  [[instr.slots]]                 # TRA <- imm << 2  (U*4 = op.code(7:0) << 2)
+    xbus = "U*4"
+    sr = "TRA"
+    pc = "HOLD"
   [[instr.slots]]
     xbus = "VBR"
     ybus = "256"

@@ -23,7 +23,8 @@ entity cpu is
    event_o      : out cpu_event_o_t;
    event_i      : in  cpu_event_i_t;
    cop_o        : out cop_o_t;
-   cop_i        : in  cop_i_t);
+   cop_i        : in  cop_i_t;
+   priv_o       : out cpu_priv_o_t := NULL_PRIV_O);  -- SH-4 EXPEVT/INTEVT/TRA (J4)
 end entity cpu;
 
 architecture stru of cpu is 
@@ -89,7 +90,8 @@ begin
       illegal_delay_slot => illegal_delay_slot,
       illegal_instr => illegal_instr,
       copreg => copreg,
-      cop_i => cop_i, cop_o => cop_o);
+      cop_i => cop_i, cop_o => cop_o,
+      priv_o => priv_o);
 
   coproc.cpu_data_mux <= coproc_decode.cpu_data_mux when COPRO_DECODE
                          else DBUS;

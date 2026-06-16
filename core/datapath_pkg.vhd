@@ -61,6 +61,7 @@ package datapath_pack is
       illegal_instr : out std_logic;
       copreg      : in std_logic_vector(7 downto 0);
       cop_i       : in cop_i_t;
-      cop_o       : out cop_o_t);
+      cop_o       : out cop_o_t;
+      priv_o      : out cpu_priv_o_t := NULL_PRIV_O);  -- SH-4 EXPEVT/INTEVT/TRA (J4)
    end component datapath;
 end package;

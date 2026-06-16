@@ -27,6 +27,9 @@ begin
             "00000000000000000000000000" & op.code(3 downto 0) & "00" when IMM_U_4_2,
             x"000000" & op.code(7 downto 0) when IMM_U_8_0,
             "00000000000000000000000" & op.code(7 downto 0) & "0" when IMM_U_8_1,
+{{- range .ExtraImmConsts }}
+            {{ .VHDL }} when {{ .Literal }},
+{{- end }}
             "0000000000000000000000" & op.code(7 downto 0) & "00" when IMM_U_8_2;
     -- Sign extend parts of opcode
     process(op)

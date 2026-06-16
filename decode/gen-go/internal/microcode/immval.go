@@ -87,6 +87,21 @@ func ImmLiteralToVHDL(lit string) string {
 	case "IMM_S_12_1":
 		return "imms_12_1"
 	}
+	// General numeric constants: IMM_P<N> / IMM_N<N> for any N. The
+	// explicit cases above are kept for low-churn review, but this
+	// fallback produces byte-identical output for them (e.g. IMM_P16 ->
+	// x"00000010", IMM_N16 -> x"fffffff0") and extends the immediate set
+	// to arbitrary constants (IMM_P256 -> x"00000100"), which PM3+ needs.
+	if s, ok := strings.CutPrefix(lit, "IMM_P"); ok {
+		if n, err := strconv.ParseUint(s, 10, 32); err == nil {
+			return fmt.Sprintf(`x"%08x"`, uint32(n))
+		}
+	}
+	if s, ok := strings.CutPrefix(lit, "IMM_N"); ok {
+		if n, err := strconv.ParseUint(s, 10, 32); err == nil {
+			return fmt.Sprintf(`x"%08x"`, uint32(-int64(n))) // two's complement
+		}
+	}
 	return ""
 }
 
@@ -312,5 +327,45 @@ func CollectImmVals(s *spec.Spec) []ImmVal {
 	out = append(out, positives...)
 	out = append(out, negatives...)
 	out = append(out, structuredOrder...)
+
+	// System-plane immediates are excluded from the canonical collection
+	// above (the Clojure port's behaviour: system instructions reuse the
+	// same constants as non-system ones). That holds for every constant in
+	// production — but a system instruction MAY introduce a numeric
+	// immediate used nowhere else (PM3's VBR+0x100 fixed-vector offset is
+	// the first). Such a constant must still be declared in immval_t so the
+	// simple/direct decoders can name it. Collect any system-only numeric
+	// immediates and append them at the END, sorted, so the existing order
+	// — and thus byte-identical output for the production spec, where this
+	// set is empty — is preserved.
+	var systemExtras []ImmVal
+	for _, instr := range s.Instrs {
+		if instr.Plane != "system" {
+			continue
+		}
+		for _, slot := range instr.Slots {
+			for _, field := range []string{"alu_y", "xbus", "ybus"} {
+				raw := slot[field]
+				if raw == "" {
+					continue
+				}
+				v, ok := ParseImmToml(instr.Format, raw)
+				if !ok || seen[v] {
+					continue
+				}
+				seen[v] = true
+				// Only numeric constants are appended here. A system-only
+				// structured immediate (opcode-field extraction) would also
+				// need decoder-template support, which is out of scope until
+				// one actually appears.
+				if v.Kind == ImmNumeric {
+					systemExtras = append(systemExtras, v)
+				}
+			}
+		}
+	}
+	sort.Slice(systemExtras, func(i, j int) bool { return systemExtras[i].N < systemExtras[j].N })
+	out = append(out, systemExtras...)
+
 	return out
 }

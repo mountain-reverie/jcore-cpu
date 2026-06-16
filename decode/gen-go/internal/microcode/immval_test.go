@@ -114,18 +114,57 @@ func TestImmLiteralToVHDL(t *testing.T) {
 		{"IMM_S_8_0", "imms_8_0"},
 		{"IMM_S_8_1", "imms_8_1"},
 		{"IMM_S_12_1", "imms_12_1"},
-		// Unrecognized literals must return the empty string.
+		// General numeric constants — any IMM_P<N>/IMM_N<N> expands to a
+		// 32-bit hex vector via the numeric fallback (not just the
+		// predefined ±{1,2,4,8,16}). The predefined cases above remain
+		// byte-identical to what the fallback would produce.
+		{"IMM_P3", `x"00000003"`},    // not in the explicit switch
+		{"IMM_P256", `x"00000100"`},  // 0x100 — PM3 fixed-vector offset
+		{"IMM_P352", `x"00000160"`},  // 0x160 — PM3 EXPEVT code
+		{"IMM_P1536", `x"00000600"`}, // 0x600 — PM3 fixed-vector offset
+		{"IMM_N256", `x"ffffff00"`},  // -256 two's complement
+		// Unrecognized / non-numeric literals must return the empty string.
 		{"", ""},
 		{"IMM_UNKNOWN", ""},
 		{"imm_zero", ""},   // case-sensitive
-		{"IMM_P3", ""},     // not in the switch
-		{"IMM_U_4_3", ""},  // not in the switch
-		{"IMM_S_16_0", ""}, // not in the switch
+		{"IMM_U_4_3", ""},  // structured, not numeric — stays empty
+		{"IMM_S_16_0", ""}, // structured, not numeric — stays empty
+		{"IMM_PXYZ", ""},   // IMM_P prefix but non-numeric tail — stays empty
+		{"IMM_N", ""},      // empty numeric tail — stays empty
 	}
 	for _, c := range cases {
 		got := ImmLiteralToVHDL(c.lit)
 		if got != c.want {
 			t.Errorf("ImmLiteralToVHDL(%q) = %q, want %q", c.lit, got, c.want)
+		}
+	}
+}
+
+// TestImmLiteralToVHDL_TotalOverCollected asserts that ImmLiteralToVHDL is
+// total over every immval_t literal that CollectImmVals can produce for the
+// production spec AND the J4 (sh4) overlay profile. Any literal that expands
+// to "" would make the direct decoder emit a bare enum into a
+// std_logic_vector context, which fails to elaborate. This invariant guards
+// the whole class at go-test speed (no GHDL needed): adding a microcode
+// immediate the expander can't represent fails here immediately.
+func TestImmLiteralToVHDL_TotalOverCollected(t *testing.T) {
+	profiles := []struct {
+		name     string
+		overlays []string
+	}{
+		{"production", nil},
+		{"j4", []string{"../../spec/sh4"}},
+	}
+	for _, p := range profiles {
+		s, err := spec.LoadProfile("../../spec", p.overlays...)
+		if err != nil {
+			t.Fatalf("LoadProfile(%s): %v", p.name, err)
+		}
+		for _, iv := range CollectImmVals(s) {
+			lit := iv.Literal()
+			if ImmLiteralToVHDL(lit) == "" {
+				t.Errorf("[%s] ImmLiteralToVHDL(%q) is empty — direct decoder will not elaborate", p.name, lit)
+			}
 		}
 	}
 }

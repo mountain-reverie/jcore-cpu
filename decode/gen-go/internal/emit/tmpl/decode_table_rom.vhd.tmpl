@@ -297,6 +297,9 @@
             x"0000000" & op.code(3 downto 0) when "01010",
             "000000000000000000000000000" & op.code(3 downto 0) & "0" when "01011",
             "00000000000000000000000000" & op.code(3 downto 0) & "00" when "01100",
+{{- range .ExtraImmConsts }}
+            {{ .VHDL }} when "{{ .RomCode }}",
+{{- end }}
             x"00000000" when others;
     ilevel_cap <= line(60);
     id.ifadsel <= line(61);

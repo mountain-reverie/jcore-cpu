@@ -1,4 +1,5 @@
 register_tap
+register_ebr_tap
 mult_tap
 mult_seq_tap
 divider_tap

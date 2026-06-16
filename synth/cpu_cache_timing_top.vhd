@@ -21,9 +21,10 @@ use work.data_bus_pack.all;
 use work.cache_pack.all;
 
 entity cpu_cache_timing_top is
-  generic (SAME_CLOCK : boolean := false);
+  -- No generic: the cache CDC form comes from the cache_clkmode package the
+  -- build analyzes (sc/dc), so ghdl bakes the constant and yosys sees no params.
   port ( clk125 : in  std_logic;   -- cpu + cache cpu-side clock
-         clk200 : in  std_logic;   -- cache mem-side clock (= clk125 if SAME_CLOCK)
+         clk200 : in  std_logic;   -- cache mem-side clock (= clk125 if single-clock)
          rst    : in  std_logic;
          ti     : in  std_logic;    -- serial entropy in (keeps inputs non-constant)
          sout   : out std_logic );  -- serial reduction out (keeps outputs observed)
@@ -62,7 +63,7 @@ architecture timing of cpu_cache_timing_top is
   signal ic_ctrl, dc_ctrl : cache_ctrl_t;
   signal dc_snpc_o : dcache_snoop_io_t;
 begin
-  -- harness-driven cpu inputs (debug/event/cop) — same scheme as cpu_timing_top
+  -- harness-driven cpu inputs (debug/event/cop) -- same scheme as cpu_timing_top
   debug_i.en   <= acc(2);
   debug_i.cmd  <= cpu_debug_cmd_t'val(to_integer(unsigned(acc(4 downto 3))));
   debug_i.ir   <= acc(15 downto 0);
@@ -93,7 +94,7 @@ begin
                cop_o => cop_o, cop_i => cop_i );
 
   u_icache : icache_adapter
-    generic map (SAME_CLOCK => SAME_CLOCK)
+   
     port map ( clk125 => clk125, clk200 => clk200, rst => rst,
                ctrl => ic_ctrl,
                ibus_o => inst_o, ibus_i => inst_i,
@@ -101,7 +102,7 @@ begin
                dbus_i => ic_ddr_i, dbus_ack_r => acc(23) );
 
   u_dcache : dcache_adapter
-    generic map (SAME_CLOCK => SAME_CLOCK)
+   
     port map ( clk125 => clk125, clk200 => clk200, rst => rst,
                ctrl => dc_ctrl,
                ibus_o => db_o, lock => db_lock, ibus_i => db_i,

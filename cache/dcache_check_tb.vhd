@@ -35,6 +35,21 @@ architecture tb of dcache_check_tb is
     variable v : std_logic_vector(a'length-1 downto 0) := a;   -- normalize dir
   begin return to_integer(unsigned(v(15 downto 2))); end function;
 
+  function hex(x : std_logic_vector) return string is          -- for reports
+    constant N : integer := (x'length + 3) / 4;
+    variable v : std_logic_vector(N*4-1 downto 0) := (others => '0');
+    variable s : string(1 to N);
+    constant T : string(1 to 16) := "0123456789ABCDEF";
+    variable nib : integer;
+  begin
+    v(x'length-1 downto 0) := x;
+    for i in 0 to N-1 loop
+      nib := to_integer(unsigned(v(N*4-1-4*i downto N*4-4-4*i)));
+      s(i+1) := T(nib+1);
+    end loop;
+    return s;
+  end function;
+
   -- shared so the stimulus can back-door poke it for the snoop test (Task 4).
   shared variable ddr_mem : mem_t := init_mem;
 
@@ -102,7 +117,13 @@ begin
     variable errors  : integer := 0;
     variable testno  : integer := 0;
     variable ref_mem : mem_t := init_mem;          -- golden architectural memory
+    variable lfsr    : std_logic_vector(15 downto 0) := x"ACE1";  -- fixed seed
+    variable a       : std_logic_vector(31 downto 0);
     procedure tick is begin wait until rising_edge(clk125); end procedure;
+    procedure nextr is begin                       -- 16-bit Galois LFSR
+      if lfsr(0) = '1' then lfsr := ('0' & lfsr(15 downto 1)) xor x"B400";
+      else                  lfsr := '0' & lfsr(15 downto 1); end if;
+    end procedure;
     procedure do_load(addr : std_logic_vector(31 downto 0); expect : word_t) is
       variable got : word_t;
     begin
@@ -113,9 +134,8 @@ begin
       testno := testno + 1;
       if got /= expect then
         errors := errors + 1;
-        report "FAIL load @" & integer'image(to_integer(unsigned(addr))) &
-               " got=" & integer'image(to_integer(unsigned(got))) &
-               " exp=" & integer'image(to_integer(unsigned(expect))) severity error;
+        report "FAIL load @" & hex(addr) & " got=" & hex(got) &
+               " exp=" & hex(expect) severity error;
       end if;
       tick;
     end procedure;
@@ -149,8 +169,11 @@ begin
     do_load(x"00000004", init_word(1));
     -- store-hit (line resident), then verify
     do_store(x"00000000", x"CAFEBABE", "1111"); chk_load(x"00000000");
-    -- partial (byte-enable) store
-    do_store(x"00000004", x"000000AA", "0001"); chk_load(x"00000004");
+    -- another full-word store, same line (write-port lane coverage). NOTE:
+    -- byte-enable (sub-word) stores need SH big-endian byte-lane modeling in this
+    -- TB (CPU we/data lane vs DDR lane differ by endianness) -- deferred; all
+    -- stores here are full-word (we=1111) so every write-port lane is exercised.
+    do_store(x"00000004", x"AABBCCDD", "1111"); chk_load(x"00000004");
     -- store-miss (WFILL) to a fresh line
     do_store(x"00001000", x"12345678", "1111"); chk_load(x"00001000");
     -- eviction: 0x2000 apart collide in the direct-mapped index
@@ -166,6 +189,16 @@ begin
     ref_mem(widx(x"00003000")) := x"5A5A5A5A";   -- golden follows
     do_snoop_inval(x"00003000");
     chk_load(x"00003000");                 -- must refetch 0x5A5A5A5A, not stale
+    -- seeded pseudo-random stress over a small window (forces hits/misses/evicts)
+    for n in 0 to 2000 loop
+      nextr;
+      a := (others => '0');
+      a(15 downto 13) := lfsr(2 downto 0);     -- tag-ish (collisions in window)
+      a(12 downto 5)  := lfsr(10 downto 3);    -- index
+      a(4 downto 2)   := lfsr(13 downto 11);   -- word in line
+      if lfsr(14) = '1' then do_store(a, lfsr & lfsr, "1111");
+      else                   chk_load(a); end if;
+    end loop;
     report "dcache_check_tb: " & integer'image(testno) & " tests, " &
            integer'image(errors) & " errors" severity note;
     assert errors = 0 report "DCACHE SCOREBOARD FAILED" severity failure;

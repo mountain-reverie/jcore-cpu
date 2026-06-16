@@ -47,7 +47,11 @@ ENTRY(start)
         nop
 
         ! point VBR at our exception vector base
-        mov.l   p_vbr_base, r0
+#if CONFIG_PRIV_ARCH
+        mov.l   p_vbr_fixed, r0   ! J4 (SH-4 fixed vector): VBR+0x100 == handler
+#else
+        mov.l   p_vbr_base, r0    ! J2: SH-2 indirect vector table
+#endif
         ldc     r0, vbr        ! privileged, but MD=1 here -> must NOT trap
 
         ! drop to user mode: clear MD (SR bit 30)
@@ -104,6 +108,7 @@ ENTRY(exception_handler)
 
         .align 2
 p_vbr_base:    .long vbr_base
+p_vbr_fixed:   .long exception_handler - 0x100   ! J4: VBR+0x100 == handler
 p_mdmask:      .long 0xBFFFFFFF
 p_rbclear:     .long 0xDFFFFFFF
 p_test_result: .long TEST_RESULT_ADDRESS

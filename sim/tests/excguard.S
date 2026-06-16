@@ -34,11 +34,12 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-        ! VBR -> direct handler table (every entry = the handler)
-        mov.l   p_myvbr, r0
-        ldc     r0, vbr
 #if CONFIG_PRIV_ARCH
-        ! J4: establish RB=0 and drop to user mode (clear MD) so the handler
+        ! J4 (SH-4 fixed-vector model): point VBR so that VBR+0x100 (the
+        ! general-exception vector) is the handler CODE itself.
+        mov.l   p_vbr_fixed, r0
+        ldc     r0, vbr
+        ! establish RB=0 and drop to user mode (clear MD) so the handler
         ! observes the entry's MD 0->1 transition rather than the reset MD=1.
         stc     sr, r3
         mov.l   p_rbclear, r4
@@ -49,6 +50,11 @@ ENTRY(start)
         nop
         nop
         nop
+#else
+        ! J2: VBR -> direct handler table (every entry = the handler), reached
+        ! via the SH-2 indirect vector fetch.
+        mov.l   p_myvbr, r0
+        ldc     r0, vbr
 #endif
         trapa   #0
         bra     _fail_loop         ! TRAPA must vector to the handler; if we get
@@ -82,6 +88,7 @@ ENTRY(_fail_loop)
         nop
 
         .align 2
+p_vbr_fixed:   .long exception_handler - 0x100   ! J4: VBR+0x100 == handler
 p_myvbr:       .long _myvbr
 p_mdmask:      .long 0xBFFFFFFF
 p_rbclear:     .long 0xDFFFFFFF

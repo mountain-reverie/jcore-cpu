@@ -10,7 +10,7 @@ CONFIG_PRIV_ARCH ?= 0
 CFLAGS = -m2 -g -Os -Wall -Iinclude -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH)
 LDFLAGS = -T sh32.x -Map main.map
 
-all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img
+all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img
 
 interrupts.elf: interrupts.o
 rte.elf: rte.o
@@ -18,6 +18,7 @@ privmode.elf: privmode.o
 banktest.elf: banktest.o
 exctest.elf: exctest.o
 excguard.elf: excguard.o
+trapatest.elf: trapatest.o
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@

@@ -3,10 +3,9 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 use work.cache_pack.all;
+use work.cache_clkmode.all;  -- CACHE_SAME_CLOCK (true=single-clock FPGA)
 
-entity icache is
-   generic (SAME_CLOCK : boolean := false);  -- true: single-clock (clk125=clk200)
-   port (
+entity icache is port (
    clk125 : in std_logic;
    clk200 : in std_logic;
    rst : in std_logic;
@@ -170,7 +169,7 @@ thisuc_c <= thisuc;
   -- reference). Single-clock (SAME_CLOCK): a negedge FF -- same 0.5-cycle delay
   -- (thisbc_r changes only on the rising edge, so it is stable through the low
   -- phase) but a real flip-flop, so ghdl-yosys infers no combinational loop.
-  c2_r3_latch : if not SAME_CLOCK generate
+  c2_r3_latch : if not CACHE_SAME_CLOCK generate
     c2_r3 : process(clk125, thisbc_r) -- transparent latch 0.5 cycle delay
     begin
       if clk125 = '0' then
@@ -178,7 +177,7 @@ thisuc_c <= thisuc;
       end if;
     end process;
   end generate;
-  c2_r3_ff : if SAME_CLOCK generate
+  c2_r3_ff : if CACHE_SAME_CLOCK generate
     c2_r3 : process(clk125)            -- 0.5 cycle delay (negedge FF, single-clock)
     begin
       if falling_edge(clk125) then

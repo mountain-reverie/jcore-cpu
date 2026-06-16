@@ -66,6 +66,14 @@ package mult_pkg is
     mach    : std_logic_vector(31 downto 0);
     macl    : std_logic_vector(31 downto 0);
     busy    : std_logic;
+    -- slot_stall: J1 only. mult(seq) holds this high while it iterates so the
+    -- datapath stretches the execution slot (freezing the WHOLE pipeline --
+    -- including the writeback stage, where MAC.L issues its command). Without
+    -- it, back-to-back MAC.L stream their WB-stage commands faster than the
+    -- ~32-cycle sequential multiplier can accept them and get silently dropped.
+    -- mult(stru) ties it to '0' (it finishes in a few cycles, so J2/J4 are
+    -- unaffected -- the next mult op always finds the unit free).
+    slot_stall : std_logic;
   end record;
 
   type mult_reg_t is record

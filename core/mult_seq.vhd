@@ -89,6 +89,15 @@ begin
   y.busy <= '1' when r.sstate /= S_IDLE else '0';
   y.mach <= r.mach;
   y.macl <= r.macl;
+  -- slot_stall drives the datapath slot-stretch (J1). High whenever a command
+  -- is in flight, so the datapath holds slot_o low and FREEZES the whole
+  -- pipeline (incl. the WB stage from which MAC.L issues) until this multiply
+  -- finishes. The command being accepted shifts out of the WB pipeline on the
+  -- accept edge (slot='1'), so it is not re-accepted; the next mult op's
+  -- command is held frozen in the WB pipeline until the unit is free again.
+  -- It is a function of the REGISTERED state only -> no combinational loop
+  -- through slot_o.
+  y.slot_stall <= '1' when r.sstate /= S_IDLE else '0';
 
   comb : process(r, slot, a)
     variable v       : seq_reg_t;
@@ -241,16 +250,21 @@ begin
     -- the '*' operator.
     -------------------------------------------------------------------
     if r.sstate = S_RUN then
-      if slot = '1' then
-        if r.mplier(0) = '1' then
-          v.acc := r.acc + r.mcand;       -- the ONE reused adder
-        end if;
-        v.mcand  := r.mcand sll 1;
-        v.mplier := r.mplier srl 1;
-        v.count  := r.count - 1;
-        if r.count = 1 then               -- last iteration completes here
-          v.sstate := S_DONE;
-        end if;
+      -- Iterate every clock, NOT gated on slot. While busy, slot_stall holds
+      -- the datapath slot low (the pipeline, including this multiply's command
+      -- in the WB pipeline, is frozen), so gating the step on slot='1' would
+      -- deadlock (the FSM would never advance, busy stays high, slot stays
+      -- low). The operands (acc/mcand/mplier/count) are internal registers, so
+      -- no slot is needed to step. Mirrors shifter(seq), which likewise steps
+      -- on the clock while the slot is stretched low.
+      if r.mplier(0) = '1' then
+        v.acc := r.acc + r.mcand;         -- the ONE reused adder
+      end if;
+      v.mcand  := r.mcand sll 1;
+      v.mplier := r.mplier srl 1;
+      v.count  := r.count - 1;
+      if r.count = 1 then                 -- last iteration completes here
+        v.sstate := S_DONE;
       end if;
     end if;
 

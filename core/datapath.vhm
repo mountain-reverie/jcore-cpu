@@ -34,6 +34,10 @@ entity datapath is
 		     macin2 : out std_logic_vector(31 downto 0);
 		     mach : in std_logic_vector(31 downto 0);
 		     macl : in std_logic_vector(31 downto 0);
+		     -- J1: high while mult(seq) iterates -> stretch the slot so the
+		     -- frozen pipeline cannot drain a back-to-back MAC.L command into
+		     -- the busy multiplier. '0' for mult(stru) (J2/J4 unaffected).
+		     mult_stall : in std_logic;
 		     mac_s : out std_logic;
 		     t_bcc : out std_logic;
 		     ibit : out std_logic_vector(3 downto 0);
@@ -264,7 +268,7 @@ begin
 
 	ibit <= sr.int_mask;
 
-	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy)
+	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall)
 	  register this when clk='1' and clk'event reset when rst='1';
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
@@ -356,7 +360,7 @@ begin
           -- whole pipeline (incl. this shift in EX) until it finishes. The
           -- shifter steps on the clock, so it advances while slot_o is held
           -- low; comb shifter ties shift_busy='0' (no effect on J2/J4).
-          if this.data_o.en = '0' and slot_inst_en = '0' and this.debug_state /= READY and shift_busy = '0' then
+          if this.data_o.en = '0' and slot_inst_en = '0' and this.debug_state /= READY and shift_busy = '0' and mult_stall = '0' then
             -- present data read by completed transactions
             if this.m_en = '1' then
               this.m_dr := this.m_dr_next;

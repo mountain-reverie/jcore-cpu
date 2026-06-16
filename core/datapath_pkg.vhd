@@ -49,6 +49,8 @@ package datapath_pack is
       macin2      : out std_logic_vector(31 downto 0);
       mach        : in std_logic_vector(31 downto 0);
       macl        : in std_logic_vector(31 downto 0);
+      -- J1: high while mult(seq) iterates -> stretch the slot. '0' for mult(stru).
+      mult_stall  : in std_logic;
       mac_s       : out std_logic;
       t_bcc       : out std_logic;
       ibit        : out std_logic_vector(3 downto 0);

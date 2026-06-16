@@ -43,8 +43,8 @@ ENTRY(start)
         nop
         nop
 
-        ! VBR = our exception vector base
-        mov.l   p_vbr_base, r0
+        ! VBR (SH-4 fixed vector): VBR+0x100 == exception_handler
+        mov.l   p_vbr_fixed, r0
         ldc     r0, vbr
 
         ! sentinel = 0
@@ -105,6 +105,7 @@ ENTRY(_fail_loop)
 
         .align 2
 p_vbr_base:    .long vbr_base
+p_vbr_fixed:   .long exception_handler - 0x100   ! J4: VBR+0x100 == handler
 p_mdmask:      .long 0xBFFFFFFF
 p_rbclear:     .long 0xDFFFFFFF
 p_mdbit:       .long 0x40000000

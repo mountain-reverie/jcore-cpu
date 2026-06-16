@@ -25,10 +25,11 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-        mov.l   p_myvbr, r0
-        ldc     r0, vbr
 #if CONFIG_PRIV_ARCH
-        ! J4: establish RB=0, drop to user mode (clear MD bit 30)
+        ! J4 (SH-4 fixed vector): point VBR so VBR+0x100 == exception_handler
+        mov.l   p_vbr_fixed, r0
+        ldc     r0, vbr
+        ! establish RB=0, drop to user mode (clear MD bit 30)
         stc     sr, r3
         mov.l   p_rbclear, r4
         and     r4, r3
@@ -38,6 +39,10 @@ ENTRY(start)
         nop
         nop
         nop
+#else
+        ! J2: VBR -> indirect handler table
+        mov.l   p_myvbr, r0
+        ldc     r0, vbr
 #endif
         ! sentinel = 0 — also the store that stalls the fetch right before TRAPA
         mov.l   p_sentinel, r1
@@ -75,6 +80,7 @@ ENTRY(_fail_loop)
         nop
 
         .align 2
+p_vbr_fixed:   .long exception_handler - 0x100   ! J4: VBR+0x100 == handler
 p_myvbr:       .long _myvbr
 p_mdmask:      .long 0xBFFFFFFF
 p_rbclear:     .long 0xDFFFFFFF

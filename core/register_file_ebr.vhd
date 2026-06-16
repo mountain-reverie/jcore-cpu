@@ -55,6 +55,10 @@ begin
   -- identical to register_file(flops)/two_bank.
   dout_a <= read_with_forwarding(addr_ra, q_a, wb_pipe, ex_pipes);
   dout_b <= read_with_forwarding(addr_rb, q_b, wb_pipe, ex_pipes);
+  -- reg0 is a rising-edge flop (vs q_a/q_b's falling-edge latch) on purpose:
+  -- R0's just-committed value is always served by the forwarding overlay, never
+  -- read straight from reg0 in the same slot it is written, so the half-clock
+  -- difference in when reg0 updates is never observable -- same result as q.
   dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes);
 
   -- Synchronous block-RAM read on the FALLING edge (EBR inference + in-slot

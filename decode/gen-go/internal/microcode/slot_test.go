@@ -463,3 +463,19 @@ func TestAssignSR_CaptureSelectors(t *testing.T) {
 		}
 	}
 }
+
+// TestAssignYBus_CauseRegs covers the PM3 STC read path: ybus = "EXPEVT"/
+// "INTEVT"/"TRA" selects the dedicated control register onto the y-bus.
+func TestAssignYBus_CauseRegs(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"EXPEVT", "SEL_EXPEVT"}, {"INTEVT", "SEL_INTEVT"}, {"TRA", "SEL_TRA"},
+	} {
+		out := AssignMap{}
+		if err := assignYBus(c.in, "", "", out); err != nil {
+			t.Fatalf("assignYBus(%q): %v", c.in, err)
+		}
+		if out[SigYbusSel] != c.want {
+			t.Errorf("ybus=%q -> ybus_sel=%q, want %q", c.in, out[SigYbusSel], c.want)
+		}
+	}
+}

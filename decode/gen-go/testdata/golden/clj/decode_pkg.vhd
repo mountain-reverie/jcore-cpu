@@ -29,7 +29,7 @@ package decode_pack is
     type sr_sel_t is (SEL_PREV, SEL_WBUS, SEL_ZBUS, SEL_DIV0U, SEL_ARITH, SEL_LOGIC, SEL_INT_MASK, SEL_SET_T, SEL_EXCEPTION, SEL_EXPEVT, SEL_INTEVT, SEL_TRA);
     type t_sel_t is (SEL_CLEAR, SEL_SET, SEL_SHIFT, SEL_CARRY);
     type xbus_sel_t is (SEL_IMM, SEL_REG, SEL_PC);
-    type ybus_sel_t is (SEL_IMM, SEL_REG, SEL_MACH, SEL_MACL, SEL_PC, SEL_SR);
+    type ybus_sel_t is (SEL_IMM, SEL_REG, SEL_MACH, SEL_MACL, SEL_PC, SEL_SR, SEL_EXPEVT, SEL_INTEVT, SEL_TRA);
     type zbus_sel_t is (SEL_ARITH, SEL_LOGIC, SEL_SHIFT, SEL_MANIP, SEL_YBUS, SEL_WBUS);
     type operation_t is
         record

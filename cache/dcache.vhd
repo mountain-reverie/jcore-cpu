@@ -6,7 +6,9 @@ use work.cache_pack.all;
 use work.cpu2j0_pack.all;
 use work.data_bus_pack.all;
 
-entity dcache is port (
+entity dcache is
+   generic (SAME_CLOCK : boolean := false);  -- true: single-clock (clk125=clk200)
+   port (
    clk125 : in  std_logic;
    clk200 : in  std_logic;
    rst :    in  std_logic;
@@ -228,19 +230,43 @@ thisbc_c <= thisbc;
      end if;
   end process;
 
-  c2_r2 : process(clk200, thisbm_r) -- transparent latch 0.5 cycle delay
-  begin
-    if clk200 = '0' then
-      bmen_value_halfcb2 <= thisbm_r.en2(VALUE);
-    end if;
-  end process;
+  -- 0.5-cycle phase elements. Dual-clock: transparent latches (CDC phase
+  -- reference). Single-clock (SAME_CLOCK): negedge FFs -- same 0.5-cycle delay
+  -- (thisb*_r changes only on the rising edge) but real flip-flops, so
+  -- ghdl-yosys infers no combinational loop.
+  c2_r2_latch : if not SAME_CLOCK generate
+    c2_r2 : process(clk200, thisbm_r) -- transparent latch 0.5 cycle delay
+    begin
+      if clk200 = '0' then
+        bmen_value_halfcb2 <= thisbm_r.en2(VALUE);
+      end if;
+    end process;
+  end generate;
+  c2_r2_ff : if SAME_CLOCK generate
+    c2_r2 : process(clk200)            -- 0.5 cycle delay (negedge FF, single-clock)
+    begin
+      if falling_edge(clk200) then
+        bmen_value_halfcb2 <= thisbm_r.en2(VALUE);
+      end if;
+    end process;
+  end generate;
 
-  c2_r3 : process(clk125, thisbc_r) -- transparent latch 0.5 cycle delay
-  begin
-    if clk125 = '0' then
-      bcen_value_halfcb0 <= thisbc_r.en0(VALUE);
-    end if;
-  end process;
+  c2_r3_latch : if not SAME_CLOCK generate
+    c2_r3 : process(clk125, thisbc_r) -- transparent latch 0.5 cycle delay
+    begin
+      if clk125 = '0' then
+        bcen_value_halfcb0 <= thisbc_r.en0(VALUE);
+      end if;
+    end process;
+  end generate;
+  c2_r3_ff : if SAME_CLOCK generate
+    c2_r3 : process(clk125)            -- 0.5 cycle delay (negedge FF, single-clock)
+    begin
+      if falling_edge(clk125) then
+        bcen_value_halfcb0 <= thisbc_r.en0(VALUE);
+      end if;
+    end process;
+  end generate;
 
   -- output signal ------------------------------------------------------------
   mtoc2.b0enr    <= thisbc_r.en0(STABLE);

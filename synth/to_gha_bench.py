@@ -22,6 +22,12 @@ def canonical_variant(variant):
     unrecognised map to j2 (the baseline), so historical points stay on the
     bare J2 series."""
     v = (variant or "").lower()
+    # check the cpu+cache tags before the bare j2/j4 substrings ("j4c" contains
+    # "j4", "j2c" contains "j2").
+    if "j2c" in v:
+        return "j2c"
+    if "j4c" in v:
+        return "j4c"
     if "j1" in v:
         return "j1"
     if "j4" in v:
@@ -36,9 +42,12 @@ def convert(canon_paths):
             doc = json.load(f)
         target, variant = doc["target"], doc.get("variant", "")
         cvar = canonical_variant(variant)
-        # J2 keeps the bare name (continuous history); J1/J4 are suffixed so the
-        # action keys them as distinct series and compares each against itself.
-        suffix = "" if cvar == "j2" else " [%s]" % cvar
+        # J2 keeps the bare name (continuous history); the others are suffixed so
+        # the action keys them as distinct series and compares each against
+        # itself. cpu+cache get explicit "J2+cache"/"J4+cache" display labels.
+        _LABEL = {"j2": "", "j1": " [j1]", "j4": " [j4]",
+                  "j2c": " [J2+cache]", "j4c": " [J4+cache]"}
+        suffix = _LABEL.get(cvar, " [%s]" % cvar)
         for m in doc["metrics"]:
             entry = {
                 "name": "%s · %s%s" % (target, m["name"], suffix),

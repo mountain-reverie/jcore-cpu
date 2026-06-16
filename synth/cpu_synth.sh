@@ -74,7 +74,7 @@ FILES=(
 # config so the representative Fmax measures the selected variant, not always J2.
 # CPUTOP = the synth -top cell; CACHE=1 marks the cpu+cache variants (which add
 # the cache file chain + drive the SAME_CLOCK generic per backend).
-CPUTOP="cpu"; CACHE=0
+CPUTOP="cpu"; TIMINGCELL="cpu_timing_top"; CACHE=0
 case "$SYNTH_VARIANT" in
   j2)
     TOP="cpu_synth_direct"; TIMING_TOP="cpu_timing_j2"
@@ -99,7 +99,7 @@ case "$SYNTH_VARIANT" in
     fi
     ;;
   j2c|j4c)
-    CACHE=1; CPUTOP="cpu_cache_timing_top"
+    CACHE=1; CPUTOP="cpu_cache_timing_top"; TIMINGCELL="cpu_cache_timing_top"
     if [ "$SYNTH_VARIANT" = j4c ]; then
       TOP="cpu_cache_timing_j4"; FILES+=(synth/cpu_synth_j4_config.vhd)
     else
@@ -149,8 +149,8 @@ GHDL_BASE="ghdl --std=93 -fexplicit --ieee=synopsys --workdir=$WORK ${FILES[*]}"
 GEN=""
 if [ "$CACHE" = 1 ]; then
   case "$BACKEND" in
-    ecp5|ice40) GEN="-gSAME_CLOCK=true" ;;
-    *)          GEN="-gSAME_CLOCK=false" ;;
+    ecp5|ice40|timing) GEN="-gSAME_CLOCK=true" ;;   # all FPGA targets: single-clock
+    *)                 GEN="-gSAME_CLOCK=false" ;;  # asic: dual-clock
   esac
 fi
 
@@ -177,7 +177,7 @@ case "$BACKEND" in
     # register Fmax instead of the bare-core IO-scatter artifact. This netlist
     # is what the ECP5 timing regression gate measures. Elaborates the
     # per-variant harness config so J1/J4 measure their own core, not J2.
-    yosys -m ghdl -p "$GHDL_BASE -e $TIMING_TOP; synth_ecp5 -top cpu_timing_top; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_timing.json"
+    yosys -m ghdl -p "$GHDL_BASE -e $TIMING_TOP $GEN; synth_ecp5 -top $TIMINGCELL; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_timing.json"
     ;;
   ice40)
     # iCE40 up5k fit gauge. The bare cpu cannot P&R on up5k (too many
@@ -186,7 +186,7 @@ case "$BACKEND" in
     # IO). nextpnr-ice40 (run by the caller) then places & routes it on the up5k
     # and reports ICESTORM_LC/RAM/DSP utilisation + Fmax. Elaborates the
     # per-variant harness config so J1 measures its own core.
-    yosys -m ghdl -p "$GHDL_BASE -e $TIMING_TOP; synth_ice40 -dsp -top cpu_timing_top; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_ice40.json"
+    yosys -m ghdl -p "$GHDL_BASE -e $TIMING_TOP $GEN; synth_ice40 -dsp -top $TIMINGCELL; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_ice40.json"
     ;;
   *) echo "ERROR: unknown backend '$BACKEND' (want asic|ecp5|timing|ice40)" >&2; exit 1 ;;
 esac

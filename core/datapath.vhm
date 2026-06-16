@@ -55,6 +55,9 @@ end entity datapath;
 architecture stru of datapath is
 	subtype reg_t is std_logic_vector(31 downto 0);
 	signal gpf_zwd, pc, reg_x, reg_y, reg_0, xbus, ybus, ybus_temp, zbus, wbus : std_logic_vector(31 downto 0);
+	-- zbus as the multiplier operand mux (macin1/macin2) sees it: identical to
+	-- zbus except the SEL_SHIFT (shifter) source is a don't-care (see below).
+	signal zbus_mac : std_logic_vector(31 downto 0);
 	signal sr : sr_t;
 	-- regfile addresses after SH-4 bank remapping (pass-through on J2)
 	signal num_x_r, num_y_r, num_z_r, num_w_r : regnum_t;
@@ -249,6 +252,28 @@ begin
           ybus                                             when SEL_YBUS,
           wbus                                             when SEL_WBUS;
 
+        -- The multiplier operand mux (macin1/macin2) reads zbus only on
+        -- SEL_ZBUS, and no instruction ever co-asserts mac.sel=SEL_ZBUS with
+        -- z_sel=SEL_SHIFT: the only ZBUS-sourced multiplier reads are CLRMAC
+        -- (z_sel=SEL_LOGIC) and LDS Rm,MAC{H,L} (z_sel=SEL_YBUS); shift ops leave
+        -- mac.sel at its WBUS default. So the shifter output can never reach the
+        -- multiplier input in a single cycle. Feeding macin a zbus *view* with
+        -- the SEL_SHIFT source replaced by a don't-care is therefore exactly
+        -- equivalent, and it removes a large FALSE timing path
+        -- (regfile->shifter->zbus->macin->mult.rin) that otherwise dominates the
+        -- reported iCE40 Fmax. Keeping the other five sources (rather than a lean
+        -- 2-way logic_out/ybus mux) lets the ECP5 abc9 timing-driven flow keep the
+        -- multiplier-input path fast -- the lean form pulls the late logic_out
+        -- signal into the mult cone and regresses the ECP5 representative Fmax.
+        -- Logically identical for every variant.
+        with buses.z_sel select zbus_mac <=
+          arith_out(31 downto 0)                           when SEL_ARITH,
+          logic_out                                        when SEL_LOGIC,
+          (others => '-')                                  when SEL_SHIFT,
+          manip(xbus, ybus, func.alu.manip)                when SEL_MANIP,
+          ybus                                             when SEL_YBUS,
+          wbus                                             when SEL_WBUS;
+
 	-- Shifter: shift_b is {direction, magnitude[4:0]} = ybus(31) & ybus(4..0).
 	-- shift_sel ('1' when this EX op is a shift) gates shifter(seq)'s accept;
 	-- shifter(seq) busy stretches the slot below (multi-cycle hold). `start`
@@ -263,8 +288,8 @@ begin
 	  t_in => sr.t, op => func.shift,
 	  y => shift_y, t_out => sfto, busy => shift_busy);
 
-	with mac.sel1 select macin1 <= xbus when SEL_XBUS, zbus when SEL_ZBUS, wbus when others;
-	with mac.sel2 select macin2 <= ybus when SEL_YBUS, zbus when SEL_ZBUS, wbus when others;
+	with mac.sel1 select macin1 <= xbus when SEL_XBUS, zbus_mac when SEL_ZBUS, wbus when others;
+	with mac.sel2 select macin2 <= ybus when SEL_YBUS, zbus_mac when SEL_ZBUS, wbus when others;
 
 	ibit <= sr.int_mask;
 

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/j-core/jcore-cpu/decode/gen-go/internal/model"
@@ -14,21 +13,6 @@ import (
 // parenthesized comma-separated list: "(IMM_ZERO, IMM_P1, ...)".
 func vhdlEnumList(items []string) string {
 	return "(" + strings.Join(items, ", ") + ")"
-}
-
-// vhdlHexByte returns the VHDL hex byte literal x"NN".
-func vhdlHexByte(v uint8) string {
-	return fmt.Sprintf(`x"%02x"`, v)
-}
-
-// parseHex parses a lowercase hex string (e.g., "e2") into a uint8.
-// Returns 0 on empty or invalid input.
-func parseHex(s string) uint8 {
-	if s == "" {
-		return 0
-	}
-	v, _ := strconv.ParseUint(s, 16, 8)
-	return uint8(v)
 }
 
 // joinStr joins a slice of strings with a separator. Exposed as "join"

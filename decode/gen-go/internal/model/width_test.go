@@ -72,6 +72,47 @@ func TestBuildBodyAddrSentinel(t *testing.T) {
 	}
 }
 
+// TestSetOperationAddrWidth covers the operation_t.addr patch directly,
+// including the 9-bit width (which no real Build reaches yet) and the
+// not-found error path that guards against a silent no-op if the record or
+// field is ever renamed.
+func TestSetOperationAddrWidth(t *testing.T) {
+	addrType := func(p *Package) string {
+		for _, r := range p.Records {
+			if r.Name != "operation_t" {
+				continue
+			}
+			for _, f := range r.Fields {
+				if len(f.Names) == 1 && f.Names[0] == "addr" {
+					return f.Type
+				}
+			}
+		}
+		return ""
+	}
+
+	p8 := newStaticPackage()
+	if err := setOperationAddrWidth(p8, 8); err != nil {
+		t.Fatal(err)
+	}
+	if got := addrType(p8); got != "std_logic_vector(7 downto 0)" {
+		t.Errorf("8-bit operation_t.addr = %q, want std_logic_vector(7 downto 0)", got)
+	}
+
+	p9 := newStaticPackage()
+	if err := setOperationAddrWidth(p9, 9); err != nil {
+		t.Fatal(err)
+	}
+	if got := addrType(p9); got != "std_logic_vector(8 downto 0)" {
+		t.Errorf("9-bit operation_t.addr = %q, want std_logic_vector(8 downto 0)", got)
+	}
+
+	// Not-found path: a package without operation_t must error, not no-op.
+	if err := setOperationAddrWidth(&Package{}, 8); err == nil {
+		t.Error("setOperationAddrWidth on a package without operation_t: want error, got nil")
+	}
+}
+
 // TestProductionBuildIsEightBit is the end-to-end invariant: the real SH-2
 // spec fits the 8-bit microcode space, so AddressBits is 8 and the ROM is the
 // legacy 256 words. (This is what keeps base/J1/J2 byte-identical; the >256

@@ -15,8 +15,6 @@ var funcMap = template.FuncMap{
 	"formatString":  formatString,
 	"registerArgs":  registerArgs,
 	"vhdlEnumList":  vhdlEnumList,
-	"vhdlHexByte":   vhdlHexByte,
-	"parseHex":      parseHex,
 	"join":          joinStr,
 	"lastIdx":       lastIdx,
 	"allEnums":      allEnums,

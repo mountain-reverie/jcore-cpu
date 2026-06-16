@@ -16,6 +16,14 @@ NANGATE_LIB="${NANGATE_LIB:-/opt/nangate45/nangate45.lib}"
 TARGET_MHZ="${ECP5_TARGET_MHZ:-50}"
 PERIOD_NS="$(awk -v m="$TARGET_MHZ" 'BEGIN{printf "%.4f", 1000.0/m}')"
 
+# cpu+cache variants (j2c/j4c) have a different top (cpu_cache_timing_top) with
+# two clocks (clk125 cpu-side, clk200 mem-side); the bare cpu has one `clk`.
+SYNTH_VARIANT="${SYNTH_VARIANT:-j2}"
+case "$SYNTH_VARIANT" in
+  j2c|j4c) STA_TOP="cpu_cache_timing_top" ;;
+  *)       STA_TOP="cpu" ;;
+esac
+
 if [ ! -f "$OUT/cpu_asic.v" ]; then
   echo "WARN: $OUT/cpu_asic.v missing — run synth/cpu_synth.sh asic first; skipping STA" >&2
   exit 0
@@ -38,20 +46,29 @@ fi
 # + -noattr mirror regression.sh Step 7 to avoid escaped-identifier
 # concatenations that OpenSTA's Verilog reader cannot parse.
 # (Flattening loses per-module area; per-block ASIC area is a future refinement.)
-if ! yosys -p "read_verilog $OUT/cpu_asic.v; synth -top cpu -flatten; dfflibmap -liberty $NANGATE_LIB; abc -liberty $NANGATE_LIB; splitnets -ports; clean -purge; stat -liberty $NANGATE_LIB; write_verilog -noattr $OUT/cpu_asic_mapped.v" \
+if ! yosys -p "read_verilog $OUT/cpu_asic.v; synth -top $STA_TOP -flatten; dfflibmap -liberty $NANGATE_LIB; abc -liberty $NANGATE_LIB; splitnets -ports; clean -purge; stat -liberty $NANGATE_LIB; write_verilog -noattr $OUT/cpu_asic_mapped.v" \
      | tee "$OUT/cpu_asic_mapped_stat.txt"; then
   echo "WARN: yosys tech-map failed — ASIC timing absent" >&2
   exit 0
 fi
 
-# 2) Static timing. Virtual clock + real clk on the cpu's clk port at PERIOD_NS.
+# 2) Static timing. Virtual clock + the design clock(s) at PERIOD_NS. cpu+cache
+# is dual-clock (clk125 cpu-side / clk200 mem-side, asynchronous CDC so the
+# half-cycle/CDC paths are not timed across domains); the bare cpu has one clk.
+if [ "$STA_TOP" = "cpu_cache_timing_top" ]; then
+  CLOCKS_TCL="create_clock -name clk125 -period $PERIOD_NS [get_ports clk125]
+create_clock -name clk200 -period $PERIOD_NS [get_ports clk200]
+set_clock_groups -asynchronous -group {clk125} -group {clk200}"
+else
+  CLOCKS_TCL="create_clock -name clk -period $PERIOD_NS [get_ports clk]"
+fi
 TCL="$(mktemp)"; trap 'rm -f "$TCL"' EXIT
 cat > "$TCL" <<TCL
 read_liberty $NANGATE_LIB
 read_verilog $OUT/cpu_asic_mapped.v
-link_design cpu
+link_design $STA_TOP
 create_clock -name virt_clk -period $PERIOD_NS
-create_clock -name clk -period $PERIOD_NS [get_ports clk]
+$CLOCKS_TCL
 set_input_delay  -clock virt_clk 0 [all_inputs]
 set_output_delay -clock virt_clk 0 [all_outputs]
 report_checks -path_delay max -format short

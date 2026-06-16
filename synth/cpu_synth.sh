@@ -54,6 +54,7 @@ FILES=(
   core/register_file.vhd
   core/register_file_flops.vhd
   core/register_file_two_bank.vhd
+  core/register_file_ebr.vhd
   decode/decode.vhd
   decode/decode_body.vhd
   decode/decode_table.vhd

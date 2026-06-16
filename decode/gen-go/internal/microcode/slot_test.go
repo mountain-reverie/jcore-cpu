@@ -446,3 +446,20 @@ func TestAssignSlotTRAPA(t *testing.T) {
 	assertSignal(t, am, SigRegnumZ, "R15")
 	assertSignal(t, am, SigWrregZ, "1")
 }
+
+// TestAssignSR_CaptureSelectors covers the PM3 SH-4 cause-capture selectors:
+// sr = "EXPEVT"/"INTEVT"/"TRA" latches the slot immediate into the dedicated
+// control register via sr_sel.
+func TestAssignSR_CaptureSelectors(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"EXPEVT", "SEL_EXPEVT"}, {"INTEVT", "SEL_INTEVT"}, {"TRA", "SEL_TRA"},
+	} {
+		out := AssignMap{}
+		if err := assignSR(c.in, out); err != nil {
+			t.Fatalf("assignSR(%q): %v", c.in, err)
+		}
+		if out[SigSrSel] != c.want {
+			t.Errorf("sr=%q -> sr_sel=%q, want %q", c.in, out[SigSrSel], c.want)
+		}
+	}
+}

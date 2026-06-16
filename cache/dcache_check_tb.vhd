@@ -31,8 +31,9 @@ architecture tb of dcache_check_tb is
   function init_mem return mem_t is
     variable m : mem_t;
   begin for i in 0 to MEMW-1 loop m(i) := init_word(i); end loop; return m; end function;
-  function widx(a : std_logic_vector) return integer is
-  begin return to_integer(unsigned(a(15 downto 2))); end function;  -- word index
+  function widx(a : std_logic_vector) return integer is        -- word index
+    variable v : std_logic_vector(a'length-1 downto 0) := a;   -- normalize dir
+  begin return to_integer(unsigned(v(15 downto 2))); end function;
 
   -- shared so the stimulus can back-door poke it for the snoop test (Task 4).
   shared variable ddr_mem : mem_t := init_mem;
@@ -133,6 +134,13 @@ begin
     end procedure;
     procedure chk_load(addr : std_logic_vector(31 downto 0)) is
     begin do_load(addr, ref_mem(widx(addr))); end procedure;
+    procedure do_snoop_inval(addr : std_logic_vector(31 downto 0)) is
+    begin
+      snpc_i <= (al => addr(27 downto 5), en => '1');
+      tick;
+      snpc_i <= NULL_SNOOP_IO;
+      for i in 0 to 3 loop tick; end loop;   -- let the invalidation settle
+    end procedure;
   begin
     wait until rst = '0';
     for i in 0 to 4 loop tick; end loop;
@@ -151,6 +159,13 @@ begin
     do_store(x"00002000", x"DEADBEEF", "1111");
     chk_load(x"00000000");                 -- A reloads (B's write-back intact)
     chk_load(x"00002000");
+    -- snoop: load a clean line, let an "external master" rewrite DDR, snoop-
+    -- invalidate, then the next load MUST miss and re-fetch the new value.
+    chk_load(x"00003000");
+    ddr_mem(widx(x"00003000")) := x"5A5A5A5A";   -- back-door external write
+    ref_mem(widx(x"00003000")) := x"5A5A5A5A";   -- golden follows
+    do_snoop_inval(x"00003000");
+    chk_load(x"00003000");                 -- must refetch 0x5A5A5A5A, not stale
     report "dcache_check_tb: " & integer'image(testno) & " tests, " &
            integer'image(errors) & " errors" severity note;
     assert errors = 0 report "DCACHE SCOREBOARD FAILED" severity failure;

@@ -529,7 +529,9 @@ component icache_ram is port (
 end component;
 
 
-component icache is port (
+component icache is
+   generic (SAME_CLOCK : boolean := false);
+   port (
    clk125 : in  std_logic;
    clk200 : in  std_logic;
    rst : in  std_logic;
@@ -620,7 +622,9 @@ component dcache_ram is port (
    ry  : out dcache_ram_o_t);
 end component;
 
-component dcache is port (
+component dcache is
+   generic (SAME_CLOCK : boolean := false);
+   port (
    clk125 : in  std_logic;
    clk200 : in  std_logic;
    rst :    in  std_logic;
@@ -674,7 +678,9 @@ component dcache_mcl is port (
    mtoc  : out mtoc_dc_t) ;
 end component;
 
-component icache_adapter is port (
+component icache_adapter is
+   generic (SAME_CLOCK : boolean := false);
+   port (
    clk125 : in std_logic;
    clk200 : in std_logic;
    rst : in std_logic;
@@ -688,7 +694,9 @@ component icache_adapter is port (
    dbus_ack_r : in  std_logic);
 end component;
 
-component dcache_adapter is port (
+component dcache_adapter is
+   generic (SAME_CLOCK : boolean := false);
+   port (
    clk125 : in std_logic;
    clk200 : in std_logic;
    rst : in std_logic;

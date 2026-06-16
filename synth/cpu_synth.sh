@@ -110,13 +110,18 @@ case "$SYNTH_VARIANT" in
     if [ "$SYNTH_VARIANT" = j4c ]; then TOP="cpu_cache_timing_j4"
     else TOP="cpu_cache_timing_j2"; fi
     TIMING_TOP="$TOP"
-    # Cache clock mode = which cache_clkmode package: asic = dual-clock, all FPGA
-    # targets = single-clock. The package constant (no generic) selects the cache
-    # CDC form, so ghdl bakes it and yosys sees no parametric cache module.
-    case "$BACKEND" in
-      asic) CLKMODE=cache/cache_clkmode_dc.vhd ;;
-      *)    CLKMODE=cache/cache_clkmode_sc.vhd ;;
-    esac
+    # Cache CDC form = the cache_clkmode package constant (no generic, so ghdl
+    # bakes it and yosys sees no parametric cache module). We use the SINGLE-CLOCK
+    # (negedge-FF) form (_sc) on BOTH backends. The dual-clock (_dc) form uses a
+    # level-sensitive transparent latch ("if clk='0' then q<=d") for the half-
+    # cycle CDC element; ghdl synthesis rejects it ("latch infered ... use
+    # --latches") and forcing --latches pushes unmapped $dlatch cells into the
+    # OpenSTA flow. That is the very reason jcore-soc rewrites these latches to
+    # negedge FFs for FPGA synthesis -- the latch form is a sim/ASIC-backend
+    # artifact, not a ghdl-yosys synth target. So the asic-vs-fpga metric compares
+    # the same synthesizable cpu+cache on Nangate45 vs ECP5. (_dc is retained for
+    # jcore-soc's dual-clock simulation / native-ASIC flow.)
+    CLKMODE=cache/cache_clkmode_sc.vhd
     # cache cores are vhm; preprocess like the cpu cores (uses jcore-soc's v2p).
     for f in cache/dcache_ccl cache/dcache_mcl cache/icache_ccl cache/icache_mcl; do
       LD_LIBRARY_PATH='' perl "$JCORE_SOC/tools/v2p" < "$f.vhm" > "$f.vhd"

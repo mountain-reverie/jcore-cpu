@@ -1,11 +1,14 @@
 # SH-4 register-model exception entry/return (J4 overlay; overrides the base
 # SH-2 stack-model instructions by name). SPC = regfile 21, SSR = regfile 22.
-# See docs/priv-arch/j4-implementation-design.md §4.
+# See docs/priv-arch/j4-implementation-design.md §4 and
+# docs/priv-arch/pm3-fixed-vectors-expevt-design.md.
 #
-# Fused entry: SPC <- PC(-adjust) in one slot (zbus=SPC, zbus_sel=ARITH), then
-# SSR<-SR + SEL_EXCEPTION, then the VBR+U*4 vector fetch -> PC. No stack pushes
-# (frees ROM vs the SH-2 model). ALL six entries use this model so the
-# register-model RTE returns correctly. Tested: TRAPA (exctest), General Illegal
+# Entry: SPC <- PC(-adjust) in one slot (zbus=SPC, zbus_sel=ARITH), then
+# SSR<-SR + SEL_EXCEPTION, then a DIRECT fixed-vector jump
+# PC <- VBR+0x100 (general exceptions) or VBR+0x600 (interrupt). No vector-table
+# memory read (the SH-4 model: handler code lives at the fixed offset), and no
+# stack pushes. ALL six entries use the register model so the register-model RTE
+# returns correctly. Tested: TRAPA (trapatest/exctest), General Illegal
 # (privmode); others are structurally identical.
 
 # ---- Interrupt (maskable: capture level, set IMASK) ----
@@ -13,7 +16,7 @@
   name = "Interrupt"
   format = "d8"
   opcode = "---- -000 dddd dddd"
-  operation = ""
+  operation = "SPC<-PC; SSR<-SR; MD/RB/BL; IMASK; PC<-VBR+0x600"
   plane = "system"
 
   [[instr.slots]]
@@ -35,20 +38,12 @@
     pc = "HOLD"
     sr = "INT_MASK"
   [[instr.slots]]
-    arith = "ADD"
-    ma_addy = "ZBUS"
-    ma_op = "READ"
-    ma_size = "32"
-    pc = "HOLD"
     xbus = "VBR"
-    ybus = "U*4"
-    zbus_sel = "ARITH"
-  [[instr.slots]]
-    pc = "HOLD"
-  [[instr.slots]]
-    pc = "HOLD"
+    ybus = "1536"
+    arith = "ADD"
     zbus = "PC"
-    zbus_sel = "W"
+    zbus_sel = "ARITH"
+    pc = "HOLD"
   [[instr.slots]]
     if_addy = "ZBUS"
     if_issue = "YES"
@@ -64,7 +59,7 @@
   name = "Error"
   format = "d8"
   opcode = "---- -001 dddd dddd"
-  operation = ""
+  operation = "SPC<-PC; SSR<-SR; MD/RB/BL; PC<-VBR+0x100"
   plane = "system"
 
   [[instr.slots]]
@@ -82,20 +77,12 @@
     zbus_sel = "Y"
     sr = "EXCEPTION"
   [[instr.slots]]
-    arith = "ADD"
-    ma_addy = "ZBUS"
-    ma_op = "READ"
-    ma_size = "32"
-    pc = "HOLD"
     xbus = "VBR"
-    ybus = "U*4"
-    zbus_sel = "ARITH"
-  [[instr.slots]]
-    pc = "HOLD"
-  [[instr.slots]]
-    pc = "HOLD"
+    ybus = "256"
+    arith = "ADD"
     zbus = "PC"
-    zbus_sel = "W"
+    zbus_sel = "ARITH"
+    pc = "HOLD"
   [[instr.slots]]
     if_addy = "ZBUS"
     if_issue = "YES"
@@ -111,7 +98,7 @@
   name = "Slot Illegal"
   format = "d8"
   opcode = "---- -110 dddd dddd"
-  operation = ""
+  operation = "SPC<-PC; SSR<-SR; MD/RB/BL; PC<-VBR+0x100"
   plane = "system"
 
   [[instr.slots]]
@@ -128,20 +115,12 @@
     zbus_sel = "Y"
     sr = "EXCEPTION"
   [[instr.slots]]
+    xbus = "VBR"
+    ybus = "256"
     arith = "ADD"
-    ma_addy = "ZBUS"
-    ma_op = "READ"
-    ma_size = "32"
-    pc = "HOLD"
-    xbus = "U*4"
-    ybus = "VBR"
-    zbus_sel = "ARITH"
-  [[instr.slots]]
-    pc = "HOLD"
-  [[instr.slots]]
-    pc = "HOLD"
     zbus = "PC"
-    zbus_sel = "W"
+    zbus_sel = "ARITH"
+    pc = "HOLD"
   [[instr.slots]]
     if_addy = "ZBUS"
     if_issue = "YES"
@@ -157,7 +136,7 @@
   name = "General Illegal"
   format = "d8"
   opcode = "---- -111 dddd dddd"
-  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; PC<-(VBR+U*4)"
+  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; PC<-VBR+0x100"
   plane = "system"
 
   [[instr.slots]]
@@ -174,20 +153,12 @@
     zbus_sel = "Y"
     sr = "EXCEPTION"
   [[instr.slots]]
+    xbus = "VBR"
+    ybus = "256"
     arith = "ADD"
-    ma_addy = "ZBUS"
-    ma_op = "READ"
-    ma_size = "32"
-    pc = "HOLD"
-    xbus = "U*4"
-    ybus = "VBR"
-    zbus_sel = "ARITH"
-  [[instr.slots]]
-    pc = "HOLD"
-  [[instr.slots]]
-    pc = "HOLD"
     zbus = "PC"
-    zbus_sel = "W"
+    zbus_sel = "ARITH"
+    pc = "HOLD"
   [[instr.slots]]
     if_addy = "ZBUS"
     if_issue = "YES"
@@ -198,12 +169,13 @@
     pc = "INC"
   [[instr.slots]]
 
-# ---- TRAPA #imm (SPC = next instruction; vector = VBR+imm*4) ----
+# ---- TRAPA #imm (SPC = next instruction; all imm vector to VBR+0x100; the
+#      handler reads TRA (Phase B) to recover imm) ----
 [[instr]]
   name = "TRAPA #imm"
   format = "i8"
   opcode = "1100 0011 iiii iiii"
-  operation = "SPC<-PC; SSR<-SR; MD/RB/BL; PC<-(VBR+imm*4)"
+  operation = "SPC<-PC; SSR<-SR; MD/RB/BL; PC<-VBR+0x100"
 
   [[instr.slots]]
     alu_y = "0"
@@ -219,20 +191,12 @@
     zbus_sel = "Y"
     sr = "EXCEPTION"
   [[instr.slots]]
+    xbus = "VBR"
+    ybus = "256"
     arith = "ADD"
-    ma_addy = "ZBUS"
-    ma_op = "READ"
-    ma_size = "32"
-    pc = "HOLD"
-    xbus = "U*4"
-    ybus = "VBR"
-    zbus_sel = "ARITH"
-  [[instr.slots]]
-    pc = "HOLD"
-  [[instr.slots]]
-    pc = "HOLD"
     zbus = "PC"
-    zbus_sel = "W"
+    zbus_sel = "ARITH"
+    pc = "HOLD"
   [[instr.slots]]
     if_addy = "ZBUS"
     if_issue = "YES"

@@ -4,7 +4,9 @@ use ieee.numeric_std.all;
 
 use work.cache_pack.all;
 
-entity icache is port (
+entity icache is
+   generic (SAME_CLOCK : boolean := false);  -- true: single-clock (clk125=clk200)
+   port (
    clk125 : in std_logic;
    clk200 : in std_logic;
    rst : in std_logic;
@@ -164,12 +166,26 @@ thisuc_c <= thisuc;
      end if;
   end process;
 
-  c2_r3 : process(clk125, thisbc_r) -- transparent latch 0.5 cycle delay
-  begin
-    if clk125 = '0' then
-      bcen_value_halfcb0 <= thisbc_r.en(VALUE);
-    end if;
-  end process;
+  -- 0.5-cycle phase element. Dual-clock: transparent latch (the CDC phase
+  -- reference). Single-clock (SAME_CLOCK): a negedge FF -- same 0.5-cycle delay
+  -- (thisbc_r changes only on the rising edge, so it is stable through the low
+  -- phase) but a real flip-flop, so ghdl-yosys infers no combinational loop.
+  c2_r3_latch : if not SAME_CLOCK generate
+    c2_r3 : process(clk125, thisbc_r) -- transparent latch 0.5 cycle delay
+    begin
+      if clk125 = '0' then
+        bcen_value_halfcb0 <= thisbc_r.en(VALUE);
+      end if;
+    end process;
+  end generate;
+  c2_r3_ff : if SAME_CLOCK generate
+    c2_r3 : process(clk125)            -- 0.5 cycle delay (negedge FF, single-clock)
+    begin
+      if falling_edge(clk125) then
+        bcen_value_halfcb0 <= thisbc_r.en(VALUE);
+      end if;
+    end process;
+  end generate;
 
   -- output signal ------------------------------------------------------------
   mtoc2.rfillv <= thisbc_r.en(STABLE);

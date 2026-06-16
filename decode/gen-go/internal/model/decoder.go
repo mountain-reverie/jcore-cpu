@@ -21,6 +21,13 @@ type Decoder struct {
 	// Lines is always length 16; entries may have empty Instructions.
 	Lines [16]LineGroup
 
+	// AddressBits is the width of op.addr (the microcode ROM address),
+	// computed by Build as max(8, bits.Len(numSlots)) so the all-ones
+	// address stays a reserved, unused slot (the predecode "unknown
+	// opcode" sentinel). 8 while the microcode fits 256 slots, 9 once it
+	// exceeds 256. Threaded to the templates that declare address widths.
+	AddressBits int
+
 	// Package carries the structured representation of decode_pkg.vhd:
 	// enum types, record types, component declarations, and constants.
 	// Populated by Build; used by the decode_pkg.vhd template.

@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"math/bits"
 	"sort"
 	"strings"
 
@@ -10,6 +11,26 @@ import (
 	"github.com/j-core/jcore-cpu/decode/gen-go/internal/opcode"
 	"github.com/j-core/jcore-cpu/decode/gen-go/internal/spec"
 )
+
+// addrBitsForSlots returns the microcode address width for a microcode of
+// numSlots used slots. We need 2^addrBits > numSlots so the all-ones address
+// stays a reserved, unused slot (the predecode "unknown opcode" sentinel),
+// i.e. addrBits >= bits.Len(numSlots). Floored at 8 to keep the existing
+// 8-bit decoders byte-identical.
+func addrBitsForSlots(numSlots int) int {
+	return max(8, bits.Len(uint(numSlots)))
+}
+
+// addrLit renders a microcode ROM address as a VHDL std_logic_vector literal
+// of width addrBits. Widths divisible by 4 use a hex literal (x"..") so the
+// 8-bit case reproduces the legacy x"%02x" form byte-for-byte; other widths
+// use a binary literal ("..").
+func addrLit(value, addrBits int) string {
+	if addrBits%4 == 0 {
+		return fmt.Sprintf("x\"%0*x\"", addrBits/4, value)
+	}
+	return fmt.Sprintf("\"%0*b\"", addrBits, value)
+}
 
 // Build transforms a loaded Spec into the emission-ready Decoder.
 // width is the ROM width in bits (64 or 72; default is 72). It is
@@ -216,10 +237,39 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 	// CreateEncoding over ALL slots (normal + system).
 	enc := microcode.CreateEncoding(allSlots, width)
 
-	// Build the 256-entry ROM.
+	// Size the microcode address space. op.addr must address every used slot
+	// (0..len-1) AND reserve the all-ones address as the predecode "unknown
+	// opcode" sentinel, so we need 2^addrBits > len(allSlots), i.e.
+	// addrBits >= bits.Len(len(allSlots)). Floor at 8 to keep the existing
+	// 8-bit decoders byte-identical.
+	addrBits := addrBitsForSlots(len(allSlots))
+	romSize := 1 << addrBits
+	if len(allSlots) >= romSize {
+		return nil, fmt.Errorf("microcode slots (%d) leave no room for the "+
+			"all-ones sentinel in %d-bit address space", len(allSlots), addrBits)
+	}
+	d.AddressBits = addrBits
+
+	// Set operation_t.addr to the computed width (newStaticPackage built it at
+	// the default 8-bit; for addrBits==8 this rewrites the identical string).
+	for ri := range pkg.Records {
+		if pkg.Records[ri].Name != "operation_t" {
+			continue
+		}
+		for fi := range pkg.Records[ri].Fields {
+			f := &pkg.Records[ri].Fields[fi]
+			if len(f.Names) == 1 && f.Names[0] == "addr" {
+				f.Type = fmt.Sprintf("std_logic_vector(%d downto 0)", addrBits-1)
+			}
+		}
+	}
+
+	// Build the 2^addrBits-entry ROM (power of two so the all-ones sentinel
+	// address is addressable; unused entries are zero words).
 	rom := &ROM{
 		TotalBits: enc.TotalBits,
 	}
+	rom.Words = make([]ROMWord, romSize)
 	zeroWord := strings.Repeat("0", enc.TotalBits)
 	for i := range rom.Words {
 		rom.Words[i].Bits = zeroWord
@@ -289,7 +339,7 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 			}
 		}
 	}
-	d.Body = BuildBody(instrAddrs, instrLogicNormal, writesPC, privileged)
+	d.Body = BuildBody(instrAddrs, instrLogicNormal, writesPC, privileged, addrBits)
 	d.Simple = BuildSimple(s, instrLogicAll, slotAssigns)
 	d.Direct = BuildDirect(s, instrLogicAll, slotAssigns)
 	d.Entity = BuildEntity(d.Package)
@@ -330,12 +380,12 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 	pkg.SystemInstrROMAddrs = make(map[string]string)
 	for name, a := range sysFirstAddr {
 		canonical := toCanonical(name)
-		pkg.SystemInstrROMAddrs[canonical] = fmt.Sprintf("x\"%02x\"", a)
+		pkg.SystemInstrROMAddrs[canonical] = addrLit(a, addrBits)
 	}
 
 	// DEC_CORE_ROM_RESET: inc(RESET_CPU.index) per genvhdl.clj line 711-712.
 	if resetAddr, ok := sysFirstAddr["Reset CPU"]; ok {
-		pkg.DecCoreROMResetAddr = fmt.Sprintf("%02x", resetAddr+1)
+		pkg.DecCoreROMResetAddr = addrLit(resetAddr+1, addrBits)
 	}
 
 	return d, nil

@@ -25,6 +25,11 @@ architecture tb of register_ebr_tap is
 
   signal addr_ra, addr_rb, w_addr_wb, w_addr_ex : std_logic_vector(4 downto 0)
     := (others => '0');
+  -- ebr's full-cycle read needs the address one cycle EARLY (rising-edge read):
+  -- addr_ra_early leads addr_ra by one cycle (same read-address sequence), so at
+  -- each compare point ebr's q reflects the same register two_bank reads async.
+  signal addr_ra_early, addr_rb_early : std_logic_vector(4 downto 0)
+    := (others => '0');
   signal din_wb, din_ex : std_logic_vector(31 downto 0) := (others => '0');
   signal we_wb, we_ex : std_logic := '0';
 
@@ -86,6 +91,7 @@ begin
     generic map (ADDR_WIDTH => 5, NUM_REGS => 16, REG_WIDTH => 32)
     port map (clk => clk, rst => rst, ce => slot,
       addr_ra => addr_ra, dout_a => a_e, addr_rb => addr_rb, dout_b => b_e,
+      addr_ra_early => addr_ra_early, addr_rb_early => addr_rb_early,
       dout_0 => z_e, we_wb => we_wb, w_addr_wb => w_addr_wb, din_wb => din_wb,
       we_ex => we_ex, w_addr_ex => w_addr_ex, din_ex => din_ex, wr_data_o => open);
 
@@ -104,11 +110,17 @@ begin
     wait until rising_edge(clk);
     wait until rising_edge(clk);
     rst <= '0'; slot <= '1';
+    -- Prime the leading early read address for the first compare point.
+    addr_ra_early <= S(0).ra; addr_rb_early <= S(0).rb;
     for i in S'range loop
-      wait until rising_edge(clk);
+      wait until rising_edge(clk);   -- ebr q latches reg[ S(i).ra ] (early addr led)
       addr_ra   <= S(i).ra;  addr_rb   <= S(i).rb;
       we_wb     <= S(i).ewb; w_addr_wb <= S(i).awb; din_wb <= S(i).dwb;
       we_ex     <= S(i).eex; w_addr_ex <= S(i).aex; din_ex <= S(i).dex;
+      -- lead the early read address by one cycle for the NEXT compare point
+      if i < S'high then
+        addr_ra_early <= S(i+1).ra; addr_rb_early <= S(i+1).rb;
+      end if;
       wait until falling_edge(clk);
       wait for 1 ns;   -- let ebr's q_a/q_b settle, then both are comparable
       check(a_e, a_f, b_e, b_f, z_e, z_f, "cycle " & integer'image(i));
@@ -124,6 +136,8 @@ begin
     -- suppressed EX write asserted, comparing ebr vs two_bank each cycle.
     wait until rising_edge(clk);            -- commit cycle (ce still '1')
     addr_ra <= "00001"; addr_rb <= "00010";
+    -- Held read address: early addr equals it (full-cycle read of the held reg).
+    addr_ra_early <= "00001"; addr_rb_early <= "00010";
     we_wb <= '1'; w_addr_wb <= "00001"; din_wb <= x"deadbeef"; we_ex <= '0';
     wait until rising_edge(clk);            -- reg1 := deadbeef commits here
     we_wb <= '0';

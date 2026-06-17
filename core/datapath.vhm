@@ -7,7 +7,11 @@ use work.datapath_pack.all;
 use work.decode_pack.all;
 
 entity datapath is
-	generic ( PRIV_ARCH : boolean := false );
+	generic (
+	  PRIV_ARCH : boolean := false;
+	  -- J1 only: drive the register file's early-read addresses and let
+	  -- architecture(ebr) read on the rising edge (full cycle). false for J2/J4.
+	  EARLY_REGFILE_READ : boolean := false );
 	port (
 		     clk : in std_logic;
 		     rst : in std_logic;
@@ -61,6 +65,7 @@ architecture stru of datapath is
 	signal sr : sr_t;
 	-- regfile addresses after SH-4 bank remapping (pass-through on J2)
 	signal num_x_r, num_y_r, num_z_r, num_w_r : regnum_t;
+	signal num_x_early_r, num_y_early_r : regnum_t;
 	signal sfto : std_logic;
 	signal shift_b : std_logic_vector(5 downto 0);
 	signal shift_sel : std_logic;
@@ -216,11 +221,16 @@ begin
 	num_y_r <= bank_remap(reg.num_y, sr.md, sr.rb) when PRIV_ARCH else reg.num_y;
 	num_z_r <= bank_remap(reg.num_z, sr.md, sr.rb) when PRIV_ARCH else reg.num_z;
 	num_w_r <= bank_remap(reg.num_w, sr.md, sr.rb) when PRIV_ARCH else reg.num_w;
+	-- J1 early-read addresses (architecture(ebr) reads on rising edge); zero on J2/J4.
+	num_x_early_r <= reg.num_x_early when EARLY_REGFILE_READ else (others => '0');
+	num_y_early_r <= reg.num_y_early when EARLY_REGFILE_READ else (others => '0');
 	u_regfile : register_file
           generic map (ADDR_WIDTH => 5,
                        NUM_REGS => REGFILE_DEPTH,
                        REG_WIDTH => 32)
           port map(clk => clk, rst => rst, ce => slot_o, addr_ra => num_x_r, dout_a => reg_x,
+                   addr_ra_early => num_x_early_r,
+                   addr_rb_early => num_y_early_r,
                    addr_rb => num_y_r, dout_b => reg_y, dout_0 => reg_0,
                    we_wb => reg.wr_w, w_addr_wb => num_w_r, din_wb => wbus,
                    we_ex => reg.wr_z, w_addr_ex => num_z_r, din_ex => gpf_zwd,

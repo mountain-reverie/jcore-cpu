@@ -88,6 +88,10 @@ component register_file is
     addr_rb : in  std_logic_vector(ADDR_WIDTH-1 downto 0);
     dout_b  : out std_logic_vector(REG_WIDTH-1 downto 0);
     dout_0  : out std_logic_vector(REG_WIDTH-1 downto 0);
+    -- One-cycle-early read addresses (J1 architecture(ebr) full-cycle read);
+    -- defaulted so two_bank/flops instantiations need not drive them.
+    addr_ra_early : in std_logic_vector(ADDR_WIDTH-1 downto 0) := (others => '0');
+    addr_rb_early : in std_logic_vector(ADDR_WIDTH-1 downto 0) := (others => '0');
 
     we_wb     : in  std_logic;
     w_addr_wb : in  std_logic_vector(ADDR_WIDTH-1 downto 0);

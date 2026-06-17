@@ -22,7 +22,9 @@ package datapath_pack is
    constant MD  : integer range 0 to 30 := 30;
 
    component datapath is
-     generic ( PRIV_ARCH : boolean := false );
+     generic (
+       PRIV_ARCH : boolean := false;
+       EARLY_REGFILE_READ : boolean := false );
      port (
       clk         : in  std_logic;
       rst         : in  std_logic;

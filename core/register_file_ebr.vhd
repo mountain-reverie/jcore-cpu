@@ -30,7 +30,7 @@ architecture ebr of register_file is
   signal ram_a, ram_b : ram_type;
   signal reg0 : data_t;
 
-  -- Falling-edge-latched RAM read outputs (the "bank data" for forwarding).
+  -- Rising-edge-latched (full-cycle) RAM read outputs (the "bank data" for forwarding).
   signal q_a, q_b : data_t;
 
   -- Bias yosys toward SB_RAM40_4K/BRAM inference (ignored by GHDL simulation
@@ -61,15 +61,16 @@ begin
   -- difference in when reg0 updates is never observable -- same result as q.
   dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes);
 
-  -- Synchronous block-RAM read on the FALLING edge (EBR inference + in-slot
-  -- read latency). No reset/enable: block RAM has no async reset, and the read
-  -- is free-running -- q settles on the first falling edge after reset, before
-  -- any real operand read.
+  -- Full-cycle read: clock the block-RAM read on the RISING edge using the
+  -- one-cycle-early addresses, so q_a/q_b are valid at the START of the EX slot
+  -- (a full period for the downstream ALU/mult/shifter), not just the falling-
+  -- edge half. The early address (decode's ex.regnum_{x,y}) is the value
+  -- addr_ra/addr_rb take one cycle later, so q matches the EX instruction.
   read_proc : process(clk)
   begin
-    if clk'event and clk = '0' then
-      q_a <= ram_a(to_reg_index(addr_ra));
-      q_b <= ram_b(to_reg_index(addr_rb));
+    if rising_edge(clk) then
+      q_a <= ram_a(to_reg_index(addr_ra_early));
+      q_b <= ram_b(to_reg_index(addr_rb_early));
     end if;
   end process;
 

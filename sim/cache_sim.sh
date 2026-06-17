@@ -6,6 +6,12 @@ MODE="${1:?usage: cache_sim.sh <sc|dc>}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
 JCORE_SOC="${JCORE_SOC:-$ROOT/jcore-soc}"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
+
+# The dcache CCL/MCL cores are .vhm templates; preprocess to .vhd via jcore-soc's
+# v2p (same as synth/cpu_synth.sh) so a clean checkout (CI) has them.
+for f in cache/dcache_ccl cache/dcache_mcl; do
+  LD_LIBRARY_PATH='' perl "$JCORE_SOC/tools/v2p" < "$f.vhm" > "$f.vhd"
+done
 # --syn-binding: the cache instantiates dcache/dcache_ram/ram_2rw as COMPONENTS;
 # ghdl's plain default binding leaves them unbound (black boxes) in elaboration,
 # so use synthesis default binding to bind component->entity (same as synth).

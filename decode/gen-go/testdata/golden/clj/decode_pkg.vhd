@@ -103,6 +103,8 @@ package decode_pack is
         record
             num_x : regnum_t;
             num_y : regnum_t;
+            num_x_early : regnum_t;
+            num_y_early : regnum_t;
             num_z : regnum_t;
             num_w : regnum_t;
             wr_z : std_logic;

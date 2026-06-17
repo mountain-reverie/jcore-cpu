@@ -17,7 +17,8 @@ configuration cpu_synth_j1 of cpu is
       use configuration work.cpu_decode_rom;
     end for;
     for u_datapath : datapath
-      use entity work.datapath(stru);
+      use entity work.datapath(stru)
+        generic map (EARLY_REGFILE_READ => true);
       for stru
         for u_regfile : register_file
           use entity work.register_file(ebr);

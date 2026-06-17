@@ -41,6 +41,24 @@ architecture ebr of register_file is
 
   signal ex_pipes : ex_pipeline_t;
   signal wb_pipe : reg_pipe_t;
+
+  -- Full-cycle (rising-edge) read closes the q->EX half-cycle, but its committed
+  -- value q is one cycle staler: the write that commits ON the read edge is not
+  -- yet in q (block-RAM read-during-write returns old data) AND has already
+  -- shifted out of ex_pipes(0/1/2) into the RAM, so read_with_forwarding misses
+  -- it. last_wr holds that just-committed write one extra cycle; fwd_last
+  -- overlays it onto q as the lowest-priority forward (below ex_pipes(2)).
+  signal last_wr : reg_pipe_t;
+
+  function fwd_last(addr : addr_t; bank : data_t; last : reg_pipe_t)
+  return data_t is
+  begin
+    if last.en = '1' and last.addr = addr then
+      return last.data;
+    else
+      return bank;
+    end if;
+  end;
 begin
   wb_pipe.en   <= we_wb;
   wb_pipe.addr <= w_addr_wb;
@@ -53,8 +71,10 @@ begin
   -- The falling-edge-latched RAM output is the committed register value;
   -- read_with_forwarding overlays the in-flight EX/WB pipeline writes on top,
   -- identical to register_file(flops)/two_bank.
-  dout_a <= read_with_forwarding(addr_ra, q_a, wb_pipe, ex_pipes);
-  dout_b <= read_with_forwarding(addr_rb, q_b, wb_pipe, ex_pipes);
+  dout_a <= read_with_forwarding(addr_ra, fwd_last(addr_ra, q_a, last_wr),
+                                 wb_pipe, ex_pipes);
+  dout_b <= read_with_forwarding(addr_rb, fwd_last(addr_rb, q_b, last_wr),
+                                 wb_pipe, ex_pipes);
   -- reg0 is a rising-edge flop (vs q_a/q_b's falling-edge latch) on purpose:
   -- R0's just-committed value is always served by the forwarding overlay, never
   -- read straight from reg0 in the same slot it is written, so the half-clock
@@ -85,6 +105,7 @@ begin
       reg0 <= (others => '0');
       ex_pipes(1) <= REG_PIPE_RESET;
       ex_pipes(2) <= REG_PIPE_RESET;
+      last_wr <= REG_PIPE_RESET;
     elsif (rising_edge(clk) and ce = '1') then
       -- the decoder should never schedule a write to a register for both Z and
       -- W bus at the same time
@@ -108,6 +129,17 @@ begin
       end if;
       ex_pipes(2) <= ex_pipes(1);
       ex_pipes(1) <= ex_pipes(0);
+      -- Record the write committed THIS edge (raw addr/data, same mux as the
+      -- commit above) so the full-cycle read's staler q can still serve it next
+      -- cycle via fwd_last. en=0 when nothing committed (no gap to cover).
+      last_wr.en <= wb_pipe.en or ex_pipes(2).en;
+      if (ex_pipes(2).en = '1') then
+        last_wr.addr <= ex_pipes(2).addr;
+        last_wr.data <= ex_pipes(2).data;
+      else
+        last_wr.addr <= wb_pipe.addr;
+        last_wr.data <= wb_pipe.data;
+      end if;
     end if;
   end process;
 end architecture;

@@ -6,26 +6,40 @@
 window.__SIZE__ = null;
 window.__SPEED__ = null;
 
-var VARIANT_COLOR = { j1: "#e6b800", j2: "#1f77b4", j4: "#2ca02c" }; // yellow / blue / green
+// j1 yellow / j2 blue / j4 green; the cpu+cache variants reuse their base hue in
+// a pastel (lighter) shade so all five overlay on one chart, cache visibly tied
+// to its cpu: j2c = pastel blue, j4c = pastel green.
+var VARIANT_COLOR = {
+  j1: "#e6b800", j2: "#1f77b4", j4: "#2ca02c",
+  j2c: "#9ecae1", j4c: "#a1d99b"
+};
+var VARIANT_LABEL = { j1: "J1", j2: "J2", j4: "J4", j2c: "J2+cache", j4c: "J4+cache" };
 
 function variantOf(extra) {
   var e = (extra || "").toLowerCase();
+  if (e.indexOf("j2c") >= 0) return "j2c";  // before j2/j4 (j4c contains "j4")
+  if (e.indexOf("j4c") >= 0) return "j4c";
   if (e.indexOf("j1") >= 0) return "j1";
   if (e.indexOf("j4") >= 0) return "j4";
   return "j2"; // default incl. legacy "direct-rom72"
 }
 
-// Benchmark metric names carry a "[j1]"/"[j4]" suffix so github-action-benchmark
-// keys each variant as its own series (J2 stays bare = continuous history). The
-// dashboard derives the variant from that suffix (falling back to `extra` for
-// historical bare-J2 points) and groups on the suffix-stripped base name, so the
-// three variants overlay on one chart.
+// Benchmark metric names carry a "[j1]"/"[j4]"/"[J2+cache]"/"[J4+cache]" suffix so
+// github-action-benchmark keys each variant as its own series (J2 stays bare =
+// continuous history). The dashboard derives the variant from that suffix
+// (falling back to `extra` for historical bare-J2 points) and groups on the
+// suffix-stripped base name, so all five variants overlay on one chart.
 function variantOfBench(name, extra) {
   var m = /\s\[(j[124])\]$/.exec(name || "");
-  return m ? m[1] : variantOf(extra);
+  if (m) return m[1];
+  if (/\s\[J2\+cache\]$/.test(name || "")) return "j2c";
+  if (/\s\[J4\+cache\]$/.test(name || "")) return "j4c";
+  return variantOf(extra);
 }
 function baseName(name) {
-  return (name || "").replace(/\s\[j[124]\]$/, "");
+  // Strip the variant suffix (incl. the cpu+cache labels) so all five variants
+  // group onto one chart per base metric.
+  return (name || "").replace(/\s\[(j[124]|J2\+cache|J4\+cache)\]$/, "");
 }
 
 // Load a script that assigns window.BENCHMARK_DATA; resolve with that value
@@ -86,7 +100,7 @@ function lineCard(parent, title, variantMap, unit, budget) {
     var pts = variantMap[v].slice().sort(function (a, b) { return a.x - b.x; });
     var color = VARIANT_COLOR[v] || "#888888";
     return {
-      label: v.toUpperCase(),
+      label: VARIANT_LABEL[v] || v.toUpperCase(),
       data: pts,
       borderColor: color,
       backgroundColor: color,

@@ -24,7 +24,11 @@ window.BENCHMARK_DATA = {
           { name: "asic-nangate45 · cpu/area [j1]", unit: "um2", value: 38500, extra: "j1" },
           { name: "asic-nangate45 · cpu/area [j4]", unit: "um2", value: 50900, extra: "j4" },
           { name: "ecp5-lfe5u-85f · cpu/LUT4 [j1]", unit: "LUT4", value: 6385, extra: "j1" },
-          { name: "ecp5-lfe5u-85f · cpu/LUT4 [j4]", unit: "LUT4", value: 5734, extra: "j4" } ] }
+          { name: "ecp5-lfe5u-85f · cpu/LUT4 [j4]", unit: "LUT4", value: 5734, extra: "j4" },
+          { name: "asic-nangate45 · cpu/area [J2+cache]", unit: "um2", value: 95800, extra: "j2c" },
+          { name: "asic-nangate45 · cpu/area [J4+cache]", unit: "um2", value: 98200, extra: "j4c" },
+          { name: "ecp5-lfe5u-85f · cpu/LUT4 [J2+cache]", unit: "LUT4", value: 9050, extra: "j2c" },
+          { name: "ecp5-lfe5u-85f · cpu/LUT4 [J4+cache]", unit: "LUT4", value: 9420, extra: "j4c" } ] }
     ],
     "synth-speed": [
       { commit: { id: "aaa1111", message: "first", timestamp: "2026-06-10T00:00:00Z", url: "#" }, date: 1700000000000,
@@ -40,7 +44,11 @@ window.BENCHMARK_DATA = {
                    { name: "asic-nangate45 · cpu/Fmax (relative) [j1]", unit: "MHz", value: 35.6, extra: "j1" },
                    { name: "asic-nangate45 · cpu/Fmax (relative) [j4]", unit: "MHz", value: 45.0, extra: "j4" },
                    { name: "ecp5-lfe5u-85f · cpu/Fmax (representative) [j1]", unit: "MHz", value: 38.5, extra: "j1" },
-                   { name: "ecp5-lfe5u-85f · cpu/Fmax (representative) [j4]", unit: "MHz", value: 47.1, extra: "j4" } ] }
+                   { name: "ecp5-lfe5u-85f · cpu/Fmax (representative) [j4]", unit: "MHz", value: 47.1, extra: "j4" },
+                   { name: "asic-nangate45 · cpu/Fmax (relative) [J2+cache]", unit: "MHz", value: 33.2, extra: "j2c" },
+                   { name: "asic-nangate45 · cpu/Fmax (relative) [J4+cache]", unit: "MHz", value: 32.0, extra: "j4c" },
+                   { name: "ecp5-lfe5u-85f · cpu/Fmax (representative) [J2+cache]", unit: "MHz", value: 38.0, extra: "j2c" },
+                   { name: "ecp5-lfe5u-85f · cpu/Fmax (representative) [J4+cache]", unit: "MHz", value: 36.4, extra: "j4c" } ] }
     ]
   }
 };

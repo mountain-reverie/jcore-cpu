@@ -205,6 +205,8 @@ func newStaticPackage() *Package {
 				Fields: []RecordField{
 					{Names: []string{"num_x"}, Type: "regnum_t"},
 					{Names: []string{"num_y"}, Type: "regnum_t"},
+					{Names: []string{"num_x_early"}, Type: "regnum_t"},
+					{Names: []string{"num_y_early"}, Type: "regnum_t"},
 					{Names: []string{"num_z"}, Type: "regnum_t"},
 					{Names: []string{"num_w"}, Type: "regnum_t"},
 					{Names: []string{"wr_z"}, Type: "std_logic"},

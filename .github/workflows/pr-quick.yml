@@ -233,3 +233,32 @@ jobs:
           make -C decode generate
           make -C decode diff
           echo "==> Step 4b: J4 overlay elaboration PASSED"
+
+  cache-sim:
+    name: dcache scoreboard (${{ matrix.mode }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [sc, dc]
+    steps:
+      - name: Checkout jcore-cpu
+        uses: actions/checkout@v4
+        with:
+          path: jcore-cpu
+
+      - name: Checkout jcore-soc (cache deps)
+        uses: actions/checkout@v4
+        with:
+          repository: mountain-reverie/jcore-soc
+          path: jcore-soc
+
+      - name: Install apt dependencies (GHDL, perl)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ghdl ghdl-mcode perl
+
+      - name: Run dcache scoreboard (${{ matrix.mode }})
+        working-directory: jcore-cpu
+        run: JCORE_SOC="${{ github.workspace }}/jcore-soc" sim/cache_sim.sh ${{ matrix.mode }}

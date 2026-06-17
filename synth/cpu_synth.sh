@@ -177,7 +177,17 @@ case "$BACKEND" in
     # that the issue/slot false combinational loop is broken in core/datapath.vhm
     # (see synth/README.md). Strip verification cells (as above) so nextpnr-ecp5
     # can consume the JSON.
-    yosys -m ghdl -p "$GHDL_BASE -e $TOP; synth_ecp5 -top $CPUTOP; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_ecp5.json"
+    #
+    # Bare-core fit gate (CPUTOP=cpu) exposes every cpu port as a pad, and the
+    # LFE5U-85F CABGA381 has only 365 IO BELs (the core already uses ~348). The
+    # SH-4 priv_o export (EXPEVT/INTEVT/TRA, 34 bits, constant-0 on this
+    # PRIV_ARCH=false proxy) is observability with no in-core consumer, so drop
+    # its ports before P&R to keep the fit gate logic-bound, not IO-bound. The
+    # j2c/j4c variants wrap cpu in cpu_cache_timing_top (priv_o left open), so no
+    # drop is needed (and the bare-cpu port path would not match that top).
+    PRIV_DROP=""
+    [ "$CACHE" = 0 ] && PRIV_DROP="delete cpu/priv_o[expevt] cpu/priv_o[intevt] cpu/priv_o[tra]; opt_clean;"
+    yosys -m ghdl -p "$GHDL_BASE -e $TOP; synth_ecp5 -top $CPUTOP; check -assert; chformal -remove; delete t:\$check t:\$print; $PRIV_DROP stat; write_json $OUT/cpu_ecp5.json"
     ;;
   timing)
     # Representative Fmax benchmark: the cpu_timing_top harness registers the

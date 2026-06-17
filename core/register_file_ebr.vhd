@@ -84,11 +84,15 @@ begin
   -- Full-cycle read: clock the block-RAM read on the RISING edge using the
   -- one-cycle-early addresses, so q_a/q_b are valid at the START of the EX slot
   -- (a full period for the downstream ALU/mult/shifter), not just the falling-
-  -- edge half. The early address (decode's ex.regnum_{x,y}) is the value
-  -- addr_ra/addr_rb take one cycle later, so q matches the EX instruction.
+  -- edge half. The early address (decode's ex.regnum_{x,y}) is the COMBINATIONAL
+  -- value addr_ra/addr_rb (= ex1.regnum) take one cycle later -- but only when
+  -- the pipeline advances (slot='1'). So the read must be ce-gated (ce=slot_o),
+  -- in lockstep with the ex1 register load: when slot='0' (a slot-stretch stall)
+  -- ex1 holds and the early address may move, so q must HOLD the held EX
+  -- instruction's operand rather than re-latch a stale/next early address.
   read_proc : process(clk)
   begin
-    if rising_edge(clk) then
+    if rising_edge(clk) and ce = '1' then
       q_a <= ram_a(to_reg_index(addr_ra_early));
       q_b <= ram_b(to_reg_index(addr_rb_early));
     end if;

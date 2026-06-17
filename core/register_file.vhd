@@ -31,6 +31,11 @@ entity register_file is
     addr_rb : in  std_logic_vector(ADDR_WIDTH-1 downto 0);
     dout_b  : out std_logic_vector(REG_WIDTH-1 downto 0);
     dout_0  : out std_logic_vector(REG_WIDTH-1 downto 0);
+    -- One-cycle-early read addresses, used only by architecture(ebr) for its
+    -- rising-edge (full-cycle) RAM read. Default = (others=>'0'); two_bank and
+    -- flops ignore them, so J2/J4/sim see no change.
+    addr_ra_early : in std_logic_vector(ADDR_WIDTH-1 downto 0) := (others => '0');
+    addr_rb_early : in std_logic_vector(ADDR_WIDTH-1 downto 0) := (others => '0');
 
     we_wb     : in  std_logic;
     w_addr_wb : in  std_logic_vector(ADDR_WIDTH-1 downto 0);

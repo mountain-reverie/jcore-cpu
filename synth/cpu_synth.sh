@@ -29,6 +29,9 @@ set -euo pipefail
 
 BACKEND="${1:?usage: cpu_synth.sh <asic|ecp5|timing|ice40>}"
 SYNTH_VARIANT="${SYNTH_VARIANT:-j2}"
+# J1 consumes the subset decoder in decode/j1/; all other variants use root decode/.
+# decode_core.vhd is shared (not part of decode/j1) and always comes from decode/.
+if [ "$SYNTH_VARIANT" = "j1" ]; then DEC=decode/j1; else DEC=decode; fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 # jcore-soc checkout (provides the cache's lib/ + components/ deps for j2c/j4c).
@@ -49,7 +52,7 @@ FILES=(
   core/components_pkg.vhd
   core/mult_pkg.vhd
   core/datapath_pkg.vhd
-  decode/decode_pkg.vhd
+  $DEC/decode_pkg.vhd
   core/cpu.vhd
   core/mult.vhd
   core/shifter.vhd
@@ -58,11 +61,11 @@ FILES=(
   core/register_file_flops.vhd
   core/register_file_two_bank.vhd
   core/register_file_ebr.vhd
-  decode/decode.vhd
-  decode/decode_body.vhd
-  decode/decode_table.vhd
-  decode/decode_table_direct.vhd
-  decode/decode_table_direct_config.vhd
+  $DEC/decode.vhd
+  $DEC/decode_body.vhd
+  $DEC/decode_table.vhd
+  $DEC/decode_table_direct.vhd
+  $DEC/decode_table_direct_config.vhd
   decode/decode_core.vhd
   synth/cpu_synth_config.vhd
 )
@@ -94,7 +97,7 @@ case "$SYNTH_VARIANT" in
     # decoder configs may coexist in the library since only cpu_decode_rom is bound.
     TOP="cpu_synth_j1"; TIMING_TOP="cpu_timing_j1"
     FILES+=(core/mult_seq.vhd core/shifter_seq.vhd \
-            decode/decode_table_rom.vhd decode/decode_table_rom_config.vhd \
+            $DEC/decode_table_rom.vhd $DEC/decode_table_rom_config.vhd \
             synth/cpu_synth_j1_config.vhd \
             synth/cpu_timing_top.vhd synth/cpu_timing_config.vhd)
     ;;

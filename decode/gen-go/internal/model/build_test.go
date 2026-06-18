@@ -197,3 +197,58 @@ func TestNoDropsLeavesIllegalInstrUnchanged(t *testing.T) {
 		t.Fatalf("IllegalInstr gained terms without drops: %q", d.Body.IllegalInstr)
 	}
 }
+
+// TestDropKeepsEncodingWidthEqualToBase asserts that dropping instructions
+// (J1 profile) does not shrink ROM.TotalBits relative to the base ISA.
+// The ROM template hardcodes bit-position selectors (e.g. "line(74 downto 73)")
+// that must remain valid regardless of which instructions are dropped.
+func TestDropKeepsEncodingWidthEqualToBase(t *testing.T) {
+	sBase, err := spec.Load("../../spec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dBase, err := Build(sBase, 72)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Load again for the J1 variant (ApplyDrops mutates the Spec).
+	sJ1, err := spec.Load("../../spec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	prof, err := spec.ReadProfile("../../spec/profiles/j1.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := spec.ApplyDrops(sJ1, prof.Drop); err != nil {
+		t.Fatal(err)
+	}
+	dJ1, err := Build(sJ1, 72)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if dJ1.ROM.TotalBits != dBase.ROM.TotalBits {
+		t.Errorf("J1 ROM.TotalBits = %d, want %d (same as base); dropping instructions must not shrink the encoding",
+			dJ1.ROM.TotalBits, dBase.ROM.TotalBits)
+	}
+
+	// Verify dropped instructions are absent from Lines (disassembler).
+	dropped := make(map[string]bool, len(sJ1.Dropped))
+	for _, di := range sJ1.Dropped {
+		dropped[di.Name] = true
+	}
+	for _, lg := range dJ1.Lines {
+		for _, in := range lg.Instructions {
+			if dropped[in.Name] {
+				t.Errorf("dropped instruction %q still present in Lines", in.Name)
+			}
+		}
+	}
+
+	// Verify at least one dropped opcode is OR-ed into IllegalInstr.
+	if !strings.Contains(dJ1.Body.IllegalInstr, `x"2003"`) {
+		t.Errorf("CAS.L dropped opcode term not found in IllegalInstr: %q", dJ1.Body.IllegalInstr)
+	}
+}

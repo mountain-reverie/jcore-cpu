@@ -119,13 +119,25 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 	// -----------------------------------------------------------------------
 
 	// Build a name→Instr lookup so we can iterate in CSV order.
-	instrByName := make(map[string]*spec.Instr, len(s.Instrs))
+	// Include both kept (s.Instrs) and dropped (s.Dropped) instructions so
+	// that format-inheritance traverses the full CSV order — a dropped
+	// instruction must still propagate its format to the next entry in the
+	// CSV, and its slots must feed CreateEncoding to keep the bit-field
+	// layout stable (same TotalBits as the base ISA).
+	instrByName := make(map[string]*spec.Instr, len(s.Instrs)+len(s.Dropped))
 	for i := range s.Instrs {
 		instrByName[s.Instrs[i].Name] = &s.Instrs[i]
+	}
+	droppedByName := make(map[string]bool, len(s.Dropped))
+	for i := range s.Dropped {
+		instrByName[s.Dropped[i].Name] = &s.Dropped[i]
+		droppedByName[s.Dropped[i].Name] = true
 	}
 
 	// Partition instructions into normal (non-system) and system, in CSV row order.
 	// Normal instructions come first in the ROM; system instructions at the end.
+	// Dropped instructions are excluded from normalInstrs/systemInstrs (they get no
+	// ROM address) but remain visible in instrByName for format-inheritance resolution.
 	var normalInstrs []*spec.Instr
 	var systemInstrs []*spec.Instr
 
@@ -135,6 +147,9 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 		si := instrByName[name]
 		if si == nil {
 			continue // instruction in CSV but not in our spec (shouldn't happen)
+		}
+		if droppedByName[name] {
+			continue // dropped: no ROM address
 		}
 		if si.Plane == "system" {
 			systemInstrs = append(systemInstrs, si)
@@ -163,8 +178,10 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 	}
 
 	// Gather all AssignMaps in ROM order (normal first, system last).
-	// CreateEncoding needs ALL slots (normal + system) because system slots
-	// contribute distinct signal values that affect field widths.
+	// CreateEncoding needs ALL slots (normal + system + dropped) because
+	// dropped-instruction slots contribute signal values that affect field
+	// widths; omitting them would narrow TotalBits relative to the base ISA
+	// and break the hardcoded bit-position selectors in the ROM template.
 	type slotMeta struct {
 		instrIdx  int    // index into allInstrs
 		instrName string // name of the instruction
@@ -182,7 +199,9 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 	// across csvInstrOrder iteration, then pass the resolved format to
 	// AssignSlot for register placement decisions. The rule is reset to
 	// "" at the start; only non-empty Format values propagate.
-	resolvedFormat := make(map[string]string, len(allInstrs))
+	// NOTE: instrByName now includes dropped instructions so the inheritance
+	// chain is unbroken across the full CSV order.
+	resolvedFormat := make(map[string]string, len(allInstrs)+len(s.Dropped))
 	prevFormat := ""
 	for _, name := range csvInstrOrder {
 		si := instrByName[name]
@@ -254,8 +273,46 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 		}
 	}
 
-	// CreateEncoding over ALL slots (normal + system).
-	enc := microcode.CreateEncoding(allSlots, width)
+	// Collect slots from dropped instructions for encoding purposes only.
+	// Dropped instructions get no ROM address (excluded from allSlots/slotMetas)
+	// but their signal values must participate in CreateEncoding so that
+	// TotalBits and all field bit-positions remain identical to the base ISA.
+	// This prevents the hardcoded bit-position selectors in the ROM template
+	// (e.g. "line(74 downto 73)") from going out of range.
+	var droppedSlots []microcode.AssignMap
+	for i := range s.Dropped {
+		di := &s.Dropped[i]
+		rf := resolvedFormat[di.Name]
+		instrForAssign := *di
+		instrForAssign.Format = rf
+		var keptSlots []spec.Slot
+		for _, slot := range di.Slots {
+			if len(slot) > 0 {
+				keptSlots = append(keptSlots, slot)
+			}
+		}
+		n := len(keptSlots)
+		for j, slot := range keptSlots {
+			am, err := microcode.AssignSlot(instrForAssign, slot)
+			if err != nil {
+				return nil, fmt.Errorf("%s slot %d: %w", di.Name, j, err)
+			}
+			if j == n-1 {
+				_, hasIfIssue := am[microcode.SigIfIssue]
+				_, hasDispatch := am[microcode.SigDispatch]
+				if !hasIfIssue && !hasDispatch {
+					am[microcode.SigIfIssue] = "1"
+					am[microcode.SigDispatch] = "1"
+				}
+			}
+			droppedSlots = append(droppedSlots, am)
+		}
+	}
+
+	// CreateEncoding over ALL slots (normal + system + dropped).
+	// Dropped slots participate in encoding width computation but not in
+	// ROM address assignment below.
+	enc := microcode.CreateEncoding(append(allSlots, droppedSlots...), width)
 
 	// Size the microcode address space. op.addr must address every used slot
 	// (0..len-1) AND reserve the all-ones address as the predecode "unknown

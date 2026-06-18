@@ -56,6 +56,13 @@ architecture arch of decode_core is
   signal next_id_stall_a : std_logic;
   signal maskint : std_logic;
   signal delay_slot : std_logic;
+  -- Stage 2 squash: the microcode address that was actually read into the ROM
+  -- output last cycle (registered op_addr_next), and the mispredict flag raised
+  -- when that read-ahead address does not match the address the sequencer
+  -- actually presents this cycle (ROM decoder only).
+  signal predicted_addr : std_logic_vector(7 downto 0);
+  signal op_addr_next_i : std_logic_vector(7 downto 0);
+  signal mispredict : std_logic;
 
   register variable this : decode_core_reg_t reset := reset_vector;
 
@@ -135,14 +142,39 @@ begin
   mac_stall <= mac_stall_sense and (p.wb1.mac_busy or p.wb2.mac_busy or
                                     p.wb3.mac_busy or p.ex1.mac_busy or mac_busy);
 
+  -- Stage 2 squash (ROM full-cycle read): register the read-ahead address that
+  -- produced the current ROM line, and raise mispredict when it disagrees with
+  -- the address the sequencer actually presents this cycle (ra_base == current
+  -- op.addr). This catches read-ahead mispredictions whose inputs were not
+  -- available a cycle early: taken branches, late exceptions, and the
+  -- prefetch-not-ready instruction boundary at startup. mispredict forces a
+  -- one-cycle front stall (below), which holds op so op_addr_next == op.addr and
+  -- the ROM is re-read at the true address next cycle, and bubbles the bad EX
+  -- via the existing stall path. It converges in one cycle (predicted_addr then
+  -- equals op.addr) so there is no loop. Forced '0' for non-ROM decoders, so the
+  -- direct (J2/J4) decoder is byte-for-byte unaffected.
+  predicted_addr_reg : process(clk, rst)
+  begin
+    if rst = '1' then
+      predicted_addr <= (others => '0');
+    elsif clk = '1' and clk'event then
+      predicted_addr <= op_addr_next_i;
+    end if;
+  end process;
+  mispredict <= '1' when (decode_type = ROM and predicted_addr /= ra_base)
+                else '0';
+
   -- Next ID STALL
-  next_id_stall_a <= reg_conf or if_stall or mac_stall;
+  next_id_stall_a <= reg_conf or if_stall or mac_stall or mispredict;
   next_id_stall <= next_id_stall_a;
 
   incpc <= id.incpc and not(next_id_stall_a);
 
   ifadsel <= id.ifadsel;
-  if_issue <= id.if_issue and not(reg_conf) and not(mac_stall);
+  -- On a mispredict the current ROM line is the speculatively-read (wrong) word,
+  -- so its fetch-issue control must not be acted on -- suppress it for the
+  -- one-cycle squash bubble (the corrected line drives the fetch next cycle).
+  if_issue <= id.if_issue and not(reg_conf) and not(mac_stall) and not(mispredict);
 
   -- Detect Exception Events
   next_op <=
@@ -179,8 +211,27 @@ begin
     ra_v <= std_logic_vector(unsigned(ra_base) + 1) when next_id_stall_a = '0'
             else ra_base;
     ra_seqz_n <= dispatch when next_id_stall_a = '0' else this'register.instr_seq_zero;
-    op_addr_next <= ra_v when (next_id_stall_a = '1' or ra_seqz_n = '0')
-                    else predecode_rom_addr(if_dr_next);
+    -- When slot='0' the decode_core sequencer register holds (see the register
+    -- process: it only advances "if slot='1'"), so next cycle's op.addr equals
+    -- the current op.addr. The read-ahead must hold too, otherwise the
+    -- free-running rising-edge ROM read latches rom[A+1] while the pipeline is
+    -- still at A -- mis-aligning the microcode (and its fetch controls) during
+    -- memory wait states. Falling back to the current op.addr reproduces the
+    -- original free-running rom[op.addr] read on a hold. The slot='1' path keeps
+    -- the one-cycle-ahead prediction; taken-branch mispredicts are caught by the
+    -- squash.
+    -- ra_base equals the current combinational op.addr (same mux as the op
+    -- output above), so it is the address to hold when slot='0'. (op is an
+    -- output port and cannot be read here.)
+    -- Gate the whole read-ahead on decode_type=ROM (a compile-time generic) so
+    -- the direct (J2/J4) decoder, which ignores op_addr_next, constant-folds the
+    -- read-ahead cone (the if_dr_next predecode, the adder, predicted_addr and
+    -- mispredict) away -- keeping the direct decoder area-neutral.
+    op_addr_next_i <= (others => '0') when decode_type /= ROM else
+                      ra_base when slot = '0' else
+                      ra_v when (next_id_stall_a = '1' or ra_seqz_n = '0') else
+                      predecode_rom_addr(if_dr_next);
+    op_addr_next <= op_addr_next_i;
 
     -- Detect register conflict
     reg_conf <=

@@ -39,6 +39,7 @@ entity decode_core is
     ilevel : out std_logic_vector(3 downto 0);
     incpc : out std_logic;
     op : out operation_t;
+    op_addr_next : out std_logic_vector(7 downto 0);
     next_id_stall : out std_logic
     );
 end;
@@ -46,6 +47,9 @@ end;
 architecture arch of decode_core is
 
   signal mac_stall : std_logic;
+  -- Stage 2 read-ahead microcode address (full-cycle ROM read) intermediates.
+  signal ra_base, ra_v : std_logic_vector(7 downto 0);
+  signal ra_seqz_n : std_logic;
   signal reg_conf : std_logic;
   signal next_op : operation_t;  
   signal instr_state_sel : std_logic;
@@ -163,6 +167,20 @@ begin
 
     op <= this'register.op when this'register.id_stall = '1' or this'register.instr_seq_zero = '0'
           else next_op;
+
+    -- Stage 2: read-ahead microcode address for the full-cycle (rising-edge)
+    -- ROM read -- the op.addr the sequencer will use NEXT cycle, mirroring the
+    -- register process + the op output mux. Exact for hold / multi-cycle
+    -- increment / sequential boundary (predecode of the prefetched if_dr_next);
+    -- taken-branch / late-exception mispredicts are caught by the squash.
+    ra_base <= next_op.addr
+               when (this'register.id_stall = '0' and this'register.instr_seq_zero = '1')
+               else this'register.op.addr;
+    ra_v <= std_logic_vector(unsigned(ra_base) + 1) when next_id_stall_a = '0'
+            else ra_base;
+    ra_seqz_n <= dispatch when next_id_stall_a = '0' else this'register.instr_seq_zero;
+    op_addr_next <= ra_v when (next_id_stall_a = '1' or ra_seqz_n = '0')
+                    else predecode_rom_addr(if_dr_next);
 
     -- Detect register conflict
     reg_conf <=

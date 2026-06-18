@@ -383,6 +383,7 @@ func newStaticPackage() *Package {
 					{Name: "incpc", Direction: "out", Type: "std_logic"},
 					{Name: "next_id_stall", Direction: "out", Type: "std_logic"},
 					{Name: "op", Direction: "out", Type: "operation_t"},
+					{Name: "op_addr_next", Direction: "out", Type: "std_logic_vector(7 downto 0)"},
 				},
 			},
 			{
@@ -391,6 +392,7 @@ func newStaticPackage() *Package {
 					{Name: "clk", Direction: "in", Type: "std_logic"},
 					{Name: "next_id_stall", Direction: "in", Type: "std_logic"},
 					{Name: "op", Direction: "in", Type: "operation_t"},
+					{Name: "op_addr_next", Direction: "in", Type: "std_logic_vector(7 downto 0)"},
 					{Name: "t_bcc", Direction: "in", Type: "std_logic"},
 					{Name: "debug", Direction: "out", Type: "std_logic"},
 					{Name: "delay_jump", Direction: "out", Type: "std_logic"},

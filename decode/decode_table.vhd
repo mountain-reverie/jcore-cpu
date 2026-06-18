@@ -18,6 +18,7 @@ entity decode_table is
         clk : in std_logic;
         next_id_stall : in std_logic;
         op : in operation_t;
+        op_addr_next : in std_logic_vector(7 downto 0);
         t_bcc : in std_logic;
         debug : out std_logic;
         delay_jump : out std_logic;

@@ -194,6 +194,7 @@ package decode_pack is
             event_i : in cpu_event_i_t;
             ibit : in std_logic_vector(3 downto 0);
             if_dr : in std_logic_vector(15 downto 0);
+            if_dr_next : in std_logic_vector(15 downto 0);
             if_stall : in std_logic;
             illegal_delay_slot : in std_logic;
             illegal_instr : in std_logic;
@@ -231,6 +232,7 @@ package decode_pack is
             ibit : in std_logic_vector(3 downto 0);
             id : in pipeline_id_t;
             if_dr : in std_logic_vector(15 downto 0);
+            if_dr_next : in std_logic_vector(15 downto 0);
             if_stall : in std_logic;
             ilevel_cap : in std_logic;
             illegal_delay_slot : in std_logic;
@@ -248,7 +250,8 @@ package decode_pack is
             ilevel : out std_logic_vector(3 downto 0);
             incpc : out std_logic;
             next_id_stall : out std_logic;
-            op : out operation_t
+            op : out operation_t;
+            op_addr_next : out std_logic_vector(7 downto 0)
         );
     end component;
     component decode_table
@@ -256,6 +259,7 @@ package decode_pack is
             clk : in std_logic;
             next_id_stall : in std_logic;
             op : in operation_t;
+            op_addr_next : in std_logic_vector(7 downto 0);
             t_bcc : in std_logic;
             debug : out std_logic;
             delay_jump : out std_logic;

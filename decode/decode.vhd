@@ -59,6 +59,7 @@ architecture arch of decode is
     signal maskint_o : std_logic;
     signal next_id_stall : std_logic;
     signal op : operation_t;
+    signal op_addr_next : std_logic_vector(7 downto 0);
     signal pipeline_c : pipeline_t;
     signal pipeline_r : pipeline_t;
     signal wb : pipeline_wb_t;
@@ -103,13 +104,15 @@ begin
             ilevel => sr.ilevel,
             incpc => pc.inc,
             next_id_stall => next_id_stall,
-            op => op
+            op => op,
+            op_addr_next => op_addr_next
         );
     table : decode_table
         port map (
             clk => clk,
             next_id_stall => next_id_stall,
             op => op,
+            op_addr_next => op_addr_next,
             t_bcc => t_bcc,
             debug => debug_o,
             delay_jump => delay_jump,

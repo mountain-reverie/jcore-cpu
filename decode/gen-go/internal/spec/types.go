@@ -43,6 +43,7 @@ type File struct {
 type Spec struct {
 	Defaults Defaults
 	Instrs   []Instr
+	Dropped  []Instr           // removed by a profile, kept for their opcodes
 	// Source records the file each instruction came from, for error reporting.
 	Source map[string]string // key = Instr.Name → filename
 }

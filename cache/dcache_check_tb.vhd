@@ -126,12 +126,14 @@ begin
     end procedure;
     procedure do_load(addr : std_logic_vector(31 downto 0); expect : word_t) is
       variable got : word_t;
+      variable cyc : integer := 0;
     begin
       ibus_o <= (en=>'1', a=>addr, rd=>'1', wr=>'0', we=>"0000", d=>(others=>'0'));
-      loop tick; exit when ibus_i.ack = '1'; end loop;
+      loop tick; cyc := cyc + 1; exit when ibus_i.ack = '1'; end loop;
       got := ibus_i.d;
       ibus_o <= NULL_DATA_O;
       testno := testno + 1;
+      report "LATENCY load @" & hex(addr) & " = " & integer'image(cyc) & " cycles" severity note;
       if got /= expect then
         errors := errors + 1;
         report "FAIL load @" & hex(addr) & " got=" & hex(got) &

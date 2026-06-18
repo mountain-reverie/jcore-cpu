@@ -67,6 +67,18 @@ jobs:
         # SYNTH_VARIANT selects the cpu top configuration (j1/j2/j4); j2 is
         # byte-identical to the historical J2-only invocation.
         run: SYNTH_VARIANT=${{ matrix.variant }} synth/cpu_synth.sh asic
+      - name: Assert no negedge FFs (single-clock cache)
+        if: matrix.variant == 'j2c' || matrix.variant == 'j4c'
+        run: |
+          set -euo pipefail
+          # The single-clock cache CDC must be all-posedge (Part B reclock). A
+          # negedge FF means a half-cycle (T/2) timing path regressed back in.
+          # write_verilog emits `always @(negedge ...)` for any negedge FF.
+          if grep -nE "@[[:space:]]*\(negedge" build/cpu_asic.v; then
+            echo "FAIL: negedge-clocked FF in the cpu+cache netlist (T/2 path regressed)" >&2
+            exit 1
+          fi
+          echo "OK: cpu+cache netlist is all-posedge (no T/2 half-cycle path)"
       - name: Report cell/area stats
         run: |
           set -euo pipefail

@@ -146,6 +146,32 @@ Each future SH-4 feature attaches at a defined seam WITHOUT touching J2 sources.
 
 ---
 
+## L1 cache: single-clock CDC and Fmax
+
+The `cache/` I/D caches (`icache`, `dcache`) carry a small bidirectional
+clock-domain-crossing (CDC) between a CPU-side domain (`clk125`) and a memory-side
+domain (`clk200`) — an XOR-toggle level handshake with "phase element" registers
+(`bcen_value_halfcb0`, `bmen_value_halfcb2`). The CDC form is selected at analysis
+time by `cache/cache_clkmode_{sc,dc}.vhd` (the `CACHE_SAME_CLOCK` constant), the
+same sim/ecp5-arch-split idiom used elsewhere:
+
+- **`_dc` (dual-clock, ASIC):** phase elements are transparent latches that sample
+  the other domain mid-cycle (metastability hardening). This is the form the
+  dual-clock testbench / native-ASIC flow uses.
+- **`_sc` (single-clock, every FPGA — `clk125`=`clk200`):** the metastability
+  hardening is vestigial (one clock net), so the phase elements are clocked on the
+  **posedge (full cycle)**. This removes the **T/2 half-cycle timing path** that was
+  the cache Fmax limiter on the ULX3S.
+
+**Latency characteristic (single-clock):** the posedge form costs **+1 cycle per
+phase-element path**. A cache **hit is unaffected**; a cache **miss is +2 cycles**
+(the miss round-trip crosses both `dcache` phase elements — cpu→mem request and
+mem→cpu critical word). This is a deliberate trade: misses are dominated by SDRAM
+fill latency, so +2 CPU-side cycles is negligible, while the higher Fmax benefits
+every cycle. Verified by the dcache scoreboard (`sim/cache_sim.sh sc`): hit = 2
+cycles, cold-miss 10 → 12. A CI guard asserts the single-clock cpu+cache netlist
+contains no negedge flip-flops, so the T/2 path cannot silently regress.
+
 ## The J2 invariant — files that must not be edited for J4 work
 
 SH-4 work ONLY adds files (under `spec/sh4/`, new architectures, new

@@ -411,6 +411,22 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 		pkg.DecCoreROMResetAddr = addrLit(resetAddr+1, addrBits)
 	}
 
+	// Route dropped instructions to the illegal-instruction trap: OR each
+	// dropped opcode's match into check_illegal_instruction. decode_core then
+	// forces op.addr = GENERAL_ILLEGAL on illegal_instr = '1'. Sorted by opcode
+	// for deterministic output.
+	if len(s.Dropped) > 0 {
+		dropped := append([]spec.Instr(nil), s.Dropped...)
+		sort.Slice(dropped, func(i, j int) bool { return dropped[i].Opcode < dropped[j].Opcode })
+		for _, in := range dropped {
+			term, err := illegalMatchExpr(in.Opcode)
+			if err != nil {
+				return nil, err
+			}
+			d.Body.IllegalInstr = d.Body.IllegalInstr + " or " + term
+		}
+	}
+
 	return d, nil
 }
 

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/j-core/jcore-cpu/decode/gen-go/internal/spec"
@@ -157,5 +158,42 @@ func TestBuildProductionImmVals(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("ImmValLiterals[%d]: got %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+func TestDroppedOpcodeAddedToIllegalInstr(t *testing.T) {
+	s := &spec.Spec{
+		Instrs: []spec.Instr{
+			{Name: "CLRT", Format: "0", Opcode: "0000 0000 0000 1000",
+				Slots: []spec.Slot{{"sr": "T=0"}}},
+		},
+		Dropped: []spec.Instr{
+			{Name: "CAS.L Rm, Rn, @R0", Opcode: "0010 nnnn mmmm 0011"},
+		},
+	}
+	d, err := Build(s, 72)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(d.Body.IllegalInstr, `(code and x"f00f") = x"2003"`) {
+		t.Fatalf("dropped CAS.L not OR-ed into IllegalInstr: %q", d.Body.IllegalInstr)
+	}
+	// The base illegal check must still be present.
+	if !strings.Contains(d.Body.IllegalInstr, `x"ff"`) {
+		t.Fatalf("base illegal check lost: %q", d.Body.IllegalInstr)
+	}
+}
+
+func TestNoDropsLeavesIllegalInstrUnchanged(t *testing.T) {
+	s := &spec.Spec{Instrs: []spec.Instr{
+		{Name: "CLRT", Format: "0", Opcode: "0000 0000 0000 1000",
+			Slots: []spec.Slot{{"sr": "T=0"}}},
+	}}
+	d, err := Build(s, 72)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(d.Body.IllegalInstr, " or ") {
+		t.Fatalf("IllegalInstr gained terms without drops: %q", d.Body.IllegalInstr)
 	}
 }

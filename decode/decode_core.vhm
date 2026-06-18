@@ -19,6 +19,7 @@ entity decode_core is
     ibit : in std_logic_vector(3 downto 0);
     id : in pipeline_id_t;
     if_dr : in std_logic_vector(15 downto 0);
+    if_dr_next : in std_logic_vector(15 downto 0);
     if_stall : in std_logic;
     ilevel_cap : in std_logic;
     illegal_delay_slot : in std_logic;

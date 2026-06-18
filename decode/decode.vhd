@@ -21,6 +21,7 @@ entity decode is
         event_i : in cpu_event_i_t;
         ibit : in std_logic_vector(3 downto 0);
         if_dr : in std_logic_vector(15 downto 0);
+        if_dr_next : in std_logic_vector(15 downto 0);
         if_stall : in std_logic;
         illegal_delay_slot : in std_logic;
         illegal_instr : in std_logic;
@@ -84,6 +85,7 @@ begin
             ibit => ibit,
             id => id,
             if_dr => if_dr,
+            if_dr_next => if_dr_next,
             if_stall => if_stall,
             ilevel_cap => ilevel_cap,
             illegal_delay_slot => illegal_delay_slot,

@@ -41,6 +41,7 @@ architecture stru of cpu is
    signal t_bcc : std_logic;
    signal ibit : std_logic_vector(3 downto 0);
    signal if_dr : std_logic_vector(15 downto 0);
+   signal if_dr_next : std_logic_vector(15 downto 0);
    signal enter_debug, debug, mask_int : std_logic;
    signal event_ack    : std_logic;
    signal slp_o        : std_logic;
@@ -60,7 +61,7 @@ begin
    u_decode: decode
      port map (clk => clk, rst => rst, slot => slot,
       enter_debug => enter_debug, debug => debug,
-      if_dr => if_dr, if_stall => if_stall,
+      if_dr => if_dr, if_dr_next => if_dr_next, if_stall => if_stall,
       illegal_delay_slot => illegal_delay_slot,
       illegal_instr => illegal_instr,
       mac_busy => mac_o.busy,
@@ -85,7 +86,7 @@ begin
       macin1 => mac_i.in1, macin2 => mac_i.in2, mach => mac_o.mach, macl => mac_o.macl,
       mult_stall => mac_o.slot_stall,
       mac_s => mac_i.s,
-      t_bcc => t_bcc, ibit => ibit, if_dr => if_dr, if_stall => if_stall,
+      t_bcc => t_bcc, ibit => ibit, if_dr => if_dr, if_dr_next => if_dr_next, if_stall => if_stall,
       mask_int => mask_int,
       illegal_delay_slot => illegal_delay_slot,
       illegal_instr => illegal_instr,

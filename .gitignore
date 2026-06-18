@@ -47,6 +47,9 @@ insns.json
 jcore-decoder-migration-spec-v2.md
 docs/superpowers
 
+# Git worktrees
+.worktrees/
+
 # synth/ build artifacts (netlists, GHDL work dirs)
 build/
 

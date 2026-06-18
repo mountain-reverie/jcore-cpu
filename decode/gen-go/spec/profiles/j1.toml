@@ -1,0 +1,14 @@
+# J1 profile — single-core J1 SH-2 subset.
+# Drops multi-processor and coprocessor instructions not present in J1.
+
+drop = [
+  "CAS.L Rm, Rn, @R0",
+  "CLDS CP0_Rm, CP0_COM",
+  "CLDS CPI_Rm, CPI_COM",
+  "CSTS CP0_COM, CP0_Rn",
+  "CSTS CPI_COM, CPI_Rn",
+  "LDS Rm, CP0_COM",
+  "LDS Rm, CPI_COM",
+  "STS CP0_COM, Rn",
+  "STS CPI_COM, Rn",
+]

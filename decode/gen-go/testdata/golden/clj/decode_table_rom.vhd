@@ -177,14 +177,16 @@ architecture rom of decode_table is
     250 => "000000000000000000000000000000000000000000000000000000000000000000000000000", 251 => "000000100000000001000000000000000000000000110010001100000000100000000000010", 252 => "000000000000110000000000000000000000000000000000000000000000000000000000000", 253 => "000000000100100000001000000000000000000000000000000000000000000000000000000", -- Break
     254 => "000000000000000000000000000000000000000000000000000000000000000000000000000", 255 => "000000000000000000000000000000000000000000000000000000000000000000000000000");
 begin
-    -- Read microcode line on falling edge of
-    -- clock. Needs to be clocked so that xilinx
-    -- uses a RAM, and needs to be falling edge to
-    -- allow the ROM address to be computed.
-    process(clk, op)
+    -- Stage 2 full-cycle read: read the microcode line on the RISING edge using
+    -- the read-ahead address op_addr_next (decode_core's prediction of NEXT
+    -- cycle's op.addr). line is then valid at the START of the slot it controls
+    -- -- a full clock period for the decode logic, instead of the falling-edge
+    -- half. Correct when the prediction holds; taken-branch / late-exception
+    -- mispredicts are caught by the squash (op.addr /= the read-ahead address).
+    process(clk)
     begin
-        if (clk = '0' and clk'event) then
-            line <= microcode_rom(TO_INTEGER(unsigned(op.addr)));
+        if rising_edge(clk) then
+            line <= microcode_rom(TO_INTEGER(unsigned(op_addr_next)));
         end if;
     end process;
     -- Sign extend parts of opcode

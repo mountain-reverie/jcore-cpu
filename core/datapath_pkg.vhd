@@ -57,6 +57,7 @@ package datapath_pack is
       t_bcc       : out std_logic;
       ibit        : out std_logic_vector(3 downto 0);
       if_dr       : out std_logic_vector(15 downto 0);
+      if_dr_next  : out std_logic_vector(15 downto 0);
       if_stall    : out std_logic;
       mask_int    : out std_logic;
       illegal_delay_slot : out std_logic;

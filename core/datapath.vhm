@@ -46,6 +46,7 @@ entity datapath is
 		     t_bcc : out std_logic;
 		     ibit : out std_logic_vector(3 downto 0);
 		     if_dr : out std_logic_vector(15 downto 0);
+		     if_dr_next : out std_logic_vector(15 downto 0);
 		     if_stall : out std_logic;
 		     mask_int : out std_logic;
 		     illegal_delay_slot : out std_logic;
@@ -564,6 +565,7 @@ begin
         db_o <= this'register.data_o;
         inst_o <= this'register.inst_o;
         if_dr <= this'register.if_dr;
+        if_dr_next <= this'register.if_dr_next;
         illegal_delay_slot <= this'register.illegal_delay_slot;
         illegal_instr <= this'register.illegal_instr;
         cop_o.rna <= copreg(7 downto 4);

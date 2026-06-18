@@ -178,9 +178,9 @@ thisuc_c <= thisuc;
     end process;
   end generate;
   c2_r3_ff : if CACHE_SAME_CLOCK generate
-    c2_r3 : process(clk125)            -- 0.5 cycle delay (negedge FF, single-clock)
-    begin
-      if falling_edge(clk125) then
+    c2_r3 : process(clk125)            -- full-cycle (posedge FF, single-clock):
+    begin                              -- removes the T/2 path; +1 cycle on fill
+      if rising_edge(clk125) then
         bcen_value_halfcb0 <= thisbc_r.en(VALUE);
       end if;
     end process;

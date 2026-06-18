@@ -1,4 +1,4 @@
-# J-Core J2 CPU
+# J-Core CPU (J1 / J2 / J4)
 
 [![synth-cpu](https://github.com/mountain-reverie/jcore-cpu/actions/workflows/synth-cpu.yml/badge.svg)](https://github.com/mountain-reverie/jcore-cpu/actions/workflows/synth-cpu.yml)
 [![full-regression](https://github.com/mountain-reverie/jcore-cpu/actions/workflows/full-regression.yml/badge.svg)](https://github.com/mountain-reverie/jcore-cpu/actions/workflows/full-regression.yml)
@@ -9,6 +9,20 @@ An open-source 32-bit RISC processor implementing the SH-2 (SuperH-2)
 instruction set architecture. The repository contains the VHDL hardware
 description, a C/VHDL co-simulation testbench, and a Go-based instruction
 decoder generator.
+
+## Variants
+
+The J-Core CPU is implemented as a single VHDL entity with three variants
+selected via VHDL configurations:
+
+| Variant | Description |
+|---|---|
+| **J2** | Baseline core targeting ASIC and FPGA; runs Linux no-MMU. Implements the SH-2 ISA plus SH-4 dynamic shift instructions (SHAD/SHLD). 2–3 cycle Karatsuba multiplier. |
+| **J1** | Smaller variant targeting iCE40 and other small FPGAs; microcontroller-oriented core. Sequential shift-add multiplier (~34 cycles) replaces the hardware array — same ISA, multiply stalls longer, ~9% fewer cells. |
+| **J4** | J2 + full SH-4 extensions targeting complete Linux (MMU, privileged modes, banked registers). Placeholder today — byte-identical to J2 while extensions are developed. |
+
+See [`docs/architecture/cpu-variants.md`](docs/architecture/cpu-variants.md) for
+the full design, configuration guide, and build commands.
 
 ## 📊 Synthesis metrics dashboard
 
@@ -29,6 +43,8 @@ The top-level `cpu` entity (`core/cpu.vhd`) instantiates three sub-units:
 - `decode` — instruction decoder with pipeline control
 - `mult` — multiplier / MAC unit (multi-cycle, microcode-driven)
 - `datapath` — execution datapath (ALU, shifter, register file, buses)
+
+The pipeline description above reflects the **J2** baseline.
 
 See [`CLAUDE.md`](CLAUDE.md) for a full repository map and conventions.
 

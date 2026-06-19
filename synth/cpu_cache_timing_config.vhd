@@ -19,3 +19,18 @@ configuration cpu_cache_timing_j4 of cpu_cache_timing_top is
     for u_dcache : dcache_adapter use configuration work.dcache_adapter_fpga; end for;
   end for;
 end configuration;
+
+-- M0: J4+cache asic/ecp5 area build with PRIV_ARCH=true (real SH-4 privileged
+-- datapath).  Identical to cpu_cache_timing_j4 except u_cpu uses cpu_synth_j4
+-- with generic map(PRIV_ARCH => true), exactly as cpu_timing_j4 does for the
+-- bare-cpu timing backend.  Used by cpu_synth.sh AREA_TOP for j4c asic/ecp5.
+configuration cpu_cache_timing_j4_priv of cpu_cache_timing_top is
+  for timing
+    for u_cpu : cpu
+      use configuration work.cpu_synth_j4
+        generic map (PRIV_ARCH => true);
+    end for;
+    for u_icache : icache_adapter use configuration work.icache_adapter_fpga; end for;
+    for u_dcache : dcache_adapter use configuration work.dcache_adapter_fpga; end for;
+  end for;
+end configuration;

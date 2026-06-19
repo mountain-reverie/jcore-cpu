@@ -417,21 +417,18 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 			}
 		}
 	}
-	// Route dropped opcodes' predecode to the General Illegal microcode so the
-	// Stage-2 read-ahead never executes a populated kept entry for them.
-	// Route dropped opcodes to General Illegal only when that microcode exists
-	// (always true for the real SH-2 spec; a minimal unit-test spec may omit
-	// it, in which case dropped opcodes still trap via check_illegal_instruction).
+	// Collect dropped opcodes so BuildBody can route their predecode to the
+	// all-ones sentinel (a side-effect-free NOP), keeping the Stage-2 read-ahead
+	// safe; the trap itself is raised by check_illegal_instruction.
 	var droppedPredecode map[string]logic.LogicMap
-	illegalAddr, hasIllegal := instrAddrs["General Illegal"]
-	if len(s.Dropped) > 0 && hasIllegal {
+	if len(s.Dropped) > 0 {
 		droppedPredecode = make(map[string]logic.LogicMap, len(s.Dropped))
 		for i := range s.Dropped {
 			di := &s.Dropped[i]
 			droppedPredecode[di.Name] = logic.OpToLogicMap(di.Plane, di.Opcode)
 		}
 	}
-	d.Body = BuildBody(instrAddrs, instrLogicNormal, writesPC, privileged, addrBits, droppedPredecode, illegalAddr)
+	d.Body = BuildBody(instrAddrs, instrLogicNormal, writesPC, privileged, addrBits, droppedPredecode)
 	d.Simple = BuildSimple(s, instrLogicAll, slotAssigns)
 	d.Direct = BuildDirect(s, instrLogicAll, slotAssigns)
 	d.Entity = BuildEntity(d.Package)

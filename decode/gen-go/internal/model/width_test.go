@@ -61,12 +61,12 @@ func TestAddrLit(t *testing.T) {
 // the all-ones address rendered at the active width.
 func TestBuildBodyAddrSentinel(t *testing.T) {
 	empty := func() *Body {
-		return BuildBody(map[string]int{}, map[string]logic.LogicMap{}, map[string]bool{}, map[string]bool{}, 8, nil, 0)
+		return BuildBody(map[string]int{}, map[string]logic.LogicMap{}, map[string]bool{}, map[string]bool{}, 8, nil)
 	}
 	if got := empty().AddrSentinel; got != `x"ff"` {
 		t.Errorf("8-bit AddrSentinel = %q, want %q", got, `x"ff"`)
 	}
-	b9 := BuildBody(map[string]int{}, map[string]logic.LogicMap{}, map[string]bool{}, map[string]bool{}, 9, nil, 0)
+	b9 := BuildBody(map[string]int{}, map[string]logic.LogicMap{}, map[string]bool{}, map[string]bool{}, 9, nil)
 	if got := b9.AddrSentinel; got != `"111111111"` {
 		t.Errorf("9-bit AddrSentinel = %q, want %q", got, `"111111111"`)
 	}

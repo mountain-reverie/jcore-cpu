@@ -312,12 +312,13 @@ func TestDropKeepsKeptMicrocodeIdentical(t *testing.T) {
 	}
 }
 
-// TestDroppedOpcodeRoutedToIllegalPredecode guards the Stage-2 read-ahead
-// safety fix: a dropped opcode's predecode must point at the General Illegal
-// microcode, NOT at some populated kept-instruction entry (which the read-ahead
-// would execute one cycle early, before the illegal squash, causing a bus
-// error instead of a clean trap).
-func TestDroppedOpcodeRoutedToIllegalPredecode(t *testing.T) {
+// TestDroppedOpcodeRoutedToSentinelPredecode guards the Stage-2 read-ahead
+// safety fix: a dropped opcode's predecode must point at the all-ones sentinel
+// (an unpopulated NOP entry), NOT at some populated kept-instruction entry
+// (which the read-ahead would execute one cycle early, before the illegal
+// squash, causing a bus error instead of a clean trap). The trap itself is
+// raised by check_illegal_instruction -> decode_core.
+func TestDroppedOpcodeRoutedToSentinelPredecode(t *testing.T) {
 	j, err := spec.Load(filepath.Join("..", "..", "spec"))
 	if err != nil {
 		t.Fatal(err)

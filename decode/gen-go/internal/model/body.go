@@ -57,26 +57,20 @@ type PredecodeBitAssign struct {
 //
 // writesPC is the set of instruction names that write PC (branches);
 // drives check_illegal_delay_slot.
-// droppedPredecode maps each dropped instruction name → its opcode LogicMap;
-// illegalAddr is the ROM address of the General Illegal microcode. Dropped
-// opcodes are added to the predecode pointing at illegalAddr so that — even
-// with the Stage-2 read-ahead, which reads ROM[predecode(opcode)] one cycle
-// early — a dropped opcode executes the illegal sequence instead of landing on
-// some populated kept-instruction entry (e.g. XTRACT). The illegal/privileged
-// checks still see only the real instruction set (scoped copies below).
-func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, writesPC map[string]bool, privileged map[string]bool, addrBits int, droppedPredecode map[string]logic.LogicMap, illegalAddr int) *Body {
+// droppedPredecode maps each dropped instruction name → its opcode LogicMap.
+// Dropped opcodes are added to the predecode pointing at the all-ones SENTINEL
+// (an unpopulated ROM entry → zero microcode → side-effect-free NOP), so that —
+// even with the Stage-2 read-ahead, which reads ROM[predecode(opcode)] one cycle
+// early — a dropped opcode never lands on a populated entry that performs a
+// memory access (e.g. CAS.L → XTRACT) and faults before the illegal squash. The
+// trap itself is raised by check_illegal_instruction → decode_core, exactly as
+// for natural undefined opcodes. The illegal/privileged checks still see only
+// the real instruction set (scoped copies below).
+func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, writesPC map[string]bool, privileged map[string]bool, addrBits int, droppedPredecode map[string]logic.LogicMap) *Body {
 	body := &Body{}
 	preAddrs := instrAddrs
 	preLogic := instrLogic
 	if len(droppedPredecode) > 0 {
-		// Route dropped opcodes to the all-ones SENTINEL (an unpopulated ROM
-		// entry → zero microcode → side-effect-free NOP). The Stage-2 read-ahead
-		// reads ROM[predecode(opcode)] one cycle early, so a dropped opcode must
-		// NOT land on a populated entry that performs a memory access (CAS.L →
-		// XTRACT, or the General Illegal microcode), which would fault before the
-		// illegal squash. The trap itself is raised by check_illegal_instruction
-		// → decode_core, exactly as for natural undefined opcodes.
-		_ = illegalAddr // retained for signature stability; sentinel is the target
 		sentinel := (1 << addrBits) - 1
 		preAddrs = make(map[string]int, len(instrAddrs)+len(droppedPredecode))
 		for k, v := range instrAddrs {

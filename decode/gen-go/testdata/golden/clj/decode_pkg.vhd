@@ -25,11 +25,12 @@ package decode_pack is
     type macin2_sel_t is (SEL_YBUS, SEL_ZBUS, SEL_WBUS);
     type mem_addr_sel_t is (SEL_XBUS, SEL_YBUS, SEL_ZBUS);
     type mem_wdata_sel_t is (SEL_ZBUS, SEL_YBUS);
+    type mmu_reg_sel_t is (SEL_PTEH, SEL_PTEL, SEL_ASIDR);
     type reg_sel_t is (SEL_R0, SEL_R15, SEL_RA, SEL_RB);
     type sr_sel_t is (SEL_PREV, SEL_WBUS, SEL_ZBUS, SEL_DIV0U, SEL_ARITH, SEL_LOGIC, SEL_INT_MASK, SEL_SET_T, SEL_EXCEPTION, SEL_EXPEVT, SEL_INTEVT, SEL_TRA);
     type t_sel_t is (SEL_CLEAR, SEL_SET, SEL_SHIFT, SEL_CARRY);
     type xbus_sel_t is (SEL_IMM, SEL_REG, SEL_PC);
-    type ybus_sel_t is (SEL_IMM, SEL_REG, SEL_MACH, SEL_MACL, SEL_PC, SEL_SR, SEL_EXPEVT, SEL_INTEVT, SEL_TRA);
+    type ybus_sel_t is (SEL_IMM, SEL_REG, SEL_MACH, SEL_MACL, SEL_PC, SEL_SR, SEL_EXPEVT, SEL_INTEVT, SEL_TRA, SEL_MMU);
     type zbus_sel_t is (SEL_ARITH, SEL_LOGIC, SEL_SHIFT, SEL_MANIP, SEL_YBUS, SEL_WBUS);
     type operation_t is
         record
@@ -53,6 +54,7 @@ package decode_pack is
         record
             x_sel : xbus_sel_t;
             y_sel : ybus_sel_t;
+            mmu_reg_sel : mmu_reg_sel_t;
             z_sel : zbus_sel_t;
             imm_val : std_logic_vector(31 downto 0);
         end record;
@@ -115,6 +117,8 @@ package decode_pack is
             sel : sr_sel_t;
             t : t_sel_t;
             ilevel : std_logic_vector(3 downto 0);
+            mmu_reg_wr : std_logic;
+            mmu_reg_sel : mmu_reg_sel_t;
         end record;
     type pipeline_ex_stall_t is
         record
@@ -134,12 +138,15 @@ package decode_pack is
             mulcom2 : mult_state_t;
             macsel1 : macin1_sel_t;
             macsel2 : macin2_sel_t;
+            mmu_reg_wr : std_logic;
+            mmu_reg_sel : mmu_reg_sel_t;
         end record;
     type pipeline_ex_t is
         record
             imm_val : std_logic_vector(31 downto 0);
             xbus_sel : xbus_sel_t;
             ybus_sel : ybus_sel_t;
+            mmu_reg_sel : mmu_reg_sel_t;
             regnum_z, regnum_x, regnum_y : regnum_t;
             alumanip : alumanip_t;
             aluinx_sel : aluinx_sel_t;

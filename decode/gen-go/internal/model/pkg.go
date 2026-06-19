@@ -101,11 +101,12 @@ func newStaticPackage() *Package {
 			{Name: "macin2_sel_t", Literals: []string{"SEL_YBUS", "SEL_ZBUS", "SEL_WBUS"}},
 			{Name: "mem_addr_sel_t", Literals: []string{"SEL_XBUS", "SEL_YBUS", "SEL_ZBUS"}},
 			{Name: "mem_wdata_sel_t", Literals: []string{"SEL_ZBUS", "SEL_YBUS"}},
+			{Name: "mmu_reg_sel_t", Literals: []string{"SEL_PTEH", "SEL_PTEL", "SEL_ASIDR"}},
 			{Name: "reg_sel_t", Literals: []string{"SEL_R0", "SEL_R15", "SEL_RA", "SEL_RB"}},
 			{Name: "sr_sel_t", Literals: []string{"SEL_PREV", "SEL_WBUS", "SEL_ZBUS", "SEL_DIV0U", "SEL_ARITH", "SEL_LOGIC", "SEL_INT_MASK", "SEL_SET_T", "SEL_EXCEPTION", "SEL_EXPEVT", "SEL_INTEVT", "SEL_TRA"}},
 			{Name: "t_sel_t", Literals: []string{"SEL_CLEAR", "SEL_SET", "SEL_SHIFT", "SEL_CARRY"}},
 			{Name: "xbus_sel_t", Literals: []string{"SEL_IMM", "SEL_REG", "SEL_PC"}},
-			{Name: "ybus_sel_t", Literals: []string{"SEL_IMM", "SEL_REG", "SEL_MACH", "SEL_MACL", "SEL_PC", "SEL_SR", "SEL_EXPEVT", "SEL_INTEVT", "SEL_TRA"}},
+			{Name: "ybus_sel_t", Literals: []string{"SEL_IMM", "SEL_REG", "SEL_MACH", "SEL_MACL", "SEL_PC", "SEL_SR", "SEL_EXPEVT", "SEL_INTEVT", "SEL_TRA", "SEL_MMU"}},
 			{Name: "zbus_sel_t", Literals: []string{"SEL_ARITH", "SEL_LOGIC", "SEL_SHIFT", "SEL_MANIP", "SEL_YBUS", "SEL_WBUS"}},
 		},
 		SystemInstrNames: []string{
@@ -141,6 +142,7 @@ func newStaticPackage() *Package {
 				Fields: []RecordField{
 					{Names: []string{"x_sel"}, Type: "xbus_sel_t"},
 					{Names: []string{"y_sel"}, Type: "ybus_sel_t"},
+					{Names: []string{"mmu_reg_sel"}, Type: "mmu_reg_sel_t"},
 					{Names: []string{"z_sel"}, Type: "zbus_sel_t"},
 					{Names: []string{"imm_val"}, Type: "std_logic_vector(31 downto 0)"},
 				},
@@ -219,6 +221,8 @@ func newStaticPackage() *Package {
 					{Names: []string{"sel"}, Type: "sr_sel_t"},
 					{Names: []string{"t"}, Type: "t_sel_t"},
 					{Names: []string{"ilevel"}, Type: "std_logic_vector(3 downto 0)"},
+					{Names: []string{"mmu_reg_wr"}, Type: "std_logic"},
+					{Names: []string{"mmu_reg_sel"}, Type: "mmu_reg_sel_t"},
 				},
 			},
 			{
@@ -240,6 +244,8 @@ func newStaticPackage() *Package {
 					{Names: []string{"mulcom2"}, Type: "mult_state_t"},
 					{Names: []string{"macsel1"}, Type: "macin1_sel_t"},
 					{Names: []string{"macsel2"}, Type: "macin2_sel_t"},
+					{Names: []string{"mmu_reg_wr"}, Type: "std_logic"},
+					{Names: []string{"mmu_reg_sel"}, Type: "mmu_reg_sel_t"},
 				},
 			},
 			{
@@ -248,6 +254,7 @@ func newStaticPackage() *Package {
 					{Names: []string{"imm_val"}, Type: "std_logic_vector(31 downto 0)"},
 					{Names: []string{"xbus_sel"}, Type: "xbus_sel_t"},
 					{Names: []string{"ybus_sel"}, Type: "ybus_sel_t"},
+					{Names: []string{"mmu_reg_sel"}, Type: "mmu_reg_sel_t"},
 					{Names: []string{"regnum_z", "regnum_x", "regnum_y"}, Type: "regnum_t"},
 					{Names: []string{"alumanip"}, Type: "alumanip_t"},
 					{Names: []string{"aluinx_sel"}, Type: "aluinx_sel_t"},

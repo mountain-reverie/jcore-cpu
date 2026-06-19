@@ -17,34 +17,36 @@ type Signal string
 
 const (
 	// Bus selectors and register numbers (from x-bus/y-bus/z-bus/w-bus)
-	SigXbusSel  Signal = "xbus_sel"
-	SigYbusSel  Signal = "ybus_sel"
-	SigZbusSel  Signal = "zbus_sel"
-	SigRegnumX  Signal = "regnum_x"
-	SigRegnumY  Signal = "regnum_y"
-	SigRegnumZ  Signal = "regnum_z"
-	SigRegnumW  Signal = "regnum_w"
-	SigWrregZ   Signal = "wrreg_z"
-	SigWrregW   Signal = "wrreg_w"
-	SigWrpcZ    Signal = "wrpc_z"
-	SigWrprPC   Signal = "wrpr_pc"
-	SigWrsrW    Signal = "wrsr_w"
-	SigWrsrZ    Signal = "wrsr_z"
+	SigXbusSel   Signal = "xbus_sel"
+	SigYbusSel   Signal = "ybus_sel"
+	SigMmuRegSel Signal = "mmu_reg_sel"
+	SigMmuRegWr  Signal = "mmu_reg_wr"
+	SigZbusSel   Signal = "zbus_sel"
+	SigRegnumX   Signal = "regnum_x"
+	SigRegnumY   Signal = "regnum_y"
+	SigRegnumZ   Signal = "regnum_z"
+	SigRegnumW   Signal = "regnum_w"
+	SigWrregZ    Signal = "wrreg_z"
+	SigWrregW    Signal = "wrreg_w"
+	SigWrpcZ     Signal = "wrpc_z"
+	SigWrprPC    Signal = "wrpr_pc"
+	SigWrsrW     Signal = "wrsr_w"
+	SigWrsrZ     Signal = "wrsr_z"
 
 	// ALU
-	SigAluinxSel  Signal = "aluinx_sel"
-	SigAluinySel  Signal = "aluiny_sel"
-	SigAluManip   Signal = "alumanip"
-	SigArithFunc  Signal = "arith_func"
-	SigArithSrFn  Signal = "arith_sr_func"
-	SigArithCiEn  Signal = "arith_ci_en"
-	SigLogicFunc  Signal = "logic_func"
-	SigLogicSrFn  Signal = "logic_sr_func"
-	SigShiftFunc  Signal = "shiftfunc"
+	SigAluinxSel Signal = "aluinx_sel"
+	SigAluinySel Signal = "aluiny_sel"
+	SigAluManip  Signal = "alumanip"
+	SigArithFunc Signal = "arith_func"
+	SigArithSrFn Signal = "arith_sr_func"
+	SigArithCiEn Signal = "arith_ci_en"
+	SigLogicFunc Signal = "logic_func"
+	SigLogicSrFn Signal = "logic_sr_func"
+	SigShiftFunc Signal = "shiftfunc"
 
 	// SR/T
-	SigSrSel  Signal = "sr_sel"
-	SigTSel   Signal = "t_sel"
+	SigSrSel Signal = "sr_sel"
+	SigTSel  Signal = "t_sel"
 
 	// Memory access
 	SigMaIssue     Signal = "ma_issue"
@@ -55,31 +57,31 @@ const (
 	SigMemLock     Signal = "mem_lock"
 
 	// MAC
-	SigExWrmach     Signal = "ex_wrmach"
-	SigWbWrmach     Signal = "wb_wrmach"
-	SigExWrmacl     Signal = "ex_wrmacl"
-	SigWbWrmacl     Signal = "wb_wrmacl"
-	SigExMulcom1    Signal = "ex_mulcom1"
-	SigWbMulcom1    Signal = "wb_mulcom1"
-	SigExMulcom2    Signal = "ex_mulcom2"
-	SigWbMulcom2    Signal = "wb_mulcom2"
-	SigExMacsel1    Signal = "ex_macsel1"
-	SigWbMacsel1    Signal = "wb_macsel1"
-	SigExMacsel2    Signal = "ex_macsel2"
-	SigWbMacsel2    Signal = "wb_macsel2"
-	SigMacBusy      Signal = "mac_busy"
-	SigMacStallSns  Signal = "mac_stall_sense"
-	SigMacSLatch    Signal = "mac_s_latch"
+	SigExWrmach    Signal = "ex_wrmach"
+	SigWbWrmach    Signal = "wb_wrmach"
+	SigExWrmacl    Signal = "ex_wrmacl"
+	SigWbWrmacl    Signal = "wb_wrmacl"
+	SigExMulcom1   Signal = "ex_mulcom1"
+	SigWbMulcom1   Signal = "wb_mulcom1"
+	SigExMulcom2   Signal = "ex_mulcom2"
+	SigWbMulcom2   Signal = "wb_mulcom2"
+	SigExMacsel1   Signal = "ex_macsel1"
+	SigWbMacsel1   Signal = "wb_macsel1"
+	SigExMacsel2   Signal = "ex_macsel2"
+	SigWbMacsel2   Signal = "wb_macsel2"
+	SigMacBusy     Signal = "mac_busy"
+	SigMacStallSns Signal = "mac_stall_sense"
+	SigMacSLatch   Signal = "mac_s_latch"
 
 	// PC / instruction-fetch
-	SigIncPC      Signal = "incpc"
-	SigIfIssue    Signal = "if_issue"
-	SigIfAdsel    Signal = "ifadsel"
-	SigDelayJump  Signal = "delay_jump"
-	SigDispatch   Signal = "dispatch"
-	SigIlevelCap  Signal = "ilevel_cap"
-	SigEventAck0  Signal = "event_ack_0"
-	SigMaskInt    Signal = "maskint_next"
+	SigIncPC     Signal = "incpc"
+	SigIfIssue   Signal = "if_issue"
+	SigIfAdsel   Signal = "ifadsel"
+	SigDelayJump Signal = "delay_jump"
+	SigDispatch  Signal = "dispatch"
+	SigIlevelCap Signal = "ilevel_cap"
+	SigEventAck0 Signal = "event_ack_0"
+	SigMaskInt   Signal = "maskint_next"
 
 	// Coprocessor / misc
 	SigCopCmd     Signal = "coproc_cmd"
@@ -107,6 +109,7 @@ func (s Signal) IsStdLogic() bool {
 		SigMacStallSns, SigMacSLatch,
 		SigIncPC, SigIfIssue, SigIfAdsel, SigDelayJump, SigDispatch,
 		SigIlevelCap, SigEventAck0, SigMaskInt,
+		SigMmuRegWr,
 		SigDebug, SigSlp:
 		return true
 	}
@@ -173,6 +176,8 @@ func SignalDefault(s Signal) (string, bool) {
 		return "SEL_XBUS", true
 	case SigExMacsel2, SigWbMacsel2:
 		return "SEL_YBUS", true
+	case SigMmuRegSel:
+		return "SEL_PTEH", true
 	case SigMacBusy:
 		// mac_busy_t first literal is NOT_BUSY (see Clojure
 		// interface.clj line 189: [:mac-busy "mac_busy_t"
@@ -240,7 +245,9 @@ var SignalVHDLPath = map[Signal]string{
 	SigWbMacsel1:   "wb_stall.macsel1",
 	SigExMacsel2:   "ex_stall.macsel2",
 	SigWbMacsel2:   "wb_stall.macsel2",
-	SigMacBusy:     "mac_busy",      // top-level signal in arch, not record
+	SigMmuRegSel:   "ex.mmu_reg_sel",
+	SigMmuRegWr:    "ex_stall.mmu_reg_wr",
+	SigMacBusy:     "mac_busy", // top-level signal in arch, not record
 	SigMacStallSns: "mac_stall_sense",
 	SigMacSLatch:   "mac_s_latch",
 	SigIncPC:       "id.incpc",
@@ -263,7 +270,7 @@ var SignalVHDLPath = map[Signal]string{
 // order — that is dictated by CombinableSignals + alphabetical
 // sort of standalone signals in CreateEncoding.
 var AllSignals = []Signal{
-	SigXbusSel, SigYbusSel, SigZbusSel,
+	SigXbusSel, SigYbusSel, SigMmuRegSel, SigZbusSel,
 	SigRegnumX, SigRegnumY, SigRegnumZ, SigRegnumW,
 	SigWrregZ, SigWrregW, SigWrpcZ, SigWrprPC, SigWrsrW, SigWrsrZ,
 	SigAluinxSel, SigAluinySel, SigAluManip,

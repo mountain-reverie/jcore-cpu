@@ -825,6 +825,7 @@ begin
             WORD when "10",
             BYTE when "01",
             LONG when others;
+    ex.mmu_reg_sel <= SEL_PTEH;
     cond15 <= (imp_bit_292) & (imp_bit_276 or imp_bit_303) & (imp_bit_82 or imp_bit_156 or imp_bit_229) & (imp_bit_7 or imp_bit_160 or imp_bit_275) & (imp_bit_159 or imp_bit_227 or imp_bit_253 or (not op.code(9) and not op.code(11) and not op.code(12) and not op.code(13) and op.code(14) and op.code(15) and not p(0)) or imp_bit_314) & (imp_bit_110 or imp_bit_266 or imp_bit_297 or imp_bit_299 or imp_bit_319 or imp_bit_320) & (imp_bit_59 or imp_bit_63 or imp_bit_149 or imp_bit_153 or (op.code(12) and not op.code(13) and op.code(14) and not op.code(15) and not p(0)) or imp_bit_193 or imp_bit_197 or (not op.code(9) and not op.code(11) and not op.code(12) and not op.code(13) and not op.code(14) and op.code(15) and not p(0)));
     with cond15 select
         ex.regnum_x <=

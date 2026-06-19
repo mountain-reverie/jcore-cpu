@@ -120,27 +120,30 @@ var referenceDefaults = map[microcode.Signal]string{
 	// cpu_data_mux_t first literal DBUS.
 	// (interface.clj: [:cpu-data-mux "cpu_data_mux_t" "DBUS" ...])
 	microcode.SigCpuDataMux: "DBUS",
+
+	// mmu_reg_sel_t first literal SEL_PTEH (M1 MMU registers).
+	microcode.SigMmuRegSel: "SEL_PTEH",
 }
 
 // signalsNillable is the set of signals that have no default and must NOT be
 // force-driven when absent from a slot's AssignMap.  Transcribed from
 // interface.clj lines 405-416 (:nillable-outputs set).
 var signalsNillable = map[microcode.Signal]bool{
-	microcode.SigShiftFunc:    true, // :shiftfunc
-	microcode.SigImmVal:       true, // :imm-val
-	microcode.SigMaWr:         true, // :ma-wr
-	microcode.SigArithFunc:    true, // :arith-func
-	microcode.SigArithSrFn:    true, // :arith-sr-func
-	microcode.SigLogicFunc:    true, // :logic-func
-	microcode.SigLogicSrFn:    true, // :logic-sr-func
-	microcode.SigZbusSel:      true, // :zbus-sel
-	microcode.SigMemAddrSel:   true, // :mem-addr-sel
-	microcode.SigMemSize:      true, // :mem-size
-	microcode.SigMemWdataSel:  true, // :mem-wdata-sel
-	microcode.SigRegnumW:      true, // :regnum-w
-	microcode.SigRegnumX:      true, // :regnum-x
-	microcode.SigRegnumY:      true, // :regnum-y
-	microcode.SigRegnumZ:      true, // :regnum-z
+	microcode.SigShiftFunc:   true, // :shiftfunc
+	microcode.SigImmVal:      true, // :imm-val
+	microcode.SigMaWr:        true, // :ma-wr
+	microcode.SigArithFunc:   true, // :arith-func
+	microcode.SigArithSrFn:   true, // :arith-sr-func
+	microcode.SigLogicFunc:   true, // :logic-func
+	microcode.SigLogicSrFn:   true, // :logic-sr-func
+	microcode.SigZbusSel:     true, // :zbus-sel
+	microcode.SigMemAddrSel:  true, // :mem-addr-sel
+	microcode.SigMemSize:     true, // :mem-size
+	microcode.SigMemWdataSel: true, // :mem-wdata-sel
+	microcode.SigRegnumW:     true, // :regnum-w
+	microcode.SigRegnumX:     true, // :regnum-x
+	microcode.SigRegnumY:     true, // :regnum-y
+	microcode.SigRegnumZ:     true, // :regnum-z
 }
 
 // TestSignalDefaultMatchesReference verifies that microcode.SignalDefault

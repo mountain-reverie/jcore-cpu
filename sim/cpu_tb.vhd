@@ -187,7 +187,10 @@ begin
   splice_instr_data_bus(instr_slaves_o(DEV_DDR), instr_slaves_i(DEV_DDR),
                         instrd_slaves_o(DEV_DDR), instrd_slaves_i(DEV_DDR));
 
-  cpu1: configuration work.cpu_sim
+#ifndef CPU_TB_CONFIG
+#define CPU_TB_CONFIG work.cpu_sim
+#endif
+  cpu1: configuration CPU_TB_CONFIG
 #if CONFIG_PRIV_ARCH
             generic map(PRIV_ARCH => true)
 #endif

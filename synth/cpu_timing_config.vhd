@@ -17,6 +17,8 @@ end configuration;
 
 configuration cpu_timing_j4 of cpu_timing_top is
   for timing
-    for u_cpu : cpu use configuration work.cpu_synth_j4; end for;
+    for u_cpu : cpu use configuration work.cpu_synth_j4
+      generic map(PRIV_ARCH => true);
+    end for;
   end for;
 end configuration;

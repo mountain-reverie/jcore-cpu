@@ -71,6 +71,10 @@ FILES=(
 # cpu_timing_* harness is bare-cpu only; j2c/j4c use cpu_cache_timing_*. CACHE=1
 # marks the cpu+cache variants.
 CPUTOP="cpu"; TIMINGCELL="cpu_timing_top"; CACHE=0
+# AREA_TOP/AREA_CPUTOP: the elaboration top and synth -top cell for the
+# asic/ecp5 area backends.  Defaults to TOP/CPUTOP; overridden for j4/j4c
+# where cpu_synth_j4_priv (PRIV_ARCH=true) replaces cpu_synth_j4 (=false).
+AREA_TOP=""; AREA_CPUTOP=""
 # The cache adapters instantiate icache/dcache as VHDL *components* (bound via
 # cache_pack), so ghdl needs --syn-binding to bind them to their entities and
 # synthesize their bodies -- without it ghdl emits empty blackbox modules that
@@ -102,13 +106,27 @@ case "$SYNTH_VARIANT" in
       TOP="cpu_synth_j4"; TIMING_TOP="cpu_timing_j4"
       FILES+=(synth/cpu_synth_j4_config.vhd)
     fi
+    # M0: for the asic/ecp5 area backends, elaborate via cpu_synth_j4_priv
+    # (a pass-through top that binds cpu with PRIV_ARCH=true via configuration
+    # generic map). The yosys ghdl plugin does not support the -g elaboration
+    # flag, so the generic must be set in VHDL. cpu_synth_j4_priv is defined in
+    # cpu_synth_j4_config.vhd. The timing/ice40 backends use cpu_timing_j4
+    # (which already has PRIV_ARCH=>true via its own configuration binding) and
+    # are unaffected.
+    AREA_TOP="cpu_synth_j4_priv"; AREA_CPUTOP="cpu_j4_priv_top"
     FILES+=(synth/cpu_timing_top.vhd synth/cpu_timing_config.vhd)
     ;;
   j2c|j4c)
     CACHE=1; CPUTOP="cpu_cache_timing_top"; TIMINGCELL="cpu_cache_timing_top"
     SYN_BINDING="--syn-binding"
-    if [ "$SYNTH_VARIANT" = j4c ]; then TOP="cpu_cache_timing_j4"
-    else TOP="cpu_cache_timing_j2"; fi
+    if [ "$SYNTH_VARIANT" = j4c ]; then
+      TOP="cpu_cache_timing_j4"
+      # M0: for j4c asic/ecp5, use the PRIV_ARCH=true variant of the cache
+      # timing top (cpu_cache_timing_j4_priv in cpu_cache_timing_config.vhd).
+      AREA_TOP="cpu_cache_timing_j4_priv"
+    else
+      TOP="cpu_cache_timing_j2"
+    fi
     TIMING_TOP="$TOP"
     # Cache CDC form = the cache_clkmode package constant (no generic, so ghdl
     # bakes it and yosys sees no parametric cache module). We use the SINGLE-CLOCK
@@ -161,6 +179,11 @@ case "$SYNTH_VARIANT" in
   *) echo "ERROR: unknown SYNTH_VARIANT '$SYNTH_VARIANT' (want j1|j2|j4|j2c|j4c)" >&2; exit 1 ;;
 esac
 
+# Resolve asic/ecp5 area elaboration top: use AREA_TOP if set (j4/j4c with
+# PRIV_ARCH=true wrapper), fall back to TOP for all other variants.
+[ -z "$AREA_TOP" ] && AREA_TOP="$TOP"
+[ -z "$AREA_CPUTOP" ] && AREA_CPUTOP="$CPUTOP"
+
 GHDL_BASE="ghdl --std=93 -fexplicit --ieee=synopsys $SYN_BINDING --workdir=$WORK ${FILES[*]}"
 
 case "$BACKEND" in
@@ -170,7 +193,7 @@ case "$BACKEND" in
     # $assert/$assume/$cover; `delete t:$check t:$print` drops the $check/$print
     # cells (ghdl 6 + yosys 0.44) whose verilog backend otherwise emits empty
     # `initial` blocks that OpenSTA's reader rejects.
-    yosys -m ghdl -p "$GHDL_BASE -e $TOP; synth -top $CPUTOP; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_verilog $OUT/cpu_asic.v"
+    yosys -m ghdl -p "$GHDL_BASE -e $AREA_TOP; synth -top $AREA_CPUTOP; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_verilog $OUT/cpu_asic.v"
     ;;
   ecp5)
     # abc9 (synth_ecp5 default) gives timing-driven LUT mapping. It works now
@@ -178,16 +201,16 @@ case "$BACKEND" in
     # (see synth/README.md). Strip verification cells (as above) so nextpnr-ecp5
     # can consume the JSON.
     #
-    # Bare-core fit gate (CPUTOP=cpu) exposes every cpu port as a pad, and the
-    # LFE5U-85F CABGA381 has only 365 IO BELs (the core already uses ~348). The
-    # SH-4 priv_o export (EXPEVT/INTEVT/TRA, 34 bits, constant-0 on this
-    # PRIV_ARCH=false proxy) is observability with no in-core consumer, so drop
-    # its ports before P&R to keep the fit gate logic-bound, not IO-bound. The
-    # j2c/j4c variants wrap cpu in cpu_cache_timing_top (priv_o left open), so no
-    # drop is needed (and the bare-cpu port path would not match that top).
+    # Bare-core fit gate exposes every cpu port as a pad, and the LFE5U-85F
+    # CABGA381 has only 365 IO BELs (the core already uses ~348). The SH-4
+    # priv_o export (EXPEVT/INTEVT/TRA, 34 bits) is observability with no
+    # in-core consumer, so drop its ports before P&R to keep the fit gate
+    # logic-bound, not IO-bound. For j4/j4c, AREA_CPUTOP=cpu_j4_priv_top,
+    # so the priv_o path uses the wrapper top name. j2c/j4c wrap cpu in
+    # cpu_cache_timing_top (priv_o left open), so no drop is needed there.
     PRIV_DROP=""
-    [ "$CACHE" = 0 ] && PRIV_DROP="delete cpu/priv_o[expevt] cpu/priv_o[intevt] cpu/priv_o[tra]; opt_clean;"
-    yosys -m ghdl -p "$GHDL_BASE -e $TOP; synth_ecp5 -top $CPUTOP; check -assert; chformal -remove; delete t:\$check t:\$print; $PRIV_DROP stat; write_json $OUT/cpu_ecp5.json"
+    [ "$CACHE" = 0 ] && PRIV_DROP="delete ${AREA_CPUTOP}/priv_o[expevt] ${AREA_CPUTOP}/priv_o[intevt] ${AREA_CPUTOP}/priv_o[tra]; opt_clean;"
+    yosys -m ghdl -p "$GHDL_BASE -e $AREA_TOP; synth_ecp5 -top $AREA_CPUTOP; check -assert; chformal -remove; delete t:\$check t:\$print; $PRIV_DROP stat; write_json $OUT/cpu_ecp5.json"
     ;;
   timing)
     # Representative Fmax benchmark: the cpu_timing_top harness registers the

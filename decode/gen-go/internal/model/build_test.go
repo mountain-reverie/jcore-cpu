@@ -352,11 +352,14 @@ func TestDroppedOpcodeRoutedToIllegalPredecode(t *testing.T) {
 		}
 		return a
 	}
+	sentinel := (1 << d.AddressBits) - 1
 	for _, op := range []int{0x2983, 0x4088, 0x4288} {
-		comment := d.ROM.Words[pa(op)].Comment
-		// Must NOT land on a normal data-moving instruction like XTRACT/MOV.
-		if comment != "" && comment != "General Illegal" {
-			t.Errorf("dropped opcode %#x predecodes to %q ROM entry (addr %d); expected the General Illegal microcode", op, comment, pa(op))
+		got := pa(op)
+		// Must route to the all-ones sentinel: an unpopulated, side-effect-free
+		// ROM entry, so the Stage-2 read-ahead never executes a memory-accessing
+		// microcode for a dropped opcode before the illegal squash.
+		if got != sentinel {
+			t.Errorf("dropped opcode %#x predecodes to addr %d (%q); expected sentinel %d", op, got, d.ROM.Words[got].Comment, sentinel)
 		}
 	}
 }

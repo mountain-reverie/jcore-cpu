@@ -69,6 +69,15 @@ func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, 
 	preAddrs := instrAddrs
 	preLogic := instrLogic
 	if len(droppedPredecode) > 0 {
+		// Route dropped opcodes to the all-ones SENTINEL (an unpopulated ROM
+		// entry → zero microcode → side-effect-free NOP). The Stage-2 read-ahead
+		// reads ROM[predecode(opcode)] one cycle early, so a dropped opcode must
+		// NOT land on a populated entry that performs a memory access (CAS.L →
+		// XTRACT, or the General Illegal microcode), which would fault before the
+		// illegal squash. The trap itself is raised by check_illegal_instruction
+		// → decode_core, exactly as for natural undefined opcodes.
+		_ = illegalAddr // retained for signature stability; sentinel is the target
+		sentinel := (1 << addrBits) - 1
 		preAddrs = make(map[string]int, len(instrAddrs)+len(droppedPredecode))
 		for k, v := range instrAddrs {
 			preAddrs[k] = v
@@ -78,7 +87,7 @@ func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, 
 			preLogic[k] = v
 		}
 		for nm, lm := range droppedPredecode {
-			preAddrs[nm] = illegalAddr
+			preAddrs[nm] = sentinel
 			preLogic[nm] = lm
 		}
 	}

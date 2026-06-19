@@ -443,6 +443,11 @@ func assignYBus(v, rn, rm string, out AssignMap) error {
 		out[SigYbusSel] = "SEL_INTEVT"
 	case up == "TRA":
 		out[SigYbusSel] = "SEL_TRA"
+	case up == "PTEH" || up == "PTEL" || up == "ASIDR":
+		// SH-4 MMU register read (J4 + MMU_ARCH): consolidated ybus source
+		// SEL_MMU, sub-selected by mmu_reg_sel. STC PTEH/PTEL/ASIDR, Rn.
+		out[SigYbusSel] = "SEL_MMU"
+		out[SigMmuRegSel] = "SEL_" + up
 	default:
 		if isConstStr(v) {
 			out[SigYbusSel] = "SEL_IMM"
@@ -481,6 +486,11 @@ func assignZBus(v, rn, rm string, out AssignMap) error {
 		if rm != "" {
 			out[SigRegnumZ] = rm
 		}
+	case up == "PTEH" || up == "PTEL" || up == "ASIDR":
+		// SH-4 MMU register write (J4 + MMU_ARCH): latch zbus into the addressed
+		// MMU flop. NOT a regfile write — no wrreg_z. LDC Rm,PTEH/PTEL/ASIDR.
+		out[SigMmuRegWr] = "1"
+		out[SigMmuRegSel] = "SEL_" + up
 	case isNamedReg(up):
 		setWriteReg(SigWrregZ, SigRegnumZ, up, out)
 	case up == "PC":
@@ -1094,6 +1104,7 @@ func coprocCmdSel(v string) (string, error) {
 //	format "n", "nd8", "ni", "nm", "nmd" (and "mn" alias) → high nibble = RA
 //	format "nd4" → Rn is in the low nibble = RB
 //	format "" or formats without Rn (e.g., "m", "md", "d8", "d12", "i8", "0") → "" (absent)
+//
 // namedRegVHDL maps each named register to its VHDL std_logic_vector(4 downto 0)
 // literal. This is the single source of truth shared by RegnumVHDL and the
 // namedRegs slice; tests validate that every entry in namedRegs has an entry here.
@@ -1216,4 +1227,3 @@ func firstConstStr(candidates ...string) string {
 	}
 	return ""
 }
-

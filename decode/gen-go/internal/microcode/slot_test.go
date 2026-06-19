@@ -49,15 +49,15 @@ func TestAssignSlotADDRmRn(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := AssignMap{
-		SigXbusSel:  "SEL_REG",
-		SigRegnumX:  "RA",
-		SigYbusSel:  "SEL_REG",
-		SigRegnumY:  "RB",
-		SigWrregZ:   "1",
-		SigRegnumZ:  "RA",
-		SigZbusSel:  "SEL_ARITH",
+		SigXbusSel:   "SEL_REG",
+		SigRegnumX:   "RA",
+		SigYbusSel:   "SEL_REG",
+		SigRegnumY:   "RB",
+		SigWrregZ:    "1",
+		SigRegnumZ:   "RA",
+		SigZbusSel:   "SEL_ARITH",
 		SigArithFunc: "ADD",
-		SigIncPC:    "1",
+		SigIncPC:     "1",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ADD Rm,Rn:\ngot  %+v\nwant %+v", got, want)
@@ -476,6 +476,31 @@ func TestAssignYBus_CauseRegs(t *testing.T) {
 		}
 		if out[SigYbusSel] != c.want {
 			t.Errorf("ybus=%q -> ybus_sel=%q, want %q", c.in, out[SigYbusSel], c.want)
+		}
+	}
+}
+
+func TestAssignYBus_MMU(t *testing.T) {
+	for _, reg := range []string{"PTEH", "PTEL", "ASIDR"} {
+		out := AssignMap{}
+		if err := assignYBus(reg, "", "", out); err != nil {
+			t.Fatalf("assignYBus(%q): %v", reg, err)
+		}
+		assertSignal(t, out, SigYbusSel, "SEL_MMU")
+		assertSignal(t, out, SigMmuRegSel, "SEL_"+reg)
+	}
+}
+
+func TestAssignZBus_MMU(t *testing.T) {
+	for _, reg := range []string{"PTEH", "PTEL", "ASIDR"} {
+		out := AssignMap{}
+		if err := assignZBus(reg, "", "", out); err != nil {
+			t.Fatalf("assignZBus(%q): %v", reg, err)
+		}
+		assertSignal(t, out, SigMmuRegWr, "1")
+		assertSignal(t, out, SigMmuRegSel, "SEL_"+reg)
+		if _, ok := out[SigWrregZ]; ok {
+			t.Fatalf("zbus=%q must NOT write the regfile (SigWrregZ set)", reg)
 		}
 	}
 }

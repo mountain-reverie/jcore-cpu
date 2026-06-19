@@ -2,9 +2,11 @@ package model
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/j-core/jcore-cpu/decode/gen-go/internal/logic"
 	"github.com/j-core/jcore-cpu/decode/gen-go/internal/spec"
 )
 
@@ -307,5 +309,54 @@ func TestDropKeepsKeptMicrocodeIdentical(t *testing.T) {
 	}
 	if bad > 0 {
 		t.Errorf("total kept instructions with differing microcode: %d", bad)
+	}
+}
+
+// TestDroppedOpcodeRoutedToIllegalPredecode guards the Stage-2 read-ahead
+// safety fix: a dropped opcode's predecode must point at the General Illegal
+// microcode, NOT at some populated kept-instruction entry (which the read-ahead
+// would execute one cycle early, before the illegal squash, causing a bus
+// error instead of a clean trap).
+func TestDroppedOpcodeRoutedToIllegalPredecode(t *testing.T) {
+	j, err := spec.Load(filepath.Join("..", "..", "spec"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	prof, err := spec.ReadProfile(filepath.Join("..", "..", "spec", "profiles", "j1.toml"))
+	if err != nil {
+		t.Skip("j1 profile not present")
+	}
+	if err := spec.ApplyDrops(j, prof.Drop); err != nil {
+		t.Fatal(err)
+	}
+	d, err := Build(j, 72)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// General Illegal first-slot ROM address = the predecode target for any
+	// dropped opcode. Evaluate predecode for CAS.L (0x2983) and confirm it lands
+	// on a ROM entry that is NOT a normal kept instruction.
+	pa := func(op int) int {
+		arm := &d.Body.Predecode.Arms[(op>>12)&0xf]
+		if arm.LiteralAddr != "" {
+			h := strings.TrimSuffix(strings.TrimPrefix(arm.LiteralAddr, `x"`), `"`)
+			v, _ := strconv.ParseInt(h, 16, 0)
+			return int(v)
+		}
+		r := logic.SigValue(func(s string, b int) int { return (op >> b) & 1 })
+		a := 0
+		for _, x := range arm.BitAssigns {
+			if v, _ := logic.EvalBoolExpr(x.Expr, r); v {
+				a |= 1 << x.Bit
+			}
+		}
+		return a
+	}
+	for _, op := range []int{0x2983, 0x4088, 0x4288} {
+		comment := d.ROM.Words[pa(op)].Comment
+		// Must NOT land on a normal data-moving instruction like XTRACT/MOV.
+		if comment != "" && comment != "General Illegal" {
+			t.Errorf("dropped opcode %#x predecodes to %q ROM entry (addr %d); expected the General Illegal microcode", op, comment, pa(op))
+		}
 	}
 }

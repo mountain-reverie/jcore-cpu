@@ -57,9 +57,32 @@ type PredecodeBitAssign struct {
 //
 // writesPC is the set of instruction names that write PC (branches);
 // drives check_illegal_delay_slot.
-func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, writesPC map[string]bool, privileged map[string]bool, addrBits int) *Body {
+// droppedPredecode maps each dropped instruction name → its opcode LogicMap;
+// illegalAddr is the ROM address of the General Illegal microcode. Dropped
+// opcodes are added to the predecode pointing at illegalAddr so that — even
+// with the Stage-2 read-ahead, which reads ROM[predecode(opcode)] one cycle
+// early — a dropped opcode executes the illegal sequence instead of landing on
+// some populated kept-instruction entry (e.g. XTRACT). The illegal/privileged
+// checks still see only the real instruction set (scoped copies below).
+func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, writesPC map[string]bool, privileged map[string]bool, addrBits int, droppedPredecode map[string]logic.LogicMap, illegalAddr int) *Body {
 	body := &Body{}
-	body.Predecode = buildPredecode(instrAddrs, instrLogic, addrBits)
+	preAddrs := instrAddrs
+	preLogic := instrLogic
+	if len(droppedPredecode) > 0 {
+		preAddrs = make(map[string]int, len(instrAddrs)+len(droppedPredecode))
+		for k, v := range instrAddrs {
+			preAddrs[k] = v
+		}
+		preLogic = make(map[string]logic.LogicMap, len(instrLogic)+len(droppedPredecode))
+		for k, v := range instrLogic {
+			preLogic[k] = v
+		}
+		for nm, lm := range droppedPredecode {
+			preAddrs[nm] = illegalAddr
+			preLogic[nm] = lm
+		}
+	}
+	body.Predecode = buildPredecode(preAddrs, preLogic, addrBits)
 	body.IllegalSlot = buildIllegalSlot(instrLogic, writesPC)
 	body.IllegalInstr = `code(15 downto 8) = x"ff"`
 	body.Privileged = buildPrivileged(instrLogic, privileged)

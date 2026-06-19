@@ -24,6 +24,7 @@ package datapath_pack is
    component datapath is
      generic (
        PRIV_ARCH : boolean := false;
+       MMU_ARCH  : boolean := false;  -- MMU control-register file (subordinate to PRIV_ARCH)
        EARLY_REGFILE_READ : boolean := false );
      port (
       clk         : in  std_logic;

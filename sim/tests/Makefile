@@ -7,7 +7,8 @@ LIBGCC = `sh2-elf-gcc -print-file-name=libgcc.a`
 # Must match the DUT's PRIV_ARCH generic (see ../Makefile). 0 = J2/J1 (no
 # privilege; privmode expects no trap), 1 = J4 (privmode expects the trap).
 CONFIG_PRIV_ARCH ?= 0
-CFLAGS = -m2 -g -Os -Wall -Iinclude -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH)
+CONFIG_MMU_ARCH ?= 0
+CFLAGS = -m2 -g -Os -Wall -Iinclude -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH)
 LDFLAGS = -T sh32.x -Map main.map
 
 all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img

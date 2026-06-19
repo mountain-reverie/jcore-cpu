@@ -189,7 +189,11 @@ begin
 
   cpu1: configuration work.cpu_sim
 #if CONFIG_PRIV_ARCH
+#if CONFIG_MMU_ARCH
+            generic map(PRIV_ARCH => true, MMU_ARCH => true)
+#else
             generic map(PRIV_ARCH => true)
+#endif
 #endif
             port map(clk => clk, rst => rst,
                      db_o => data_master_o, db_i => data_master_i,

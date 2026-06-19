@@ -9,7 +9,8 @@ use work.mult_pkg.all;
 entity cpu is
  generic (
    COPRO_DECODE : boolean := true;
-   PRIV_ARCH    : boolean := false);
+   PRIV_ARCH    : boolean := false;
+   MMU_ARCH     : boolean := false);  -- MMU control-register file (subordinate to PRIV_ARCH)
  port (
    clk          : in  std_logic;
    rst          : in  std_logic;
@@ -77,7 +78,7 @@ begin
       mac_i.wr_m1 <= mac.com1; mac_i.command <= mac.com2;
       mac_i.wr_mach <= mac.wrmach; mac_i.wr_macl <= mac.wrmacl;
 
-   u_datapath : datapath generic map (PRIV_ARCH => PRIV_ARCH) port map (clk => clk, rst => rst, slot => slot,
+   u_datapath : datapath generic map (PRIV_ARCH => PRIV_ARCH, MMU_ARCH => MMU_ARCH) port map (clk => clk, rst => rst, slot => slot,
       debug => debug, enter_debug => enter_debug,
       db_lock => db_lock, db_o => db_o, db_i => db_i, inst_o => inst_o, inst_i => inst_i,
       debug_o => debug_o, debug_i => debug_i,

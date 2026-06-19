@@ -9,6 +9,7 @@ use work.decode_pack.all;
 entity datapath is
 	generic (
 	  PRIV_ARCH : boolean := false;
+	  MMU_ARCH  : boolean := false;  -- MMU control-register file (subordinate to PRIV_ARCH)
 	  -- J1 only: drive the register file's early-read addresses and let
 	  -- architecture(ebr) read on the rising edge (full cycle). false for J2/J4.
 	  EARLY_REGFILE_READ : boolean := false );

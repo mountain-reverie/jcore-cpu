@@ -165,7 +165,16 @@ func buildPredecode(addrs map[string]int, lm map[string]logic.LogicMap, addrBits
 	for nib := 0; nib < 16; nib++ {
 		arm := PredecodeArm{TopNibble: nib}
 		g := groups[nib]
-		sort.Slice(g, func(i, j int) bool { return g[i].addr < g[j].addr })
+		// Sort by address, then by name as a stable tiebreaker. The name key is
+		// essential when several opcodes share one address (e.g. dropped opcodes
+		// all routed to the sentinel) — otherwise their comment order would be
+		// non-deterministic across runs.
+		sort.Slice(g, func(i, j int) bool {
+			if g[i].addr != g[j].addr {
+				return g[i].addr < g[j].addr
+			}
+			return g[i].name < g[j].name
+		})
 		for _, in := range g {
 			arm.ListComment = append(arm.ListComment, fmt.Sprintf(
 				"%s => %s  %s",

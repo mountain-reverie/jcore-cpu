@@ -1,6 +1,7 @@
 package model
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -250,5 +251,61 @@ func TestDropKeepsEncodingWidthEqualToBase(t *testing.T) {
 	// Verify at least one dropped opcode is OR-ed into IllegalInstr.
 	if !strings.Contains(dJ1.Body.IllegalInstr, `x"2003"`) {
 		t.Errorf("CAS.L dropped opcode term not found in IllegalInstr: %q", dJ1.Body.IllegalInstr)
+	}
+}
+
+// TestDropKeepsKeptMicrocodeIdentical guards the encoding-order invariant:
+// dropping instructions must not change the microcode bits of any KEPT
+// instruction. The encoding assigns field-value codes in first-encountered
+// (csvInstrOrder) order, so the dropped slots must participate in that order,
+// not be appended — otherwise a value first introduced by a dropped
+// instruction gets a different code and corrupts kept instructions that use it.
+func TestDropKeepsKeptMicrocodeIdentical(t *testing.T) {
+	base, err := spec.Load(filepath.Join("..", "..", "spec"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := Build(base, 72)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j, err := spec.Load(filepath.Join("..", "..", "spec"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	prof, err := spec.ReadProfile(filepath.Join("..", "..", "spec", "profiles", "j1.toml"))
+	if err != nil {
+		t.Skip("j1 profile not present")
+	}
+	if err := spec.ApplyDrops(j, prof.Drop); err != nil {
+		t.Fatal(err)
+	}
+	dj, err := Build(j, 72)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Map instruction name -> microcode bits of its last slot (ROM Word.Comment).
+	bitsByName := func(d *Decoder) map[string]string {
+		m := map[string]string{}
+		for _, w := range d.ROM.Words {
+			if w.Comment != "" {
+				m[w.Comment] = w.Bits
+			}
+		}
+		return m
+	}
+	bb := bitsByName(db)
+	jb := bitsByName(dj)
+	bad := 0
+	for name, jbits := range jb {
+		if bbits, ok := bb[name]; ok && bbits != jbits {
+			if bad < 8 {
+				t.Errorf("kept instr %q microcode differs base vs j1", name)
+			}
+			bad++
+		}
+	}
+	if bad > 0 {
+		t.Errorf("total kept instructions with differing microcode: %d", bad)
 	}
 }

@@ -35,6 +35,20 @@ type priv_reg_t is record
 end record;
 constant PRIV_REG_RESET : priv_reg_t := (others => (others => '0'));
 
+-- SH-4 MMU control registers (J4 + MMU_ARCH). A dedicated flop block, NOT the
+-- regfile: these are CSRs read/written broadside by the TLB/fault logic.
+-- All-0 at reset (hardware-spec §9). M1 wires PTEH/PTEL/ASIDR to LDC/STC;
+-- MMUCR/TEA/TTB exist (reset 0) but get their software path in M2 (P4 decode).
+type mmu_reg_t is record
+  pteh   : std_logic_vector(31 downto 0);
+  ptel   : std_logic_vector(31 downto 0);
+  asidr  : std_logic_vector(31 downto 0);
+  mmucr  : std_logic_vector(31 downto 0);
+  tea    : std_logic_vector(31 downto 0);
+  ttb    : std_logic_vector(31 downto 0);
+end record;
+constant MMU_REG_RESET : mmu_reg_t := (others => (others => '0'));
+
 -- if size becomes part of the bus, mem_size_t will move into cpu2j0_pack
 type mem_size_t is (BYTE, WORD, LONG);
 
@@ -53,6 +67,7 @@ type datapath_reg_t is record
    pc         : std_logic_vector(bits-1 downto 0);
    sr         : sr_t;
    priv       : priv_reg_t;   -- SH-4 EXPEVT/INTEVT/TRA (J4)
+   mmu        : mmu_reg_t;   -- SH-4 MMU CSRs: PTEH/PTEL/ASIDR/MMUCR/TEA/TTB (J4+MMU_ARCH)
    mac_s      : std_logic;
    data_o_size: mem_size_t;
    data_o_lock: std_logic;
@@ -82,7 +97,7 @@ type datapath_reg_t is record
    ybus_override : ybus_val_pipeline_t;
 end record;
 
-constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mac_s => '0', data_o_size => BYTE, data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
+constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, mac_s => '0', data_o_size => BYTE, data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
 
 subtype regnum_t is std_logic_vector(4 downto 0);
 component register_file is

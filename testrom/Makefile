@@ -12,9 +12,11 @@ TESTS_OBJS += testmul.o testmulu.o testmuls.o testmull.o testdmulu.o testdmuls.o
 TESTS_OBJS += testdiv.o
 TESTS_OBJS += testmacw.o testmacl.o
 
-ifeq ($(CPU), j1)
-    TESTS_OBJS += testillegal.o
-else
+# J1 drops CAS.L + the coprocessor ops, so it excludes testmov3 (coproc) and
+# testcas (CAS.L). Those dropped opcodes' illegal-trap behaviour is verified by
+# the standalone sim test sim/tests/illegalj1.S, not a testrom function (the
+# testrom links the GDB stub, which captures illegal exceptions).
+ifneq ($(CPU), j1)
     TESTS_OBJS += testmov3.o testcas.o
 endif
 

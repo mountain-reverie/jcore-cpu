@@ -177,11 +177,6 @@ __asm__(
 "  jsr @r0\n"
 "  nop\n"
 #endif
-#ifdef CPU_J1
-"  mov.l testillegal_k, r0\n"
-"  jsr @r0\n"
-"  nop\n"
-#endif
 "  mov.l testalu_k, r0\n"
 "  jsr @r0\n"
 "  nop\n"
@@ -251,9 +246,6 @@ __asm__(
 #ifndef CPU_J1
 "testmov3_k:   .long _testmov3\n"
 "testcas_k:    .long _testcas\n"
-#endif
-#ifdef CPU_J1
-"testillegal_k: .long _testillegal\n"
 #endif
 "testalu_k:    .long _testalu\n"
 "testshift_k:  .long _testshift\n"

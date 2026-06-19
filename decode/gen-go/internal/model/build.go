@@ -141,6 +141,19 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 	var normalInstrs []*spec.Instr
 	var systemInstrs []*spec.Instr
 
+	// encEntry tracks an instruction in CSV order for the ENCODING pass. Both
+	// kept and dropped instructions appear here, in their true csvInstrOrder
+	// positions, so CreateEncoding sees field values in the SAME
+	// first-encountered order as the base ISA. (A dropped instruction appended
+	// out of order would shift a field's value codes and corrupt the microcode
+	// of kept instructions that use that value.) Dropped entries are flagged so
+	// the ROM-address pass below can skip them.
+	type encEntry struct {
+		si      *spec.Instr
+		dropped bool
+	}
+	var normalEnc, systemEnc []encEntry
+
 	csvNames := make(map[string]bool, len(csvInstrOrder))
 	for _, name := range csvInstrOrder {
 		csvNames[name] = true
@@ -148,15 +161,22 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 		if si == nil {
 			continue // instruction in CSV but not in our spec (shouldn't happen)
 		}
-		if droppedByName[name] {
-			continue // dropped: no ROM address
-		}
+		dropped := droppedByName[name]
 		if si.Plane == "system" {
-			systemInstrs = append(systemInstrs, si)
+			systemEnc = append(systemEnc, encEntry{si, dropped})
+			if !dropped {
+				systemInstrs = append(systemInstrs, si)
+			}
 		} else {
-			normalInstrs = append(normalInstrs, si)
+			normalEnc = append(normalEnc, encEntry{si, dropped})
+			if !dropped {
+				normalInstrs = append(normalInstrs, si)
+			}
 		}
 	}
+	// Encoding order mirrors the ROM order: all normal-plane instructions (in
+	// CSV order) first, then system-plane, dropped instructions included.
+	encOrdered := append(normalEnc, systemEnc...)
 	// Loudly catch the case where a TOML instruction is missing from
 	// csvInstrOrder: the disassembler (Lines) would include it but the
 	// ROM would silently drop it. If it happens, csvInstrOrder must be
@@ -183,13 +203,13 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 	// widths; omitting them would narrow TotalBits relative to the base ISA
 	// and break the hardcoded bit-position selectors in the ROM template.
 	type slotMeta struct {
-		instrIdx  int    // index into allInstrs
 		instrName string // name of the instruction
 		lastSlot  bool   // true if this is the last slot of the instruction
 	}
 
 	allInstrs := append(normalInstrs, systemInstrs...)
-	var allSlots []microcode.AssignMap
+	var allSlots []microcode.AssignMap   // kept-instruction slots only (ROM addresses)
+	var encSlots []microcode.AssignMap   // all slots incl dropped, in CSV order (encoding)
 	var slotMetas []slotMeta
 	slotAssigns := make(map[string][]microcode.AssignMap)
 
@@ -216,7 +236,8 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 		}
 	}
 
-	for instrIdx, si := range allInstrs {
+	for _, ent := range encOrdered {
+		si := ent.si
 		// Collect only non-empty slots. The TOML format uses an empty
 		// [[instr.slots]] entry (len==0) as an optional cycle-terminator
 		// marker; it does not correspond to a microcode cycle in the Clojure
@@ -263,9 +284,17 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 					am[microcode.SigDispatch] = "1"
 				}
 			}
+			// Every slot (kept and dropped) contributes to the encoding, in
+			// CSV order, so field-value codes match the base ISA exactly.
+			encSlots = append(encSlots, am)
+			if ent.dropped {
+				// Dropped instructions get no ROM address, no predecode entry,
+				// no disassembler line; they only stabilize the encoding above
+				// and are routed to the illegal trap (see end of Build).
+				continue
+			}
 			allSlots = append(allSlots, am)
 			slotMetas = append(slotMetas, slotMeta{
-				instrIdx:  instrIdx,
 				instrName: si.Name,
 				lastSlot:  j == n-1,
 			})
@@ -273,46 +302,15 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 		}
 	}
 
-	// Collect slots from dropped instructions for encoding purposes only.
-	// Dropped instructions get no ROM address (excluded from allSlots/slotMetas)
-	// but their signal values must participate in CreateEncoding so that
-	// TotalBits and all field bit-positions remain identical to the base ISA.
-	// This prevents the hardcoded bit-position selectors in the ROM template
-	// (e.g. "line(74 downto 73)") from going out of range.
-	var droppedSlots []microcode.AssignMap
-	for i := range s.Dropped {
-		di := &s.Dropped[i]
-		rf := resolvedFormat[di.Name]
-		instrForAssign := *di
-		instrForAssign.Format = rf
-		var keptSlots []spec.Slot
-		for _, slot := range di.Slots {
-			if len(slot) > 0 {
-				keptSlots = append(keptSlots, slot)
-			}
-		}
-		n := len(keptSlots)
-		for j, slot := range keptSlots {
-			am, err := microcode.AssignSlot(instrForAssign, slot)
-			if err != nil {
-				return nil, fmt.Errorf("%s slot %d: %w", di.Name, j, err)
-			}
-			if j == n-1 {
-				_, hasIfIssue := am[microcode.SigIfIssue]
-				_, hasDispatch := am[microcode.SigDispatch]
-				if !hasIfIssue && !hasDispatch {
-					am[microcode.SigIfIssue] = "1"
-					am[microcode.SigDispatch] = "1"
-				}
-			}
-			droppedSlots = append(droppedSlots, am)
-		}
-	}
-
-	// CreateEncoding over ALL slots (normal + system + dropped).
-	// Dropped slots participate in encoding width computation but not in
-	// ROM address assignment below.
-	enc := microcode.CreateEncoding(append(allSlots, droppedSlots...), width)
+	// CreateEncoding over ALL slots (normal + system + dropped) in CSV order.
+	// encSlots includes dropped instructions' slots in their true
+	// csvInstrOrder positions, so TotalBits, every field bit-position, AND
+	// every field's value-code assignment are identical to the base ISA. That
+	// keeps the microcode bits of every KEPT instruction byte-identical to base
+	// and keeps the hardcoded ROM-template bit selectors (e.g.
+	// "line(74 downto 73)") in range. allSlots (kept only) drives ROM
+	// addressing below; dropped instructions get no ROM address.
+	enc := microcode.CreateEncoding(encSlots, width)
 
 	// Size the microcode address space. op.addr must address every used slot
 	// (0..len-1) AND reserve the all-ones address as the predecode "unknown

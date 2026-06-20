@@ -547,6 +547,18 @@ begin
                 if PRIV_ARCH then this.priv.tra := buses.imm_val(9 downto 0); end if;
             end case;
 
+            -- LDC Rm,PTEH/PTEL/ASIDR write path (J4+MMU_ARCH).
+            -- When the decoder asserts mmu_reg_wr the zbus carries the source
+            -- GPR value; latch it into the addressed MMU CSR flop.
+            -- Gated under MMU_ARCH so J1/J2 (MMU_ARCH=false) are byte-unchanged.
+            if MMU_ARCH and sr_ctrl.mmu_reg_wr = '1' then
+              case sr_ctrl.mmu_reg_sel is
+                when SEL_PTEH  => this.mmu.pteh  := zbus;
+                when SEL_PTEL  => this.mmu.ptel  := zbus;
+                when SEL_ASIDR => this.mmu.asidr := zbus;
+              end case;
+            end if;
+
             if mac.s_latch = '1' then this.mac_s := this.sr.s; end if;
             this.data_o_lock := mem.lock;
           end if;

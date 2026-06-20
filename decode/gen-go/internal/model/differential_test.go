@@ -122,7 +122,8 @@ var referenceDefaults = map[microcode.Signal]string{
 	microcode.SigCpuDataMux: "DBUS",
 
 	// mmu_reg_sel_t first literal SEL_PTEH (M1 MMU registers).
-	microcode.SigMmuRegSel: "SEL_PTEH",
+	microcode.SigMmuRegSel:   "SEL_PTEH",
+	microcode.SigMmuRegSelWr: "SEL_PTEH",
 }
 
 // signalsNillable is the set of signals that have no default and must NOT be

@@ -19,8 +19,9 @@ const (
 	// Bus selectors and register numbers (from x-bus/y-bus/z-bus/w-bus)
 	SigXbusSel   Signal = "xbus_sel"
 	SigYbusSel   Signal = "ybus_sel"
-	SigMmuRegSel Signal = "mmu_reg_sel"
-	SigMmuRegWr  Signal = "mmu_reg_wr"
+	SigMmuRegSel   Signal = "mmu_reg_sel"
+	SigMmuRegSelWr Signal = "mmu_reg_sel_wr"
+	SigMmuRegWr    Signal = "mmu_reg_wr"
 	SigZbusSel   Signal = "zbus_sel"
 	SigRegnumX   Signal = "regnum_x"
 	SigRegnumY   Signal = "regnum_y"
@@ -176,7 +177,7 @@ func SignalDefault(s Signal) (string, bool) {
 		return "SEL_XBUS", true
 	case SigExMacsel2, SigWbMacsel2:
 		return "SEL_YBUS", true
-	case SigMmuRegSel:
+	case SigMmuRegSel, SigMmuRegSelWr:
 		return "SEL_PTEH", true
 	case SigMacBusy:
 		// mac_busy_t first literal is NOT_BUSY (see Clojure
@@ -246,6 +247,7 @@ var SignalVHDLPath = map[Signal]string{
 	SigExMacsel2:   "ex_stall.macsel2",
 	SigWbMacsel2:   "wb_stall.macsel2",
 	SigMmuRegSel:   "ex.mmu_reg_sel",
+	SigMmuRegSelWr: "ex_stall.mmu_reg_sel",
 	SigMmuRegWr:    "ex_stall.mmu_reg_wr",
 	SigMacBusy:     "mac_busy", // top-level signal in arch, not record
 	SigMacStallSns: "mac_stall_sense",
@@ -270,7 +272,7 @@ var SignalVHDLPath = map[Signal]string{
 // order — that is dictated by CombinableSignals + alphabetical
 // sort of standalone signals in CreateEncoding.
 var AllSignals = []Signal{
-	SigXbusSel, SigYbusSel, SigMmuRegSel, SigZbusSel,
+	SigXbusSel, SigYbusSel, SigMmuRegSel, SigMmuRegSelWr, SigZbusSel,
 	SigRegnumX, SigRegnumY, SigRegnumZ, SigRegnumW,
 	SigWrregZ, SigWrregW, SigWrpcZ, SigWrprPC, SigWrsrW, SigWrsrZ,
 	SigAluinxSel, SigAluinySel, SigAluManip,

@@ -490,7 +490,7 @@ func assignZBus(v, rn, rm string, out AssignMap) error {
 		// SH-4 MMU register write (J4 + MMU_ARCH): latch zbus into the addressed
 		// MMU flop. NOT a regfile write — no wrreg_z. LDC Rm,PTEH/PTEL/ASIDR.
 		out[SigMmuRegWr] = "1"
-		out[SigMmuRegSel] = "SEL_" + up
+		out[SigMmuRegSelWr] = "SEL_" + up
 	case isNamedReg(up):
 		setWriteReg(SigWrregZ, SigRegnumZ, up, out)
 	case up == "PC":

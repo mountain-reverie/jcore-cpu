@@ -77,7 +77,7 @@ architecture arch of decode_core is
       -- for each system instruction
       op.addr := system_instr_rom_addrs(instr);
     else
-      op.addr := x"00";
+      op.addr := (others => '0');
     end if;
     return op;
   end;
@@ -109,7 +109,7 @@ architecture arch of decode_core is
       -- to the address in the ROM where the microcode starts for the instruction
       op.addr := predecode_rom_addr(instr);
     else
-      op.addr := x"00";
+      op.addr := (others => '0');
     end if;
     return op;
   end;

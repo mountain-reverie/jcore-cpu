@@ -52,6 +52,27 @@ func addrLit(value, addrBits int) string {
 	return fmt.Sprintf("\"%0*b\"", addrBits, value)
 }
 
+// setOpAddrNextWidth rewrites every op_addr_next port in Components to a
+// std_logic_vector of the given microcode address width. It errors if no
+// such port is found, preventing silent mismatches on rename.
+func setOpAddrNextWidth(pkg *Package, addrBits int) error {
+	typ := fmt.Sprintf("std_logic_vector(%d downto 0)", addrBits-1)
+	found := false
+	for ci := range pkg.Components {
+		for pi := range pkg.Components[ci].Ports {
+			p := &pkg.Components[ci].Ports[pi]
+			if p.Name == "op_addr_next" {
+				p.Type = typ
+				found = true
+			}
+		}
+	}
+	if !found {
+		return fmt.Errorf("op_addr_next port not found in package components")
+	}
+	return nil
+}
+
 // Build transforms a loaded Spec into the emission-ready Decoder.
 // width is the ROM width in bits (64 or 72; default is 72). It is
 // stored for use by the ROM template in Task 9.
@@ -275,6 +296,10 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 	if err := setOperationAddrWidth(pkg, addrBits); err != nil {
 		return nil, err
 	}
+	// Set op_addr_next port widths to match operation_t.addr.
+	if err := setOpAddrNextWidth(pkg, addrBits); err != nil {
+		return nil, err
+	}
 
 	// Build the 2^addrBits-entry ROM (power of two so the all-ones sentinel
 	// address is addressable; unused entries are zero words).
@@ -410,6 +435,10 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 	if resetAddr, ok := sysFirstAddr["Reset CPU"]; ok {
 		pkg.DecCoreROMResetAddr = addrLit(resetAddr+1, addrBits)
 	}
+
+	// DEC_CORE_RESET addr: the fixed-address-1 sentinel for the non-ROM reset
+	// path.  At 8 bits addrLit(1,8) == x"01", reproducing the legacy literal.
+	pkg.DecCoreResetAddr = addrLit(1, addrBits)
 
 	return d, nil
 }

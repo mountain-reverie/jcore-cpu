@@ -67,6 +67,8 @@ architecture stru of datapath is
 	signal zbus_mac : std_logic_vector(31 downto 0);
 	signal sr : sr_t;
 	signal priv_regs : priv_reg_t;   -- SH-4 EXPEVT/INTEVT/TRA (J4); 0 on J1/J2
+	signal mmu_regs  : mmu_reg_t;    -- SH-4 MMU CSRs (J4+MMU_ARCH); 0 otherwise
+	signal mmu_ybus  : std_logic_vector(31 downto 0);  -- sub-mux for SEL_MMU
 	-- regfile addresses after SH-4 bank remapping (pass-through on J2)
 	signal num_x_r, num_y_r, num_z_r, num_w_r : regnum_t;
 	signal num_x_early_r, num_y_early_r : regnum_t;
@@ -220,6 +222,7 @@ begin
 	                                     (x"00000" & priv_regs.expevt) when SEL_EXPEVT,
 	                                     (x"00000" & priv_regs.intevt) when SEL_INTEVT,
 	                                     (x"00000" & "00" & priv_regs.tra) when SEL_TRA,
+	                                     mmu_ybus when SEL_MMU,
 	                                     buses.imm_val when others;
 	ybus <= ybus_override.d when ybus_override.en = '1' else ybus_temp;
 
@@ -579,6 +582,11 @@ begin
 	pc <= this'register.pc;
 	sr <= this'register.sr;
 	priv_regs <= this'register.priv;
+	-- MMU CSR registered copy + ybus sub-mux (J4+MMU_ARCH); constant-0 otherwise
+	mmu_regs <= this'register.mmu when MMU_ARCH else MMU_REG_RESET;
+	mmu_ybus <= mmu_regs.ptel  when buses.mmu_reg_sel = SEL_PTEL else
+	            mmu_regs.asidr when buses.mmu_reg_sel = SEL_ASIDR else
+	            mmu_regs.pteh;
 	-- Export the SH-4 cause registers (J4). Constant-0 on a non-PRIV_ARCH build
 	-- so J1/J2 boards see a tied-off port.
 	priv_o.expevt <= priv_regs.expevt when PRIV_ARCH else (others => '0');

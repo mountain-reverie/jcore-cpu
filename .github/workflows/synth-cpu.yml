@@ -150,7 +150,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [j2, j4, j2c, j4c]   # J1 -> iCE40 (synth-ice40); *c = cpu+cache (FPGA single-clock)
+        variant: [j1, j2, j4, j2c, j4c]   # *c = cpu+cache (FPGA single-clock)
     steps:
       - name: Checkout jcore-cpu
         uses: actions/checkout@v4

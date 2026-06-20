@@ -34,6 +34,7 @@ type Package struct {
 
 	// ROM-dependent fields: filled in by Task 9 once ROM addresses are known.
 	// Task 7 stubs these with hardcoded golden values in the test.
+	DecCoreResetAddr    string            // addr literal for DEC_CORE_RESET (always value 1), e.g. x"01" (8-bit) or "000000001" (9-bit)
 	DecCoreROMResetAddr string            // full VHDL address literal, e.g. x"e2" (8-bit) or "000100011" (9-bit)
 	SystemInstrROMAddrs map[string]string // e.g. {"BREAK": `x"fa"`, ...}
 }

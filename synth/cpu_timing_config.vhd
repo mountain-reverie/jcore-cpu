@@ -11,7 +11,9 @@ end configuration;
 
 configuration cpu_timing_j1 of cpu_timing_top is
   for timing
-    for u_cpu : cpu use configuration work.cpu_synth_j1; end for;
+    for u_cpu : cpu use configuration work.cpu_synth_j1
+      generic map(COPRO_DECODE => false);
+    end for;
   end for;
 end configuration;
 

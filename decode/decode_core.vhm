@@ -39,7 +39,7 @@ entity decode_core is
     ilevel : out std_logic_vector(3 downto 0);
     incpc : out std_logic;
     op : out operation_t;
-    op_addr_next : out std_logic_vector(8 downto 0);
+    op_addr_next : out std_logic_vector(DEC_ADDR_BITS-1 downto 0);
     next_id_stall : out std_logic
     );
 end;
@@ -48,7 +48,7 @@ architecture arch of decode_core is
 
   signal mac_stall : std_logic;
   -- Stage 2 read-ahead microcode address (full-cycle ROM read) intermediates.
-  signal ra_base, ra_v : std_logic_vector(8 downto 0);
+  signal ra_base, ra_v : std_logic_vector(DEC_ADDR_BITS-1 downto 0);
   signal ra_seqz_n : std_logic;
   signal reg_conf : std_logic;
   signal next_op : operation_t;  
@@ -60,8 +60,8 @@ architecture arch of decode_core is
   -- output last cycle (registered op_addr_next), and the mispredict flag raised
   -- when that read-ahead address does not match the address the sequencer
   -- actually presents this cycle (ROM decoder only).
-  signal predicted_addr : std_logic_vector(8 downto 0);
-  signal op_addr_next_i : std_logic_vector(8 downto 0);
+  signal predicted_addr : std_logic_vector(DEC_ADDR_BITS-1 downto 0);
+  signal op_addr_next_i : std_logic_vector(DEC_ADDR_BITS-1 downto 0);
   signal mispredict : std_logic;
 
   register variable this : decode_core_reg_t reset := reset_vector;

@@ -229,10 +229,10 @@ case "$BACKEND" in
     # and reports ICESTORM_LC/RAM/DSP utilisation + Fmax. Elaborates the
     # per-variant harness config so J1 measures its own core.
     # J1 gets two extra Yosys passes (from jcore-j1-ghdl): opt+opt_mem before
-    # synth_ice40 to eliminate dead logic, and -abc2 -retime for a second ABC
-    # pass + register retiming (Fmax win). J2/J4 left byte-identical to baseline.
+    # synth_ice40 to eliminate dead logic, and -abc2 for a second ABC pass.
+    # (-retime is incompatible with synth_ice40's default -abc9.) J2/J4 unchanged.
     if [ "$SYNTH_VARIANT" = j1 ]; then
-      yosys -m ghdl -p "$GHDL_BASE -e $TIMING_TOP; opt; opt_mem; synth_ice40 -dsp -abc2 -retime -top $TIMINGCELL; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_ice40.json"
+      yosys -m ghdl -p "$GHDL_BASE -e $TIMING_TOP; opt; opt_mem; synth_ice40 -dsp -abc2 -top $TIMINGCELL; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_ice40.json"
     else
       yosys -m ghdl -p "$GHDL_BASE -e $TIMING_TOP; synth_ice40 -dsp -top $TIMINGCELL; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_ice40.json"
     fi

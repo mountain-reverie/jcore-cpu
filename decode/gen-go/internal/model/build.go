@@ -119,40 +119,15 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 	// -----------------------------------------------------------------------
 
 	// Build a name→Instr lookup so we can iterate in CSV order.
-	// Include both kept (s.Instrs) and dropped (s.Dropped) instructions so
-	// that format-inheritance traverses the full CSV order — a dropped
-	// instruction must still propagate its format to the next entry in the
-	// CSV, and its slots must feed CreateEncoding to keep the bit-field
-	// layout stable (same TotalBits as the base ISA).
-	instrByName := make(map[string]*spec.Instr, len(s.Instrs)+len(s.Dropped))
+	instrByName := make(map[string]*spec.Instr, len(s.Instrs))
 	for i := range s.Instrs {
 		instrByName[s.Instrs[i].Name] = &s.Instrs[i]
-	}
-	droppedByName := make(map[string]bool, len(s.Dropped))
-	for i := range s.Dropped {
-		instrByName[s.Dropped[i].Name] = &s.Dropped[i]
-		droppedByName[s.Dropped[i].Name] = true
 	}
 
 	// Partition instructions into normal (non-system) and system, in CSV row order.
 	// Normal instructions come first in the ROM; system instructions at the end.
-	// Dropped instructions are excluded from normalInstrs/systemInstrs (they get no
-	// ROM address) but remain visible in instrByName for format-inheritance resolution.
 	var normalInstrs []*spec.Instr
 	var systemInstrs []*spec.Instr
-
-	// encEntry tracks an instruction in CSV order for the ENCODING pass. Both
-	// kept and dropped instructions appear here, in their true csvInstrOrder
-	// positions, so CreateEncoding sees field values in the SAME
-	// first-encountered order as the base ISA. (A dropped instruction appended
-	// out of order would shift a field's value codes and corrupt the microcode
-	// of kept instructions that use that value.) Dropped entries are flagged so
-	// the ROM-address pass below can skip them.
-	type encEntry struct {
-		si      *spec.Instr
-		dropped bool
-	}
-	var normalEnc, systemEnc []encEntry
 
 	csvNames := make(map[string]bool, len(csvInstrOrder))
 	for _, name := range csvInstrOrder {
@@ -161,22 +136,12 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 		if si == nil {
 			continue // instruction in CSV but not in our spec (shouldn't happen)
 		}
-		dropped := droppedByName[name]
 		if si.Plane == "system" {
-			systemEnc = append(systemEnc, encEntry{si, dropped})
-			if !dropped {
-				systemInstrs = append(systemInstrs, si)
-			}
+			systemInstrs = append(systemInstrs, si)
 		} else {
-			normalEnc = append(normalEnc, encEntry{si, dropped})
-			if !dropped {
-				normalInstrs = append(normalInstrs, si)
-			}
+			normalInstrs = append(normalInstrs, si)
 		}
 	}
-	// Encoding order mirrors the ROM order: all normal-plane instructions (in
-	// CSV order) first, then system-plane, dropped instructions included.
-	encOrdered := append(normalEnc, systemEnc...)
 	// Loudly catch the case where a TOML instruction is missing from
 	// csvInstrOrder: the disassembler (Lines) would include it but the
 	// ROM would silently drop it. If it happens, csvInstrOrder must be
@@ -198,18 +163,16 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 	}
 
 	// Gather all AssignMaps in ROM order (normal first, system last).
-	// CreateEncoding needs ALL slots (normal + system + dropped) because
-	// dropped-instruction slots contribute signal values that affect field
-	// widths; omitting them would narrow TotalBits relative to the base ISA
-	// and break the hardcoded bit-position selectors in the ROM template.
+	// CreateEncoding needs ALL slots (normal + system) because system slots
+	// contribute distinct signal values that affect field widths.
 	type slotMeta struct {
+		instrIdx  int    // index into allInstrs
 		instrName string // name of the instruction
 		lastSlot  bool   // true if this is the last slot of the instruction
 	}
 
 	allInstrs := append(normalInstrs, systemInstrs...)
-	var allSlots []microcode.AssignMap   // kept-instruction slots only (ROM addresses)
-	var encSlots []microcode.AssignMap   // all slots incl dropped, in CSV order (encoding)
+	var allSlots []microcode.AssignMap
 	var slotMetas []slotMeta
 	slotAssigns := make(map[string][]microcode.AssignMap)
 
@@ -219,9 +182,7 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 	// across csvInstrOrder iteration, then pass the resolved format to
 	// AssignSlot for register placement decisions. The rule is reset to
 	// "" at the start; only non-empty Format values propagate.
-	// NOTE: instrByName now includes dropped instructions so the inheritance
-	// chain is unbroken across the full CSV order.
-	resolvedFormat := make(map[string]string, len(allInstrs)+len(s.Dropped))
+	resolvedFormat := make(map[string]string, len(allInstrs))
 	prevFormat := ""
 	for _, name := range csvInstrOrder {
 		si := instrByName[name]
@@ -236,8 +197,7 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 		}
 	}
 
-	for _, ent := range encOrdered {
-		si := ent.si
+	for instrIdx, si := range allInstrs {
 		// Collect only non-empty slots. The TOML format uses an empty
 		// [[instr.slots]] entry (len==0) as an optional cycle-terminator
 		// marker; it does not correspond to a microcode cycle in the Clojure
@@ -284,17 +244,9 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 					am[microcode.SigDispatch] = "1"
 				}
 			}
-			// Every slot (kept and dropped) contributes to the encoding, in
-			// CSV order, so field-value codes match the base ISA exactly.
-			encSlots = append(encSlots, am)
-			if ent.dropped {
-				// Dropped instructions get no ROM address, no predecode entry,
-				// no disassembler line; they only stabilize the encoding above
-				// and are routed to the illegal trap (see end of Build).
-				continue
-			}
 			allSlots = append(allSlots, am)
 			slotMetas = append(slotMetas, slotMeta{
+				instrIdx:  instrIdx,
 				instrName: si.Name,
 				lastSlot:  j == n-1,
 			})
@@ -302,15 +254,8 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 		}
 	}
 
-	// CreateEncoding over ALL slots (normal + system + dropped) in CSV order.
-	// encSlots includes dropped instructions' slots in their true
-	// csvInstrOrder positions, so TotalBits, every field bit-position, AND
-	// every field's value-code assignment are identical to the base ISA. That
-	// keeps the microcode bits of every KEPT instruction byte-identical to base
-	// and keeps the hardcoded ROM-template bit selectors (e.g.
-	// "line(74 downto 73)") in range. allSlots (kept only) drives ROM
-	// addressing below; dropped instructions get no ROM address.
-	enc := microcode.CreateEncoding(encSlots, width)
+	// CreateEncoding over ALL slots (normal + system).
+	enc := microcode.CreateEncoding(allSlots, width)
 
 	// Size the microcode address space. op.addr must address every used slot
 	// (0..len-1) AND reserve the all-ones address as the predecode "unknown
@@ -417,18 +362,7 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 			}
 		}
 	}
-	// Collect dropped opcodes so BuildBody can route their predecode to the
-	// all-ones sentinel (a side-effect-free NOP), keeping the Stage-2 read-ahead
-	// safe; the trap itself is raised by check_illegal_instruction.
-	var droppedPredecode map[string]logic.LogicMap
-	if len(s.Dropped) > 0 {
-		droppedPredecode = make(map[string]logic.LogicMap, len(s.Dropped))
-		for i := range s.Dropped {
-			di := &s.Dropped[i]
-			droppedPredecode[di.Name] = logic.OpToLogicMap(di.Plane, di.Opcode)
-		}
-	}
-	d.Body = BuildBody(instrAddrs, instrLogicNormal, writesPC, privileged, addrBits, droppedPredecode)
+	d.Body = BuildBody(instrAddrs, instrLogicNormal, writesPC, privileged, addrBits)
 	d.Simple = BuildSimple(s, instrLogicAll, slotAssigns)
 	d.Direct = BuildDirect(s, instrLogicAll, slotAssigns)
 	d.Entity = BuildEntity(d.Package)
@@ -475,22 +409,6 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 	// DEC_CORE_ROM_RESET: inc(RESET_CPU.index) per genvhdl.clj line 711-712.
 	if resetAddr, ok := sysFirstAddr["Reset CPU"]; ok {
 		pkg.DecCoreROMResetAddr = addrLit(resetAddr+1, addrBits)
-	}
-
-	// Route dropped instructions to the illegal-instruction trap: OR each
-	// dropped opcode's match into check_illegal_instruction. decode_core then
-	// forces op.addr = GENERAL_ILLEGAL on illegal_instr = '1'. Sorted by opcode
-	// for deterministic output.
-	if len(s.Dropped) > 0 {
-		dropped := append([]spec.Instr(nil), s.Dropped...)
-		sort.Slice(dropped, func(i, j int) bool { return dropped[i].Opcode < dropped[j].Opcode })
-		for _, in := range dropped {
-			term, err := illegalMatchExpr(in.Opcode)
-			if err != nil {
-				return nil, err
-			}
-			d.Body.IllegalInstr = d.Body.IllegalInstr + " or " + term
-		}
 	}
 
 	return d, nil

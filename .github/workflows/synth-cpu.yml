@@ -55,9 +55,6 @@ jobs:
           yosys -m ghdl -p 'help ghdl' >/dev/null && echo "ghdl plugin OK"
       - name: Generate decoder
         run: make -C decode generate
-      - name: Generate J1 decoder subset
-        if: matrix.variant == 'j1'
-        run: make -C decode generate-j1
       - name: Preprocess vhm -> vhd (v2p)
         run: |
           set -eux
@@ -321,9 +318,6 @@ jobs:
           nextpnr-ice40 --version
       - name: Generate decoder
         run: make -C decode generate
-      - name: Generate J1 decoder subset
-        if: matrix.variant == 'j1'
-        run: make -C decode generate-j1
       - name: Preprocess vhm -> vhd (v2p)
         run: |
           set -eux

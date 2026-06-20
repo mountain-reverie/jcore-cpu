@@ -8,10 +8,6 @@ CONFIG_PREFETCHER=0
 # Build the DUT with the SH-4 privileged architecture (J4). Default 0 (J2) so the
 # standard test ROM regression is unaffected; the privmode test needs this = 1.
 CONFIG_PRIV_ARCH=0
-# VHDL configuration the testbench binds for the CPU instance. Default cpu_sim
-# (direct decoder, J2). A J1 sim build sets CPU_TB_CONFIG=work.cpu_j1 together
-# with DECODE_DIR=decode/j1 to exercise the J1 subset decoder.
-CPU_TB_CONFIG ?= work.cpu_sim
 
 GHDL_EXISTS := $(shell sh -c 'which $(GHDL) >/dev/null && echo true')
 IVERILOG_EXISTS := $(shell sh -c 'which $(IVERILOG) >/dev/null && echo true')
@@ -113,7 +109,7 @@ cpu_pure_tb: ram.img
 # Add dependencies to particular vhh files. TODO: how to avoid
 # repeating this rule?
 cpu_tb.vhh: cpu_tb.vhd cpu_signals.h sim/sim_macros.h
-	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCPU_TB_CONFIG=$(CPU_TB_CONFIG) -I. -I../config -Isim $< -o $@
+	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -I. -I../config -Isim $< -o $@
 
 %.vpi:
 	$(IVERILOG_VPI) --name=$* $^

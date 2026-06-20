@@ -169,14 +169,9 @@ __asm__(
 "  mov.l testmov2_k, r0\n"
 "  jsr @r0\n"
 "  nop\n"
-#ifndef CPU_J1
 "  mov.l testmov3_k, r0\n"
 "  jsr @r0\n"
 "  nop\n"
-"  mov.l testcas_k, r0\n"
-"  jsr @r0\n"
-"  nop\n"
-#endif
 "  mov.l testalu_k, r0\n"
 "  jsr @r0\n"
 "  nop\n"
@@ -243,10 +238,7 @@ __asm__(
 "testbra_k:    .long _testbra\n"
 "testmov_k:    .long _testmov\n"
 "testmov2_k:   .long _testmov2\n"
-#ifndef CPU_J1
 "testmov3_k:   .long _testmov3\n"
-"testcas_k:    .long _testcas\n"
-#endif
 "testalu_k:    .long _testalu\n"
 "testshift_k:  .long _testshift\n"
 "testmul_k:    .long _testmul\n"

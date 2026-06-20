@@ -57,35 +57,9 @@ type PredecodeBitAssign struct {
 //
 // writesPC is the set of instruction names that write PC (branches);
 // drives check_illegal_delay_slot.
-// droppedPredecode maps each dropped instruction name → its opcode LogicMap.
-// Dropped opcodes are added to the predecode pointing at the all-ones SENTINEL
-// (an unpopulated ROM entry → zero microcode → side-effect-free NOP), so that —
-// even with the Stage-2 read-ahead, which reads ROM[predecode(opcode)] one cycle
-// early — a dropped opcode never lands on a populated entry that performs a
-// memory access (e.g. CAS.L → XTRACT) and faults before the illegal squash. The
-// trap itself is raised by check_illegal_instruction → decode_core, exactly as
-// for natural undefined opcodes. The illegal/privileged checks still see only
-// the real instruction set (scoped copies below).
-func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, writesPC map[string]bool, privileged map[string]bool, addrBits int, droppedPredecode map[string]logic.LogicMap) *Body {
+func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, writesPC map[string]bool, privileged map[string]bool, addrBits int) *Body {
 	body := &Body{}
-	preAddrs := instrAddrs
-	preLogic := instrLogic
-	if len(droppedPredecode) > 0 {
-		sentinel := (1 << addrBits) - 1
-		preAddrs = make(map[string]int, len(instrAddrs)+len(droppedPredecode))
-		for k, v := range instrAddrs {
-			preAddrs[k] = v
-		}
-		preLogic = make(map[string]logic.LogicMap, len(instrLogic)+len(droppedPredecode))
-		for k, v := range instrLogic {
-			preLogic[k] = v
-		}
-		for nm, lm := range droppedPredecode {
-			preAddrs[nm] = sentinel
-			preLogic[nm] = lm
-		}
-	}
-	body.Predecode = buildPredecode(preAddrs, preLogic, addrBits)
+	body.Predecode = buildPredecode(instrAddrs, instrLogic, addrBits)
 	body.IllegalSlot = buildIllegalSlot(instrLogic, writesPC)
 	body.IllegalInstr = `code(15 downto 8) = x"ff"`
 	body.Privileged = buildPrivileged(instrLogic, privileged)
@@ -159,16 +133,7 @@ func buildPredecode(addrs map[string]int, lm map[string]logic.LogicMap, addrBits
 	for nib := 0; nib < 16; nib++ {
 		arm := PredecodeArm{TopNibble: nib}
 		g := groups[nib]
-		// Sort by address, then by name as a stable tiebreaker. The name key is
-		// essential when several opcodes share one address (e.g. dropped opcodes
-		// all routed to the sentinel) — otherwise their comment order would be
-		// non-deterministic across runs.
-		sort.Slice(g, func(i, j int) bool {
-			if g[i].addr != g[j].addr {
-				return g[i].addr < g[j].addr
-			}
-			return g[i].name < g[j].name
-		})
+		sort.Slice(g, func(i, j int) bool { return g[i].addr < g[j].addr })
 		for _, in := range g {
 			arm.ListComment = append(arm.ListComment, fmt.Sprintf(
 				"%s => %s  %s",

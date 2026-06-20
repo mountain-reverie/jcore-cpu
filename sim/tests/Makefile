@@ -11,7 +11,7 @@ CONFIG_MMU_ARCH ?= 0
 CFLAGS = -m2 -g -Os -Wall -Iinclude -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH)
 LDFLAGS = -T sh32.x -Map main.map
 
-all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img
+all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img mmureg.img
 
 interrupts.elf: interrupts.o
 rte.elf: rte.o
@@ -22,6 +22,7 @@ excguard.elf: excguard.o
 trapatest.elf: trapatest.o
 pm3vec.elf: pm3vec.o
 pm3guard.elf: pm3guard.o
+mmureg.elf: mmureg.o
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@

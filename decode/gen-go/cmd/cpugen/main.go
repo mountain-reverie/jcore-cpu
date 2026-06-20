@@ -16,7 +16,6 @@ func main() {
 	width := flag.Int("w", 72, "ROM width: 64 or 72")
 	outDir := flag.String("o", "", "output directory; if empty, validate only and exit")
 	overlay := flag.String("overlay", "", "optional overlay spec dir (additive, for ISA variants)")
-	profilePath := flag.String("profile", "", "optional variant profile TOML (drop list)")
 	flag.Parse()
 
 	var s *spec.Spec
@@ -29,17 +28,6 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "load:", err)
 		os.Exit(1)
-	}
-	if *profilePath != "" {
-		prof, err := spec.ReadProfile(*profilePath)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "profile:", err)
-			os.Exit(1)
-		}
-		if err := spec.ApplyDrops(s, prof.Drop); err != nil {
-			fmt.Fprintln(os.Stderr, "profile:", err)
-			os.Exit(1)
-		}
 	}
 	if err := spec.Validate(s); err != nil {
 		fmt.Fprintln(os.Stderr, "validate:", err)

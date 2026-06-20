@@ -2,24 +2,13 @@ OBJS := entry.o gdb.o sh2.o main.o version.o
 OBJS += uartlite.o
 #OBJS += uart16550.o
 
-CPU ?= j2
-
 TESTS_OBJS := testbra.o
-TESTS_OBJS += testmov.o testmov2.o
+TESTS_OBJS += testmov.o testmov2.o testmov3.o
 TESTS_OBJS += testalu.o
 TESTS_OBJS += testshift.o
 TESTS_OBJS += testmul.o testmulu.o testmuls.o testmull.o testdmulu.o testdmuls.o testmulconf.o
 TESTS_OBJS += testdiv.o
 TESTS_OBJS += testmacw.o testmacl.o
-
-# J1 drops CAS.L + the coprocessor ops, so it excludes testmov3 (coproc) and
-# testcas (CAS.L). Those dropped opcodes' illegal-trap behaviour is verified by
-# the standalone sim test sim/tests/illegalj1.S, not a testrom function (the
-# testrom links the GDB stub, which captures illegal exceptions).
-ifneq ($(CPU), j1)
-    TESTS_OBJS += testmov3.o testcas.o
-endif
-
 TESTS_OBJS := $(addprefix tests/,$(TESTS_OBJS))
 
 CC = sh2-elf-gcc
@@ -37,10 +26,6 @@ ifeq ($(DDR), lpddr)
 	CFLAGS += -D LPDDR
 else ifeq ($(DDR), ddr8)
 	CFLAGS += -D DDR_BL4
-endif
-
-ifeq ($(CPU), j1)
-	CFLAGS += -DCPU_J1
 endif
 
 all: main.elf

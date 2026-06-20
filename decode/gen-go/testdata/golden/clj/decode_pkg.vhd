@@ -297,6 +297,7 @@ package decode_pack is
             op : operation_t;
             ilevel : std_logic_vector(3 downto 0);
         end record;
+    constant DEC_ADDR_BITS : natural := 8;
     constant DEC_CORE_RESET : decode_core_reg_t := (maskint => '0', delay_slot => '0', id_stall => '0', instr_seq_zero => '0', op => (plane => SYSTEM_INSTR, code => x"0300", addr => x"01"), ilevel => x"0");
     -- Reset vector specific to the microcode ROM. Uses a different starting addr.
     constant DEC_CORE_ROM_RESET : decode_core_reg_t := (maskint => '0', delay_slot => '0', id_stall => '0', instr_seq_zero => '0', op => (plane => SYSTEM_INSTR, code => x"0300", addr => x"e2"), ilevel => x"0");

@@ -1,0 +1,83 @@
+# SH-4 MMU control-register LDC/STC (J4 overlay, MMU_ARCH). PT-register family:
+#   LDC = 0100 mmmm xxxx 1110 ; STC = 0000 nnnn xxxx 0011
+#   xxxx: 0101 PTEH · 0110 PTEL · 0111 ASIDR. All privileged.
+# These are additive overlay entries: absent from the base J2 decoder, so
+# they raise General Illegal on J2. See spec §5.
+
+[[instr]]
+  name = "LDC Rm, PTEH"
+  privileged = true
+  format = "m"
+  opcode = "0100 mmmm 0101 1110"
+  operation = "Rm -> PTEH (MMU page-table-entry high)"
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "Rm"
+    zbus = "PTEH"
+    zbus_sel = "Y"
+
+[[instr]]
+  name = "STC PTEH, Rn"
+  privileged = true
+  format = "n"
+  opcode = "0000 nnnn 0101 0011"
+  operation = "PTEH -> Rn"
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "PTEH"
+    zbus = "Rn"
+    zbus_sel = "Y"
+
+[[instr]]
+  name = "LDC Rm, PTEL"
+  privileged = true
+  format = "m"
+  opcode = "0100 mmmm 0110 1110"
+  operation = "Rm -> PTEL (MMU page-table-entry low)"
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "Rm"
+    zbus = "PTEL"
+    zbus_sel = "Y"
+
+[[instr]]
+  name = "STC PTEL, Rn"
+  privileged = true
+  format = "n"
+  opcode = "0000 nnnn 0110 0011"
+  operation = "PTEL -> Rn"
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "PTEL"
+    zbus = "Rn"
+    zbus_sel = "Y"
+
+[[instr]]
+  name = "LDC Rm, ASIDR"
+  privileged = true
+  format = "m"
+  opcode = "0100 mmmm 0111 1110"
+  operation = "Rm -> ASIDR (address space identifier)"
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "Rm"
+    zbus = "ASIDR"
+    zbus_sel = "Y"
+
+[[instr]]
+  name = "STC ASIDR, Rn"
+  privileged = true
+  format = "n"
+  opcode = "0000 nnnn 0111 0011"
+  operation = "ASIDR -> Rn"
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "ASIDR"
+    zbus = "Rn"
+    zbus_sel = "Y"

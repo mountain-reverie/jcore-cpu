@@ -241,8 +241,21 @@ else
             continue
         fi
 
+        # illegalj1 must run against the J1 decoder (cpu_j1 config): it
+        # tests that CAS.L / coprocessor ops trap as illegal on J1.  The
+        # standard cpu_sim config uses cpu_decode_direct (J2/J4), where
+        # those opcodes are valid and the trap never fires.
+        if [ "$name" = "illegalj1" ]; then
+            (cd "$REPO_ROOT/sim" && make TOOLS_DIR="$TOOLS_DIR" CPU_TB_CONFIG=work.cpu_j1 cpu_ctb work-obj93.cf >/dev/null 2>&1)
+        fi
+
         output="$(cd "$REPO_ROOT/sim" && timeout 30 ./cpu_ctb --stop-time=10us -i "tests/$name.img" 2>&1)"
         exit_code=$?
+
+        # Restore the standard (cpu_sim) build after the J1-specific test.
+        if [ "$name" = "illegalj1" ]; then
+            (cd "$REPO_ROOT/sim" && make TOOLS_DIR="$TOOLS_DIR" cpu_ctb work-obj93.cf >/dev/null 2>&1)
+        fi
 
         if echo "$output" | grep -q "Test Passed"; then
             echo "    PASS [$name]"

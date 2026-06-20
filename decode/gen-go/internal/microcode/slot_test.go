@@ -498,7 +498,7 @@ func TestAssignZBus_MMU(t *testing.T) {
 			t.Fatalf("assignZBus(%q): %v", reg, err)
 		}
 		assertSignal(t, out, SigMmuRegWr, "1")
-		assertSignal(t, out, SigMmuRegSel, "SEL_"+reg)
+		assertSignal(t, out, SigMmuRegSelWr, "SEL_"+reg)
 		if _, ok := out[SigWrregZ]; ok {
 			t.Fatalf("zbus=%q must NOT write the regfile (SigWrregZ set)", reg)
 		}

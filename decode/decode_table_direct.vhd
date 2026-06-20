@@ -889,6 +889,7 @@ begin
             SEL_XBUS when "01",
             SEL_ZBUS when others;
     ex_stall.mem_wdata_sel <= SEL_ZBUS when (imp_bit_118 or imp_bit_251 or imp_bit_312) = '1' else SEL_YBUS;
+    ex_stall.mmu_reg_sel <= SEL_PTEH;
     ex_stall.mulcom1 <= (imp_bit_70 or imp_bit_130 or imp_bit_210);
     cond6 <= ((op.code(0) and not op.code(1) and op.code(2) and op.code(3) and op.code(12) and op.code(13) and not op.code(14) and not op.code(15) and not p(0))) & ((op.code(0) and not op.code(1) and op.code(2) and not op.code(3) and op.code(12) and op.code(13) and not op.code(14) and not op.code(15) and not p(0))) & (imp_bit_130) & ((op.code(0) and op.code(1) and op.code(2) and op.code(3) and not op.code(12) and op.code(13) and not op.code(14) and not op.code(15) and not p(0))) & ((not op.code(0) and op.code(1) and op.code(2) and op.code(3) and not op.code(12) and op.code(13) and not op.code(14) and not op.code(15) and not p(0)));
     with cond6 select

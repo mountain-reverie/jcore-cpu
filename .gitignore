@@ -15,14 +15,7 @@ sim/timeout_cnt.vhd
 
 # tests/ unit-TAP build outputs
 tests/work-obj93.cf
-tests/arith_tap
-tests/bshift_tap
-tests/divider_tap
-tests/logic_tap
-tests/manip_tap
-tests/mult_tap
-tests/mult_seq_tap
-tests/register_tap
+tests/*_tap
 
 # .vhm preprocessor outputs (built by sim/Makefile or jcore-soc/tools)
 core/datapath.vhd
@@ -63,3 +56,5 @@ __pycache__/
 *.swp
 *.swo
 .DS_Store
+*.o
+*.a

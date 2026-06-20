@@ -588,6 +588,13 @@ var csvInstrOrder = []string{
 	"STC EXPEVT, Rn",
 	"STC INTEVT, Rn",
 	"STC TRA, Rn",
+	// MMU control-register instructions (J4 overlay):
+	"LDC Rm, PTEH",
+	"STC PTEH, Rn",
+	"LDC Rm, PTEL",
+	"STC PTEL, Rn",
+	"LDC Rm, ASIDR",
+	"STC ASIDR, Rn",
 	// System-plane instructions (at end, in CSV row order):
 	"General Illegal",
 	"Slot Illegal",

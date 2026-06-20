@@ -228,7 +228,14 @@ case "$BACKEND" in
     # IO). nextpnr-ice40 (run by the caller) then places & routes it on the up5k
     # and reports ICESTORM_LC/RAM/DSP utilisation + Fmax. Elaborates the
     # per-variant harness config so J1 measures its own core.
-    yosys -m ghdl -p "$GHDL_BASE -e $TIMING_TOP; synth_ice40 -dsp -top $TIMINGCELL; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_ice40.json"
+    # J1 gets two extra Yosys passes (from jcore-j1-ghdl): opt+opt_mem before
+    # synth_ice40 to eliminate dead logic, and -abc2 -retime for a second ABC
+    # pass + register retiming (Fmax win). J2/J4 left byte-identical to baseline.
+    if [ "$SYNTH_VARIANT" = j1 ]; then
+      yosys -m ghdl -p "$GHDL_BASE -e $TIMING_TOP; opt; opt_mem; synth_ice40 -dsp -abc2 -retime -top $TIMINGCELL; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_ice40.json"
+    else
+      yosys -m ghdl -p "$GHDL_BASE -e $TIMING_TOP; synth_ice40 -dsp -top $TIMINGCELL; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_ice40.json"
+    fi
     ;;
   *) echo "ERROR: unknown backend '$BACKEND' (want asic|ecp5|timing|ice40)" >&2; exit 1 ;;
 esac

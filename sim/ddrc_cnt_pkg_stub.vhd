@@ -1,4 +1,9 @@
--- Minimal stub for ddrc_cnt_pack, providing only the types needed by cache_pkg.
+-- SIM-ONLY minimal shim of ddrc_cnt_pack.
+-- Provides only ddr_status_o_t, used transitively by cache_pack (cache/cache_pkg.vhd).
+-- The real package $(JCORE_SOC)/components/ddr2/ddrc_cnt_pkg.vhd drags in work.config,
+-- which is not available in the cpu sim build, so this shim is justified.
+-- ddr_status_o_t MUST stay in sync with the real definition at
+-- $(JCORE_SOC)/components/ddr2/ddrc_cnt_pkg.vhd lines ~133-136.
 library ieee;
 use ieee.std_logic_1164.all;
 

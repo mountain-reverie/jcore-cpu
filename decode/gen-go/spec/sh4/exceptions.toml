@@ -18,7 +18,11 @@
 [[instr]]
   name = "Interrupt"
   format = "d8"
-  opcode = "---- -000 dddd dddd"
+  # bit 11 MUST be 0 (not don't-care): the TLB exception system ops use nibbles
+  # 0x8-0xD (bit 11 = 1) and share bits[10:8] with these base exceptions. A
+  # don't-care here makes nibble 0x8 (TLB IMISS) alias Interrupt, leaking its
+  # INTEVT/IMASK slots into the IMISS entry. See exceptions DMISS_R/Error below.
+  opcode = "---- 0000 dddd dddd"
   operation = "SPC<-PC; SSR<-SR; MD/RB/BL; IMASK; INTEVT<-vec; PC<-VBR+0x600"
   plane = "system"
 
@@ -65,7 +69,10 @@
 [[instr]]
   name = "Error"
   format = "d8"
-  opcode = "---- -001 dddd dddd"
+  # bit 11 = 0 explicitly: nibble 0x9 (TLB DMISS_R) would otherwise alias this
+  # Error entry (both have bits[10:8]=001), making DMISS_R spuriously run Error's
+  # EXPEVT<-0x100 slot and clobber the 0x060 side-effect value.
+  opcode = "---- 0001 dddd dddd"
   operation = "SPC<-PC; SSR<-SR; MD/RB/BL; EXPEVT<-0x100; PC<-VBR+0x100"
   plane = "system"
 
@@ -108,7 +115,7 @@
 [[instr]]
   name = "Slot Illegal"
   format = "d8"
-  opcode = "---- -110 dddd dddd"
+  opcode = "---- 0110 dddd dddd"  # bit 11 = 0 (avoid TLB-nibble aliasing)
   operation = "SPC<-PC; SSR<-SR; MD/RB/BL; EXPEVT<-0x1A0; PC<-VBR+0x100"
   plane = "system"
 
@@ -150,7 +157,7 @@
 [[instr]]
   name = "General Illegal"
   format = "d8"
-  opcode = "---- -111 dddd dddd"
+  opcode = "---- 0111 dddd dddd"  # bit 11 = 0 (avoid TLB-nibble aliasing)
   operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x180; PC<-VBR+0x100"
   plane = "system"
 

@@ -766,6 +766,19 @@ begin
                 when others =>
 
             end case;
+        elsif std_match(cond, "00000000000111000") then
+            -- LDTLB [0038]
+            -- PTEH/PTEL/ASIDR -> TLB
+            case op.addr(3 downto 0) is
+                when x"0" =>
+                    dispatch <= '1';
+                    id.if_issue <= '1';
+                    id.incpc <= '1';
+                    maskint_next <= '1';
+                    ex_stall.tlb_wr <= '1';
+                when others =>
+
+            end case;
         elsif std_match(cond, "00000000000111011") then
             -- BGND [003B]
             -- background

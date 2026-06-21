@@ -47,9 +47,10 @@ endif
 
 VHDS := $(CPU_VHDS) bridge_pkg.vhd monitor_pkg.vhd bus_monitor.vhd timeout_cnt.vhd cpu_tb.vhh data_bus_pkg.vhd cpu_pure_tb.vhh cpusim_miniaic2.vhd
 VHDS += mem/cpu_sram.vhd mem/asymmetric_ram.vhd
+VHDS += tlb_match_tb.vhd
 #UNISIM_VHDS := unisims/unisim_VCOMP.vhd unisims/unisim_VPKG.vhd $(wildcard unisims/primitive/*.vhd)
 
-VHDL_TOPS := cpu_tb cpu_pure_tb
+VHDL_TOPS := cpu_tb cpu_pure_tb tlb_match_tb
 #VHDL_LIBS := unisim work
 VHDL_LIBS := work
 

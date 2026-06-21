@@ -33,7 +33,7 @@ architecture arch of decode is
     signal wb_stall : pipeline_wb_stall_t;
     constant STAGE_EX_RESET : pipeline_ex_t := (imm_val => x"00000000", xbus_sel => SEL_IMM, ybus_sel => SEL_IMM, mmu_reg_sel => SEL_PTEH, regnum_z => "00000", regnum_x => "00000", regnum_y => "00000", alumanip => SWAP_BYTE, aluinx_sel => SEL_XBUS, aluiny_sel => SEL_YBUS, arith_func => ADD, arith_ci_en => '0', arith_sr_func => ZERO, logic_func => LOGIC_NOT, logic_sr_func => ZERO, mac_busy => '0', ma_wr => '0', mem_lock => '0', mem_size => BYTE, coproc_cmd => NOP);
     constant STAGE_WB_RESET : pipeline_wb_t := (regnum_w => "00000", mac_busy => '0');
-    constant STAGE_EX_STALL_RESET : pipeline_ex_stall_t := (wrpc_z => '0', wrsr_z => '0', ma_issue => '0', wrpr_pc => '0', zbus_sel => SEL_ARITH, sr_sel => SEL_PREV, t_sel => SEL_CLEAR, mem_addr_sel => SEL_XBUS, mem_wdata_sel => SEL_ZBUS, wrreg_z => '0', wrmach => '0', wrmacl => '0', shiftfunc => LOGIC, mulcom1 => '0', mulcom2 => NOP, macsel1 => SEL_XBUS, macsel2 => SEL_YBUS, mmu_reg_wr => '0', mmu_reg_sel => SEL_PTEH);
+    constant STAGE_EX_STALL_RESET : pipeline_ex_stall_t := (wrpc_z => '0', wrsr_z => '0', ma_issue => '0', wrpr_pc => '0', zbus_sel => SEL_ARITH, sr_sel => SEL_PREV, t_sel => SEL_CLEAR, mem_addr_sel => SEL_XBUS, mem_wdata_sel => SEL_ZBUS, wrreg_z => '0', wrmach => '0', wrmacl => '0', shiftfunc => LOGIC, mulcom1 => '0', mulcom2 => NOP, macsel1 => SEL_XBUS, macsel2 => SEL_YBUS, mmu_reg_wr => '0', mmu_reg_sel => SEL_PTEH, tlb_wr => '0');
     constant STAGE_WB_STALL_RESET : pipeline_wb_stall_t := (mulcom1 => '0', wrmach => '0', wrmacl => '0', wrreg_w => '0', wrsr_w => '0', macsel1 => SEL_XBUS, macsel2 => SEL_YBUS, mulcom2 => NOP, cpu_data_mux => DBUS);
     constant PIPELINE_RESET : pipeline_t := (ex1 => STAGE_EX_RESET, ex1_stall => STAGE_EX_STALL_RESET, wb1 => STAGE_WB_RESET, wb2 => STAGE_WB_RESET, wb3 => STAGE_WB_RESET, wb1_stall => STAGE_WB_STALL_RESET, wb2_stall => STAGE_WB_STALL_RESET, wb3_stall => STAGE_WB_STALL_RESET);
 begin
@@ -169,6 +169,7 @@ begin
     sr.sel <= SEL_WBUS when pipeline_r.wb3_stall.wrsr_w = '1' else pipeline_r.ex1_stall.sr_sel;
     sr.mmu_reg_wr  <= pipeline_r.ex1_stall.mmu_reg_wr;
     sr.mmu_reg_sel <= pipeline_r.ex1_stall.mmu_reg_sel;
+    sr.tlb_wr      <= pipeline_r.ex1_stall.tlb_wr;
     coproc.coproc_cmd <= CSTS when (pipeline_r.ex1.coproc_cmd = STS and pipeline_r.wb1_stall.cpu_data_mux = DBUS) else pipeline_r.ex1.coproc_cmd;
     copreg <= op.code(11 downto 4);
 end;

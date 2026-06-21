@@ -81,3 +81,13 @@
     ybus = "ASIDR"
     zbus = "Rn"
     zbus_sel = "Y"
+
+[[instr]]
+  name = "LDTLB"
+  privileged = true
+  opcode = "0000 0000 0011 1000"
+  operation = "PTEH/PTEL/ASIDR -> TLB"
+  [[instr.slots]]
+    tlb_wr = "YES"
+    mask_int = "YES"
+    pc = "INC"

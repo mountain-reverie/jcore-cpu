@@ -22,4 +22,6 @@ var KnownFields = map[string]bool{
 	// system
 	"debug": true, "event": true, "halt": true,
 	"mask_int": true, "coproc_cmd": true, "data_mux": true,
+	// MMU
+	"tlb_wr": true,
 }

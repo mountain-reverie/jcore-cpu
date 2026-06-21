@@ -186,6 +186,12 @@ func AssignSlot(instr spec.Instr, slot spec.Slot) (AssignMap, error) {
 		out[SigMaskInt] = "1"
 	}
 
+	// --- tlb_wr ---
+	// LDTLB: pulse the TLB write port for one cycle in EX stage.
+	if v := slot["tlb_wr"]; v != "" {
+		out[SigTlbWr] = "1"
+	}
+
 	// --- memory access ---
 	// Clojure lines 243–246: (when-let [ma (:ma mc)] (gen-ma ma))
 	if slot["ma_op"] != "" {

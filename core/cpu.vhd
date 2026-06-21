@@ -127,7 +127,7 @@ begin
 
   -- TLB instantiation (MMU_ARCH=true only).
   -- The TLB is combinational for lookups; it is clocked only for TI flush and
-  -- LDTLB writes (both driven from Task 7). For now tlb_wr and ti are '0'.
+  -- LDTLB writes: tlb_wr comes from decoder (sr.tlb_wr); ti flush is deferred.
   g_mmu : if MMU_ARCH generate
   begin
     -- Reconstruct 32-bit VAs from the registered bus outputs.
@@ -160,7 +160,7 @@ begin
         asid     => dp_mmu_regs.asidr(15 downto 0),
         md       => dp_sr.md,
         at       => dp_mmu_regs.mmucr(0),
-        tlb_wr   => '0',
+        tlb_wr   => sr.tlb_wr,
         pteh_vpn => dp_mmu_regs.pteh(31 downto 12),
         ptel     => dp_mmu_regs.ptel,
         asidr    => dp_mmu_regs.asidr(15 downto 0),

@@ -87,6 +87,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libboost-all-dev \
         libeigen3-dev \
         ghdl-mcode \
+        device-tree-compiler \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------

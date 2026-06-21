@@ -64,6 +64,14 @@ architecture stru of cpu is
    signal tlb_d_hit  : std_logic;
    signal tlb_i_prot : std_logic;
    signal tlb_d_prot : std_logic;
+   -- MMU address-translation intermediates (driven by g_mmu only; VHDL-93 forbids
+   -- signal declarations inside a generate body, so they live here).
+   signal i_va_32         : std_logic_vector(31 downto 0);
+   signal d_va_32         : std_logic_vector(31 downto 0);
+   signal i_at_translated : std_logic;
+   signal d_at_translated : std_logic;
+   signal tlb_i_pa        : std_logic_vector(18 downto 0);
+   signal tlb_d_pa        : std_logic_vector(18 downto 0);
 begin
 
    event_o.ack  <= event_ack;
@@ -121,12 +129,6 @@ begin
   -- The TLB is combinational for lookups; it is clocked only for TI flush and
   -- LDTLB writes (both driven from Task 7). For now tlb_wr and ti are '0'.
   g_mmu : if MMU_ARCH generate
-    signal i_va_32   : std_logic_vector(31 downto 0);
-    signal d_va_32   : std_logic_vector(31 downto 0);
-    signal i_at_translated : std_logic;
-    signal d_at_translated : std_logic;
-    signal tlb_i_pa  : std_logic_vector(18 downto 0);
-    signal tlb_d_pa  : std_logic_vector(18 downto 0);
   begin
     -- Reconstruct 32-bit VAs from the registered bus outputs.
     -- inst_o.a is PA[31:1]; bit 0 is always 0 for instruction fetch.

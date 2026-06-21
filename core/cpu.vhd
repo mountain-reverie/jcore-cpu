@@ -72,6 +72,12 @@ architecture stru of cpu is
    signal d_at_translated : std_logic;
    signal tlb_i_pa        : std_logic_vector(18 downto 0);
    signal tlb_d_pa        : std_logic_vector(18 downto 0);
+   -- TLB exception detection outputs (fed to decode and datapath).
+   signal tlb_exc_en   : std_logic;
+   signal tlb_exc_kind : tlb_exc_kind_t;
+   signal tlb_exc_pend : std_logic;
+   signal tlb_fault_va : std_logic_vector(31 downto 0);
+   signal tlb_exc_expevt : std_logic_vector(11 downto 0);
 begin
 
    event_o.ack  <= event_ack;
@@ -93,7 +99,9 @@ begin
       event_i => event_i, event_ack => event_ack,
       ibit => ibit,
       slp => slp_o,
-      mask_int => mask_int);
+      mask_int => mask_int,
+      tlb_exc_en   => tlb_exc_en,
+      tlb_exc_kind => tlb_exc_kind);
    u_mult : mult port map (clk => clk, rst => rst, slot => slot, a => mac_i, y => mac_o);
       mac_i.wr_m1 <= mac.com1; mac_i.command <= mac.com2;
       mac_i.wr_mach <= mac.wrmach; mac_i.wr_macl <= mac.wrmacl;
@@ -115,7 +123,10 @@ begin
       cop_i => cop_i, cop_o => cop_o,
       priv_o => priv_o,
       mmu_regs_o => dp_mmu_regs,
-      sr_o       => dp_sr);
+      sr_o       => dp_sr,
+      tlb_exc_pend => tlb_exc_pend,
+      tlb_fault_va => tlb_fault_va,
+      tlb_exc_expevt => tlb_exc_expevt);
 
   db_o   <= sig_db_o;
   inst_o <= sig_inst_o;
@@ -127,7 +138,7 @@ begin
 
   -- TLB instantiation (MMU_ARCH=true only).
   -- The TLB is combinational for lookups; it is clocked only for TI flush and
-  -- LDTLB writes: tlb_wr comes from decoder (sr.tlb_wr); ti flush is deferred.
+  -- LDTLB writes: tlb_wr comes from decoder (sr.tlb_wr); ti is MMUCR bit[2].
   g_mmu : if MMU_ARCH generate
   begin
     -- Reconstruct 32-bit VAs from the registered bus outputs.
@@ -164,16 +175,85 @@ begin
         pteh_vpn => dp_mmu_regs.pteh(31 downto 12),
         ptel     => dp_mmu_regs.ptel,
         asidr    => dp_mmu_regs.asidr(15 downto 0),
-        ti       => '0');
+        ti       => dp_mmu_regs.mmucr(2));
 
     mmu_o.i_pa_tag <= tlb_i_pa;
     mmu_o.i_at     <= i_at_translated;
     mmu_o.d_pa_tag <= tlb_d_pa;
     mmu_o.d_at     <= d_at_translated;
+
+    -- TLB exception detection: priority I-side > D-side; miss > prot.
+    -- tlb_exc_en is combinatorial (no register); it is sampled by decode_core
+    -- on each slot and triggers the appropriate system microcode entry.
+    -- tlb_exc_pend and tlb_fault_va go to datapath to write TEA/PTEH.
+    process(i_at_translated, d_at_translated,
+            sig_inst_o, sig_db_o,
+            tlb_i_hit, tlb_i_prot, tlb_d_hit, tlb_d_prot,
+            i_va_32, d_va_32)
+      variable exc_en   : std_logic;
+      variable exc_kind : tlb_exc_kind_t;
+      variable fva      : std_logic_vector(31 downto 0);
+    begin
+      exc_en   := '0';
+      exc_kind := IMISS;
+      fva      := (others => '0');
+      if i_at_translated = '1' and sig_inst_o.en = '1' then
+        if tlb_i_hit = '0' then
+          exc_en   := '1';
+          exc_kind := IMISS;
+          fva      := i_va_32;
+        elsif tlb_i_prot = '1' then
+          exc_en   := '1';
+          exc_kind := IPROT;
+          fva      := i_va_32;
+        end if;
+      end if;
+      if exc_en = '0' and d_at_translated = '1' and sig_db_o.en = '1' then
+        if tlb_d_hit = '0' then
+          if sig_db_o.wr = '1' then
+            exc_en   := '1';
+            exc_kind := DMISS_W;
+          else
+            exc_en   := '1';
+            exc_kind := DMISS_R;
+          end if;
+          fva := d_va_32;
+        elsif tlb_d_prot = '1' then
+          if sig_db_o.wr = '1' then
+            exc_en   := '1';
+            exc_kind := DPROT_W;
+          else
+            exc_en   := '1';
+            exc_kind := DPROT_R;
+          end if;
+          fva := d_va_32;
+        end if;
+      end if;
+      tlb_exc_en   <= exc_en;
+      tlb_exc_kind <= exc_kind;
+      tlb_exc_pend <= exc_en;
+      tlb_fault_va <= fva;
+    end process;
+
+    -- SH-4 EXPEVT code for the detected fault kind, captured into EXPEVT as a
+    -- datapath hardware side-effect (see datapath.vhm). IMISS=0x040 DMISS_R=0x060
+    -- DMISS_W=0x080 IPROT=0x0A0 DPROT_R/W=0x0C0.
+    with tlb_exc_kind select tlb_exc_expevt <=
+      x"040" when IMISS,
+      x"060" when DMISS_R,
+      x"080" when DMISS_W,
+      x"0A0" when IPROT,
+      x"0C0" when DPROT_R,
+      x"0C0" when DPROT_W;
   end generate g_mmu;
 
   g_no_mmu : if not MMU_ARCH generate
-    mmu_o <= NULL_MMU_O;
+    mmu_o        <= NULL_MMU_O;
+    tlb_exc_en   <= '0';
+    tlb_exc_kind <= IMISS;
+    tlb_exc_pend <= '0';
+    tlb_fault_va <= (others => '0');
+    tlb_exc_expevt <= (others => '0');
   end generate g_no_mmu;
 
 end architecture stru;

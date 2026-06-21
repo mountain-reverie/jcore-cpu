@@ -212,6 +212,8 @@ package decode_pack is
             rst : in std_logic;
             slot : in std_logic;
             t_bcc : in std_logic;
+            tlb_exc_en : in std_logic;
+            tlb_exc_kind : in tlb_exc_kind_t;
             buses : out buses_ctrl_t;
             copreg : out std_logic_vector(7 downto 0);
             coproc : out coproc_ctrl_t;
@@ -253,6 +255,8 @@ package decode_pack is
             rst : in std_logic;
             slot : in std_logic;
             t_bcc : in std_logic;
+            tlb_exc_en : in std_logic;
+            tlb_exc_kind : in tlb_exc_kind_t;
             event_ack : out std_logic;
             if_issue : out std_logic;
             ifadsel : out std_logic;
@@ -303,11 +307,11 @@ package decode_pack is
     constant DEC_CORE_RESET : decode_core_reg_t := (maskint => '0', delay_slot => '0', id_stall => '0', instr_seq_zero => '0', op => (plane => SYSTEM_INSTR, code => x"0300", addr => x"01"), ilevel => x"0");
     -- Reset vector specific to the microcode ROM. Uses a different starting addr.
     constant DEC_CORE_ROM_RESET : decode_core_reg_t := (maskint => '0', delay_slot => '0', id_stall => '0', instr_seq_zero => '0', op => (plane => SYSTEM_INSTR, code => x"0300", addr => x"e2"), ilevel => x"0");
-    type system_instr_t is (BREAK, ERROR, GENERAL_ILLEGAL, INTERRUPT, RESET_CPU, SLOT_ILLEGAL);
+    type system_instr_t is (BREAK, ERROR, GENERAL_ILLEGAL, INTERRUPT, RESET_CPU, SLOT_ILLEGAL, TLB_DMISS_R, TLB_DMISS_W, TLB_DPROT_R, TLB_DPROT_W, TLB_IMISS, TLB_IPROT);
     type system_instr_addr_array is array (system_instr_t range <>) of std_logic_vector(7 downto 0);
-    constant system_instr_rom_addrs : system_instr_addr_array := (BREAK => x"fa", ERROR => x"f1", GENERAL_ILLEGAL => x"d1", INTERRUPT => x"e8", RESET_CPU => x"e1", SLOT_ILLEGAL => x"d9");
+    constant system_instr_rom_addrs : system_instr_addr_array := (BREAK => x"fa", ERROR => x"f1", GENERAL_ILLEGAL => x"d1", INTERRUPT => x"e8", RESET_CPU => x"e1", SLOT_ILLEGAL => x"d9", TLB_DMISS_R => , TLB_DMISS_W => , TLB_DPROT_R => , TLB_DPROT_W => , TLB_IMISS => , TLB_IPROT => );
     type system_instr_code_array is array (system_instr_t range <>) of std_logic_vector(11 downto 8);
-    constant system_instr_codes : system_instr_code_array := (BREAK => x"2", ERROR => x"1", GENERAL_ILLEGAL => x"7", INTERRUPT => x"0", RESET_CPU => x"3", SLOT_ILLEGAL => x"6");
+    constant system_instr_codes : system_instr_code_array := (BREAK => x"2", ERROR => x"1", GENERAL_ILLEGAL => x"7", INTERRUPT => x"0", RESET_CPU => x"3", SLOT_ILLEGAL => x"6", TLB_DMISS_R => x"9", TLB_DMISS_W => x"A", TLB_DPROT_R => x"C", TLB_DPROT_W => x"D", TLB_IMISS => x"8", TLB_IPROT => x"B");
     type system_event_code_array is array (cpu_event_cmd_t range <>) of std_logic_vector(11 downto 8);
     constant system_event_codes : system_event_code_array := (INTERRUPT => x"0", ERROR => x"1", BREAK => x"2", RESET_CPU => x"3");
     type system_event_instr_array is array (cpu_event_cmd_t range <>) of system_instr_t;

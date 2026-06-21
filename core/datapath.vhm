@@ -57,7 +57,12 @@ entity datapath is
 		     cop_o : out cop_o_t;
 		     priv_o    : out cpu_priv_o_t := NULL_PRIV_O;  -- SH-4 EXPEVT/INTEVT/TRA (J4)
 		     mmu_regs_o : out mmu_reg_t := MMU_REG_RESET;  -- MMU CSRs for TLB (J4+MMU_ARCH)
-		     sr_o       : out sr_t                          -- committed SR for TLB md bit
+		     sr_o       : out sr_t;                         -- committed SR for TLB md bit
+		     -- TLB fault side-effects: when tlb_exc_pend='1', write TEA, PTEH[31:14]
+		     -- and EXPEVT (the latter selected from the fault kind by cpu.vhd).
+		     tlb_exc_pend   : in std_logic := '0';
+		     tlb_fault_va   : in std_logic_vector(31 downto 0) := (others => '0');
+		     tlb_exc_expevt : in std_logic_vector(11 downto 0) := (others => '0')
 	     );
 end entity datapath;
 
@@ -316,7 +321,7 @@ begin
 
 	ibit <= sr.int_mask;
 
-	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall)
+	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, tlb_fault_va, tlb_exc_expevt)
 	  register this when clk='1' and clk'event reset when rst='1';
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
@@ -583,6 +588,20 @@ begin
               when SEL_TRA =>
                 if PRIV_ARCH then this.priv.tra := buses.imm_val(9 downto 0); end if;
             end case;
+
+            -- TLB fault hardware side-effects (J4+MMU_ARCH): when tlb_exc_pend='1'
+            -- (the fault is detected), capture TEA and PTEH[31:14] from the faulting
+            -- VA, and EXPEVT from the fault kind. EXPEVT is captured here (not via a
+            -- microcode immediate slot) because it is data-dependent on the kind and
+            -- the system-instruction-only immediate would otherwise need a dedicated
+            -- decoder selector arm. The values are stable while the fault persists, so
+            -- repeated writes before the exception dispatches are idempotent.
+            if MMU_ARCH and tlb_exc_pend = '1' then
+              this.mmu.tea              := tlb_fault_va;
+              this.mmu.pteh(31 downto 14) := tlb_fault_va(31 downto 14);
+              this.mmu.pteh(13 downto 0)  := (others => '0');
+              if PRIV_ARCH then this.priv.expevt := tlb_exc_expevt; end if;
+            end if;
 
             -- LDC Rm,PTEH/PTEL/ASIDR write path (J4+MMU_ARCH).
             -- When the decoder asserts mmu_reg_wr the zbus carries the source

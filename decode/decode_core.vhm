@@ -3,6 +3,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.decode_pack.all;
 use work.cpu2j0_pack.all;
+use work.cpu2j0_components_pack.all;
 
 entity decode_core is
   generic (
@@ -31,6 +32,8 @@ entity decode_core is
     rst : in std_logic;
     slot : in std_logic;
     t_bcc : in std_logic;
+    tlb_exc_en : in std_logic;
+    tlb_exc_kind : in tlb_exc_kind_t;
     debug : in std_logic;
     enter_debug : in std_logic;
     event_ack : out std_logic;
@@ -63,6 +66,18 @@ architecture arch of decode_core is
   signal predicted_addr : std_logic_vector(DEC_ADDR_BITS-1 downto 0);
   signal op_addr_next_i : std_logic_vector(DEC_ADDR_BITS-1 downto 0);
   signal mispredict : std_logic;
+
+  -- TLB miss/protection exception request hold (MMU_ARCH). A TLB fault is
+  -- discovered combinationally during the offending memory access (tlb_exc_en
+  -- pulses for a single access cycle), but the decode op-mux can only latch a
+  -- new system op on a non-stalled instruction-boundary slot, which generally
+  -- arrives a cycle or more later -- after the pulse is gone. We register the
+  -- request and hold it until the exception is actually dispatched (texc_ack),
+  -- mirroring the held-until-event_ack model used for asynchronous events.
+  -- texc_kind_held latches which TLB exception to raise.
+  signal texc_req       : std_logic;
+  signal texc_kind_held : tlb_exc_kind_t;
+  signal texc_ack       : std_logic;
 
   register variable this : decode_core_reg_t reset := reset_vector;
 
@@ -164,6 +179,29 @@ begin
   mispredict <= '1' when (decode_type = ROM and predicted_addr /= ra_base)
                 else '0';
 
+  -- TLB exception request hold. Set on the combinational fault pulse, cleared
+  -- when the exception is dispatched. texc_ack mirrors the op-latch condition in
+  -- the decode_core process (slot, not stalled, at an instruction boundary), so
+  -- the request clears exactly when next_op is latched into the registered op.
+  texc_ack <= '1' when slot = '1' and texc_req = '1'
+                       and this'register.id_stall = '0'
+                       and this'register.instr_seq_zero = '1'
+              else '0';
+  texc_req_reg : process(clk, rst)
+  begin
+    if rst = '1' then
+      texc_req       <= '0';
+      texc_kind_held <= IMISS;
+    elsif clk = '1' and clk'event then
+      if texc_ack = '1' then
+        texc_req <= '0';
+      elsif tlb_exc_en = '1' and texc_req = '0' then
+        texc_req       <= '1';
+        texc_kind_held <= tlb_exc_kind;
+      end if;
+    end if;
+  end process;
+
   -- Next ID STALL
   next_id_stall_a <= reg_conf or if_stall or mac_stall or mispredict;
   next_id_stall <= next_id_stall_a;
@@ -189,6 +227,21 @@ begin
     -- General Illegal Instruction
     system_op(GENERAL_ILLEGAL)
       when illegal_instr = '1' else
+    -- TLB miss/protection exceptions (MMU_ARCH). Driven by the held request so
+    -- the system op is stable across the memory-access stall until it can be
+    -- latched at the next instruction boundary.
+    system_op(TLB_IMISS)
+      when texc_req = '1' and texc_kind_held = IMISS else
+    system_op(TLB_DMISS_R)
+      when texc_req = '1' and texc_kind_held = DMISS_R else
+    system_op(TLB_DMISS_W)
+      when texc_req = '1' and texc_kind_held = DMISS_W else
+    system_op(TLB_IPROT)
+      when texc_req = '1' and texc_kind_held = IPROT else
+    system_op(TLB_DPROT_R)
+      when texc_req = '1' and texc_kind_held = DPROT_R else
+    system_op(TLB_DPROT_W)
+      when texc_req = '1' and texc_kind_held = DPROT_W else
     -- Break Instruction
     system_op(BREAK)
       when delay_slot = '0' and enter_debug = '1' else

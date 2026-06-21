@@ -3,7 +3,13 @@ IVERILOG := iverilog
 IVERILOG_VPI := iverilog-vpi
 TOOLS_DIR := $(firstword $(wildcard ../../mcu_lib/tools) $(wildcard ../../../tools))
 
-JCORE_SOC ?= $(error JCORE_SOC is not set — export it before invoking make)
+# jcore-soc supplies the cache/lib/targets VHDL the sim now pulls in. Default to
+# the sibling checkout (works in CI and the worktree: ../../jcore-soc from sim/);
+# an explicit JCORE_SOC env overrides. Error clearly only if neither is present.
+JCORE_SOC ?= $(firstword $(wildcard ../../jcore-soc) $(wildcard ../../../jcore-soc))
+ifeq ($(strip $(JCORE_SOC)),)
+$(error JCORE_SOC is not set and no sibling jcore-soc found — export JCORE_SOC)
+endif
 
 CONFIG_RING_BUS=0
 CONFIG_PREFETCHER=0

@@ -139,6 +139,8 @@ type cache_v_ff_t   is array(0 to CACHE_LINES-1    ) of std_logic;
 type icacheccl_reg_t is record
    state    : icache_state_t;
    ma0      : std_logic_vector(27 downto 0);
+   ma0_at   : std_logic;
+   ma0_pa_tag : std_logic_vector(CACHE_PA_TAG_WIDTH-1 downto 0);
    a_prev   : icache_i_t;
    a_prev_v : std_logic;
    c_hitstate  : std_logic;
@@ -157,9 +159,11 @@ type icacheccl_reg_t is record
    ic_inv   : std_logic;
 end record;
 
-constant ICACHECCLK_REG_RESET : icacheccl_reg_t := ( 
+constant ICACHECCLK_REG_RESET : icacheccl_reg_t := (
   IDLE,                   -- state
   (others => '0'),        -- ma0
+  '0',                    -- ma0_at
+  (others => '0'),        -- ma0_pa_tag
   ( (others => '0'), '0', MMU_CACHE_I_RESET ), -- a_prev
   '0',                    -- a_prev_v
   '0',                    -- c_hitkp
@@ -176,7 +180,7 @@ constant ICACHECCLK_REG_RESET : icacheccl_reg_t := (
   '0',                    -- ic_onm
   '0',                    -- ic_onmprep
   '0'                     -- ic_inv
-  ); 
+  );
 
 type icachemcl_reg_t is record
    ma0        : std_logic_vector(27 downto 0);
@@ -381,6 +385,8 @@ type dcacheccl_reg_t is record
    state    : dcache_state_t;
    state_del1 : dcache_state_t;
    ma0      : std_logic_vector(27 downto 0);
+   ma0_at   : std_logic;
+   ma0_pa_tag : std_logic_vector(CACHE_PA_TAG_WIDTH-1 downto 0);
    a_prev   : cpu_data_o_t;
    a_prev_v : std_logic;
    a_prev_mmu : mmu_cache_i_t;
@@ -408,11 +414,13 @@ type dcacheccl_reg_t is record
    b3en_r   : std_logic_vector(1 downto 0);
 end record;
 
-constant DCACHECCLK_REG_RESET : dcacheccl_reg_t := ( 
+constant DCACHECCLK_REG_RESET : dcacheccl_reg_t := (
   IDLE,                   -- state
   IDLE,                   -- state_del1
   (others => '0'),        -- ma0
-  ('0', (others => '0'), '0', '0', 
+  '0',                    -- ma0_at
+  (others => '0'),        -- ma0_pa_tag
+  ('0', (others => '0'), '0', '0',
    (others => '0'), (others => '0') ), -- a_prev
   '0',                    -- a_prev_v
   MMU_CACHE_I_RESET,      -- a_prev_mmu

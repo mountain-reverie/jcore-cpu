@@ -47,7 +47,7 @@ include ../../prefetch/build.mk
 CPU_VHDS += $(addprefix ../../prefetch/,$(PREFETCH_VHDS))
 endif
 
-VHDS := $(CPU_VHDS) bridge_pkg.vhd monitor_pkg.vhd bus_monitor.vhd timeout_cnt.vhd cpu_tb.vhh data_bus_pkg.vhd cpu_pure_tb.vhh cpusim_miniaic2.vhd
+VHDS := $(CPU_VHDS) bridge_pkg.vhd monitor_pkg.vhd bus_monitor.vhd timeout_cnt.vhd cpu_tb.vhh data_bus_pkg.vhd cpu_pure_tb.vhh cpusim_miniaic2.vhd cpu_cache_tb.vhh
 VHDS += mem/cpu_sram.vhd mem/asymmetric_ram.vhd
 VHDS += tlb_match_tb.vhd
 VHDS += seg_decode_tb.vhd
@@ -78,7 +78,7 @@ VHDS += ../cache/is_cacheable_tb.vhd
 VHDS += ../cache/dcache_color_tb.vhd
 #UNISIM_VHDS := unisims/unisim_VCOMP.vhd unisims/unisim_VPKG.vhd $(wildcard unisims/primitive/*.vhd)
 
-VHDL_TOPS := cpu_tb cpu_pure_tb tlb_match_tb seg_decode_tb is_cacheable_tb dcache_color_tb
+VHDL_TOPS := cpu_tb cpu_pure_tb tlb_match_tb seg_decode_tb is_cacheable_tb dcache_color_tb cpu_cache_tb
 #VHDL_LIBS := unisim work
 VHDL_LIBS := work
 
@@ -140,6 +140,9 @@ cpu_pure_tb: ram.img
 # Add dependencies to particular vhh files. TODO: how to avoid
 # repeating this rule?
 cpu_tb.vhh: cpu_tb.vhd cpu_signals.h sim/sim_macros.h
+	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -I. -I../config -Isim $< -o $@
+
+cpu_cache_tb.vhh: cpu_cache_tb.vhd cpu_signals.h sim/sim_macros.h
 	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -I. -I../config -Isim $< -o $@
 
 %.vpi:

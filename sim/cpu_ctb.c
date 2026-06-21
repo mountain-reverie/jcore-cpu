@@ -798,6 +798,7 @@ int main(int argc, char **argv) {
   if (arg < 0)
     return 1;
 
+  { const char *top = getenv("SIM_TOP"); if (top && *top) cfg.name = (char *)top; }
   if (sim_new(s, &cfg)) {
     fprintf(stderr, "sim_new failed\n");
     return 1;

@@ -70,8 +70,8 @@ architecture stru of cpu is
    signal d_va_32         : std_logic_vector(31 downto 0);
    signal i_at_translated : std_logic;
    signal d_at_translated : std_logic;
-   signal tlb_i_pa        : std_logic_vector(18 downto 0);
-   signal tlb_d_pa        : std_logic_vector(18 downto 0);
+   signal tlb_i_pa        : std_logic_vector(14 downto 0);
+   signal tlb_d_pa        : std_logic_vector(14 downto 0);
    -- TLB exception detection outputs (fed to decode and datapath).
    signal tlb_exc_en   : std_logic;
    signal tlb_exc_kind : tlb_exc_kind_t;

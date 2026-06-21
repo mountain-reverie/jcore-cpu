@@ -62,8 +62,8 @@ begin
 
   stim : process
     constant PAT : word_t := x"C010C010";
-    -- PA_BUF page = 0x10000 (PA[12]=0). pa_tag = PA[31:13] = 0x10000 >> 13 = 8.
-    constant PA_TAG : std_logic_vector(18 downto 0) := std_logic_vector(to_unsigned(8, 19));
+    -- PA_BUF page = 0x10000 (PA[12]=0). pa_tag = PA[27:13] = 0x10000 >> 13 = 8.
+    constant PA_TAG : std_logic_vector(14 downto 0) := std_logic_vector(to_unsigned(8, 15));
     procedure tick is begin wait until rising_edge(clk); end procedure;
     procedure do_acc(a : word_t; wr : std_logic; d : word_t; at : std_logic) is
     begin

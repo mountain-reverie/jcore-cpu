@@ -38,12 +38,13 @@ package cpu2j0_pack is
    end record;
 
    -- TLB output from cpu to SoC cache wrappers (J4+MMU_ARCH).
-   -- Carries the PA tag (PA[31:13] = 19 bits) and AT-translated flag for both
-   -- the I-cache and D-cache ports. All-zero / at='0' when MMU_ARCH=false.
+   -- Carries the PA tag (PA[27:13] = 15 bits, matches CACHE_PA_TAG_WIDTH) and
+   -- AT-translated flag for both I-cache and D-cache ports.
+   -- All-zero / at='0' when MMU_ARCH=false.
    type cpu_mmu_o_t is record
-      i_pa_tag : std_logic_vector(18 downto 0);
+      i_pa_tag : std_logic_vector(14 downto 0);  -- PA[27:13], 15 b (matches CACHE_PA_TAG_WIDTH)
       i_at     : std_logic;
-      d_pa_tag : std_logic_vector(18 downto 0);
+      d_pa_tag : std_logic_vector(14 downto 0);
       d_at     : std_logic;
    end record;
    constant NULL_MMU_O : cpu_mmu_o_t :=

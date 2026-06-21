@@ -49,9 +49,13 @@ VHDS := $(CPU_VHDS) bridge_pkg.vhd monitor_pkg.vhd bus_monitor.vhd timeout_cnt.v
 VHDS += mem/cpu_sram.vhd mem/asymmetric_ram.vhd
 VHDS += tlb_match_tb.vhd
 VHDS += seg_decode_tb.vhd
+VHDS += ddrc_cnt_pkg_stub.vhd
+VHDS += data_bus_pack_stub.vhd
+VHDS += ../cache/cache_pkg.vhd
+VHDS += ../cache/is_cacheable_tb.vhd
 #UNISIM_VHDS := unisims/unisim_VCOMP.vhd unisims/unisim_VPKG.vhd $(wildcard unisims/primitive/*.vhd)
 
-VHDL_TOPS := cpu_tb cpu_pure_tb tlb_match_tb seg_decode_tb
+VHDL_TOPS := cpu_tb cpu_pure_tb tlb_match_tb seg_decode_tb is_cacheable_tb
 #VHDL_LIBS := unisim work
 VHDL_LIBS := work
 

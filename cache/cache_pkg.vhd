@@ -25,6 +25,13 @@ constant CACHE_I_WIDTH_BITS      : natural := 1;  -- 16 bit instructions
 constant CACHE_D_WIDTH_BITS      : natural := 2;  -- 32 bit data
 
 constant CACHE_TAG_WIDTH         : natural := CACHE_REGION_WIDTH - CACHE_LINE_WIDTH_BITS - CACHE_INDEX_BITS;
+constant CACHE_PA_TAG_WIDTH      : natural := 19;  -- PA[31:13] for 8KB/32B geometry
+
+type mmu_cache_i_t is record
+  pa_tag : std_logic_vector(CACHE_PA_TAG_WIDTH-1 downto 0);
+  at     : std_logic;
+end record;
+constant MMU_CACHE_I_RESET : mmu_cache_i_t := (pa_tag => (others => '0'), at => '0');
 constant CACHE_INDEX_MSB         : natural := CACHE_LINE_WIDTH_BITS+CACHE_INDEX_BITS-1;
 constant CACHE_LINE_WIDTH        : natural := 2**CACHE_LINE_WIDTH_BITS;
 constant CACHE_LINE_MEM_WORDS    : natural := 2**(CACHE_LINE_WIDTH_BITS-CACHE_MEM_WIDTH_BITS);
@@ -92,7 +99,7 @@ type icache_ram_i_t is record
    ta    : std_logic_vector(CACHE_INDEX_BITS-1 downto 0);
    ten   : std_logic;
    twr   : std_logic;
-   tag   : std_logic_vector(CACHE_TAG_WIDTH-1   downto 0);
+   tag   : std_logic_vector(CACHE_PA_TAG_WIDTH-1   downto 0);
 end record;
 
 type icache_ramccl_i_t is record
@@ -101,7 +108,7 @@ type icache_ramccl_i_t is record
    ta    : std_logic_vector(CACHE_INDEX_BITS-1 downto 0);
    ten   : std_logic;
    twr   : std_logic;
-   tag   : std_logic_vector(CACHE_TAG_WIDTH-1   downto 0);
+   tag   : std_logic_vector(CACHE_PA_TAG_WIDTH-1   downto 0);
 end record;
 
 type icache_rammcl_i_t is record
@@ -113,12 +120,13 @@ end record;
 
 type icache_ram_o_t is record
    d0     : std_logic_vector(CACHE_MEM_WIDTH-1     downto 0);
-   tag    : std_logic_vector(CACHE_TAG_WIDTH-1     downto 0);
+   tag    : std_logic_vector(CACHE_PA_TAG_WIDTH-1  downto 0);
 end record;
 
 type icache_i_t is record
    a     : std_logic_vector(CACHE_REGION_WIDTH-1 downto 0);
    en    : std_logic;
+   mmu   : mmu_cache_i_t;
 end record;
 
 type icccr_i_t is record
@@ -152,7 +160,7 @@ end record;
 constant ICACHECCLK_REG_RESET : icacheccl_reg_t := ( 
   IDLE,                   -- state
   (others => '0'),        -- ma0
-  ( (others => '0'), '0' ), -- a_prev
+  ( (others => '0'), '0', MMU_CACHE_I_RESET ), -- a_prev
   '0',                    -- a_prev_v
   '0',                    -- c_hitkp
   '0',                    -- pref_inc
@@ -332,7 +340,7 @@ type dcache_ram_i_t is record
    ta0   : std_logic_vector(CACHE_INDEX_BITS-1 downto 0);
    ten0  : std_logic;
    twr0  : std_logic;
-   tag0  : std_logic_vector(CACHE_TAG_WIDTH-1   downto 0);
+   tag0  : std_logic_vector(CACHE_PA_TAG_WIDTH-1   downto 0);
    ta1   : std_logic_vector(CACHE_INDEX_BITS-1 downto 0);
 end record;
 
@@ -345,7 +353,7 @@ type dcache_ramccl_i_t is record
    ta0   : std_logic_vector(CACHE_INDEX_BITS-1 downto 0);
    ten0  : std_logic;
    twr0  : std_logic;
-   tag0  : std_logic_vector(CACHE_TAG_WIDTH-1   downto 0);
+   tag0  : std_logic_vector(CACHE_PA_TAG_WIDTH-1   downto 0);
    ta1   : std_logic_vector(CACHE_INDEX_BITS-1 downto 0);
 end record;
 
@@ -359,8 +367,8 @@ end record;
 
 type dcache_ram_o_t is record
    d0     : std_logic_vector(CACHE_MEM_WIDTH-1     downto 0);
-   tag0   : std_logic_vector(CACHE_TAG_WIDTH-1     downto 0);
-   tag1   : std_logic_vector(CACHE_TAG_WIDTH-1     downto 0);
+   tag0   : std_logic_vector(CACHE_PA_TAG_WIDTH-1  downto 0);
+   tag1   : std_logic_vector(CACHE_PA_TAG_WIDTH-1  downto 0);
 end record;
 
 type dcache_snoop_io_t is record
@@ -375,6 +383,7 @@ type dcacheccl_reg_t is record
    ma0      : std_logic_vector(27 downto 0);
    a_prev   : cpu_data_o_t;
    a_prev_v : std_logic;
+   a_prev_mmu : mmu_cache_i_t;
    sa_al  : std_logic_vector(CACHE_REGION_WIDTH-CACHE_LINE_WIDTH_BITS-1 downto 0);
    sa_en_state : std_logic;
    saout_al1 : std_logic_vector(CACHE_REGION_WIDTH-CACHE_LINE_WIDTH_BITS-1 downto 0);
@@ -406,6 +415,7 @@ constant DCACHECCLK_REG_RESET : dcacheccl_reg_t := (
   ('0', (others => '0'), '0', '0', 
    (others => '0'), (others => '0') ), -- a_prev
   '0',                    -- a_prev_v
+  MMU_CACHE_I_RESET,      -- a_prev_mmu
   (others => '0'),        -- sa_al
   '0',                    -- sa_en_state
   (others => '0'),        -- saout_al1
@@ -530,7 +540,8 @@ end component;
 
 
 component icache is
-   port (
+  generic (MMU_ARCH : boolean := false);
+  port (
    clk125 : in  std_logic;
    clk200 : in  std_logic;
    rst : in  std_logic;
@@ -547,7 +558,9 @@ component icache is
    my  : out mem_o_t);
 end component;
 
-component icache_ccl is port (
+component icache_ccl is
+  generic (MMU_ARCH : boolean := false);
+  port (
    clk   : in std_logic; -- cpu clock, 125MHz
    rst   : in std_logic;
    -- Cache RAM port
@@ -622,7 +635,8 @@ component dcache_ram is port (
 end component;
 
 component dcache is
-   port (
+  generic (MMU_ARCH : boolean := false);
+  port (
    clk125 : in  std_logic;
    clk200 : in  std_logic;
    rst :    in  std_logic;
@@ -633,6 +647,7 @@ component dcache is
    ry :     out dcache_ram_i_t;
    -- --------  CPU port ----------------
    a :      in  cpu_data_o_t;
+   a_mmu :  in  mmu_cache_i_t;
    lock :   in  std_logic;
    y :      out cpu_data_i_t;
    -- --------  snoop port --------------
@@ -643,7 +658,9 @@ component dcache is
    my :     out mem_o_t);
 end component;
 
-component dcache_ccl is port (
+component dcache_ccl is
+  generic (MMU_ARCH : boolean := false);
+  port (
    clk   : in std_logic; -- cpu clock, 125MHz
    rst   : in std_logic;
    -- Cache RAM port
@@ -652,6 +669,7 @@ component dcache_ccl is port (
    -- CPU port
    a     : in  cpu_data_o_t;
    a_lock : in  std_logic;
+   a_mmu  : in  mmu_cache_i_t;
    y     : out cpu_data_i_t;
    -- snoop port
    sa :     in  dcache_snoop_io_t;

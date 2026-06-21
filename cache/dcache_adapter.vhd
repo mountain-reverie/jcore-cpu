@@ -41,6 +41,7 @@ begin
     ry     =>  dcache_ry,
     -- CPU port
     a      =>  ibus_o,
+    a_mmu  =>  MMU_CACHE_I_RESET,
     lock   =>  lock,
     y      =>  ibus_i,
     -- snoop port --------------

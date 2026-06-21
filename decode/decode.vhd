@@ -59,7 +59,7 @@ architecture arch of decode is
     signal maskint_o : std_logic;
     signal next_id_stall : std_logic;
     signal op : operation_t;
-    signal op_addr_next : std_logic_vector(7 downto 0);
+    signal op_addr_next : std_logic_vector(8 downto 0);
     signal pipeline_c : pipeline_t;
     signal pipeline_r : pipeline_t;
     signal wb : pipeline_wb_t;

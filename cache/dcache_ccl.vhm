@@ -6,7 +6,10 @@ use work.cache_pack.all;
 use work.cpu2j0_pack.all;
 use work.data_bus_pack.all;
 
-entity dcache_ccl is port (
+entity dcache_ccl is
+  generic (
+    MMU_ARCH : boolean := false);
+  port (
    clk    : in std_logic; -- cpu clock, 125MHz
    rst    : in std_logic;
    -- Cache RAM port
@@ -15,6 +18,7 @@ entity dcache_ccl is port (
    -- CPU port
    a      : in cpu_data_o_t;
    a_lock : in std_logic;
+   a_mmu  : in mmu_cache_i_t;
    y      : out cpu_data_i_t;
    -- snoop port
    sa     : in  dcache_snoop_io_t;
@@ -53,6 +57,7 @@ begin
   variable cachehit          : std_logic;
   variable cachehit_snoop    : std_logic;
   variable cachehit_dur_fill : std_logic;
+  variable tag_to_compare    : std_logic_vector(CACHE_PA_TAG_WIDTH-1 downto 0);
   variable ctom_b0en         : std_logic;
   variable ctom_b3en         : std_logic_vector(1 downto 0);
   variable ctom_cmd          : std_logic_vector(2 downto 0); -- command of b0
@@ -248,7 +253,13 @@ begin
     -- --------------------------  |
     -- --------------------------  V
     vsel := this.ffv(vtoi(a.a(CACHE_INDEX_MSB downto 5)));
-    if(((this.aen_del1 = '1') and (ra.tag0 = to_cache_tag(this.a_prev.a))) or
+    if MMU_ARCH and this.a_prev_mmu.at = '1' then
+      tag_to_compare := this.a_prev_mmu.pa_tag;
+    else
+      tag_to_compare := (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
+                        & to_cache_tag(this.a_prev.a);
+    end if;
+    if(((this.aen_del1 = '1') and (ra.tag0 = tag_to_compare)) or
        ((this.aen_del1 = '0') and (this.c_hitstate = '1'))) and
       (vsel= '1') then                                 cachehit := '1';
     else                                               cachehit := '0'; end if;
@@ -257,7 +268,7 @@ begin
     -- cachehit (fill state) (during fill, different index)
     -- ------------ unneceaary logic, coded by viewpoint of logic correctness
     -- ------------ and performance check
-    if(((this.aen_del1 = '1') and (ra.tag0 = to_cache_tag(this.a_prev.a))) or
+    if(((this.aen_del1 = '1') and (ra.tag0 = tag_to_compare)) or
        ((this.aen_del1 = '0') and (this.c_hitstate = '1'))) and
       (vsel= '1') and
       (this.state = RMISS3) and
@@ -281,7 +292,7 @@ begin
     -- create hit check, (snoop)
     -- ------------------------------------------------------------------------
     if(this.sa_al(CACHE_REGION_WIDTH-CACHE_LINE_WIDTH_BITS-1 downto
-                  CACHE_INDEX_BITS)                  = ra.tag1 ) and
+                  CACHE_INDEX_BITS)                  = ra.tag1(CACHE_TAG_WIDTH-1 downto 0) ) and
                                      -- if default param, 23 bit comparator
       (this.sa_en_state = '1') and
       (this.ry_twr = '0') -- tag ram is in read cycle
@@ -497,7 +508,9 @@ begin
     else                         nx.a_prev_v := this.a_prev_v; end if;
 
     if(a.en = '1') then          nx.a_prev := a;
-    else                         nx.a_prev := this.a_prev; end if;
+                                 nx.a_prev_mmu := a_mmu;
+    else                         nx.a_prev := this.a_prev;
+                                 nx.a_prev_mmu := this.a_prev_mmu; end if;
 
     if(nx.state = RMISS1) or
       (nx.state = WMISS1) or
@@ -561,6 +574,7 @@ begin
     this.ma0         := nx.ma0;
     this.a_prev      := nx.a_prev;
     this.a_prev_v    := nx.a_prev_v;
+    this.a_prev_mmu  := nx.a_prev_mmu;
     this.saout_al1   := nx.saout_al1;
     this.sabank_send := nx.sabank_send;
     this.sabank_rcv  := nx.sabank_rcv;
@@ -587,7 +601,8 @@ begin
 
   -- tag ram       control signals --------------------------------------------
   ry_ccl.ten0 <= '1';
-  ry_ccl.tag0 <= this'register.ma0 (27 downto 
-                                   CACHE_LINE_WIDTH_BITS+CACHE_INDEX_BITS);
+  ry_ccl.tag0 <= this'register.a_prev_mmu.pa_tag when MMU_ARCH and this'register.a_prev_mmu.at = '1'
+                 else (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
+                      & this'register.ma0 (27 downto CACHE_LINE_WIDTH_BITS+CACHE_INDEX_BITS);
 
 end beh;

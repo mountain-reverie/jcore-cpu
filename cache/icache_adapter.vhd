@@ -55,8 +55,9 @@ begin
     ry => icache_ra);
 
   -- icache - cpu side connection
-  icache_a.a  <= ibus_o.a(27 downto 1) & "0";
-  icache_a.en <= ibus_o.en;
+  icache_a.a   <= ibus_o.a(27 downto 1) & "0";
+  icache_a.en  <= ibus_o.en;
+  icache_a.mmu <= MMU_CACHE_I_RESET;
   ibus_i.ack  <= icache_y.ack;
   ibus_i.d    <= icache_y.d;
 

@@ -5,7 +5,9 @@ use ieee.numeric_std.all;
 use work.cache_pack.all;
 use work.cache_clkmode.all;  -- CACHE_SAME_CLOCK (true=single-clock FPGA)
 
-entity icache is port (
+entity icache is
+  generic (MMU_ARCH : boolean := false);
+  port (
    clk125 : in std_logic;
    clk200 : in std_logic;
    rst : in std_logic;
@@ -67,7 +69,7 @@ begin
   ry.wr1 <= ry_mcl.wr1 ; -- +--
 
   -- cpu clock domain, sub module ---------------------------------------------
-  uicache_ccl : icache_ccl port map ( clk => clk125,
+  uicache_ccl : icache_ccl generic map (MMU_ARCH => MMU_ARCH) port map ( clk => clk125,
                                           -- ------
     rst => rst, ra => ra, ry_ccl => ry_ccl ,
     a => a, y => y, ctom => ctom1,

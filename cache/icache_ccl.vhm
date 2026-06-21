@@ -4,7 +4,10 @@ use ieee.numeric_std.all;
 
 use work.cache_pack.all;
 
-entity icache_ccl is port (
+entity icache_ccl is
+  generic (
+    MMU_ARCH : boolean := false);
+  port (
    clk    : in std_logic; -- cpu clock, 125MHz
    rst    : in std_logic;
    -- Cache RAM port
@@ -43,6 +46,7 @@ begin
   variable cachehit          : std_logic;
   variable fillline_hit      : std_logic;
   variable cachehit_dur_fill : std_logic;
+  variable tag_to_compare    : std_logic_vector(CACHE_PA_TAG_WIDTH-1 downto 0);
   variable wvsel             : std_logic;
   variable adrs_equcacheli   : std_logic; -- a.a and prev a.a are on same cache
                                 -- line
@@ -205,7 +209,13 @@ begin
     -- --------------------------  |
     -- --------------------------  V
     vsel := this.ffv(vtoi(a.a(CACHE_INDEX_MSB downto 5)));
-    if(((this.aen_del1 = '1') and (ra.tag = to_cache_tag(this.a_prev.a))) or
+    if MMU_ARCH and this.a_prev.mmu.at = '1' then
+      tag_to_compare := this.a_prev.mmu.pa_tag;
+    else
+      tag_to_compare := (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
+                        & to_cache_tag(this.a_prev.a);
+    end if;
+    if(((this.aen_del1 = '1') and (ra.tag = tag_to_compare)) or
        ((this.aen_del1 = '0') and (this.c_hitstate = '1'))) and
       (vsel= '1') then                                 cachehit := '1';
     else                                               cachehit := '0'; end if;
@@ -214,7 +224,7 @@ begin
     -- cachehit (fill state) (during fill, different index)
     -- ------------ unneceaary logic, coded by viewpoint of logic correctness
     -- ------------ and performance check
-    if(((this.aen_del1 = '1') and (ra.tag = to_cache_tag(this.a_prev.a))) or
+    if(((this.aen_del1 = '1') and (ra.tag = tag_to_compare)) or
        ((this.aen_del1 = '0') and (this.c_hitstate = '1'))) and
       (vsel= '1') and
       (this.state = MISS3) and
@@ -389,7 +399,8 @@ begin
 
   -- tag ram       control signals --------------------------------------------
   ry_ccl.ten <= '1';
-  ry_ccl.tag <= this'register.ma0 (27 downto 
-                                   CACHE_LINE_WIDTH_BITS+CACHE_INDEX_BITS);
+  ry_ccl.tag <= this'register.a_prev.mmu.pa_tag when MMU_ARCH and this'register.a_prev.mmu.at = '1'
+                else (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
+                     & this'register.ma0 (27 downto CACHE_LINE_WIDTH_BITS+CACHE_INDEX_BITS);
 
 end beh;

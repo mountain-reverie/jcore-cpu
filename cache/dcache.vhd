@@ -7,7 +7,9 @@ use work.cpu2j0_pack.all;
 use work.data_bus_pack.all;
 use work.cache_clkmode.all;  -- CACHE_SAME_CLOCK (true=single-clock FPGA)
 
-entity dcache is port (
+entity dcache is
+  generic (MMU_ARCH : boolean := false);
+  port (
    clk125 : in  std_logic;
    clk200 : in  std_logic;
    rst :    in  std_logic;
@@ -18,6 +20,7 @@ entity dcache is port (
    ry :     out dcache_ram_i_t;
    -- --------  CPU port ----------------
    a :      in  cpu_data_o_t;
+   a_mmu :  in  mmu_cache_i_t;
    lock :   in  std_logic; -- attribute TAS access
    y :      out cpu_data_i_t;
    -- --------  snoop port --------------
@@ -81,10 +84,10 @@ begin
   ry.we1  <= ry_mcl.we1  ;  -- +--
 
   -- cpu clock domain, sub module ---------------------------------------------
-  udcache_ccl : dcache_ccl port map (     clk    => clk125,
+  udcache_ccl : dcache_ccl generic map (MMU_ARCH => MMU_ARCH) port map ( clk    => clk125,
                                                  -- ------
     rst     => rst,     ra     => ra,     ry_ccl => ry_ccl ,
-    a       => a,       a_lock => lock,
+    a       => a,       a_lock => lock,   a_mmu  => a_mmu,
                         y      => y,      sa     => sa,
     sy      => sy,      ctom    => ctom1, mtoc   => mtoc2,
     ctrl   => ctrl );

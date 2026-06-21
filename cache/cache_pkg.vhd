@@ -728,6 +728,7 @@ component dcache_adapter is
    rst : in std_logic;
    ctrl : in cache_ctrl_t;
    ibus_o : in  cpu_data_o_t;
+   a_mmu  : in  mmu_cache_i_t := MMU_CACHE_I_RESET;
    lock   : in  std_logic;
    ibus_i : out cpu_data_i_t;
    snpc_o : out dcache_snoop_io_t;
@@ -739,6 +740,21 @@ component dcache_adapter is
    dbus_i : in  cpu_data_i_t;
    dbus_ack_r : in  std_logic);
 end component;
+
+  component dcache_cacheable_mux is
+    port (
+      clk125, clk200, rst : in std_logic;
+      ctrl   : in  cache_ctrl_t;
+      cpu_o  : in  cpu_data_o_t;
+      a_mmu  : in  mmu_cache_i_t;
+      lock   : in  std_logic;
+      cpu_i  : out cpu_data_i_t;
+      mem_o  : out cpu_data_o_t;
+      mem_lock     : out std_logic;
+      mem_ddrburst : out std_logic;
+      mem_i  : in  cpu_data_i_t;
+      mem_ack_r : in std_logic);
+  end component;
 
 end package;
 

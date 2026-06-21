@@ -37,7 +37,7 @@ begin
      a   => ra.ta0,
      dw  => tag_dw0,                           -- 24 b => 5 b & 19 b
      dr  => tag_dr0,
-     margin => "000" );
+     margin => "00" );
 
    tag1 : ram_1rw
     generic map (
@@ -53,7 +53,7 @@ begin
      a   => ra.ta1,
      dw  => tag_dw0,                           -- 24 b => 5 b & 19 b
      dr  => tag_dr1,
-     margin => "000" );
+     margin => "00" );
 
    tag_we0 <= ra.twr0 & ra.twr0 & ra.twr0;
    tag_dw0 <= "00000" & ra.tag0;

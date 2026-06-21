@@ -12,6 +12,7 @@ entity dcache_adapter is
     rst : in std_logic;
     ctrl : in cache_ctrl_t;
     ibus_o : in  cpu_data_o_t;
+    a_mmu  : in  mmu_cache_i_t := MMU_CACHE_I_RESET;  -- VIPT PA tag + AT (default off)
     lock   : in  std_logic;
     ibus_i : out cpu_data_i_t;
 
@@ -41,7 +42,7 @@ begin
     ry     =>  dcache_ry,
     -- CPU port
     a      =>  ibus_o,
-    a_mmu  =>  MMU_CACHE_I_RESET,
+    a_mmu  =>  a_mmu,
     lock   =>  lock,
     y      =>  ibus_i,
     -- snoop port --------------

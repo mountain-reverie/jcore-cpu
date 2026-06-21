@@ -50,7 +50,8 @@ end record;
 constant MMU_REG_RESET : mmu_reg_t := (others => (others => '0'));
 
 -- TLB entry and array types (MMU_ARCH). ppn is PA[31:10] = 22-bit PFN at 4 KB
--- granularity; i_pa_tag/d_pa_tag use ppn(21 downto 3) = PA[31:13] = 19 bits.
+-- granularity; i_pa_tag/d_pa_tag use ppn(27 downto 13) = PA[27:13] = 15 bits
+-- (matches CACHE_PA_TAG_WIDTH for the 28-bit cache region).
 type tlb_entry_t is record
   valid     : std_logic;
   global    : std_logic;

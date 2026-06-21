@@ -185,6 +185,12 @@ Tests for instruction cache, data cache write/eviction, TAS atomic access, singl
 ### Test Output
 Tests print "Test Passed" on success or "Test failed. Result=N" on failure (where N identifies the failing check).
 
+## GitHub Pages
+
+- `docs/insns/` is deployed to GitHub Pages via `synth-cpu.yml` as an interactive SH instruction reference (jQuery Dynatable).
+- `docs/insns.json` is the data source for the instruction explorer page. When new instructions are added to the CPU (in `decode/gen-go/spec/`), `docs/insns.json` must be updated to keep the explorer page in sync.
+- The deployed instruction explorer lives at `/insns/` on the jcore-cpu GitHub Pages site.
+
 ## Key Conventions
 
 - VHDL signal types use `_t` suffix (e.g., `cpu_data_o_t`, `reg_ctrl_t`)

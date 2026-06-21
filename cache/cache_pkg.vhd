@@ -60,6 +60,10 @@ function to_cache_idata  (a,d : std_logic_vector) return std_logic_vector;
 function itov(X, N : integer) return std_logic_vector;
 function vtoi(X : std_logic_vector) return integer;
 
+  -- SH P-region cacheability (region-only; PTE C-bit deferred).
+  -- Cached: P0 0x0-0x7, P1 0x8-0x9, P3 0xC-0xD. Uncached: P2 0xA-0xB, P4 0xE-0xF.
+  function is_cacheable(a : std_logic_vector(31 downto 0)) return boolean;
+
 type mem_i_t is record
    d     : std_logic_vector(CACHE_MEM_WIDTH-1 downto 0);
    ack   : std_logic;
@@ -790,5 +794,16 @@ begin
     return d(CACHE_I_WIDTH+CACHE_I_WIDTH-1 downto CACHE_I_WIDTH);
   end if;
 end;
+
+  function is_cacheable(a : std_logic_vector(31 downto 0)) return boolean is
+  begin
+    -- a(31:29): 000-011 = P0 (cached), 100 = P1 (cached), 101 = P2 (uncached),
+    --           110 = P3 (cached), 111 = P4 (uncached).
+    case a(31 downto 29) is
+      when "101"  => return false;  -- P2
+      when "111"  => return false;  -- P4
+      when others => return true;   -- P0, P1, P3
+    end case;
+  end function;
 
 end cache_pack;

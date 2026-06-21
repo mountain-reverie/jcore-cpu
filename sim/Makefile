@@ -3,6 +3,8 @@ IVERILOG := iverilog
 IVERILOG_VPI := iverilog-vpi
 TOOLS_DIR := $(firstword $(wildcard ../../mcu_lib/tools) $(wildcard ../../../tools))
 
+JCORE_SOC ?= $(error JCORE_SOC is not set — export it before invoking make)
+
 CONFIG_RING_BUS=0
 CONFIG_PREFETCHER=0
 # Build the DUT with the SH-4 privileged architecture (J4). Default 0 (J2) so the
@@ -50,7 +52,7 @@ VHDS += mem/cpu_sram.vhd mem/asymmetric_ram.vhd
 VHDS += tlb_match_tb.vhd
 VHDS += seg_decode_tb.vhd
 VHDS += ddrc_cnt_pkg_stub.vhd
-VHDS += data_bus_pack_stub.vhd
+VHDS += $(JCORE_SOC)/targets/data_bus_pkg.vhd
 VHDS += ../cache/cache_pkg.vhd
 VHDS += ../cache/is_cacheable_tb.vhd
 #UNISIM_VHDS := unisims/unisim_VCOMP.vhd unisims/unisim_VPKG.vhd $(wildcard unisims/primitive/*.vhd)

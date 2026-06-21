@@ -449,20 +449,17 @@ begin
                 when SEL_ZBUS => ma_dw := zbus;
               end case;
               this.data_o_size := mem.size;
-              -- P4 MMU register access (MMU_ARCH only).
-              -- When the effective address falls in the P4 MMIO window
-              -- (0xFF000000-0xFF0000FF) the access is handled entirely within the
-              -- datapath: no bus transaction is issued and the read result is
-              -- injected directly into the wbus pipeline.
+              -- P4 MMU register access (MMUCR=0xFF000010, TTB=0xFF000008, TEA=0xFF00000C)
+              -- handled entirely within the datapath: no bus transaction is issued and
+              -- the read result is injected directly into the wbus pipeline.
               if MMU_ARCH then
                 seg_v := seg_decode(ma_ad);
                 if    ma_ad(7 downto 0) = x"08" then p4_sel_v := SEL_TTB;
                 elsif ma_ad(7 downto 0) = x"0C" then p4_sel_v := SEL_TEA;
-                else                                  p4_sel_v := SEL_MMUCR;
+                elsif ma_ad(7 downto 0) = x"10" then p4_sel_v := SEL_MMUCR;
                 end if;
               end if;
-              if MMU_ARCH and seg_v = SEG_P4 and
-                 (p4_sel_v = SEL_MMUCR or p4_sel_v = SEL_TTB or p4_sel_v = SEL_TEA) then
+              if MMU_ARCH and seg_v = SEG_P4 then
                 if mem.wr = '1' then
                   case p4_sel_v is
                     when SEL_MMUCR =>

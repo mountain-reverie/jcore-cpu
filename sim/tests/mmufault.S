@@ -93,7 +93,6 @@ ENTRY(dmiss_r_handler)
 
         ! EXPEVT == 0x060 ?
         .word   0x0052                  ! STC EXPEVT, r0
-        mov     r0, r5                  ! preserve actual EXPEVT for diagnosis
         mov.l   h_expevt, r1
         cmp/eq  r0, r1
         bf      h_bad_expevt
@@ -112,7 +111,7 @@ h_pass: bra     h_pass
         nop
 h_bad_expevt:
         mov.l   h_result, r0
-        mov     r5, r1                  ! DIAG: write actual EXPEVT value
+        mov     #2, r1
         mov.l   r1, @r0
 h_be:   bra     h_be
         nop

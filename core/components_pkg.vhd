@@ -49,6 +49,33 @@ type mmu_reg_t is record
 end record;
 constant MMU_REG_RESET : mmu_reg_t := (others => (others => '0'));
 
+-- TLB entry and array types (MMU_ARCH). ppn is PA[31:10] = 22-bit PFN at 4 KB
+-- granularity; i_pa_tag/d_pa_tag use ppn(21 downto 3) = PA[31:13] = 19 bits.
+type tlb_entry_t is record
+  valid     : std_logic;
+  global    : std_logic;
+  used      : std_logic;
+  vpn       : std_logic_vector(31 downto 12);
+  asid_tag  : std_logic_vector(15 downto 0);
+  page_mask : std_logic_vector(3 downto 0);
+  ppn       : std_logic_vector(31 downto 10);
+  w         : std_logic;
+  x         : std_logic;
+  u         : std_logic;
+  d         : std_logic;
+  c         : std_logic;
+  stale     : std_logic;
+end record;
+constant TLB_ENTRY_RESET : tlb_entry_t := (
+  valid => '0', global => '0', used => '0',
+  vpn => (others => '0'), asid_tag => (others => '0'),
+  page_mask => (others => '0'), ppn => (others => '0'),
+  w => '0', x => '0', u => '0', d => '0', c => '0', stale => '0'
+);
+type tlb_array_t is array(0 to 31) of tlb_entry_t;
+
+type tlb_exc_kind_t is (IMISS, DMISS_R, DMISS_W, IPROT, DPROT_R, DPROT_W);
+
 -- if size becomes part of the bus, mem_size_t will move into cpu2j0_pack
 type mem_size_t is (BYTE, WORD, LONG);
 

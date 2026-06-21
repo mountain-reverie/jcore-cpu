@@ -112,6 +112,7 @@ func newStaticPackage() *Package {
 		},
 		SystemInstrNames: []string{
 			"BREAK", "ERROR", "GENERAL_ILLEGAL", "INTERRUPT", "RESET_CPU", "SLOT_ILLEGAL",
+			"TLB_DMISS_R", "TLB_DMISS_W", "TLB_DPROT_R", "TLB_DPROT_W", "TLB_IMISS", "TLB_IPROT",
 		},
 		Records: []RecordType{
 			{
@@ -344,6 +345,8 @@ func newStaticPackage() *Package {
 					{Name: "rst", Direction: "in", Type: "std_logic"},
 					{Name: "slot", Direction: "in", Type: "std_logic"},
 					{Name: "t_bcc", Direction: "in", Type: "std_logic"},
+					{Name: "tlb_exc_en", Direction: "in", Type: "std_logic"},
+					{Name: "tlb_exc_kind", Direction: "in", Type: "tlb_exc_kind_t"},
 					{Name: "buses", Direction: "out", Type: "buses_ctrl_t"},
 					{Name: "copreg", Direction: "out", Type: "std_logic_vector(7 downto 0)"},
 					{Name: "coproc", Direction: "out", Type: "coproc_ctrl_t"},
@@ -386,6 +389,8 @@ func newStaticPackage() *Package {
 					{Name: "rst", Direction: "in", Type: "std_logic"},
 					{Name: "slot", Direction: "in", Type: "std_logic"},
 					{Name: "t_bcc", Direction: "in", Type: "std_logic"},
+					{Name: "tlb_exc_en", Direction: "in", Type: "std_logic"},
+					{Name: "tlb_exc_kind", Direction: "in", Type: "tlb_exc_kind_t"},
 					{Name: "event_ack", Direction: "out", Type: "std_logic"},
 					{Name: "if_issue", Direction: "out", Type: "std_logic"},
 					{Name: "ifadsel", Direction: "out", Type: "std_logic"},
@@ -430,7 +435,7 @@ func newStaticPackage() *Package {
 			{
 				Name: "system_instr_codes",
 				Type: "system_instr_code_array",
-				Init: "(BREAK => x\"2\", ERROR => x\"1\", GENERAL_ILLEGAL => x\"7\", INTERRUPT => x\"0\", RESET_CPU => x\"3\", SLOT_ILLEGAL => x\"6\")",
+				Init: "(BREAK => x\"2\", ERROR => x\"1\", GENERAL_ILLEGAL => x\"7\", INTERRUPT => x\"0\", RESET_CPU => x\"3\", SLOT_ILLEGAL => x\"6\", TLB_DMISS_R => x\"9\", TLB_DMISS_W => x\"A\", TLB_DPROT_R => x\"C\", TLB_DPROT_W => x\"D\", TLB_IMISS => x\"8\", TLB_IPROT => x\"B\")",
 			},
 			{
 				Name: "system_event_codes",

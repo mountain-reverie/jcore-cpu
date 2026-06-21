@@ -30,6 +30,8 @@ entity decode is
         rst : in std_logic;
         slot : in std_logic;
         t_bcc : in std_logic;
+        tlb_exc_en : in std_logic;
+        tlb_exc_kind : in tlb_exc_kind_t;
         buses : out buses_ctrl_t;
         copreg : out std_logic_vector(7 downto 0);
         coproc : out coproc_ctrl_t;
@@ -98,6 +100,8 @@ begin
             rst => rst,
             slot => slot,
             t_bcc => t_bcc,
+            tlb_exc_en => tlb_exc_en,
+            tlb_exc_kind => tlb_exc_kind,
             event_ack => event_ack,
             if_issue => instr.issue,
             ifadsel => instr.addr_sel,

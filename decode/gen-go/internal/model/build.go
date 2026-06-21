@@ -632,4 +632,11 @@ var csvInstrOrder = []string{
 	"Interrupt",
 	"Error",
 	"Break",
+	// TLB miss/protection exceptions (J4+MMU_ARCH overlay):
+	"TLB IMISS",
+	"TLB DMISS R",
+	"TLB DMISS W",
+	"TLB IPROT",
+	"TLB DPROT R",
+	"TLB DPROT W",
 }

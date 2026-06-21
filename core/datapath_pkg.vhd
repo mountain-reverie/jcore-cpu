@@ -72,7 +72,10 @@ package datapath_pack is
       cop_o       : out cop_o_t;
       priv_o      : out cpu_priv_o_t := NULL_PRIV_O;  -- SH-4 EXPEVT/INTEVT/TRA (J4)
       mmu_regs_o  : out mmu_reg_t := MMU_REG_RESET;   -- MMU CSRs for TLB (J4+MMU_ARCH)
-      sr_o        : out sr_t);                          -- committed SR for TLB md bit
+      sr_o        : out sr_t;                          -- committed SR for TLB md bit
+      tlb_exc_pend   : in std_logic := '0';
+      tlb_fault_va   : in std_logic_vector(31 downto 0) := (others => '0');
+      tlb_exc_expevt : in std_logic_vector(11 downto 0) := (others => '0'));
    end component datapath;
 end package;
 

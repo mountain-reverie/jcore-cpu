@@ -430,6 +430,18 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 		canonical := toCanonical(name)
 		pkg.SystemInstrROMAddrs[canonical] = addrLit(a, addrBits)
 	}
+	// Some system-instruction names are declared in the static SystemInstrNames
+	// list but only have microcode in an overlay spec (e.g. the TLB exceptions,
+	// present only under spec/sh4). In the base spec they have no first address,
+	// which would emit an empty `NAME => ` arm into system_instr_rom_addrs and
+	// break the package. Give every declared name a valid placeholder address so
+	// the base form stays well-formed; the real address is filled in when the
+	// overlay supplies the instruction.
+	for _, canonical := range pkg.SystemInstrNames {
+		if _, ok := pkg.SystemInstrROMAddrs[canonical]; !ok {
+			pkg.SystemInstrROMAddrs[canonical] = addrLit(0, addrBits)
+		}
+	}
 
 	// DEC_CORE_ROM_RESET: inc(RESET_CPU.index) per genvhdl.clj line 711-712.
 	if resetAddr, ok := sysFirstAddr["Reset CPU"]; ok {

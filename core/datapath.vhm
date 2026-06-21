@@ -332,6 +332,22 @@ begin
         begin
           this.debug_o.ack := '0';
 
+          -- TLB fault hardware side-effects (J4+MMU_ARCH): while the fault is
+          -- detected (tlb_exc_pend='1') capture TEA and PTEH[31:14] from the
+          -- faulting VA, and EXPEVT from the fault kind. Done at the top of the
+          -- process (every cycle, not gated by a slot boundary) so the capture
+          -- window cannot be missed; the values are stable while the fault
+          -- persists, so the repeated writes are idempotent. EXPEVT is captured
+          -- here (not via a microcode immediate slot) because it is data-dependent
+          -- on the kind and a system-instruction-only immediate would otherwise
+          -- need a dedicated decoder selector arm.
+          if MMU_ARCH and tlb_exc_pend = '1' then
+            this.mmu.tea                := tlb_fault_va;
+            this.mmu.pteh(31 downto 14) := tlb_fault_va(31 downto 14);
+            this.mmu.pteh(13 downto 0)  := (others => '0');
+            if PRIV_ARCH then this.priv.expevt := tlb_exc_expevt; end if;
+          end if;
+
           next_state := this.debug_state;
 
           if this.old_debug = '0' and debug = '1' and -- debug input rose
@@ -588,20 +604,6 @@ begin
               when SEL_TRA =>
                 if PRIV_ARCH then this.priv.tra := buses.imm_val(9 downto 0); end if;
             end case;
-
-            -- TLB fault hardware side-effects (J4+MMU_ARCH): when tlb_exc_pend='1'
-            -- (the fault is detected), capture TEA and PTEH[31:14] from the faulting
-            -- VA, and EXPEVT from the fault kind. EXPEVT is captured here (not via a
-            -- microcode immediate slot) because it is data-dependent on the kind and
-            -- the system-instruction-only immediate would otherwise need a dedicated
-            -- decoder selector arm. The values are stable while the fault persists, so
-            -- repeated writes before the exception dispatches are idempotent.
-            if MMU_ARCH and tlb_exc_pend = '1' then
-              this.mmu.tea              := tlb_fault_va;
-              this.mmu.pteh(31 downto 14) := tlb_fault_va(31 downto 14);
-              this.mmu.pteh(13 downto 0)  := (others => '0');
-              if PRIV_ARCH then this.priv.expevt := tlb_exc_expevt; end if;
-            end if;
 
             -- LDC Rm,PTEH/PTEL/ASIDR write path (J4+MMU_ARCH).
             -- When the decoder asserts mmu_reg_wr the zbus carries the source

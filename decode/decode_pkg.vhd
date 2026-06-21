@@ -309,7 +309,7 @@ package decode_pack is
     constant DEC_CORE_ROM_RESET : decode_core_reg_t := (maskint => '0', delay_slot => '0', id_stall => '0', instr_seq_zero => '0', op => (plane => SYSTEM_INSTR, code => x"0300", addr => x"e2"), ilevel => x"0");
     type system_instr_t is (BREAK, ERROR, GENERAL_ILLEGAL, INTERRUPT, RESET_CPU, SLOT_ILLEGAL, TLB_DMISS_R, TLB_DMISS_W, TLB_DPROT_R, TLB_DPROT_W, TLB_IMISS, TLB_IPROT);
     type system_instr_addr_array is array (system_instr_t range <>) of std_logic_vector(7 downto 0);
-    constant system_instr_rom_addrs : system_instr_addr_array := (BREAK => x"fa", ERROR => x"f1", GENERAL_ILLEGAL => x"d1", INTERRUPT => x"e8", RESET_CPU => x"e1", SLOT_ILLEGAL => x"d9", TLB_DMISS_R => , TLB_DMISS_W => , TLB_DPROT_R => , TLB_DPROT_W => , TLB_IMISS => , TLB_IPROT => );
+    constant system_instr_rom_addrs : system_instr_addr_array := (BREAK => x"fa", ERROR => x"f1", GENERAL_ILLEGAL => x"d1", INTERRUPT => x"e8", RESET_CPU => x"e1", SLOT_ILLEGAL => x"d9", TLB_DMISS_R => x"00", TLB_DMISS_W => x"00", TLB_DPROT_R => x"00", TLB_DPROT_W => x"00", TLB_IMISS => x"00", TLB_IPROT => x"00");
     type system_instr_code_array is array (system_instr_t range <>) of std_logic_vector(11 downto 8);
     constant system_instr_codes : system_instr_code_array := (BREAK => x"2", ERROR => x"1", GENERAL_ILLEGAL => x"7", INTERRUPT => x"0", RESET_CPU => x"3", SLOT_ILLEGAL => x"6", TLB_DMISS_R => x"9", TLB_DMISS_W => x"A", TLB_DPROT_R => x"C", TLB_DPROT_W => x"D", TLB_IMISS => x"8", TLB_IPROT => x"B");
     type system_event_code_array is array (cpu_event_cmd_t range <>) of std_logic_vector(11 downto 8);

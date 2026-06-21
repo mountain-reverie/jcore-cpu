@@ -8,12 +8,12 @@ end entity;
 architecture sim of tlb_match_tb is
   signal clk      : std_logic := '0';
   signal i_va     : std_logic_vector(31 downto 0) := (others => '0');
-  signal i_pa_tag : std_logic_vector(18 downto 0);
+  signal i_pa_tag : std_logic_vector(14 downto 0);
   signal i_hit    : std_logic;
   signal i_prot   : std_logic;
   signal d_va     : std_logic_vector(31 downto 0) := (others => '0');
   signal d_we     : std_logic := '0';
-  signal d_pa_tag : std_logic_vector(18 downto 0);
+  signal d_pa_tag : std_logic_vector(14 downto 0);
   signal d_hit    : std_logic;
   signal d_prot   : std_logic;
   signal asid     : std_logic_vector(15 downto 0) := x"0001";
@@ -89,8 +89,8 @@ begin
       report "T1: miss on installed entry" severity failure;
     assert i_prot = '0'
       report "T1: spurious prot on readable+executable entry" severity failure;
-    -- pa_tag = ppn1(31 downto 13) = PA[31:13] = 19 bits
-    assert i_pa_tag = ppn1(31 downto 13)
+    -- pa_tag = ppn1(27 downto 13) = PA[27:13] = 15 bits (28-bit cache region)
+    assert i_pa_tag = ppn1(27 downto 13)
       report "T1: wrong PA tag" severity failure;
 
     -- ---- Test 2: VPN bit flip → miss ----

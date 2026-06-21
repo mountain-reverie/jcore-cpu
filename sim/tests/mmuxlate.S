@@ -58,17 +58,14 @@ ENTRY(start)
         and     r1, r0                 ! r0 = PA & ~0xFFF = VPN<<12 (ASID=0)
         .word   0x405E                 ! LDC r0,PTEH
 
-        ! Compute PTEL = (PA >> 10) | 0xE8:
-        ! PPN field is bits[28:10] of PTEL = PA[28:10] at position [28:10].
-        ! SH-4 PTEL: bits[28:10]=PPN (19 bits), bits[7:0]=protection flags.
-        ! PTEL = (PA >> 10) << 10 | flags is NOT right.
-        ! Actually PTEL[28:10] = PA[28:10] and PTEL[7:0] = flags.
-        ! So PTEL = (PA & 0x1FFFFC00) | 0xE8
+        ! Compute PTEL = (PA & 0xFFFFFC00) | 0xE8:
+        ! Our TLB uses PPN = PA[31:10] (bits[31:10]), stored at PTEL[31:10].
+        ! flags = 0xE8 (w+x+u+c) fits in 8 bits; PTEL[9:8] are unused/zero.
+        ! So PTEL = (PA & 0xFFFFFC00) | 0xE8
         mov     r5, r0
-        mov.l   p_ppn_mask, r3         ! 0x1FFFFC00
-        and     r3, r0                 ! r0 = PA & 0x1FFFFC00 (PPN field)
-        or      #0xE8, r0              ! won't work for > 8-bit OR...
-        ! or #0xE8,r0: sh2-elf or-imm works since 0xE8 fits in 8-bit sign-extended.
+        mov.l   p_ppn_mask, r3         ! 0xFFFFFC00
+        and     r3, r0                 ! r0 = PA & 0xFFFFFC00 (PPN field)
+        or      #0xE8, r0              ! or #imm,r0: zero-extends 8-bit imm, valid here
         .word   0x406E                 ! LDC r0,PTEL
 
         ! ASIDR = 0 (ASID field of PTEH was 0; ASIDR.ASID must match)

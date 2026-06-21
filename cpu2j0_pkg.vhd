@@ -37,6 +37,19 @@ package cpu2j0_pack is
       rdy  : std_logic;
    end record;
 
+   -- TLB output from cpu to SoC cache wrappers (J4+MMU_ARCH).
+   -- Carries the PA tag (PA[31:13] = 19 bits) and AT-translated flag for both
+   -- the I-cache and D-cache ports. All-zero / at='0' when MMU_ARCH=false.
+   type cpu_mmu_o_t is record
+      i_pa_tag : std_logic_vector(18 downto 0);
+      i_at     : std_logic;
+      d_pa_tag : std_logic_vector(18 downto 0);
+      d_at     : std_logic;
+   end record;
+   constant NULL_MMU_O : cpu_mmu_o_t :=
+     (i_pa_tag => (others => '0'), i_at => '0',
+      d_pa_tag => (others => '0'), d_at => '0');
+
    -- SH-4 exception-cause export (J4). All zero on a non-PRIV_ARCH build; the
    -- PM3-SoC companion maps these as P4 MMIO. Left open on non-J4 boards.
    type cpu_priv_o_t is record
@@ -105,7 +118,8 @@ package cpu2j0_pack is
 
    component cpu is generic (
       COPRO_DECODE : boolean := true;
-      PRIV_ARCH    : boolean := false);
+      PRIV_ARCH    : boolean := false;
+      MMU_ARCH     : boolean := false);
      port (
       clk          : in  std_logic;
       rst          : in  std_logic;
@@ -120,7 +134,8 @@ package cpu2j0_pack is
       event_i      : in  cpu_event_i_t;
       cop_o        : out cop_o_t;
       cop_i        : in  cop_i_t;
-      priv_o       : out cpu_priv_o_t := NULL_PRIV_O);
+      priv_o       : out cpu_priv_o_t := NULL_PRIV_O;
+      mmu_o        : out cpu_mmu_o_t := NULL_MMU_O);
    end component cpu;
 
    function loopback_bus(b : cpu_data_o_t) return cpu_data_i_t;

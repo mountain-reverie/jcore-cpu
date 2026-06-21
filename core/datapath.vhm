@@ -55,7 +55,9 @@ entity datapath is
 		     copreg : in std_logic_vector(7 downto 0);
 		     cop_i : in cop_i_t;
 		     cop_o : out cop_o_t;
-		     priv_o : out cpu_priv_o_t := NULL_PRIV_O  -- SH-4 EXPEVT/INTEVT/TRA (J4)
+		     priv_o    : out cpu_priv_o_t := NULL_PRIV_O;  -- SH-4 EXPEVT/INTEVT/TRA (J4)
+		     mmu_regs_o : out mmu_reg_t := MMU_REG_RESET;  -- MMU CSRs for TLB (J4+MMU_ARCH)
+		     sr_o       : out sr_t                          -- committed SR for TLB md bit
 	     );
 end entity datapath;
 
@@ -644,6 +646,9 @@ begin
 	priv_o.expevt <= priv_regs.expevt when PRIV_ARCH else (others => '0');
 	priv_o.intevt <= priv_regs.intevt when PRIV_ARCH else (others => '0');
 	priv_o.tra    <= priv_regs.tra    when PRIV_ARCH else (others => '0');
+	-- Export MMU CSRs and committed SR for TLB use in cpu.vhd (MMU_ARCH).
+	mmu_regs_o <= mmu_regs;
+	sr_o       <= sr;
 	mac_s <= this'register.mac_s;
         db_lock <= this'register.data_o_lock;
         db_o <= this'register.data_o;

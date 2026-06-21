@@ -47,6 +47,7 @@ done
 FILES=(
   cpu2j0_pkg.vhd
   core/components_pkg.vhd
+  core/tlb.vhd
   core/mult_pkg.vhd
   core/datapath_pkg.vhd
   decode/decode_pkg.vhd

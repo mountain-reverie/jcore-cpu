@@ -275,7 +275,7 @@ var SignalVHDLPath = map[Signal]string{
 // order — that is dictated by CombinableSignals + alphabetical
 // sort of standalone signals in CreateEncoding.
 var AllSignals = []Signal{
-	SigXbusSel, SigYbusSel, SigMmuRegSel, SigMmuRegSelWr, SigTlbWr, SigZbusSel,
+	SigXbusSel, SigYbusSel, SigMmuRegSel, SigMmuRegSelWr, SigZbusSel,
 	SigRegnumX, SigRegnumY, SigRegnumZ, SigRegnumW,
 	SigWrregZ, SigWrregW, SigWrpcZ, SigWrprPC, SigWrsrW, SigWrsrZ,
 	SigAluinxSel, SigAluinySel, SigAluManip,

@@ -6,12 +6,12 @@ entity tlb is
   port (
     clk      : in  std_logic;
     i_va     : in  std_logic_vector(31 downto 0);
-    i_pa_tag : out std_logic_vector(18 downto 0);
+    i_pa_tag : out std_logic_vector(14 downto 0);
     i_hit    : out std_logic;
     i_prot   : out std_logic;
     d_va     : in  std_logic_vector(31 downto 0);
     d_we     : in  std_logic;
-    d_pa_tag : out std_logic_vector(18 downto 0);
+    d_pa_tag : out std_logic_vector(14 downto 0);
     d_hit    : out std_logic;
     d_prot   : out std_logic;
     asid     : in  std_logic_vector(15 downto 0);
@@ -33,7 +33,7 @@ begin
   process(ram, i_va, asid, md)
     variable entry     : tlb_entry_t;
     variable hit_found : std_logic;
-    variable hit_pa    : std_logic_vector(18 downto 0);
+    variable hit_pa    : std_logic_vector(14 downto 0);
     variable prot      : std_logic;
   begin
     hit_found := '0'; hit_pa := (others => '0'); prot := '0';
@@ -43,7 +43,7 @@ begin
          and entry.vpn = i_va(31 downto 12)
          and (entry.global = '1' or entry.asid_tag = asid) then
         hit_found := '1';
-        hit_pa    := entry.ppn(31 downto 13);  -- PA[31:13] = 19 bits
+        hit_pa    := entry.ppn(27 downto 13);  -- PA[27:13] = 15 bits
         if entry.x = '0' or (entry.u = '0' and md = '0') then
           prot := '1';
         end if;
@@ -58,7 +58,7 @@ begin
   process(ram, d_va, d_we, asid, md)
     variable entry     : tlb_entry_t;
     variable hit_found : std_logic;
-    variable hit_pa    : std_logic_vector(18 downto 0);
+    variable hit_pa    : std_logic_vector(14 downto 0);
     variable prot      : std_logic;
   begin
     hit_found := '0'; hit_pa := (others => '0'); prot := '0';
@@ -68,7 +68,7 @@ begin
          and entry.vpn = d_va(31 downto 12)
          and (entry.global = '1' or entry.asid_tag = asid) then
         hit_found := '1';
-        hit_pa    := entry.ppn(31 downto 13);
+        hit_pa    := entry.ppn(27 downto 13);
         if (entry.u = '0' and md = '0') or (d_we = '1' and entry.w = '0') then
           prot := '1';
         end if;

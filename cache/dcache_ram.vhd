@@ -16,17 +16,17 @@ end dcache_ram;
 
 architecture beh of dcache_ram is
 
-signal tag_we0 : std_logic_vector( 2 downto 0);
-signal tag_dr0 : std_logic_vector(23 downto 0);
-signal tag_dw0 : std_logic_vector(23 downto 0);
-signal tag_dr1 : std_logic_vector(23 downto 0);
+signal tag_we0 : std_logic_vector( 1 downto 0);
+signal tag_dr0 : std_logic_vector(15 downto 0);
+signal tag_dw0 : std_logic_vector(15 downto 0);
+signal tag_dr1 : std_logic_vector(15 downto 0);
 
 begin
 
    tag0 : ram_1rw
     generic map (
      SUBWORD_WIDTH => 8,
-     SUBWORD_NUM => 3,
+     SUBWORD_NUM => 2,
      ADDR_WIDTH => 8)
     port map(
      rst => rst,
@@ -35,14 +35,14 @@ begin
      wr  => ra.twr0,
      we  => tag_we0,
      a   => ra.ta0,
-     dw  => tag_dw0,                           -- 24 b => 5 b & 19 b
+     dw  => tag_dw0,                           -- 16 b => 1 b & 15 b
      dr  => tag_dr0,
      margin => "00" );
 
    tag1 : ram_1rw
     generic map (
      SUBWORD_WIDTH => 8,
-     SUBWORD_NUM => 3,
+     SUBWORD_NUM => 2,
      ADDR_WIDTH => 8)
     port map(
      rst => rst,
@@ -51,14 +51,14 @@ begin
      wr  => ra.twr0,
      we  => tag_we0,
      a   => ra.ta1,
-     dw  => tag_dw0,                           -- 24 b => 5 b & 19 b
+     dw  => tag_dw0,                           -- 16 b => 1 b & 15 b
      dr  => tag_dr1,
      margin => "00" );
 
-   tag_we0 <= ra.twr0 & ra.twr0 & ra.twr0;
-   tag_dw0 <= "00000" & ra.tag0;
-   ry.tag0 <= tag_dr0(18 downto 0);            -- 19 b => 24 b ( 19 b range)
-   ry.tag1 <= tag_dr1(18 downto 0);            -- 19 b => 24 b ( 19 b range)
+   tag_we0 <= ra.twr0 & ra.twr0;
+   tag_dw0 <= "0" & ra.tag0;
+   ry.tag0 <= tag_dr0(14 downto 0);            -- 15 b => 16 b ( 15 b range)
+   ry.tag1 <= tag_dr1(14 downto 0);            -- 15 b => 16 b ( 15 b range)
 
    -- Data RAM. Two write sources: port0 = CPU store (CCL, clk125), port1 = line
    -- refill (MCL, clk200). They are provably mutually exclusive per cycle (the

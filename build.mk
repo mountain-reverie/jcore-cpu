@@ -10,3 +10,4 @@ $(VHDLS) += decode/decode_table_direct.vhd
 $(VHDLS) += decode/decode_table_direct_config.vhd
 $(VHDLS) += decode/decode_table_rom.vhd
 $(VHDLS) += decode/decode_table_rom_config.vhd
+$(VHDLS) += core/tlb.vhd

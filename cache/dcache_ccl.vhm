@@ -292,7 +292,7 @@ begin
     -- create hit check, (snoop)
     -- ------------------------------------------------------------------------
     -- FIXME(MMU_ARCH): snoop compare uses VA-based tag (15 bits). When AT=1,
-    -- stored tags are PA-based (19 bits); a VA snoop will not match.
+    -- stored tags are PA-based (15 bits); a VA snoop will not match.
     -- Full snoop correctness under translation requires PA-based invalidation
     -- (planned for a later MMU milestone, not M2 scope).
     if(this.sa_al(CACHE_REGION_WIDTH-CACHE_LINE_WIDTH_BITS-1 downto

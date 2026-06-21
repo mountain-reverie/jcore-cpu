@@ -69,10 +69,10 @@ begin
     );
 
   process
-    -- ppn1: PA[31:10] = 22 bits.  Value 1 => PA base = 0x0000_0400
-    variable ppn1 : std_logic_vector(31 downto 10) := "0000000000000000000001";
-    -- ppn2: value 2 => PA base = 0x0000_0800
-    variable ppn2 : std_logic_vector(31 downto 10) := "0000000000000000000010";
+    -- ppn1: PA[31:10] = 22 bits.  PA[13]=1 => PA base = 0x0000_2000
+    variable ppn1 : std_logic_vector(31 downto 10) := "0000000000000000001000";
+    -- ppn2: PA[14]=1 => PA base = 0x0000_4000
+    variable ppn2 : std_logic_vector(31 downto 10) := "0000000000000000010000";
   begin
     -- ---- Test 1: Install entry, hit on matching VPN+ASID ----
     -- VPN=0x00001 (page 1), PPN=ppn1, ASID=0x0001, flags: x=1,u=1,c=1 => "01100100" wait --

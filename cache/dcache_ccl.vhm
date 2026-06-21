@@ -291,6 +291,10 @@ begin
     -- ------------------------------------------------------------------------
     -- create hit check, (snoop)
     -- ------------------------------------------------------------------------
+    -- FIXME(MMU_ARCH): snoop compare uses VA-based tag (15 bits). When AT=1,
+    -- stored tags are PA-based (19 bits); a VA snoop will not match.
+    -- Full snoop correctness under translation requires PA-based invalidation
+    -- (planned for a later MMU milestone, not M2 scope).
     if(this.sa_al(CACHE_REGION_WIDTH-CACHE_LINE_WIDTH_BITS-1 downto
                   CACHE_INDEX_BITS)                  = ra.tag1(CACHE_TAG_WIDTH-1 downto 0) ) and
                                      -- if default param, 23 bit comparator
@@ -514,8 +518,12 @@ begin
 
     if(nx.state = RMISS1) or
       (nx.state = WMISS1) or
-      (nx.state = RLOCK1) then   nx.ma0 := a.a(27 downto 0);
-    else                         nx.ma0 := this.ma0; end if;
+      (nx.state = RLOCK1) then   nx.ma0        := a.a(27 downto 0);
+                                 nx.ma0_at     := a_mmu.at;
+                                 nx.ma0_pa_tag := a_mmu.pa_tag;
+    else                         nx.ma0        := this.ma0;
+                                 nx.ma0_at     := this.ma0_at;
+                                 nx.ma0_pa_tag := this.ma0_pa_tag; end if;
   
     if(this.aenrd_del1 = '1') and (this.ry_en0 = '1') then
                                  nx.dw  :=   ra.d0;
@@ -572,6 +580,8 @@ begin
     this.dw          := nx.dw;
     this.pref_inc    := nx.pref_inc;
     this.ma0         := nx.ma0;
+    this.ma0_at      := nx.ma0_at;
+    this.ma0_pa_tag  := nx.ma0_pa_tag;
     this.a_prev      := nx.a_prev;
     this.a_prev_v    := nx.a_prev_v;
     this.a_prev_mmu  := nx.a_prev_mmu;
@@ -601,7 +611,7 @@ begin
 
   -- tag ram       control signals --------------------------------------------
   ry_ccl.ten0 <= '1';
-  ry_ccl.tag0 <= this'register.a_prev_mmu.pa_tag when MMU_ARCH and this'register.a_prev_mmu.at = '1'
+  ry_ccl.tag0 <= this'register.ma0_pa_tag when MMU_ARCH and this'register.ma0_at = '1'
                  else (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
                       & this'register.ma0 (27 downto CACHE_LINE_WIDTH_BITS+CACHE_INDEX_BITS);
 

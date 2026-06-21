@@ -318,6 +318,8 @@ begin
 	  register this when clk='1' and clk'event reset when rst='1';
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
+          variable seg_v   : segment_t;
+          variable p4_sel_v : mmu_reg_sel_t;
           variable next_state : debug_state_t;
           variable slot_inst_en : std_logic;
         begin
@@ -447,7 +449,43 @@ begin
                 when SEL_ZBUS => ma_dw := zbus;
               end case;
               this.data_o_size := mem.size;
-              this.data_o := to_data_o(mem, coproc, ma_ad, ma_dw);
+              -- P4 MMU register access (MMU_ARCH only).
+              -- When the effective address falls in the P4 MMIO window
+              -- (0xFF000000-0xFF0000FF) the access is handled entirely within the
+              -- datapath: no bus transaction is issued and the read result is
+              -- injected directly into the wbus pipeline.
+              if MMU_ARCH then
+                seg_v := seg_decode(ma_ad);
+                if    ma_ad(7 downto 0) = x"08" then p4_sel_v := SEL_TTB;
+                elsif ma_ad(7 downto 0) = x"0C" then p4_sel_v := SEL_TEA;
+                else                                  p4_sel_v := SEL_MMUCR;
+                end if;
+              end if;
+              if MMU_ARCH and seg_v = SEG_P4 and
+                 (p4_sel_v = SEL_MMUCR or p4_sel_v = SEL_TTB or p4_sel_v = SEL_TEA) then
+                if mem.wr = '1' then
+                  case p4_sel_v is
+                    when SEL_MMUCR =>
+                      this.mmu.mmucr := ma_dw;
+                      -- TI bit (bit 2) self-clears; the TLB ti port is driven
+                      -- combinatorially from mmu_regs so a 1-cycle pulse suffices.
+                      this.mmu.mmucr(2) := '0';
+                    when SEL_TTB  => this.mmu.ttb  := ma_dw;
+                    when SEL_TEA  => this.mmu.tea  := ma_dw;
+                    when others   => null;
+                  end case;
+                else
+                  case p4_sel_v is
+                    when SEL_MMUCR => this.m_dr_next := this.mmu.mmucr;
+                    when SEL_TTB   => this.m_dr_next := this.mmu.ttb;
+                    when SEL_TEA   => this.m_dr_next := this.mmu.tea;
+                    when others    => this.m_dr_next := (others => '0');
+                  end case;
+                  this.m_en := '1';
+                end if;
+              else
+                this.data_o := to_data_o(mem, coproc, ma_ad, ma_dw);
+              end if;
             end if;
             if instr.issue = '1' then
               if this.debug_state = RUN or this.debug_state = AWAIT_BREAK then
@@ -556,6 +594,7 @@ begin
                 when SEL_PTEH  => this.mmu.pteh  := zbus;
                 when SEL_PTEL  => this.mmu.ptel  := zbus;
                 when SEL_ASIDR => this.mmu.asidr := zbus;
+                when others    => null;  -- SEL_MMUCR/TTB/TEA handled via P4 MMIO
               end case;
             end if;
 
@@ -596,9 +635,13 @@ begin
 	priv_regs <= this'register.priv;
 	-- MMU CSR registered copy + ybus sub-mux (J4+MMU_ARCH); constant-0 otherwise
 	mmu_regs <= this'register.mmu when MMU_ARCH else MMU_REG_RESET;
-	mmu_ybus <= mmu_regs.ptel  when buses.mmu_reg_sel = SEL_PTEL else
+	mmu_ybus <= mmu_regs.ptel  when buses.mmu_reg_sel = SEL_PTEL  else
 	            mmu_regs.asidr when buses.mmu_reg_sel = SEL_ASIDR else
+	            mmu_regs.mmucr when buses.mmu_reg_sel = SEL_MMUCR else
+	            mmu_regs.ttb   when buses.mmu_reg_sel = SEL_TTB   else
+	            mmu_regs.tea   when buses.mmu_reg_sel = SEL_TEA   else
 	            mmu_regs.pteh;
+
 	-- Export the SH-4 cause registers (J4). Constant-0 on a non-PRIV_ARCH build
 	-- so J1/J2 boards see a tied-off port.
 	priv_o.expevt <= priv_regs.expevt when PRIV_ARCH else (others => '0');

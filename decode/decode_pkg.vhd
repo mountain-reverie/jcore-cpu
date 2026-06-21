@@ -18,14 +18,14 @@ package decode_pack is
     type coproc_cmd_t is (NOP, LDS, STS, CLDS, CSTS);
     type cpu_data_mux_t is (DBUS, COPROC);
     type cpu_decode_type_t is (SIMPLE, DIRECT, ROM);
-    type immval_t is (IMM_ZERO, IMM_P1, IMM_P2, IMM_P4, IMM_P8, IMM_P16, IMM_N16, IMM_N8, IMM_N2, IMM_N1, IMM_U_4_0, IMM_U_4_1, IMM_U_4_2, IMM_U_8_0, IMM_U_8_1, IMM_U_8_2, IMM_S_8_1, IMM_S_12_1, IMM_S_8_0);
+    type immval_t is (IMM_ZERO, IMM_P1, IMM_P2, IMM_P4, IMM_P8, IMM_P16, IMM_P256, IMM_P352, IMM_N16, IMM_N8, IMM_N2, IMM_N1, IMM_U_4_0, IMM_U_4_1, IMM_U_4_2, IMM_U_8_0, IMM_U_8_1, IMM_U_8_2, IMM_S_8_1, IMM_S_12_1, IMM_S_8_0, IMM_P384, IMM_P416, IMM_P1536);
     type instruction_plane_t is (NORMAL_INSTR, SYSTEM_INSTR);
     type mac_busy_t is (NOT_BUSY, EX_NOT_STALL, WB_NOT_STALL, EX_BUSY, WB_BUSY);
     type macin1_sel_t is (SEL_XBUS, SEL_ZBUS, SEL_WBUS);
     type macin2_sel_t is (SEL_YBUS, SEL_ZBUS, SEL_WBUS);
     type mem_addr_sel_t is (SEL_XBUS, SEL_YBUS, SEL_ZBUS);
     type mem_wdata_sel_t is (SEL_ZBUS, SEL_YBUS);
-    type mmu_reg_sel_t is (SEL_PTEH, SEL_PTEL, SEL_ASIDR);
+    type mmu_reg_sel_t is (SEL_PTEH, SEL_PTEL, SEL_ASIDR, SEL_MMUCR, SEL_TTB, SEL_TEA);
     type reg_sel_t is (SEL_R0, SEL_R15, SEL_RA, SEL_RB);
     type sr_sel_t is (SEL_PREV, SEL_WBUS, SEL_ZBUS, SEL_DIV0U, SEL_ARITH, SEL_LOGIC, SEL_INT_MASK, SEL_SET_T, SEL_EXCEPTION, SEL_EXPEVT, SEL_INTEVT, SEL_TRA);
     type t_sel_t is (SEL_CLEAR, SEL_SET, SEL_SHIFT, SEL_CARRY);
@@ -36,7 +36,7 @@ package decode_pack is
         record
             plane : instruction_plane_t;
             code : std_logic_vector(15 downto 0);
-            addr : std_logic_vector(7 downto 0);
+            addr : std_logic_vector(8 downto 0);
         end record;
     type alu_ctrl_t is
         record
@@ -258,7 +258,7 @@ package decode_pack is
             incpc : out std_logic;
             next_id_stall : out std_logic;
             op : out operation_t;
-            op_addr_next : out std_logic_vector(7 downto 0)
+            op_addr_next : out std_logic_vector(8 downto 0)
         );
     end component;
     component decode_table
@@ -266,7 +266,7 @@ package decode_pack is
             clk : in std_logic;
             next_id_stall : in std_logic;
             op : in operation_t;
-            op_addr_next : in std_logic_vector(7 downto 0);
+            op_addr_next : in std_logic_vector(8 downto 0);
             t_bcc : in std_logic;
             debug : out std_logic;
             delay_jump : out std_logic;
@@ -297,13 +297,13 @@ package decode_pack is
             op : operation_t;
             ilevel : std_logic_vector(3 downto 0);
         end record;
-    constant DEC_ADDR_BITS : natural := 8;
-    constant DEC_CORE_RESET : decode_core_reg_t := (maskint => '0', delay_slot => '0', id_stall => '0', instr_seq_zero => '0', op => (plane => SYSTEM_INSTR, code => x"0300", addr => x"01"), ilevel => x"0");
+    constant DEC_ADDR_BITS : natural := 9;
+    constant DEC_CORE_RESET : decode_core_reg_t := (maskint => '0', delay_slot => '0', id_stall => '0', instr_seq_zero => '0', op => (plane => SYSTEM_INSTR, code => x"0300", addr => "000000001"), ilevel => x"0");
     -- Reset vector specific to the microcode ROM. Uses a different starting addr.
-    constant DEC_CORE_ROM_RESET : decode_core_reg_t := (maskint => '0', delay_slot => '0', id_stall => '0', instr_seq_zero => '0', op => (plane => SYSTEM_INSTR, code => x"0300", addr => x"e2"), ilevel => x"0");
+    constant DEC_CORE_ROM_RESET : decode_core_reg_t := (maskint => '0', delay_slot => '0', id_stall => '0', instr_seq_zero => '0', op => (plane => SYSTEM_INSTR, code => x"0300", addr => "011101100"), ilevel => x"0");
     type system_instr_t is (BREAK, ERROR, GENERAL_ILLEGAL, INTERRUPT, RESET_CPU, SLOT_ILLEGAL);
-    type system_instr_addr_array is array (system_instr_t range <>) of std_logic_vector(7 downto 0);
-    constant system_instr_rom_addrs : system_instr_addr_array := (BREAK => x"fa", ERROR => x"f1", GENERAL_ILLEGAL => x"d1", INTERRUPT => x"e8", RESET_CPU => x"e1", SLOT_ILLEGAL => x"d9");
+    type system_instr_addr_array is array (system_instr_t range <>) of std_logic_vector(8 downto 0);
+    constant system_instr_rom_addrs : system_instr_addr_array := (BREAK => "011111111", ERROR => "011111001", GENERAL_ILLEGAL => "011011111", INTERRUPT => "011110010", RESET_CPU => "011101011", SLOT_ILLEGAL => "011100101");
     type system_instr_code_array is array (system_instr_t range <>) of std_logic_vector(11 downto 8);
     constant system_instr_codes : system_instr_code_array := (BREAK => x"2", ERROR => x"1", GENERAL_ILLEGAL => x"7", INTERRUPT => x"0", RESET_CPU => x"3", SLOT_ILLEGAL => x"6");
     type system_event_code_array is array (cpu_event_cmd_t range <>) of std_logic_vector(11 downto 8);

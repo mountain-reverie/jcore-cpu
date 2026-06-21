@@ -21,6 +21,10 @@ package datapath_pack is
    constant RB  : integer range 0 to 30 := 29;
    constant MD  : integer range 0 to 30 := 30;
 
+   type segment_t is (SEG_P0, SEG_P1, SEG_P2, SEG_P3, SEG_P4);
+
+   function seg_decode(va : std_logic_vector(31 downto 0)) return segment_t;
+
    component datapath is
      generic (
        PRIV_ARCH : boolean := false;
@@ -69,3 +73,15 @@ package datapath_pack is
       priv_o      : out cpu_priv_o_t := NULL_PRIV_O);  -- SH-4 EXPEVT/INTEVT/TRA (J4)
    end component datapath;
 end package;
+
+package body datapath_pack is
+  function seg_decode(va : std_logic_vector(31 downto 0)) return segment_t is
+  begin
+    if    va(31 downto 24) = x"FF"  then return SEG_P4;
+    elsif va(31 downto 29) = "100"  then return SEG_P1;
+    elsif va(31 downto 29) = "101"  then return SEG_P2;
+    elsif va(31 downto 29) = "110" or va(31 downto 29) = "111" then return SEG_P3;
+    else                                  return SEG_P0;
+    end if;
+  end function;
+end package body;

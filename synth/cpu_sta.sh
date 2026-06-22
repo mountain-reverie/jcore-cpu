@@ -12,7 +12,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 OUT="$ROOT/build"; mkdir -p "$OUT"
 
-NANGATE_LIB="${NANGATE_LIB:-/opt/nangate45/nangate45.lib}"
+STA_LIB="${STA_LIB:-${NANGATE_LIB:-/opt/nangate45/nangate45.lib}}"
+TAG="${STA_OUT_TAG:+_$STA_OUT_TAG}"      # "" -> "", "sky130" -> "_sky130"
+MAPPED="$OUT/cpu_asic_mapped${TAG}.v"
+RPT="$OUT/cpu_asic_sta${TAG}.rpt"
 TARGET_MHZ="${ECP5_TARGET_MHZ:-50}"
 PERIOD_NS="$(awk -v m="$TARGET_MHZ" 'BEGIN{printf "%.4f", 1000.0/m}')"
 
@@ -32,8 +35,8 @@ if ! command -v sta >/dev/null 2>&1; then
   echo "WARN: opensta (sta) not installed — skipping ASIC STA" >&2
   exit 0
 fi
-if [ ! -f "$NANGATE_LIB" ]; then
-  echo "WARN: Nangate45 Liberty not at $NANGATE_LIB — skipping ASIC STA" >&2
+if [ ! -f "$STA_LIB" ]; then
+  echo "WARN: Liberty ($STA_LIB) not found — skipping ASIC STA" >&2
   exit 0
 fi
 
@@ -46,8 +49,8 @@ fi
 # + -noattr mirror regression.sh Step 7 to avoid escaped-identifier
 # concatenations that OpenSTA's Verilog reader cannot parse.
 # (Flattening loses per-module area; per-block ASIC area is a future refinement.)
-if ! yosys -p "read_verilog $OUT/cpu_asic.v; synth -top $STA_TOP -flatten; dfflibmap -liberty $NANGATE_LIB; abc -liberty $NANGATE_LIB; splitnets -ports; clean -purge; stat -liberty $NANGATE_LIB; write_verilog -noattr $OUT/cpu_asic_mapped.v" \
-     | tee "$OUT/cpu_asic_mapped_stat.txt"; then
+if ! yosys -p "read_verilog $OUT/cpu_asic.v; synth -top $STA_TOP -flatten; dfflibmap -liberty $STA_LIB; abc -liberty $STA_LIB; splitnets -ports; clean -purge; stat -liberty $STA_LIB; write_verilog -noattr $MAPPED" \
+     | tee "$OUT/cpu_asic_mapped_stat${TAG}.txt"; then
   echo "WARN: yosys tech-map failed — ASIC timing absent" >&2
   exit 0
 fi
@@ -59,8 +62,8 @@ fi
 CLOCKS_TCL="create_clock -name clk -period $PERIOD_NS [get_ports clk]"
 TCL="$(mktemp)"; trap 'rm -f "$TCL"' EXIT
 cat > "$TCL" <<TCL
-read_liberty $NANGATE_LIB
-read_verilog $OUT/cpu_asic_mapped.v
+read_liberty $STA_LIB
+read_verilog $MAPPED
 link_design $STA_TOP
 create_clock -name virt_clk -period $PERIOD_NS
 $CLOCKS_TCL
@@ -73,9 +76,9 @@ report_power
 exit
 TCL
 
-if ! timeout 120 sta -no_init -no_splash "$TCL" > "$OUT/cpu_asic_sta.rpt" 2>&1; then
-  echo "WARN: OpenSTA did not complete (timeout/fatal) — ASIC timing absent. See $OUT/cpu_asic_sta.rpt" >&2
-  tail -20 "$OUT/cpu_asic_sta.rpt" | sed 's/^/    /' >&2
+if ! timeout 120 sta -no_init -no_splash "$TCL" > "$RPT" 2>&1; then
+  echo "WARN: OpenSTA did not complete (timeout/fatal) — ASIC timing absent. See $RPT" >&2
+  tail -20 "$RPT" | sed 's/^/    /' >&2
   exit 0
 fi
-echo "cpu_sta.sh: OK (period ${PERIOD_NS}ns / ${TARGET_MHZ}MHz). Report: $OUT/cpu_asic_sta.rpt"
+echo "cpu_sta.sh: OK (period ${PERIOD_NS}ns / ${TARGET_MHZ}MHz). Report: $RPT"

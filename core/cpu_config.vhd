@@ -36,10 +36,36 @@ configuration cpu_decode_rom_fpga of cpu is
   end for;
 end configuration;
 
+-- MMU-enabled decode binding (used by cpu_sim below). Mirrors the generated
+-- cpu_decode_direct but sets decode_core's MMU_ARCH generic true, keeping the
+-- TLB miss/protection exception dispatch. Lives here (hand-written) rather than
+-- in the generated decode_table_direct_config.vhd. Synth builds do not compile
+-- cpu_config.vhd and use plain cpu_decode_direct (MMU_ARCH defaults false), so
+-- the TLB decode logic is pruned from the non-MMU j1/j2 critical path.
+use work.decode_pack.all;
+configuration cpu_decode_direct_mmu of decode is
+  for arch
+    for core : decode_core
+      use entity work.decode_core(arch)
+        generic map (
+          decode_type => DIRECT,
+          reset_vector => DEC_CORE_RESET,
+          MMU_ARCH => true);
+    end for;
+    for table : decode_table
+      use entity work.decode_table(direct_logic);
+    end for;
+  end for;
+end configuration;
+
 configuration cpu_sim of cpu is
   for stru
     for u_decode : decode
-      use configuration work.cpu_decode_direct;
+      -- MMU-enabled decode binding: cpu_sim is the functional build that runs
+      -- with the cpu's MMU_ARCH generic = true (set by the testbench), so the
+      -- decoder must keep the TLB exception dispatch. Synth/non-MMU configs use
+      -- plain cpu_decode_direct (MMU_ARCH defaults false, TLB logic pruned).
+      use configuration work.cpu_decode_direct_mmu;
     end for;
     for u_datapath : datapath
       use entity work.datapath(stru);

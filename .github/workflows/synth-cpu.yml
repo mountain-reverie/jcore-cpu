@@ -492,7 +492,7 @@ jobs:
           cp dashboard/index.html dashboard/app.js site/
           mkdir -p site/fixtures && cp dashboard/fixtures/data.js site/fixtures/
           mkdir -p site/insns
-          cp docs/insns.json docs/insns/index.html site/insns/
+          cp docs/insns.json docs/insns/index.html docs/insns/star_icon-*.png site/insns/
       - name: iCE40 up5k fit milestone — evaluate
         id: ice40_fit
         if: github.event_name == 'pull_request'

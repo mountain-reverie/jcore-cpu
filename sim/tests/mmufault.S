@@ -141,6 +141,11 @@ ENTRY(after_a)
         ! Sub-test B: DMISS_W (EXPEVT=0x080) -> VBR+0x440 (_v_store)
         ! Store to VA 0x1000 (page 1, unmapped).
         ! ==============================================================
+        ! Handler disabled AT; re-enable so the store below faults via MMU.
+        mov.l   p_mmucr, r0
+        mov     #1, r1
+        mov.l   r1, @r0                 ! MMUCR = 1 (AT=1)
+
         mov.l   p_g_exp_expevt, r0
         mov.l   c_dmiss_w, r1
         mov.l   r1, @r0
@@ -170,6 +175,11 @@ ENTRY(after_b)
         ! Sub-test C: IMISS (EXPEVT=0x040) -> VBR+0x400 (_v_ifetch)
         ! Jump to VA 0x1000 (page 1, unmapped) -> I-fetch miss.
         ! ==============================================================
+        ! Handler disabled AT; re-enable so the jump below faults via MMU.
+        mov.l   p_mmucr, r0
+        mov     #1, r1
+        mov.l   r1, @r0                 ! MMUCR = 1 (AT=1)
+
         mov.l   p_g_exp_expevt, r0
         mov.l   c_imiss, r1
         mov.l   r1, @r0
@@ -562,6 +572,7 @@ _v_store:                              ! = VBR + 0x440 = _v_ifetch + 0x40
         nop
 
         ! ---- Shared literal pool (at _v_ifetch + 0x60, 4-byte aligned) ----
+        .balign 4
 Hmmucr:         .long 0xFF000010       ! P4 MMUCR
 Hexp_expevt:    .long _g_exp_expevt    ! ptr to expected EXPEVT global
 Htea_addr:      .long 0xFF00000C       ! P4 TEA register address
@@ -571,6 +582,13 @@ Hexp_tea:       .long _g_exp_tea       ! ptr to expected TEA global
 _h_resume:
         mov.l   Ph_resume, r0
         mov.l   @r0, r0               ! r0 = resume label address
+        ! Force return to supervisor (SSR.MD=1): user-mode sub-tests (E/F)
+        ! fault with SSR=user SR; without this the RTE resumes in user mode and
+        ! the next sub-test's privileged LDC/LDTLB traps. MD bit = 0x40000000.
+        .word   0x0132                 ! STC SSR, r1
+        mov.l   Pmd_bit, r2
+        or      r2, r1
+        .word   0x413E                 ! LDC r1, SSR
         .word   0x404E                 ! LDC r0, SPC
         rte
         nop
@@ -587,10 +605,11 @@ _h_bad_tea:
         bra     _fail
         nop
 
-        .align 2
+        .balign 4
 Ph_resume:      .long _g_resume
 Ph_bad_expevt:  .long _g_bad_expevt
 Ph_bad_tea:     .long _g_bad_tea
+Pmd_bit:        .long 0x40000000       ! SR.MD bit, set on SSR before RTE
 
         ! ================================================================
         ! Shared handler globals.

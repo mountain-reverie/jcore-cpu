@@ -210,7 +210,18 @@ case "$BACKEND" in
     # so the priv_o path uses the wrapper top name. j2c/j4c wrap cpu in
     # cpu_cache_timing_top (priv_o left open), so no drop is needed there.
     PRIV_DROP=""
-    [ "$CACHE" = 0 ] && PRIV_DROP="delete ${AREA_CPUTOP}/priv_o[expevt] ${AREA_CPUTOP}/priv_o[intevt] ${AREA_CPUTOP}/priv_o[tra]; opt_clean;"
+    if [ "$CACHE" = 0 ]; then
+      PRIV_DROP="delete ${AREA_CPUTOP}/priv_o[expevt] ${AREA_CPUTOP}/priv_o[intevt] ${AREA_CPUTOP}/priv_o[tra];"
+      # mmu_o (PA-tag observability for the cache wrapper, 32 b) is also a bare
+      # output with no in-core consumer. The j1/j2 fit uses the raw cpu top, so
+      # mmu_o lands as IO and pushes the count to 380 > 365 BELs — drop it too.
+      # The j4 wrapper (cpu_j4_priv_top) already leaves the inner cpu's mmu_o
+      # open, so it has no mmu_o port to delete (raw-cpu top only).
+      if [ "$AREA_CPUTOP" = cpu ]; then
+        PRIV_DROP="$PRIV_DROP delete ${AREA_CPUTOP}/mmu_o[i_pa_tag] ${AREA_CPUTOP}/mmu_o[i_at] ${AREA_CPUTOP}/mmu_o[d_pa_tag] ${AREA_CPUTOP}/mmu_o[d_at];"
+      fi
+      PRIV_DROP="$PRIV_DROP opt_clean;"
+    fi
     yosys -m ghdl -p "$GHDL_BASE -e $AREA_TOP; synth_ecp5 -top $AREA_CPUTOP; check -assert; chformal -remove; delete t:\$check t:\$print; $PRIV_DROP stat; write_json $OUT/cpu_ecp5.json"
     ;;
   timing)

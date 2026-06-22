@@ -191,7 +191,7 @@ jobs:
           set -euo pipefail
           yosys -m ghdl -p "
             ghdl --std=93 -fexplicit --ieee=synopsys --workdir=$(mktemp -d) \
-              cpu2j0_pkg.vhd core/components_pkg.vhd core/mult_pkg.vhd core/datapath_pkg.vhd \
+              cpu2j0_pkg.vhd core/components_pkg.vhd core/tlb.vhd core/mult_pkg.vhd core/datapath_pkg.vhd \
               decode/decode_pkg.vhd core/cpu.vhd core/mult.vhd core/shifter.vhd core/datapath.vhd \
               core/register_file.vhd core/register_file_flops.vhd core/register_file_two_bank.vhd \
               decode/decode.vhd decode/decode_body.vhd decode/decode_table.vhd \

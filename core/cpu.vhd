@@ -128,7 +128,29 @@ begin
       tlb_fault_va => tlb_fault_va,
       tlb_exc_expevt => tlb_exc_expevt);
 
-  db_o   <= sig_db_o;
+  -- D-store TLB-fault write suppression (J4+MMU_ARCH). A store that misses or
+  -- violates the TLB must not mutate memory, but a write acks and commits in the
+  -- same cycle the fault is detected combinationally -- one cycle before the
+  -- registered TLB exception request can latch. Demote the faulting store to a
+  -- harmless READ at the EXTERNAL bus (memory untouched); this also holds the
+  -- access in-flight across the exception-latch boundary exactly as a faulting
+  -- load does. The internal sig_db_o keeps wr='1' so the TLB still sees a write
+  -- and detects the fault. Must be on the external db_o, after the TLB has
+  -- consumed sig_db_o; gating the internal db_o on tlb_exc_pend forms a comb loop.
+  g_dstore_squash : if MMU_ARCH generate
+    process(sig_db_o, tlb_exc_pend)
+    begin
+      db_o <= sig_db_o;
+      if tlb_exc_pend = '1' and sig_db_o.en = '1' and sig_db_o.wr = '1' then
+        db_o.rd <= '1';
+        db_o.wr <= '0';
+        db_o.we <= "0000";
+      end if;
+    end process;
+  end generate g_dstore_squash;
+  g_no_dstore_squash : if not MMU_ARCH generate
+    db_o <= sig_db_o;
+  end generate g_no_dstore_squash;
   inst_o <= sig_inst_o;
 
   coproc.cpu_data_mux <= coproc_decode.cpu_data_mux when COPRO_DECODE

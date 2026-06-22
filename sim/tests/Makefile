@@ -11,7 +11,7 @@ CONFIG_MMU_ARCH ?= 0
 CFLAGS = -m2 -g -Os -Wall -Iinclude -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH)
 LDFLAGS = -T sh32.x -Map main.map
 
-all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img rteredir.img mmureg.img mmuguard.img mmuxlate.img mmufault.img mmurte.img mmustore.img mmucolor.img
+all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img rteredir.img mmureg.img mmuguard.img mmuxlate.img mmufault.img mmurte.img mmustore.img mmuimiss.img mmucolor.img
 
 interrupts.elf: interrupts.o
 rte.elf: rte.o
@@ -29,6 +29,7 @@ mmuxlate.elf: mmuxlate.o
 mmufault.elf: mmufault.o
 mmurte.elf: mmurte.o
 mmustore.elf: mmustore.o
+mmuimiss.elf: mmuimiss.o
 mmucolor.elf: mmucolor.o
 
 %.o: %.S

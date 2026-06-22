@@ -8,7 +8,13 @@ use work.cpu2j0_components_pack.all;
 entity decode_core is
   generic (
     decode_type : cpu_decode_type_t;
-    reset_vector : decode_core_reg_t);
+    reset_vector : decode_core_reg_t;
+    -- MMU_ARCH gates the TLB miss/protection exception dispatch (texc_req hold +
+    -- the TLB system_op branches in next_op). Default off so non-MMU builds
+    -- (j1/j2 and all synth variants) elaborate the TLB logic away - it is pure
+    -- decode-mux depth on the Fmax-critical path with no consumer when the MMU
+    -- is absent. The functional MMU build sets this true via cpu_decode_direct_mmu.
+    MMU_ARCH : boolean := false);
   port (
     clk : in std_logic;
     delay_jump : in std_logic;
@@ -183,7 +189,7 @@ begin
   -- when the exception is dispatched. texc_ack mirrors the op-latch condition in
   -- the decode_core process (slot, not stalled, at an instruction boundary), so
   -- the request clears exactly when next_op is latched into the registered op.
-  texc_ack <= '1' when slot = '1' and texc_req = '1'
+  texc_ack <= '1' when MMU_ARCH and slot = '1' and texc_req = '1'
                        and this'register.id_stall = '0'
                        and this'register.instr_seq_zero = '1'
               else '0';
@@ -195,7 +201,7 @@ begin
     elsif clk = '1' and clk'event then
       if texc_ack = '1' then
         texc_req <= '0';
-      elsif tlb_exc_en = '1' and texc_req = '0' then
+      elsif MMU_ARCH and tlb_exc_en = '1' and texc_req = '0' then
         texc_req       <= '1';
         texc_kind_held <= tlb_exc_kind;
       end if;
@@ -231,17 +237,17 @@ begin
     -- the system op is stable across the memory-access stall until it can be
     -- latched at the next instruction boundary.
     system_op(TLB_IMISS)
-      when texc_req = '1' and texc_kind_held = IMISS else
+      when MMU_ARCH and texc_req = '1' and texc_kind_held = IMISS else
     system_op(TLB_DMISS_R)
-      when texc_req = '1' and texc_kind_held = DMISS_R else
+      when MMU_ARCH and texc_req = '1' and texc_kind_held = DMISS_R else
     system_op(TLB_DMISS_W)
-      when texc_req = '1' and texc_kind_held = DMISS_W else
+      when MMU_ARCH and texc_req = '1' and texc_kind_held = DMISS_W else
     system_op(TLB_IPROT)
-      when texc_req = '1' and texc_kind_held = IPROT else
+      when MMU_ARCH and texc_req = '1' and texc_kind_held = IPROT else
     system_op(TLB_DPROT_R)
-      when texc_req = '1' and texc_kind_held = DPROT_R else
+      when MMU_ARCH and texc_req = '1' and texc_kind_held = DPROT_R else
     system_op(TLB_DPROT_W)
-      when texc_req = '1' and texc_kind_held = DPROT_W else
+      when MMU_ARCH and texc_req = '1' and texc_kind_held = DPROT_W else
     -- Break Instruction
     system_op(BREAK)
       when delay_slot = '0' and enter_debug = '1' else

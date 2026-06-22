@@ -259,10 +259,11 @@
     pc = "HOLD"
     ybus = "SPC"
     zbus_sel = "Y"
-    delay_jmp = "SET"
-    if_addy = "ZBUS"
+    zbus = "PC"
   [[instr.slots]]
     pc = "HOLD"
+    delay_jmp = "SET"
+    if_addy = "ZBUS"
 
 # ---- Privileged software access to SSR/SPC (design §5 Tier-1) ----
 [[instr]]

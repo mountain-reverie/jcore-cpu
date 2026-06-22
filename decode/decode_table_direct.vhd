@@ -802,7 +802,7 @@ begin
     imp_bit_361 <= (op.code(9) and op.code(10) and op.code(11) and not op.code(12) and not op.code(13) and op.code(14) and op.code(15) and not p(0) and op.addr(0) and not op.addr(1));
     imp_bit_362 <= (op.code(9) and op.code(10) and op.code(11) and not op.code(12) and not op.code(13) and op.code(14) and op.code(15) and not p(0) and not op.addr(1));
     debug <= (imp_bit_137 or imp_bit_268);
-    delay_jump <= (imp_bit_103 or imp_bit_117 or imp_bit_121 or imp_bit_125 or imp_bit_200 or imp_bit_282);
+    delay_jump <= (imp_bit_103 or imp_bit_117 or imp_bit_120 or imp_bit_125 or imp_bit_200 or imp_bit_282);
     cond5 <= (imp_bit_287 or imp_bit_291) & (imp_bit_309 or imp_bit_323) & (imp_bit_38 or imp_bit_72 or imp_bit_92 or imp_bit_98 or imp_bit_108 or imp_bit_112 or imp_bit_116 or imp_bit_122 or imp_bit_127 or imp_bit_132 or imp_bit_134 or imp_bit_136 or imp_bit_139 or imp_bit_151 or imp_bit_157 or imp_bit_162 or imp_bit_164 or imp_bit_179 or imp_bit_185 or imp_bit_199 or imp_bit_217 or imp_bit_260 or imp_bit_267 or imp_bit_270 or imp_bit_277 or imp_bit_305 or imp_bit_308 or imp_bit_318 or imp_bit_320 or imp_bit_325 or imp_bit_333 or imp_bit_336 or imp_bit_346 or imp_bit_348 or imp_bit_358);
     with cond5 select
         dispatch <=
@@ -1030,7 +1030,7 @@ begin
     ex_stall.tlb_wr <= (imp_bit_9);
     ex_stall.wrmach <= (imp_bit_7 or imp_bit_23);
     ex_stall.wrmacl <= (imp_bit_7 or imp_bit_25);
-    cond24 <= (imp_bit_309 or imp_bit_323) & (imp_bit_287 or imp_bit_291) & (imp_bit_102 or imp_bit_116 or imp_bit_124 or imp_bit_175 or imp_bit_199 or imp_bit_255 or imp_bit_268 or imp_bit_289 or imp_bit_295 or imp_bit_312 or imp_bit_342 or imp_bit_354);
+    cond24 <= (imp_bit_309 or imp_bit_323) & (imp_bit_287 or imp_bit_291) & (imp_bit_102 or imp_bit_116 or imp_bit_121 or imp_bit_124 or imp_bit_175 or imp_bit_199 or imp_bit_255 or imp_bit_268 or imp_bit_289 or imp_bit_295 or imp_bit_312 or imp_bit_342 or imp_bit_354);
     with cond24 select
         ex_stall.wrpc_z <=
             not t_bcc when "100",
@@ -1056,7 +1056,7 @@ begin
             t_bcc when "010",
             '0' when "001",
             '1' when others;
-    id.ifadsel <= (imp_bit_103 or imp_bit_117 or imp_bit_121 or imp_bit_125 or (not op.code(10) and op.code(11) and p(0) and not op.addr(0) and not op.addr(1) and op.addr(2)) or imp_bit_200 or (not op.code(8) and not op.code(9) and not op.code(10) and not op.code(11) and p(0) and op.addr(0) and not op.addr(1) and op.addr(2)) or (not op.code(8) and op.code(9) and not op.code(10) and p(0) and not op.addr(0) and op.addr(1)) or imp_bit_277 or imp_bit_282 or (op.code(8) and not op.code(9) and not op.code(10) and p(0) and not op.addr(0) and not op.addr(1) and op.addr(2)) or imp_bit_302 or imp_bit_316 or (not op.code(9) and op.code(11) and p(0) and not op.addr(0) and not op.addr(1) and op.addr(2)) or (op.code(9) and op.code(10) and not op.code(11) and p(0) and not op.addr(0) and not op.addr(1) and op.addr(2)));
+    id.ifadsel <= (imp_bit_103 or imp_bit_117 or imp_bit_120 or imp_bit_125 or (not op.code(10) and op.code(11) and p(0) and not op.addr(0) and not op.addr(1) and op.addr(2)) or imp_bit_200 or (not op.code(8) and not op.code(9) and not op.code(10) and not op.code(11) and p(0) and op.addr(0) and not op.addr(1) and op.addr(2)) or (not op.code(8) and op.code(9) and not op.code(10) and p(0) and not op.addr(0) and op.addr(1)) or imp_bit_277 or imp_bit_282 or (op.code(8) and not op.code(9) and not op.code(10) and p(0) and not op.addr(0) and not op.addr(1) and op.addr(2)) or imp_bit_302 or imp_bit_316 or (not op.code(9) and op.code(11) and p(0) and not op.addr(0) and not op.addr(1) and op.addr(2)) or (op.code(9) and op.code(10) and not op.code(11) and p(0) and not op.addr(0) and not op.addr(1) and op.addr(2)));
     id.incpc <= (imp_bit_2 or imp_bit_12 or imp_bit_20 or imp_bit_21 or imp_bit_28 or imp_bit_32 or imp_bit_39 or imp_bit_49 or imp_bit_50 or imp_bit_57 or imp_bit_58 or imp_bit_67 or imp_bit_69 or imp_bit_73 or imp_bit_80 or imp_bit_85 or imp_bit_87 or imp_bit_89 or imp_bit_97 or imp_bit_102 or imp_bit_106 or imp_bit_113 or imp_bit_119 or imp_bit_124 or imp_bit_131 or imp_bit_135 or imp_bit_137 or imp_bit_149 or imp_bit_155 or imp_bit_160 or imp_bit_165 or imp_bit_170 or imp_bit_174 or imp_bit_180 or imp_bit_183 or imp_bit_187 or imp_bit_194 or imp_bit_197 or imp_bit_199 or imp_bit_202 or imp_bit_208 or imp_bit_211 or imp_bit_213 or imp_bit_218 or imp_bit_224 or imp_bit_226 or imp_bit_228 or imp_bit_229 or imp_bit_230 or imp_bit_242 or imp_bit_244 or imp_bit_248 or imp_bit_250 or imp_bit_257 or imp_bit_263 or imp_bit_269 or imp_bit_274 or imp_bit_281 or imp_bit_288 or imp_bit_298 or imp_bit_314 or imp_bit_335 or imp_bit_341 or imp_bit_353);
     ilevel_cap <= ((not op.code(8) and not op.code(9) and not op.code(10) and not op.code(11) and p(0) and not op.addr(0) and not op.addr(1) and not op.addr(2)));
     cond11 <= (imp_bit_41) & (imp_bit_161 or imp_bit_165) & (imp_bit_82 or imp_bit_142 or imp_bit_235);

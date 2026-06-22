@@ -763,14 +763,15 @@ begin
                     ex.ybus_sel <= SEL_REG;
                     ex_stall.zbus_sel <= SEL_YBUS;
                 when x"1" =>
-                    delay_jump <= '1';
-                    id.ifadsel <= '1';
                     ex.regnum_y <= "10101";
+                    ex_stall.wrpc_z <= '1';
                     ex.ybus_sel <= SEL_REG;
                     ex_stall.zbus_sel <= SEL_YBUS;
                 when x"2" =>
+                    delay_jump <= '1';
                     dispatch <= '1';
                     id.if_issue <= '1';
+                    id.ifadsel <= '1';
                 when others =>
 
             end case;

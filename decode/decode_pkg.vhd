@@ -18,7 +18,7 @@ package decode_pack is
     type coproc_cmd_t is (NOP, LDS, STS, CLDS, CSTS);
     type cpu_data_mux_t is (DBUS, COPROC);
     type cpu_decode_type_t is (SIMPLE, DIRECT, ROM);
-    type immval_t is (IMM_ZERO, IMM_P1, IMM_P2, IMM_P4, IMM_P8, IMM_P16, IMM_P256, IMM_P352, IMM_N16, IMM_N8, IMM_N2, IMM_N1, IMM_U_4_0, IMM_U_4_1, IMM_U_4_2, IMM_U_8_0, IMM_U_8_1, IMM_U_8_2, IMM_S_8_1, IMM_S_12_1, IMM_S_8_0, IMM_P384, IMM_P416, IMM_P1024, IMM_P1056, IMM_P1088, IMM_P1536);
+    type immval_t is (IMM_ZERO, IMM_P1, IMM_P2, IMM_P4, IMM_P8, IMM_P16, IMM_P256, IMM_P352, IMM_N16, IMM_N8, IMM_N2, IMM_N1, IMM_U_4_0, IMM_U_4_1, IMM_U_4_2, IMM_U_8_0, IMM_U_8_1, IMM_U_8_2, IMM_S_8_1, IMM_S_12_1, IMM_S_8_0, IMM_P64, IMM_P96, IMM_P128, IMM_P160, IMM_P192, IMM_P384, IMM_P416, IMM_P1024, IMM_P1056, IMM_P1088, IMM_P1536);
     type instruction_plane_t is (NORMAL_INSTR, SYSTEM_INSTR);
     type mac_busy_t is (NOT_BUSY, EX_NOT_STALL, WB_NOT_STALL, EX_BUSY, WB_BUSY);
     type macin1_sel_t is (SEL_XBUS, SEL_ZBUS, SEL_WBUS);
@@ -309,7 +309,7 @@ package decode_pack is
     constant DEC_CORE_ROM_RESET : decode_core_reg_t := (maskint => '0', delay_slot => '0', id_stall => '0', instr_seq_zero => '0', op => (plane => SYSTEM_INSTR, code => x"0300", addr => "011101101"), ilevel => x"0");
     type system_instr_t is (BREAK, ERROR, GENERAL_ILLEGAL, INTERRUPT, RESET_CPU, SLOT_ILLEGAL, TLB_DMISS_R, TLB_DMISS_W, TLB_DPROT_R, TLB_DPROT_W, TLB_IMISS, TLB_IPROT);
     type system_instr_addr_array is array (system_instr_t range <>) of std_logic_vector(8 downto 0);
-    constant system_instr_rom_addrs : system_instr_addr_array := (BREAK => "100000000", ERROR => "011111010", GENERAL_ILLEGAL => "011100000", INTERRUPT => "011110011", RESET_CPU => "011101100", SLOT_ILLEGAL => "011100110", TLB_DMISS_R => "100001001", TLB_DMISS_W => "100001110", TLB_DPROT_R => "100011000", TLB_DPROT_W => "100011101", TLB_IMISS => "100000100", TLB_IPROT => "100010011");
+    constant system_instr_rom_addrs : system_instr_addr_array := (BREAK => "100000000", ERROR => "011111010", GENERAL_ILLEGAL => "011100000", INTERRUPT => "011110011", RESET_CPU => "011101100", SLOT_ILLEGAL => "011100110", TLB_DMISS_R => "100001010", TLB_DMISS_W => "100010000", TLB_DPROT_R => "100011100", TLB_DPROT_W => "100100010", TLB_IMISS => "100000100", TLB_IPROT => "100010110");
     type system_instr_code_array is array (system_instr_t range <>) of std_logic_vector(11 downto 8);
     constant system_instr_codes : system_instr_code_array := (BREAK => x"2", ERROR => x"1", GENERAL_ILLEGAL => x"7", INTERRUPT => x"0", RESET_CPU => x"3", SLOT_ILLEGAL => x"6", TLB_DMISS_R => x"9", TLB_DMISS_W => x"A", TLB_DPROT_R => x"C", TLB_DPROT_W => x"D", TLB_IMISS => x"8", TLB_IPROT => x"B");
     type system_event_code_array is array (cpu_event_cmd_t range <>) of std_logic_vector(11 downto 8);

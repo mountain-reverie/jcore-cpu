@@ -122,9 +122,17 @@ case "$SYNTH_VARIANT" in
     SYN_BINDING="--syn-binding"
     if [ "$SYNTH_VARIANT" = j4c ]; then
       TOP="cpu_cache_timing_j4"
-      # M0: for j4c asic/ecp5, use the PRIV_ARCH=true variant of the cache
-      # timing top (cpu_cache_timing_j4_priv in cpu_cache_timing_config.vhd).
-      AREA_TOP="cpu_cache_timing_j4_priv"
+      # M3: for j4c asic/ecp5, use the PRIV_ARCH=true + MMU_ARCH=true variant of
+      # the cache timing top (cpu_cache_timing_j4_priv_mmu in
+      # cpu_cache_timing_config.vhd) so the real J4+MMU+cache core is synthesized.
+      AREA_TOP="cpu_cache_timing_j4_priv_mmu"
+      # The MMU build needs the J4 overlay decoder (mmu_reg_* control signals)
+      # which lives only in the generate-j4 tables. Regenerate them as a SYNTH-
+      # TIME TRANSIENT (the committed base tables stay untouched: CI's decoder
+      # gate compares the committed tables against a clean `make generate`, run
+      # in a separate job). j1/j2/j4/j2c keep the base decoder unchanged.
+      echo "cpu_synth.sh: regenerating J4 overlay decoder for j4c (transient)" >&2
+      make -C decode generate-j4 >&2
     else
       TOP="cpu_cache_timing_j2"
     fi

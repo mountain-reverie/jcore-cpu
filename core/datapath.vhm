@@ -489,6 +489,14 @@ begin
               -- the read result is injected directly into the wbus pipeline.
               if MMU_ARCH then
                 seg_v := seg_decode(ma_ad);
+                -- Default p4_sel_v every visit so it is never read holding a
+                -- value from a prior process iteration: an unconditional read-
+                -- before-write on a process variable synthesises to a
+                -- combinational feedback loop (yosys check -assert) on
+                -- datapath.p4_sel_v. SEL_PTEH is a "none of TTB/TEA/MMUCR"
+                -- sentinel here (falls into the case `others` branch); PTEH/
+                -- PTEL/ASIDR are never P4-MMIO selected (handled via LDC).
+                p4_sel_v := SEL_PTEH;
                 if    ma_ad(7 downto 0) = x"08" then p4_sel_v := SEL_TTB;
                 elsif ma_ad(7 downto 0) = x"0C" then p4_sel_v := SEL_TEA;
                 elsif ma_ad(7 downto 0) = x"10" then p4_sel_v := SEL_MMUCR;

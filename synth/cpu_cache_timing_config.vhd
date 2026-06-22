@@ -34,3 +34,20 @@ configuration cpu_cache_timing_j4_priv of cpu_cache_timing_top is
     for u_dcache : dcache_adapter use configuration work.dcache_adapter_fpga; end for;
   end for;
 end configuration;
+
+-- M3: J4+cache asic/ecp5 area build with PRIV_ARCH=true AND MMU_ARCH=true (real
+-- SH-4 MMU: TLB/CAM, D-store fault squash, MMU control-register file, VIPT seam).
+-- Identical to cpu_cache_timing_j4_priv except u_cpu also sets MMU_ARCH => true,
+-- so the MMU hardware is actually synthesized and timing-checked. Used by
+-- cpu_synth.sh AREA_TOP for j4c asic/ecp5. Requires the J4 overlay decoder
+-- (make -C decode generate-j4) which exposes the mmu_reg_* control signals.
+configuration cpu_cache_timing_j4_priv_mmu of cpu_cache_timing_top is
+  for timing
+    for u_cpu : cpu
+      use configuration work.cpu_synth_j4
+        generic map (PRIV_ARCH => true, MMU_ARCH => true);
+    end for;
+    for u_icache : icache_adapter use configuration work.icache_adapter_fpga; end for;
+    for u_dcache : dcache_adapter use configuration work.dcache_adapter_fpga; end for;
+  end for;
+end configuration;

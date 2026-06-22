@@ -37,6 +37,11 @@ begin
             "00000000000000000000000" & op.code(7 downto 0) & "0" when IMM_U_8_1,
             x"00000100" when IMM_P256,
             x"00000160" when IMM_P352,
+            x"00000040" when IMM_P64,
+            x"00000060" when IMM_P96,
+            x"00000080" when IMM_P128,
+            x"000000a0" when IMM_P160,
+            x"000000c0" when IMM_P192,
             x"00000180" when IMM_P384,
             x"000001a0" when IMM_P416,
             x"00000400" when IMM_P1024,
@@ -4001,6 +4006,10 @@ begin
                     ex.ybus_sel <= SEL_SR;
                     ex_stall.zbus_sel <= SEL_YBUS;
                 when x"2" =>
+                    imm_enum <= IMM_P64;
+                    ex_stall.sr_sel <= SEL_EXPEVT;
+                    ex.xbus_sel <= SEL_IMM;
+                when x"3" =>
                     ex.arith_func <= ADD;
                     imm_enum <= IMM_P1024;
                     ex.regnum_x <= "10001";
@@ -4008,10 +4017,10 @@ begin
                     ex.xbus_sel <= SEL_REG;
                     ex.ybus_sel <= SEL_IMM;
                     ex_stall.zbus_sel <= SEL_ARITH;
-                when x"3" =>
+                when x"4" =>
                     id.if_issue <= '1';
                     id.ifadsel <= '1';
-                when x"4" =>
+                when x"5" =>
                     dispatch <= '1';
                     id.if_issue <= '1';
                     id.incpc <= '1';
@@ -4037,6 +4046,10 @@ begin
                     ex.ybus_sel <= SEL_SR;
                     ex_stall.zbus_sel <= SEL_YBUS;
                 when x"2" =>
+                    imm_enum <= IMM_P96;
+                    ex_stall.sr_sel <= SEL_EXPEVT;
+                    ex.xbus_sel <= SEL_IMM;
+                when x"3" =>
                     ex.arith_func <= ADD;
                     imm_enum <= IMM_P1056;
                     ex.regnum_x <= "10001";
@@ -4044,10 +4057,10 @@ begin
                     ex.xbus_sel <= SEL_REG;
                     ex.ybus_sel <= SEL_IMM;
                     ex_stall.zbus_sel <= SEL_ARITH;
-                when x"3" =>
+                when x"4" =>
                     id.if_issue <= '1';
                     id.ifadsel <= '1';
-                when x"4" =>
+                when x"5" =>
                     dispatch <= '1';
                     id.if_issue <= '1';
                     id.incpc <= '1';
@@ -4073,6 +4086,10 @@ begin
                     ex.ybus_sel <= SEL_SR;
                     ex_stall.zbus_sel <= SEL_YBUS;
                 when x"2" =>
+                    imm_enum <= IMM_P128;
+                    ex_stall.sr_sel <= SEL_EXPEVT;
+                    ex.xbus_sel <= SEL_IMM;
+                when x"3" =>
                     ex.arith_func <= ADD;
                     imm_enum <= IMM_P1088;
                     ex.regnum_x <= "10001";
@@ -4080,10 +4097,10 @@ begin
                     ex.xbus_sel <= SEL_REG;
                     ex.ybus_sel <= SEL_IMM;
                     ex_stall.zbus_sel <= SEL_ARITH;
-                when x"3" =>
+                when x"4" =>
                     id.if_issue <= '1';
                     id.ifadsel <= '1';
-                when x"4" =>
+                when x"5" =>
                     dispatch <= '1';
                     id.if_issue <= '1';
                     id.incpc <= '1';
@@ -4109,6 +4126,10 @@ begin
                     ex.ybus_sel <= SEL_SR;
                     ex_stall.zbus_sel <= SEL_YBUS;
                 when x"2" =>
+                    imm_enum <= IMM_P160;
+                    ex_stall.sr_sel <= SEL_EXPEVT;
+                    ex.xbus_sel <= SEL_IMM;
+                when x"3" =>
                     ex.arith_func <= ADD;
                     imm_enum <= IMM_P1024;
                     ex.regnum_x <= "10001";
@@ -4116,10 +4137,10 @@ begin
                     ex.xbus_sel <= SEL_REG;
                     ex.ybus_sel <= SEL_IMM;
                     ex_stall.zbus_sel <= SEL_ARITH;
-                when x"3" =>
+                when x"4" =>
                     id.if_issue <= '1';
                     id.ifadsel <= '1';
-                when x"4" =>
+                when x"5" =>
                     dispatch <= '1';
                     id.if_issue <= '1';
                     id.incpc <= '1';
@@ -4145,6 +4166,10 @@ begin
                     ex.ybus_sel <= SEL_SR;
                     ex_stall.zbus_sel <= SEL_YBUS;
                 when x"2" =>
+                    imm_enum <= IMM_P192;
+                    ex_stall.sr_sel <= SEL_EXPEVT;
+                    ex.xbus_sel <= SEL_IMM;
+                when x"3" =>
                     ex.arith_func <= ADD;
                     imm_enum <= IMM_P1056;
                     ex.regnum_x <= "10001";
@@ -4152,10 +4177,10 @@ begin
                     ex.xbus_sel <= SEL_REG;
                     ex.ybus_sel <= SEL_IMM;
                     ex_stall.zbus_sel <= SEL_ARITH;
-                when x"3" =>
+                when x"4" =>
                     id.if_issue <= '1';
                     id.ifadsel <= '1';
-                when x"4" =>
+                when x"5" =>
                     dispatch <= '1';
                     id.if_issue <= '1';
                     id.incpc <= '1';
@@ -4181,6 +4206,10 @@ begin
                     ex.ybus_sel <= SEL_SR;
                     ex_stall.zbus_sel <= SEL_YBUS;
                 when x"2" =>
+                    imm_enum <= IMM_P192;
+                    ex_stall.sr_sel <= SEL_EXPEVT;
+                    ex.xbus_sel <= SEL_IMM;
+                when x"3" =>
                     ex.arith_func <= ADD;
                     imm_enum <= IMM_P1088;
                     ex.regnum_x <= "10001";
@@ -4188,10 +4217,10 @@ begin
                     ex.xbus_sel <= SEL_REG;
                     ex.ybus_sel <= SEL_IMM;
                     ex_stall.zbus_sel <= SEL_ARITH;
-                when x"3" =>
+                when x"4" =>
                     id.if_issue <= '1';
                     id.ifadsel <= '1';
-                when x"4" =>
+                when x"5" =>
                     dispatch <= '1';
                     id.if_issue <= '1';
                     id.incpc <= '1';

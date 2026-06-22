@@ -89,9 +89,29 @@ jobs:
           echo "==> Step 1: go test ./..."
           go -C decode/gen-go test ./...
 
-          # Step 2: regenerate VHDL
-          echo "==> Step 2: make -C decode generate"
+          # Step 2: regenerate VHDL + verify the COMMITTED base decoder matches
+          # a clean regeneration. `make -C decode clean` first so this is robust
+          # to git-checkout mtimes (an incremental `make generate` no-ops when the
+          # committed .vhd are newer than the spec, which would let stale or
+          # WRONG-VARIANT tables pass). The j2 base decoder must stay the j2 base
+          # decoder: if someone commits `make generate-j4` (sh4/PRIV_ARCH+MMU
+          # overlay) output as the base tables, git diff catches it here instead
+          # of silently bloating the ASIC/j2 decoder critical path (Fmax regression).
+          echo "==> Step 2: make -C decode generate + committed-decoder check"
+          make -C decode clean
           make -C decode generate
+          if ! git diff --quiet -- decode/decode_pkg.vhd decode/decode.vhd \
+                 decode/decode_body.vhd decode/decode_table_simple.vhd \
+                 decode/decode_table_direct.vhd decode/decode_table_rom.vhd \
+                 decode/sh2instr.c; then
+            echo "FAIL: committed base decode tables differ from a clean 'make -C decode generate'." >&2
+            echo "      The committed decoder is stale or was generated with the wrong variant" >&2
+            echo "      (e.g. 'make generate-j4' overlay output committed as base)." >&2
+            echo "      Fix: make -C decode clean && make -C decode generate, then commit decode/." >&2
+            git --no-pager diff --stat -- decode/ >&2
+            exit 1
+          fi
+          echo "    committed base decoder matches clean generation."
 
           # Step 3: build + run cpu_ctb with direct decoder
           echo "==> Step 3: cpu_ctb 180us [direct decoder]"

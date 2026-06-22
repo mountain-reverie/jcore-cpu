@@ -61,6 +61,24 @@ The workflow pushes two tags:
 4. Re-run `full-regression` and confirm Step 7 / 8 still pass — these
    are the most version-sensitive steps.
 
+## Heavy-tier OpenLane2 / LibreLane flow
+
+`synth/openlane/run.sh` drives a full RTL→GDS place-and-route run via
+[OpenLane2](https://github.com/efabless/openlane2) / LibreLane. It is
+**master-only** (not run on every PR) and uses the official OpenLane2
+Docker image, not the CI image described above.
+
+Key properties:
+- **Non-gating**: if `openlane` is not installed, the netlist is missing,
+  the run fails, or no `final/metrics.json` is produced, the script warns
+  to stderr and exits 0. Master CI stays green; the metric simply shows a
+  trend gap for that run.
+- Reads env `OL_PDK` (`sky130A` | `ihp-sg13g2`), `OL_DESIGN`
+  (`cpu` | `cpu_cache_timing_top`), `OL_PERIOD_NS` (default `10.0`).
+- Consumes `build/cpu_asic.v` (produced by `synth/cpu_synth.sh asic`).
+- On success writes `build/openlane_metrics.json`, consumed by
+  `synth/metrics.py --openlane-metrics`.
+
 ## Local reproduction
 
 ```bash

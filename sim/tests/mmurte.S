@@ -119,8 +119,7 @@ _v_load:                                ! = VBR + 0x420
         mov.l   Hmmucr, r0
         mov     #0, r1
         mov.l   r1, @r0                 ! MMUCR = 0 (disable AT)
-        mov.l   Ph_resume, r0
-        mov.l   @r0, r0               ! r0 = _resume address
+        mov.l   Ph_resume, r0          ! r0 = _resume address (Ph_resume: .long _resume)
         .word   0x404E                 ! LDC r0, SPC
         rte
         nop

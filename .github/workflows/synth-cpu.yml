@@ -36,6 +36,9 @@ jobs:
       fail-fast: false
       matrix:
         variant: [j1, j2, j4, j2c, j4c]   # *c = cpu+cache (ASIC dual-clock)
+    env:
+      SKY130_LIB: /opt/sky130/sky130_fd_sc_hd__tt_025C_1v80.lib
+      IHP_LIB: /opt/ihp-sg13g2/sg13g2_stdcell_typ_1p20V_25C.lib
     steps:
       - name: Checkout jcore-cpu
         uses: actions/checkout@v4
@@ -128,6 +131,34 @@ jobs:
             --stat build/asic_area_stat.txt --block-stat build/asic_block_stat.txt \
             --sta build/cpu_asic_sta.rpt \
             --period-ns "$period_ns" || true
+      - name: Emit SKY130 + IHP ASIC metrics (cheap tier)
+        continue-on-error: true
+        env:
+          SYNTH_VARIANT: ${{ matrix.variant }}
+        run: |
+          set -uo pipefail
+          period_ns=$(awk -v m="${ECP5_TARGET_MHZ}" 'BEGIN{printf "%.4f",1000.0/m}')
+          emit() {  # $1=tag  $2=lib  $3=target
+            local tag="$1" lib="$2" target="$3"
+            if [ ! -f "$lib" ]; then
+              echo "WARN: $lib absent — skipping $target" >&2; return 0
+            fi
+            STA_LIB="$lib" STA_OUT_TAG="$tag" synth/cpu_sta.sh || true
+            local block="build/asic_block_stat_${tag}.txt"
+            if [ -f build/cpu_asic.v ]; then
+              yosys -p "read_verilog build/cpu_asic.v; dfflibmap -liberty $lib; abc -liberty $lib; stat -liberty $lib" \
+                | tee "$block" || true
+            fi
+            python3 synth/metrics.py --target "$target" \
+              --variant "${{ matrix.variant }}" \
+              --commit "${GITHUB_SHA}" --out "synth/metrics/${target}.json" \
+              --stat "build/cpu_asic_mapped_stat_${tag}.txt" \
+              --block-stat "$block" \
+              --sta "build/cpu_asic_sta_${tag}.rpt" \
+              --period-ns "$period_ns" || true
+          }
+          emit sky130 "$SKY130_LIB" asic-sky130
+          emit ihp    "$IHP_LIB"    asic-ihp-sg13g2
       - name: Upload ASIC metrics
         if: always()
         uses: actions/upload-artifact@v4

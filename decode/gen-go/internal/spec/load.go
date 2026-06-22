@@ -59,6 +59,15 @@ func LoadProfile(base string, overlays ...string) (*Spec, error) {
 		for _, instr := range overlayInstrs {
 			applyDefaults(&instr, out.Defaults)
 			if idx, ok := nameIndex[instr.Name]; ok {
+				// Preserve structural metadata from the base instruction when the
+				// overlay omits it. Specifically, if the overlay doesn't specify
+				// plane (empty string), inherit the base instruction's plane so
+				// that a system-plane instruction overridden in an overlay (e.g.
+				// Break/Reset CPU opcode pinning for J4) keeps its "system"
+				// designation and continues to receive ROM-address treatment.
+				if instr.Plane == "" {
+					instr.Plane = out.Instrs[idx].Plane
+				}
 				out.Instrs[idx] = instr
 			} else {
 				nameIndex[instr.Name] = len(out.Instrs)

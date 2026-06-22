@@ -91,3 +91,99 @@
     tlb_wr = "YES"
     mask_int = "YES"
     pc = "INC"
+
+# ---- Break / Reset CPU: bit-11 pin (J4+MMU_ARCH overlay only) ----
+# The base spec uses don't-care bit 11 (---- -010 / ---- -011). That is correct
+# for J1/J2/J4 without MMU, because no TLB exception opcodes exist to alias with.
+# With MMU_ARCH, nibbles 0xA (TLB DMISS_W) and 0xB (TLB IPROT) occupy bit 11 = 1
+# in the system plane. A don't-care bit 11 in Break ("-010") aliases nibble 0xA,
+# causing a D-store TLB miss to assert `debug` and stall the CPU. Similarly
+# "-011" aliases nibble 0xB (IPROT). Pinning bit 11 = 0 here, in the overlay only,
+# avoids perturbing the base decoder logic minimizer (which would regress J2 ASIC
+# Fmax by ~14% if pinned in the base spec). Same aliasing class fixed for
+# Interrupt/Error/Slot Illegal/General Illegal in spec/sh4/exceptions.toml.
+
+[[instr]]
+  name = "Break"
+  format = ""
+  opcode = "---- 0010 dddd dddd"
+  operation = ""
+  plane = "system"
+
+  [[instr.slots]]
+    pc = "HOLD"
+
+  [[instr.slots]]
+    alu_y = "2"
+    arith = "SUB"
+    debug = "YES"
+    pc = "HOLD"
+    xbus = "PC"
+    zbus = "PC"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+    if_addy = "ZBUS"
+    if_issue = "YES"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    dispatch = "YES"
+    if_issue = "YES"
+    pc = "INC"
+
+[[instr]]
+  name = "Reset CPU"
+  format = "d8"
+  opcode = "---- 0011 dddd dddd"
+  operation = ""
+  plane = "system"
+
+  [[instr.slots]]
+    pc = "HOLD"
+
+  [[instr.slots]]
+    event = "ack"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "32"
+    pc = "HOLD"
+    ybus = "U*4"
+    zbus = "TEMP0"
+    zbus_sel = "Y"
+
+  [[instr.slots]]
+    alu_y = "4"
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "32"
+    pc = "HOLD"
+    wbus = "R15"
+    xbus = "TEMP0"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+    pc = "HOLD"
+    zbus = "PC"
+    zbus_sel = "W"
+
+  [[instr.slots]]
+    if_addy = "ZBUS"
+    if_issue = "YES"
+    logic = "XOR"
+    pc = "HOLD"
+    xbus = "TEMP1"
+    ybus = "TEMP1"
+    zbus = "VBR"
+    zbus_sel = "LOGIC"
+
+  [[instr.slots]]
+    dispatch = "YES"
+    if_issue = "YES"
+    pc = "INC"
+
+  [[instr.slots]]

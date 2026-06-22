@@ -77,6 +77,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         swig \
         python3 \
         python3-dev \
+        python3-pip \
+        python3-venv \
         zlib1g-dev \
         libreadline-dev \
         libffi-dev \
@@ -245,7 +247,7 @@ ENV NANGATE_LIB=/opt/nangate45/nangate45.lib
 # ---------------------------------------------------------------------------
 ARG SKY130_VERSION=bdc9412b3e468c102d01b7cf6337be06ec6e9c9a
 ARG IHP_REF=v1.0
-RUN pip3 install --no-cache-dir ciel \
+RUN pip3 install --no-cache-dir --break-system-packages ciel \
  && ciel enable --pdk-family sky130 ${SKY130_VERSION} \
  && mkdir -p /opt/sky130 \
  && cp "$(ciel prl path)"/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib \

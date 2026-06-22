@@ -35,19 +35,6 @@ begin
             "00000000000000000000000000" & op.code(3 downto 0) & "00" when IMM_U_4_2,
             x"000000" & op.code(7 downto 0) when IMM_U_8_0,
             "00000000000000000000000" & op.code(7 downto 0) & "0" when IMM_U_8_1,
-            x"00000100" when IMM_P256,
-            x"00000160" when IMM_P352,
-            x"00000040" when IMM_P64,
-            x"00000060" when IMM_P96,
-            x"00000080" when IMM_P128,
-            x"000000a0" when IMM_P160,
-            x"000000c0" when IMM_P192,
-            x"00000180" when IMM_P384,
-            x"000001a0" when IMM_P416,
-            x"00000400" when IMM_P1024,
-            x"00000420" when IMM_P1056,
-            x"00000440" when IMM_P1088,
-            x"00000600" when IMM_P1536,
             "0000000000000000000000" & op.code(7 downto 0) & "00" when IMM_U_8_2;
     -- Sign extend parts of opcode
     process(op)
@@ -484,73 +471,6 @@ begin
                 when others =>
 
             end case;
-        elsif std_match(cond, "00000----00110010") then
-            -- STC SSR, Rn [0032]
-            -- SSR -> Rn
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                    maskint_next <= '1';
-                    ex.regnum_y <= "10110";
-                    ex.regnum_z <= '0' & op.code(11 downto 8);
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_REG;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when others =>
-
-            end case;
-        elsif std_match(cond, "00000----01000010") then
-            -- STC SPC, Rn [0042]
-            -- SPC -> Rn
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                    maskint_next <= '1';
-                    ex.regnum_y <= "10101";
-                    ex.regnum_z <= '0' & op.code(11 downto 8);
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_REG;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when others =>
-
-            end case;
-        elsif std_match(cond, "00000----01010010") then
-            -- STC EXPEVT, Rn [0052]
-            -- EXPEVT -> Rn
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                    maskint_next <= '1';
-                    ex.regnum_z <= '0' & op.code(11 downto 8);
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_EXPEVT;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when others =>
-
-            end case;
-        elsif std_match(cond, "00000----01010011") then
-            -- STC PTEH, Rn [0053]
-            -- PTEH -> Rn
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                    maskint_next <= '1';
-                    ex.mmu_reg_sel <= SEL_PTEH;
-                    ex.regnum_z <= '0' & op.code(11 downto 8);
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_MMU;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when others =>
-
-            end case;
         elsif std_match(cond, "00000----01011010") then
             -- STS CPI_COM, Rn [005A]
             -- CPI_COM?Rn
@@ -563,89 +483,6 @@ begin
                     id.incpc <= '1';
                     wb.regnum_w <= '0' & op.code(11 downto 8);
                     wb_stall.wrreg_w <= '1';
-                when others =>
-
-            end case;
-        elsif std_match(cond, "00000----01100010") then
-            -- STC INTEVT, Rn [0062]
-            -- INTEVT -> Rn
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                    maskint_next <= '1';
-                    ex.regnum_z <= '0' & op.code(11 downto 8);
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_INTEVT;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when others =>
-
-            end case;
-        elsif std_match(cond, "00000----01100011") then
-            -- STC PTEL, Rn [0063]
-            -- PTEL -> Rn
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                    maskint_next <= '1';
-                    ex.mmu_reg_sel <= SEL_PTEL;
-                    ex.regnum_z <= '0' & op.code(11 downto 8);
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_MMU;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when others =>
-
-            end case;
-        elsif std_match(cond, "00000----01110010") then
-            -- STC TRA, Rn [0072]
-            -- TRA -> Rn
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                    maskint_next <= '1';
-                    ex.regnum_z <= '0' & op.code(11 downto 8);
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_TRA;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when others =>
-
-            end case;
-        elsif std_match(cond, "00000----01110011") then
-            -- STC ASIDR, Rn [0073]
-            -- ASIDR -> Rn
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                    maskint_next <= '1';
-                    ex.mmu_reg_sel <= SEL_ASIDR;
-                    ex.regnum_z <= '0' & op.code(11 downto 8);
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_MMU;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when others =>
-
-            end case;
-        elsif std_match(cond, "00000----1---0010") then
-            -- STC Rm_BANK, Rn [0082]
-            -- Rm_BANK -> Rn
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                    maskint_next <= '1';
-                    ex.regnum_y <= "11" & op.code(6 downto 4);
-                    ex.regnum_z <= '0' & op.code(11 downto 8);
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_REG;
-                    ex_stall.zbus_sel <= SEL_YBUS;
                 when others =>
 
             end case;
@@ -754,37 +591,44 @@ begin
             end case;
         elsif std_match(cond, "00000000000101011") then
             -- RTE [002B]
-            -- Delayed branch: SR<-SSR, PC<-SPC
+            -- Delayed branch, stack -> PC/SR
             case op.addr(3 downto 0) is
                 when x"0" =>
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= ADD;
+                    imm_enum <= IMM_P4;
                     id.incpc <= '1';
-                    ex.regnum_y <= "10110";
-                    ex_stall.sr_sel <= SEL_ZBUS;
-                    ex.ybus_sel <= SEL_REG;
-                    ex_stall.zbus_sel <= SEL_YBUS;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '0';
+                    ex_stall.mem_addr_sel <= SEL_XBUS;
+                    ex.mem_size <= LONG;
+                    ex.regnum_x <= "01111";
+                    ex.regnum_z <= "01111";
+                    ex_stall.wrreg_z <= '1';
+                    ex.xbus_sel <= SEL_REG;
+                    ex_stall.zbus_sel <= SEL_ARITH;
                 when x"1" =>
-                    ex.regnum_y <= "10101";
-                    ex_stall.wrpc_z <= '1';
-                    ex.ybus_sel <= SEL_REG;
-                    ex_stall.zbus_sel <= SEL_YBUS;
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= ADD;
+                    imm_enum <= IMM_P4;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '0';
+                    ex_stall.mem_addr_sel <= SEL_XBUS;
+                    ex.mem_size <= LONG;
+                    ex.regnum_x <= "01111";
+                    ex.regnum_z <= "01111";
+                    ex_stall.wrreg_z <= '1';
+                    wb_stall.wrsr_w <= '1';
+                    ex.xbus_sel <= SEL_REG;
+                    ex_stall.zbus_sel <= SEL_ARITH;
                 when x"2" =>
+                    ex_stall.wrpc_z <= '1';
+                    ex_stall.zbus_sel <= SEL_WBUS;
+                when x"3" =>
                     delay_jump <= '1';
                     dispatch <= '1';
                     id.if_issue <= '1';
                     id.ifadsel <= '1';
-                when others =>
-
-            end case;
-        elsif std_match(cond, "00000000000111000") then
-            -- LDTLB [0038]
-            -- PTEH/PTEL/ASIDR -> TLB
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                    maskint_next <= '1';
-                    ex_stall.tlb_wr <= '1';
                 when others =>
 
             end case;
@@ -2417,40 +2261,6 @@ begin
                 when others =>
 
             end case;
-        elsif std_match(cond, "00100----00111110") then
-            -- LDC Rm, SSR [403E]
-            -- Rm -> SSR
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                    maskint_next <= '1';
-                    ex.regnum_y <= '0' & op.code(11 downto 8);
-                    ex.regnum_z <= "10110";
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_REG;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when others =>
-
-            end case;
-        elsif std_match(cond, "00100----01001110") then
-            -- LDC Rm, SPC [404E]
-            -- Rm -> SPC
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                    maskint_next <= '1';
-                    ex.regnum_y <= '0' & op.code(11 downto 8);
-                    ex.regnum_z <= "10101";
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_REG;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when others =>
-
-            end case;
         elsif std_match(cond, "00100----01011010") then
             -- LDS Rm, CPI_COM [405A]
             -- Rm ? CPI_COM
@@ -2462,74 +2272,6 @@ begin
                     id.incpc <= '1';
                     maskint_next <= '1';
                     ex.regnum_y <= '0' & op.code(11 downto 8);
-                    ex.ybus_sel <= SEL_REG;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when others =>
-
-            end case;
-        elsif std_match(cond, "00100----01011110") then
-            -- LDC Rm, PTEH [405E]
-            -- Rm -> PTEH (MMU page-table-entry high)
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                    maskint_next <= '1';
-                    ex_stall.mmu_reg_sel <= SEL_PTEH;
-                    ex_stall.mmu_reg_wr <= '1';
-                    ex.regnum_y <= '0' & op.code(11 downto 8);
-                    ex.ybus_sel <= SEL_REG;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when others =>
-
-            end case;
-        elsif std_match(cond, "00100----01101110") then
-            -- LDC Rm, PTEL [406E]
-            -- Rm -> PTEL (MMU page-table-entry low)
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                    maskint_next <= '1';
-                    ex_stall.mmu_reg_sel <= SEL_PTEL;
-                    ex_stall.mmu_reg_wr <= '1';
-                    ex.regnum_y <= '0' & op.code(11 downto 8);
-                    ex.ybus_sel <= SEL_REG;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when others =>
-
-            end case;
-        elsif std_match(cond, "00100----01111110") then
-            -- LDC Rm, ASIDR [407E]
-            -- Rm -> ASIDR (address space identifier)
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                    maskint_next <= '1';
-                    ex_stall.mmu_reg_sel <= SEL_ASIDR;
-                    ex_stall.mmu_reg_wr <= '1';
-                    ex.regnum_y <= '0' & op.code(11 downto 8);
-                    ex.ybus_sel <= SEL_REG;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when others =>
-
-            end case;
-        elsif std_match(cond, "00100----1---1110") then
-            -- LDC Rm, Rn_BANK [408E]
-            -- Rm -> Rn_BANK
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                    maskint_next <= '1';
-                    ex.regnum_y <= '0' & op.code(11 downto 8);
-                    ex.regnum_z <= "11" & op.code(6 downto 4);
-                    ex_stall.wrreg_z <= '1';
                     ex.ybus_sel <= SEL_REG;
                     ex_stall.zbus_sel <= SEL_YBUS;
                 when others =>
@@ -3310,38 +3052,53 @@ begin
             end case;
         elsif std_match(cond, "011000011--------") then
             -- TRAPA #imm [C300]
-            -- SPC<-PC; SSR<-SR; MD/RB/BL; EXPEVT<-0x160; TRA<-imm<<2; PC<-VBR+0x100
+            -- PC/SR ? Stack area, (imm × 4 + VBR) ? PC
             case op.addr(3 downto 0) is
                 when x"0" =>
                     ex.aluiny_sel <= SEL_IMM;
-                    ex.arith_func <= ADD;
-                    imm_enum <= IMM_ZERO;
-                    ex.regnum_z <= "10101";
+                    ex.arith_func <= SUB;
+                    imm_enum <= IMM_P4;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '1';
+                    ex_stall.mem_addr_sel <= SEL_ZBUS;
+                    ex.mem_size <= LONG;
+                    ex_stall.mem_wdata_sel <= SEL_YBUS;
+                    ex.regnum_x <= "01111";
+                    ex.regnum_z <= "01111";
                     ex_stall.wrreg_z <= '1';
-                    ex.xbus_sel <= SEL_PC;
+                    ex.xbus_sel <= SEL_REG;
+                    ex.ybus_sel <= SEL_SR;
                     ex_stall.zbus_sel <= SEL_ARITH;
                 when x"1" =>
-                    ex.regnum_z <= "10110";
-                    ex_stall.sr_sel <= SEL_EXCEPTION;
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= SUB;
+                    imm_enum <= IMM_P4;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '1';
+                    ex_stall.mem_addr_sel <= SEL_ZBUS;
+                    ex.mem_size <= LONG;
+                    ex_stall.mem_wdata_sel <= SEL_YBUS;
+                    ex.regnum_x <= "01111";
+                    ex.regnum_z <= "01111";
                     ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_SR;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when x"2" =>
-                    imm_enum <= IMM_P352;
-                    ex_stall.sr_sel <= SEL_EXPEVT;
-                    ex.xbus_sel <= SEL_IMM;
-                when x"3" =>
-                    imm_enum <= IMM_U_8_2;
-                    ex_stall.sr_sel <= SEL_TRA;
-                    ex.xbus_sel <= SEL_IMM;
-                when x"4" =>
-                    ex.arith_func <= ADD;
-                    imm_enum <= IMM_P256;
-                    ex.regnum_x <= "10001";
-                    ex_stall.wrpc_z <= '1';
                     ex.xbus_sel <= SEL_REG;
-                    ex.ybus_sel <= SEL_IMM;
+                    ex.ybus_sel <= SEL_PC;
                     ex_stall.zbus_sel <= SEL_ARITH;
+                when x"2" =>
+                    ex.arith_func <= ADD;
+                    imm_enum <= IMM_U_8_2;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '0';
+                    ex_stall.mem_addr_sel <= SEL_ZBUS;
+                    ex.mem_size <= LONG;
+                    ex.regnum_y <= "10001";
+                    ex.xbus_sel <= SEL_IMM;
+                    ex.ybus_sel <= SEL_REG;
+                    ex_stall.zbus_sel <= SEL_ARITH;
+                when x"3" =>
+                when x"4" =>
+                    ex_stall.wrpc_z <= '1';
+                    ex_stall.zbus_sel <= SEL_WBUS;
                 when x"5" =>
                     id.if_issue <= '1';
                     id.ifadsel <= '1';
@@ -3749,9 +3506,9 @@ begin
                 when others =>
 
             end case;
-        elsif std_match(cond, "1----0000--------") then
+        elsif std_match(cond, "1-----000--------") then
             -- Interrupt [0000]
-            -- SPC<-PC; SSR<-SR; MD/RB/BL; IMASK; INTEVT<-vec; PC<-VBR+0x600
+            -- 
             case op.addr(3 downto 0) is
                 when x"0" =>
                     ex.aluiny_sel <= SEL_IMM;
@@ -3759,75 +3516,311 @@ begin
                     event_ack_0 <= '1';
                     ilevel_cap <= '1';
                     imm_enum <= IMM_P2;
-                    ex.regnum_z <= "10101";
-                    ex_stall.wrreg_z <= '1';
+                    ex_stall.wrpc_z <= '1';
                     ex.xbus_sel <= SEL_PC;
                     ex_stall.zbus_sel <= SEL_ARITH;
                 when x"1" =>
-                    ex.regnum_z <= "10110";
-                    ex_stall.sr_sel <= SEL_EXCEPTION;
+                    ex.aluinx_sel <= SEL_FC;
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= ADD;
+                    imm_enum <= IMM_ZERO;
+                    ex.regnum_x <= "01111";
+                    ex.regnum_z <= "10011";
                     ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_SR;
-                    ex_stall.zbus_sel <= SEL_YBUS;
+                    ex.xbus_sel <= SEL_REG;
+                    ex_stall.zbus_sel <= SEL_ARITH;
                 when x"2" =>
-                    ex_stall.sr_sel <= SEL_INT_MASK;
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= SUB;
+                    imm_enum <= IMM_P4;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '1';
+                    ex_stall.mem_addr_sel <= SEL_ZBUS;
+                    ex.mem_size <= LONG;
+                    ex_stall.mem_wdata_sel <= SEL_YBUS;
+                    ex.regnum_x <= "10011";
+                    ex.regnum_z <= "10011";
+                    ex_stall.wrreg_z <= '1';
+                    ex.xbus_sel <= SEL_REG;
+                    ex.ybus_sel <= SEL_SR;
+                    ex_stall.zbus_sel <= SEL_ARITH;
                 when x"3" =>
-                    imm_enum <= IMM_U_8_0;
-                    ex_stall.sr_sel <= SEL_INTEVT;
-                    ex.xbus_sel <= SEL_IMM;
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= SUB;
+                    imm_enum <= IMM_P4;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '1';
+                    ex_stall.mem_addr_sel <= SEL_ZBUS;
+                    ex.mem_size <= LONG;
+                    ex_stall.mem_wdata_sel <= SEL_YBUS;
+                    ex.regnum_x <= "10011";
+                    ex.regnum_z <= "10011";
+                    ex_stall.wrreg_z <= '1';
+                    ex.xbus_sel <= SEL_REG;
+                    ex.ybus_sel <= SEL_PC;
+                    ex_stall.zbus_sel <= SEL_ARITH;
                 when x"4" =>
                     ex.arith_func <= ADD;
-                    imm_enum <= IMM_P1536;
+                    imm_enum <= IMM_U_8_2;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '0';
+                    ex_stall.mem_addr_sel <= SEL_ZBUS;
+                    ex.mem_size <= LONG;
                     ex.regnum_x <= "10001";
-                    ex_stall.wrpc_z <= '1';
                     ex.xbus_sel <= SEL_REG;
                     ex.ybus_sel <= SEL_IMM;
                     ex_stall.zbus_sel <= SEL_ARITH;
                 when x"5" =>
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= SUB;
+                    imm_enum <= IMM_P4;
+                    ex.regnum_x <= "01111";
+                    ex.regnum_z <= "01111";
+                    ex_stall.sr_sel <= SEL_INT_MASK;
+                    ex_stall.wrreg_z <= '1';
+                    ex.xbus_sel <= SEL_REG;
+                    ex_stall.zbus_sel <= SEL_ARITH;
+                when x"6" =>
+                    ex_stall.wrpc_z <= '1';
+                    ex_stall.zbus_sel <= SEL_WBUS;
+                when x"7" =>
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= SUB;
                     id.if_issue <= '1';
                     id.ifadsel <= '1';
-                when x"6" =>
+                    imm_enum <= IMM_P4;
+                    ex.regnum_x <= "01111";
+                    ex.regnum_z <= "01111";
+                    ex_stall.wrreg_z <= '1';
+                    ex.xbus_sel <= SEL_REG;
+                    ex_stall.zbus_sel <= SEL_ARITH;
+                when x"8" =>
                     dispatch <= '1';
                     id.if_issue <= '1';
                     id.incpc <= '1';
                 when others =>
 
             end case;
-        elsif std_match(cond, "1----0001--------") then
+        elsif std_match(cond, "1-----001--------") then
             -- Error [0100]
-            -- SPC<-PC; SSR<-SR; MD/RB/BL; EXPEVT<-0x100; PC<-VBR+0x100
+            -- 
             case op.addr(3 downto 0) is
                 when x"0" =>
                     ex.aluiny_sel <= SEL_IMM;
                     ex.arith_func <= SUB;
                     event_ack_0 <= '1';
+                    ilevel_cap <= '1';
                     imm_enum <= IMM_P2;
-                    ex.regnum_z <= "10101";
-                    ex_stall.wrreg_z <= '1';
+                    ex_stall.wrpc_z <= '1';
                     ex.xbus_sel <= SEL_PC;
                     ex_stall.zbus_sel <= SEL_ARITH;
                 when x"1" =>
-                    ex.regnum_z <= "10110";
-                    ex_stall.sr_sel <= SEL_EXCEPTION;
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_SR;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when x"2" =>
-                    imm_enum <= IMM_P256;
-                    ex_stall.sr_sel <= SEL_EXPEVT;
-                    ex.xbus_sel <= SEL_IMM;
-                when x"3" =>
+                    ex.aluinx_sel <= SEL_FC;
+                    ex.aluiny_sel <= SEL_IMM;
                     ex.arith_func <= ADD;
-                    imm_enum <= IMM_P256;
+                    imm_enum <= IMM_ZERO;
+                    ex.regnum_x <= "01111";
+                    ex.regnum_z <= "10011";
+                    ex_stall.wrreg_z <= '1';
+                    ex.xbus_sel <= SEL_REG;
+                    ex_stall.zbus_sel <= SEL_ARITH;
+                when x"2" =>
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= SUB;
+                    imm_enum <= IMM_P4;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '1';
+                    ex_stall.mem_addr_sel <= SEL_ZBUS;
+                    ex.mem_size <= LONG;
+                    ex_stall.mem_wdata_sel <= SEL_YBUS;
+                    ex.regnum_x <= "10011";
+                    ex.regnum_z <= "10011";
+                    ex_stall.wrreg_z <= '1';
+                    ex.xbus_sel <= SEL_REG;
+                    ex.ybus_sel <= SEL_SR;
+                    ex_stall.zbus_sel <= SEL_ARITH;
+                when x"3" =>
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= SUB;
+                    imm_enum <= IMM_P4;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '1';
+                    ex_stall.mem_addr_sel <= SEL_ZBUS;
+                    ex.mem_size <= LONG;
+                    ex_stall.mem_wdata_sel <= SEL_YBUS;
+                    ex.regnum_x <= "10011";
+                    ex.regnum_z <= "10011";
+                    ex_stall.wrreg_z <= '1';
+                    ex.xbus_sel <= SEL_REG;
+                    ex.ybus_sel <= SEL_PC;
+                    ex_stall.zbus_sel <= SEL_ARITH;
+                when x"4" =>
+                    ex.arith_func <= ADD;
+                    imm_enum <= IMM_U_8_2;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '0';
+                    ex_stall.mem_addr_sel <= SEL_ZBUS;
+                    ex.mem_size <= LONG;
                     ex.regnum_x <= "10001";
-                    ex_stall.wrpc_z <= '1';
                     ex.xbus_sel <= SEL_REG;
                     ex.ybus_sel <= SEL_IMM;
                     ex_stall.zbus_sel <= SEL_ARITH;
-                when x"4" =>
+                when x"5" =>
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= SUB;
+                    imm_enum <= IMM_P4;
+                    ex.regnum_x <= "01111";
+                    ex.regnum_z <= "01111";
+                    ex_stall.wrreg_z <= '1';
+                    ex.xbus_sel <= SEL_REG;
+                    ex_stall.zbus_sel <= SEL_ARITH;
+                when x"6" =>
+                    ex_stall.wrpc_z <= '1';
+                    ex_stall.zbus_sel <= SEL_WBUS;
+                when x"7" =>
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= SUB;
                     id.if_issue <= '1';
                     id.ifadsel <= '1';
+                    imm_enum <= IMM_P4;
+                    ex.regnum_x <= "01111";
+                    ex.regnum_z <= "01111";
+                    ex_stall.wrreg_z <= '1';
+                    ex.xbus_sel <= SEL_REG;
+                    ex_stall.zbus_sel <= SEL_ARITH;
+                when x"8" =>
+                    dispatch <= '1';
+                    id.if_issue <= '1';
+                    id.incpc <= '1';
+                when others =>
+
+            end case;
+        elsif std_match(cond, "1-----110--------") then
+            -- Slot Illegal [0600]
+            -- 
+            case op.addr(3 downto 0) is
+                when x"0" =>
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= ADD;
+                    imm_enum <= IMM_ZERO;
+                    ex_stall.wrpc_z <= '1';
+                    ex.xbus_sel <= SEL_PC;
+                    ex_stall.zbus_sel <= SEL_ARITH;
+                when x"1" =>
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= SUB;
+                    imm_enum <= IMM_P4;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '1';
+                    ex_stall.mem_addr_sel <= SEL_ZBUS;
+                    ex.mem_size <= LONG;
+                    ex_stall.mem_wdata_sel <= SEL_YBUS;
+                    ex.regnum_x <= "01111";
+                    ex.regnum_z <= "01111";
+                    ex_stall.wrreg_z <= '1';
+                    ex.xbus_sel <= SEL_REG;
+                    ex.ybus_sel <= SEL_SR;
+                    ex_stall.zbus_sel <= SEL_ARITH;
+                when x"2" =>
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= SUB;
+                    imm_enum <= IMM_P4;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '1';
+                    ex_stall.mem_addr_sel <= SEL_ZBUS;
+                    ex.mem_size <= LONG;
+                    ex_stall.mem_wdata_sel <= SEL_YBUS;
+                    ex.regnum_x <= "01111";
+                    ex.regnum_z <= "01111";
+                    ex_stall.wrreg_z <= '1';
+                    ex.xbus_sel <= SEL_REG;
+                    ex.ybus_sel <= SEL_PC;
+                    ex_stall.zbus_sel <= SEL_ARITH;
+                when x"3" =>
+                    ex.arith_func <= ADD;
+                    imm_enum <= IMM_U_8_2;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '0';
+                    ex_stall.mem_addr_sel <= SEL_ZBUS;
+                    ex.mem_size <= LONG;
+                    ex.regnum_y <= "10001";
+                    ex.xbus_sel <= SEL_IMM;
+                    ex.ybus_sel <= SEL_REG;
+                    ex_stall.zbus_sel <= SEL_ARITH;
+                when x"4" =>
                 when x"5" =>
+                    ex_stall.wrpc_z <= '1';
+                    ex_stall.zbus_sel <= SEL_WBUS;
+                when x"6" =>
+                    id.if_issue <= '1';
+                    id.ifadsel <= '1';
+                when x"7" =>
+                    dispatch <= '1';
+                    id.if_issue <= '1';
+                    id.incpc <= '1';
+                when others =>
+
+            end case;
+        elsif std_match(cond, "1-----111--------") then
+            -- General Illegal [0700]
+            -- 
+            case op.addr(3 downto 0) is
+                when x"0" =>
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= SUB;
+                    imm_enum <= IMM_P2;
+                    ex_stall.wrpc_z <= '1';
+                    ex.xbus_sel <= SEL_PC;
+                    ex_stall.zbus_sel <= SEL_ARITH;
+                when x"1" =>
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= SUB;
+                    imm_enum <= IMM_P4;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '1';
+                    ex_stall.mem_addr_sel <= SEL_ZBUS;
+                    ex.mem_size <= LONG;
+                    ex_stall.mem_wdata_sel <= SEL_YBUS;
+                    ex.regnum_x <= "01111";
+                    ex.regnum_z <= "01111";
+                    ex_stall.wrreg_z <= '1';
+                    ex.xbus_sel <= SEL_REG;
+                    ex.ybus_sel <= SEL_SR;
+                    ex_stall.zbus_sel <= SEL_ARITH;
+                when x"2" =>
+                    ex.aluiny_sel <= SEL_IMM;
+                    ex.arith_func <= SUB;
+                    imm_enum <= IMM_P4;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '1';
+                    ex_stall.mem_addr_sel <= SEL_ZBUS;
+                    ex.mem_size <= LONG;
+                    ex_stall.mem_wdata_sel <= SEL_YBUS;
+                    ex.regnum_x <= "01111";
+                    ex.regnum_z <= "01111";
+                    ex_stall.wrreg_z <= '1';
+                    ex.xbus_sel <= SEL_REG;
+                    ex.ybus_sel <= SEL_PC;
+                    ex_stall.zbus_sel <= SEL_ARITH;
+                when x"3" =>
+                    ex.arith_func <= ADD;
+                    imm_enum <= IMM_U_8_2;
+                    ex_stall.ma_issue <= '1';
+                    ex.ma_wr <= '0';
+                    ex_stall.mem_addr_sel <= SEL_ZBUS;
+                    ex.mem_size <= LONG;
+                    ex.regnum_y <= "10001";
+                    ex.xbus_sel <= SEL_IMM;
+                    ex.ybus_sel <= SEL_REG;
+                    ex_stall.zbus_sel <= SEL_ARITH;
+                when x"4" =>
+                when x"5" =>
+                    ex_stall.wrpc_z <= '1';
+                    ex_stall.zbus_sel <= SEL_WBUS;
+                when x"6" =>
+                    id.if_issue <= '1';
+                    id.ifadsel <= '1';
+                when x"7" =>
                     dispatch <= '1';
                     id.if_issue <= '1';
                     id.incpc <= '1';
@@ -3902,326 +3895,6 @@ begin
                     ex.ybus_sel <= SEL_REG;
                     ex_stall.zbus_sel <= SEL_LOGIC;
                 when x"6" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                when others =>
-
-            end case;
-        elsif std_match(cond, "1----0110--------") then
-            -- Slot Illegal [0600]
-            -- SPC<-PC; SSR<-SR; MD/RB/BL; EXPEVT<-0x1A0; PC<-VBR+0x100
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    ex.aluiny_sel <= SEL_IMM;
-                    ex.arith_func <= ADD;
-                    imm_enum <= IMM_ZERO;
-                    ex.regnum_z <= "10101";
-                    ex_stall.wrreg_z <= '1';
-                    ex.xbus_sel <= SEL_PC;
-                    ex_stall.zbus_sel <= SEL_ARITH;
-                when x"1" =>
-                    ex.regnum_z <= "10110";
-                    ex_stall.sr_sel <= SEL_EXCEPTION;
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_SR;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when x"2" =>
-                    imm_enum <= IMM_P416;
-                    ex_stall.sr_sel <= SEL_EXPEVT;
-                    ex.xbus_sel <= SEL_IMM;
-                when x"3" =>
-                    ex.arith_func <= ADD;
-                    imm_enum <= IMM_P256;
-                    ex.regnum_x <= "10001";
-                    ex_stall.wrpc_z <= '1';
-                    ex.xbus_sel <= SEL_REG;
-                    ex.ybus_sel <= SEL_IMM;
-                    ex_stall.zbus_sel <= SEL_ARITH;
-                when x"4" =>
-                    id.if_issue <= '1';
-                    id.ifadsel <= '1';
-                when x"5" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                when others =>
-
-            end case;
-        elsif std_match(cond, "1----0111--------") then
-            -- General Illegal [0700]
-            -- SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x180; PC<-VBR+0x100
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    ex.aluiny_sel <= SEL_IMM;
-                    ex.arith_func <= SUB;
-                    imm_enum <= IMM_P2;
-                    ex.regnum_z <= "10101";
-                    ex_stall.wrreg_z <= '1';
-                    ex.xbus_sel <= SEL_PC;
-                    ex_stall.zbus_sel <= SEL_ARITH;
-                when x"1" =>
-                    ex.regnum_z <= "10110";
-                    ex_stall.sr_sel <= SEL_EXCEPTION;
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_SR;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when x"2" =>
-                    imm_enum <= IMM_P384;
-                    ex_stall.sr_sel <= SEL_EXPEVT;
-                    ex.xbus_sel <= SEL_IMM;
-                when x"3" =>
-                    ex.arith_func <= ADD;
-                    imm_enum <= IMM_P256;
-                    ex.regnum_x <= "10001";
-                    ex_stall.wrpc_z <= '1';
-                    ex.xbus_sel <= SEL_REG;
-                    ex.ybus_sel <= SEL_IMM;
-                    ex_stall.zbus_sel <= SEL_ARITH;
-                when x"4" =>
-                    id.if_issue <= '1';
-                    id.ifadsel <= '1';
-                when x"5" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                when others =>
-
-            end case;
-        elsif std_match(cond, "1----1000--------") then
-            -- TLB IMISS [0800]
-            -- SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x040; PC<-VBR+0x400
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    ex.aluiny_sel <= SEL_IMM;
-                    ex.arith_func <= SUB;
-                    imm_enum <= IMM_P2;
-                    ex.regnum_z <= "10101";
-                    ex_stall.wrreg_z <= '1';
-                    ex.xbus_sel <= SEL_PC;
-                    ex_stall.zbus_sel <= SEL_ARITH;
-                when x"1" =>
-                    ex.regnum_z <= "10110";
-                    ex_stall.sr_sel <= SEL_EXCEPTION;
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_SR;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when x"2" =>
-                    imm_enum <= IMM_P64;
-                    ex_stall.sr_sel <= SEL_EXPEVT;
-                    ex.xbus_sel <= SEL_IMM;
-                when x"3" =>
-                    ex.arith_func <= ADD;
-                    imm_enum <= IMM_P1024;
-                    ex.regnum_x <= "10001";
-                    ex_stall.wrpc_z <= '1';
-                    ex.xbus_sel <= SEL_REG;
-                    ex.ybus_sel <= SEL_IMM;
-                    ex_stall.zbus_sel <= SEL_ARITH;
-                when x"4" =>
-                    id.if_issue <= '1';
-                    id.ifadsel <= '1';
-                when x"5" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                when others =>
-
-            end case;
-        elsif std_match(cond, "1----1001--------") then
-            -- TLB DMISS R [0900]
-            -- SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x060; PC<-VBR+0x420
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    ex.aluiny_sel <= SEL_IMM;
-                    ex.arith_func <= SUB;
-                    imm_enum <= IMM_P2;
-                    ex.regnum_z <= "10101";
-                    ex_stall.wrreg_z <= '1';
-                    ex.xbus_sel <= SEL_PC;
-                    ex_stall.zbus_sel <= SEL_ARITH;
-                when x"1" =>
-                    ex.regnum_z <= "10110";
-                    ex_stall.sr_sel <= SEL_EXCEPTION;
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_SR;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when x"2" =>
-                    imm_enum <= IMM_P96;
-                    ex_stall.sr_sel <= SEL_EXPEVT;
-                    ex.xbus_sel <= SEL_IMM;
-                when x"3" =>
-                    ex.arith_func <= ADD;
-                    imm_enum <= IMM_P1056;
-                    ex.regnum_x <= "10001";
-                    ex_stall.wrpc_z <= '1';
-                    ex.xbus_sel <= SEL_REG;
-                    ex.ybus_sel <= SEL_IMM;
-                    ex_stall.zbus_sel <= SEL_ARITH;
-                when x"4" =>
-                    id.if_issue <= '1';
-                    id.ifadsel <= '1';
-                when x"5" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                when others =>
-
-            end case;
-        elsif std_match(cond, "1----1010--------") then
-            -- TLB DMISS W [0A00]
-            -- SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x080; PC<-VBR+0x440
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    ex.aluiny_sel <= SEL_IMM;
-                    ex.arith_func <= SUB;
-                    imm_enum <= IMM_P2;
-                    ex.regnum_z <= "10101";
-                    ex_stall.wrreg_z <= '1';
-                    ex.xbus_sel <= SEL_PC;
-                    ex_stall.zbus_sel <= SEL_ARITH;
-                when x"1" =>
-                    ex.regnum_z <= "10110";
-                    ex_stall.sr_sel <= SEL_EXCEPTION;
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_SR;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when x"2" =>
-                    imm_enum <= IMM_P128;
-                    ex_stall.sr_sel <= SEL_EXPEVT;
-                    ex.xbus_sel <= SEL_IMM;
-                when x"3" =>
-                    ex.arith_func <= ADD;
-                    imm_enum <= IMM_P1088;
-                    ex.regnum_x <= "10001";
-                    ex_stall.wrpc_z <= '1';
-                    ex.xbus_sel <= SEL_REG;
-                    ex.ybus_sel <= SEL_IMM;
-                    ex_stall.zbus_sel <= SEL_ARITH;
-                when x"4" =>
-                    id.if_issue <= '1';
-                    id.ifadsel <= '1';
-                when x"5" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                when others =>
-
-            end case;
-        elsif std_match(cond, "1----1011--------") then
-            -- TLB IPROT [0B00]
-            -- SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x0A0; PC<-VBR+0x400
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    ex.aluiny_sel <= SEL_IMM;
-                    ex.arith_func <= SUB;
-                    imm_enum <= IMM_P2;
-                    ex.regnum_z <= "10101";
-                    ex_stall.wrreg_z <= '1';
-                    ex.xbus_sel <= SEL_PC;
-                    ex_stall.zbus_sel <= SEL_ARITH;
-                when x"1" =>
-                    ex.regnum_z <= "10110";
-                    ex_stall.sr_sel <= SEL_EXCEPTION;
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_SR;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when x"2" =>
-                    imm_enum <= IMM_P160;
-                    ex_stall.sr_sel <= SEL_EXPEVT;
-                    ex.xbus_sel <= SEL_IMM;
-                when x"3" =>
-                    ex.arith_func <= ADD;
-                    imm_enum <= IMM_P1024;
-                    ex.regnum_x <= "10001";
-                    ex_stall.wrpc_z <= '1';
-                    ex.xbus_sel <= SEL_REG;
-                    ex.ybus_sel <= SEL_IMM;
-                    ex_stall.zbus_sel <= SEL_ARITH;
-                when x"4" =>
-                    id.if_issue <= '1';
-                    id.ifadsel <= '1';
-                when x"5" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                when others =>
-
-            end case;
-        elsif std_match(cond, "1----1100--------") then
-            -- TLB DPROT R [0C00]
-            -- SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x420
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    ex.aluiny_sel <= SEL_IMM;
-                    ex.arith_func <= SUB;
-                    imm_enum <= IMM_P2;
-                    ex.regnum_z <= "10101";
-                    ex_stall.wrreg_z <= '1';
-                    ex.xbus_sel <= SEL_PC;
-                    ex_stall.zbus_sel <= SEL_ARITH;
-                when x"1" =>
-                    ex.regnum_z <= "10110";
-                    ex_stall.sr_sel <= SEL_EXCEPTION;
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_SR;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when x"2" =>
-                    imm_enum <= IMM_P192;
-                    ex_stall.sr_sel <= SEL_EXPEVT;
-                    ex.xbus_sel <= SEL_IMM;
-                when x"3" =>
-                    ex.arith_func <= ADD;
-                    imm_enum <= IMM_P1056;
-                    ex.regnum_x <= "10001";
-                    ex_stall.wrpc_z <= '1';
-                    ex.xbus_sel <= SEL_REG;
-                    ex.ybus_sel <= SEL_IMM;
-                    ex_stall.zbus_sel <= SEL_ARITH;
-                when x"4" =>
-                    id.if_issue <= '1';
-                    id.ifadsel <= '1';
-                when x"5" =>
-                    dispatch <= '1';
-                    id.if_issue <= '1';
-                    id.incpc <= '1';
-                when others =>
-
-            end case;
-        elsif std_match(cond, "1----1101--------") then
-            -- TLB DPROT W [0D00]
-            -- SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x440
-            case op.addr(3 downto 0) is
-                when x"0" =>
-                    ex.aluiny_sel <= SEL_IMM;
-                    ex.arith_func <= SUB;
-                    imm_enum <= IMM_P2;
-                    ex.regnum_z <= "10101";
-                    ex_stall.wrreg_z <= '1';
-                    ex.xbus_sel <= SEL_PC;
-                    ex_stall.zbus_sel <= SEL_ARITH;
-                when x"1" =>
-                    ex.regnum_z <= "10110";
-                    ex_stall.sr_sel <= SEL_EXCEPTION;
-                    ex_stall.wrreg_z <= '1';
-                    ex.ybus_sel <= SEL_SR;
-                    ex_stall.zbus_sel <= SEL_YBUS;
-                when x"2" =>
-                    imm_enum <= IMM_P192;
-                    ex_stall.sr_sel <= SEL_EXPEVT;
-                    ex.xbus_sel <= SEL_IMM;
-                when x"3" =>
-                    ex.arith_func <= ADD;
-                    imm_enum <= IMM_P1088;
-                    ex.regnum_x <= "10001";
-                    ex_stall.wrpc_z <= '1';
-                    ex.xbus_sel <= SEL_REG;
-                    ex.ybus_sel <= SEL_IMM;
-                    ex_stall.zbus_sel <= SEL_ARITH;
-                when x"4" =>
-                    id.if_issue <= '1';
-                    id.ifadsel <= '1';
-                when x"5" =>
                     dispatch <= '1';
                     id.if_issue <= '1';
                     id.incpc <= '1';

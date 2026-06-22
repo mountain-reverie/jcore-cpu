@@ -15,10 +15,10 @@
 !   * the image is padded into page 1 so VA 0x1000 is *in range* for the bus
 !     model yet *unmapped* in the TLB -- a clean D-miss, no bus error.
 !
-! Like every general exception in this core's PM3 fixed-vector model, TLB
-! exceptions vector to VBR+0x100; the handler dispatches on EXPEVT. We set
-! VBR = dmiss_r_handler - 0x100 (a wrapped negative constant, never fetched
-! directly); the entry computes VBR+0x100 mod 2^32 = dmiss_r_handler.
+! TLB exceptions vector by access type: I-fetch->VBR+0x400, load->VBR+0x420,
+! store->VBR+0x440 (EXPEVT disambiguates miss vs protection). This test drives
+! a data-load miss (DMISS_R, EXPEVT=0x060) -> VBR+0x420. We set
+! VBR = dmiss_r_handler - 0x420 so the entry's VBR+0x420 lands on the handler.
 !
 ! result 0 = pass; nonzero = failure:
 !   1  exception never fired (ran past the faulting load)
@@ -50,7 +50,7 @@ _sim_instr_end: .long 0
         .text
 ENTRY(start)
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
-        ! Set VBR so VBR+0x420 == dmiss_r_handler.
+        ! Set VBR so VBR+0x420 == dmiss_r_handler (DMISS_R vector offset).
         mov.l   p_vbr_dmiss, r0
         .word   0x402E                  ! LDC r0, VBR
 
@@ -80,7 +80,7 @@ ENTRY(start)
         nop
 
         .align 2
-p_vbr_dmiss:   .long dmiss_r_handler - 0x100
+p_vbr_dmiss:   .long dmiss_r_handler - 0x420
 p_ptel_page0:  .long 0x000000E8
 p_mmucr:       .long 0xFF000010
 p_unmapped_va: .long 0x00001000

@@ -361,20 +361,21 @@
 
 # ---- TLB miss/protection exceptions (J4+MMU_ARCH; system-plane) ----
 # Structurally identical to General Illegal (restart = faulting instruction,
-# SPC<-PC-2) but with distinct EXPEVT codes. Like every other general
-# exception in this core's PM3 fixed-vector model, they vector to VBR+0x100;
-# the handler dispatches on EXPEVT. TEA and PTEH[31:14] are written as a
-# datapath hardware side-effect when the fault is detected (see datapath.vhm).
+# SPC<-PC-2) but with distinct EXPEVT codes and per-access-type vector offsets.
+# TEA and PTEH[31:14] are written as a datapath hardware side-effect when the
+# fault is detected (see datapath.vhm).
 # system_instr_codes: IMISS=x"8" DMISS_R=x"9" DMISS_W=x"A" IPROT=x"B"
 #                     DPROT_R=x"C" DPROT_W=x"D".
 # EXPEVT: IMISS=0x040 DMISS_R=0x060 DMISS_W=0x080 IPROT=0x0A0
 #         DPROT_R=0x0C0 DPROT_W=0x0C0.
+# Vectors (Option-A layout): I-fetch (IMISS/IPROT)->VBR+0x400 (=1024),
+#   D-load (DMISS_R/DPROT_R)->VBR+0x420 (=1056), D-store (DMISS_W/DPROT_W)->VBR+0x440 (=1088).
 
 [[instr]]
   name = "TLB IMISS"
   format = "d8"
   opcode = "---- 1000 dddd dddd"
-  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x040; PC<-VBR+0x100"
+  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x040; PC<-VBR+0x400"
   plane = "system"
   [[instr.slots]]
     alu_y = "2"
@@ -391,7 +392,7 @@
     sr = "EXCEPTION"
   [[instr.slots]]
     xbus = "VBR"
-    ybus = "256"
+    ybus = "1024"
     arith = "ADD"
     zbus = "PC"
     zbus_sel = "ARITH"
@@ -410,7 +411,7 @@
   name = "TLB DMISS R"
   format = "d8"
   opcode = "---- 1001 dddd dddd"
-  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x060; PC<-VBR+0x100"
+  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x060; PC<-VBR+0x420"
   plane = "system"
   [[instr.slots]]
     alu_y = "2"
@@ -427,7 +428,7 @@
     sr = "EXCEPTION"
   [[instr.slots]]
     xbus = "VBR"
-    ybus = "256"
+    ybus = "1056"
     arith = "ADD"
     zbus = "PC"
     zbus_sel = "ARITH"
@@ -446,7 +447,7 @@
   name = "TLB DMISS W"
   format = "d8"
   opcode = "---- 1010 dddd dddd"
-  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x080; PC<-VBR+0x100"
+  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x080; PC<-VBR+0x440"
   plane = "system"
   [[instr.slots]]
     alu_y = "2"
@@ -463,7 +464,7 @@
     sr = "EXCEPTION"
   [[instr.slots]]
     xbus = "VBR"
-    ybus = "256"
+    ybus = "1088"
     arith = "ADD"
     zbus = "PC"
     zbus_sel = "ARITH"
@@ -482,7 +483,7 @@
   name = "TLB IPROT"
   format = "d8"
   opcode = "---- 1011 dddd dddd"
-  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x0A0; PC<-VBR+0x100"
+  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x0A0; PC<-VBR+0x400"
   plane = "system"
   [[instr.slots]]
     alu_y = "2"
@@ -499,7 +500,7 @@
     sr = "EXCEPTION"
   [[instr.slots]]
     xbus = "VBR"
-    ybus = "256"
+    ybus = "1024"
     arith = "ADD"
     zbus = "PC"
     zbus_sel = "ARITH"
@@ -518,7 +519,7 @@
   name = "TLB DPROT R"
   format = "d8"
   opcode = "---- 1100 dddd dddd"
-  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x100"
+  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x420"
   plane = "system"
   [[instr.slots]]
     alu_y = "2"
@@ -535,7 +536,7 @@
     sr = "EXCEPTION"
   [[instr.slots]]
     xbus = "VBR"
-    ybus = "256"
+    ybus = "1056"
     arith = "ADD"
     zbus = "PC"
     zbus_sel = "ARITH"
@@ -554,7 +555,7 @@
   name = "TLB DPROT W"
   format = "d8"
   opcode = "---- 1101 dddd dddd"
-  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x100"
+  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x440"
   plane = "system"
   [[instr.slots]]
     alu_y = "2"
@@ -571,7 +572,7 @@
     sr = "EXCEPTION"
   [[instr.slots]]
     xbus = "VBR"
-    ybus = "256"
+    ybus = "1088"
     arith = "ADD"
     zbus = "PC"
     zbus_sel = "ARITH"

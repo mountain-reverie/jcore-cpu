@@ -308,7 +308,7 @@ package body decode_pack is
     end;
     function check_illegal_delay_slot (code : std_logic_vector(15 downto 0)) return std_logic is
     begin
-        if ((code(0) and code(1) and not code(2) and not code(3) and not code(4) and not code(6) and not code(7) and not code(12) and not code(13) and not code(14) and not code(15)) or (code(0) and code(1) and not code(2) and code(3) and not code(4) and not code(5) and not code(6) and not code(7) and not code(8) and not code(9) and not code(10) and not code(11) and not code(12) and not code(13) and not code(14) and not code(15)) or (code(0) and code(1) and not code(2) and code(3) and not code(4) and not code(6) and not code(7) and not code(12) and not code(13) and code(14) and not code(15)) or (code(13) and not code(14) and code(15)) or (code(8) and code(9) and not code(10) and not code(11) and not code(12) and not code(13) and code(14) and code(15))) = '1' then
+        if ((code(0) and code(1) and not code(2) and not code(3) and not code(4) and not code(6) and not code(7) and not code(12) and not code(13) and not code(14) and not code(15)) or (code(0) and code(1) and not code(2) and code(3) and not code(4) and not code(6) and not code(7) and not code(12) and not code(13) and code(14) and not code(15)) or (code(0) and code(1) and not code(2) and code(3) and not code(4) and not code(6) and not code(7) and not code(8) and not code(9) and not code(10) and not code(11) and not code(12) and not code(13) and not code(14) and not code(15)) or (code(13) and not code(14) and code(15)) or (code(8) and code(9) and not code(10) and not code(11) and not code(12) and not code(13) and code(14) and code(15))) = '1' then
             return '1';
         else
             return '0';

@@ -647,6 +647,11 @@ int sim_new(struct simulator *sim, struct sim_cfg *cfg) {
         argv[argc++] = "-fexplicit";
       argv[argc++] = "-r";
       argv[argc++] = sim->name;
+      /* mcode backend: ieee-asserts is a runtime option, must follow the
+         entity name (unlike the linux compiled-binary path it was missing
+         here, letting time-0 metavalue asserts flood the co-sim pty). */
+      ADD_LONG_OPTION("ieee-asserts", "disable-at-0");
+      ADD_LONG_OPTION("ieee-asserts", cfg->cfg.ghdl.ieee_asserts);
 #else
       /* On Linux, exec the sim binary directly. This avoids an
          additional fork-exec that ghdl -r does on linux which would

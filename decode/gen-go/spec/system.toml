@@ -190,7 +190,13 @@
 [[instr]]
   name = "Break"
   format = ""
-  opcode = "---- -010 dddd dddd"
+  # bit 11 MUST be 0 (not don't-care): the debug-break match decodes the op.code
+  # nibble bits[11:8]; with bit 11 a don't-care, "-010" aliases nibble 0xA (TLB
+  # DMISS_W) as well as 0x2 (Break), so dispatching a D-store TLB miss spuriously
+  # asserts `debug`, throwing the CPU into debug states (AWAIT_IF/READY) and
+  # suppressing the handler instruction fetch. Same bit-11 TLB-nibble aliasing
+  # class fixed for Interrupt/Error in spec/sh4/exceptions.toml.
+  opcode = "---- 0010 dddd dddd"
   operation = ""
   plane = "system"
 
@@ -219,7 +225,12 @@
 [[instr]]
   name = "Reset CPU"
   format = "d8"
-  opcode = "---- -011 dddd dddd"
+  # bit 11 MUST be 0 (not don't-care): "-011" otherwise aliases nibble 0xB (TLB
+  # IPROT) as well as 0x3 (Reset), so dispatching an I-fetch protection fault
+  # spuriously matches Reset CPU. Unlike Interrupt/Error/Slot/General Illegal,
+  # Reset CPU has no pinned exceptions.toml override, so it must be pinned here.
+  # Same bit-11 TLB-nibble aliasing class as the Break fix above.
+  opcode = "---- 0011 dddd dddd"
   operation = ""
   plane = "system"
 

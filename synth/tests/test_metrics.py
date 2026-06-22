@@ -287,5 +287,28 @@ class TestAsicTargetParam(unittest.TestCase):
         self.assertTrue(any(m["name"] == "cpu/area" for m in doc["metrics"]))
 
 
+class TestOpenlaneMetrics(unittest.TestCase):
+    def test_parses_known_keys(self):
+        p = metrics.parse_openlane_metrics(read("openlane_metrics_sky130.json"))
+        self.assertEqual(p["cells"], 41250)
+        self.assertAlmostEqual(p["core_area_um2"], 182340.5)
+        self.assertAlmostEqual(p["wns_ns"], -0.42)
+        self.assertAlmostEqual(p["power_mw"], 12.3)  # W -> mW
+
+    def test_missing_keys_omitted_not_crash(self):
+        p = metrics.parse_openlane_metrics("{}")
+        self.assertEqual(p, {})
+
+    def test_build_pnr_doc(self):
+        p = metrics.parse_openlane_metrics(read("openlane_metrics_sky130.json"))
+        doc = metrics.build_asic_pnr(p, "j2c", "abc123", "asic-sky130-pnr")
+        self.assertEqual(doc["target"], "asic-sky130-pnr")
+        names = {m["name"]: m for m in doc["metrics"]}
+        self.assertEqual(names["cpu/area"]["value"], 182340.5)
+        self.assertEqual(names["cpu/cells"]["value"], 41250)
+        self.assertAlmostEqual(names["cpu/WNS violation (post-route)"]["value"], 0.42)
+        self.assertAlmostEqual(names["cpu/power"]["value"], 12.3)
+
+
 if __name__ == "__main__":
     unittest.main()

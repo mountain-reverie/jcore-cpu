@@ -1,0 +1,9 @@
+{
+  "DESIGN_NAME": "__DESIGN__",
+  "VERILOG_FILES": ["dir::../../build/cpu_asic.v"],
+  "CLOCK_PORT": "clk",
+  "CLOCK_PERIOD": __PERIOD__,
+  "FP_CORE_UTIL": 40,
+  "PL_TARGET_DENSITY_PCT": 55,
+  "RUN_LINTER": false
+}

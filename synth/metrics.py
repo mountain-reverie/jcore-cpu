@@ -251,6 +251,53 @@ def build_asic(stat, sta, variant, commit, block_stat=None, target="asic-nangate
             "commit": commit, "metrics": metrics_}
 
 
+def parse_openlane_metrics(text):
+    """OpenLane2/LibreLane final metrics.json -> canonical dict (keys present
+    only when parsed). Defensive: unknown/missing keys yield no entry. Power is
+    converted W -> mW; WNS is raw worst-slack (negative == violation), the
+    builder turns it into a positive violation magnitude."""
+    import json
+    out = {}
+    try:
+        d = json.loads(text) if text.strip() else {}
+    except ValueError:
+        return out
+    def num(key):
+        v = d.get(key)
+        return float(v) if isinstance(v, (int, float)) else None
+    cells = num("design__instance__count")
+    if cells is not None:
+        out["cells"] = int(cells)
+    area = num("design__core__area")
+    if area is not None:
+        out["core_area_um2"] = area
+    ws = num("timing__setup__ws")
+    if ws is not None:
+        out["wns_ns"] = ws
+    pw = num("power__total")
+    if pw is not None:
+        out["power_mw"] = pw * 1000.0
+    return out
+
+
+def build_asic_pnr(parsed, variant, commit, target):
+    """Canonical doc for the heavy OpenLane2 P&R tier (post-route numbers).
+    WNS is surfaced as a positive violation magnitude (max(0, -ws)),
+    smaller-is-better, matching build_asic's convention so the benchmark
+    regression ratio compares correctly."""
+    metrics_ = []
+    if "core_area_um2" in parsed:
+        metrics_.append(_metric("cpu/area", "um2", parsed["core_area_um2"], "smaller"))
+    if "cells" in parsed:
+        metrics_.append(_metric("cpu/cells", "cells", parsed["cells"], "smaller"))
+    if "wns_ns" in parsed:
+        metrics_.append(_metric("cpu/WNS violation (post-route)", "ns",
+                                round(max(0.0, -parsed["wns_ns"]), 3), "smaller"))
+    if "power_mw" in parsed:
+        metrics_.append(_metric("cpu/power", "mW", round(parsed["power_mw"], 4), "smaller"))
+    return {"target": target, "variant": variant, "commit": commit, "metrics": metrics_}
+
+
 def parse_nextpnr_fmax(text):
     """Final (post-route) Fmax in MHz from a nextpnr log: the value on the LAST
     'Max frequency for clock' line. nextpnr prints an early placement estimate
@@ -341,6 +388,7 @@ def main(argv=None):
     p.add_argument("--nextpnr-timing", help="cpu_timing_top harness nextpnr log (representative Fmax)")
     p.add_argument("--nextpnr-ice40", help="nextpnr-ice40 up5k log (util + representative Fmax)")
     p.add_argument("--period-ns", type=float, default=20.0)
+    p.add_argument("--openlane-metrics", help="OpenLane2/LibreLane final metrics.json (asic-*-pnr)")
     a = p.parse_args(argv)
 
     if a.target in ("asic-nangate45", "asic-sky130", "asic-ihp-sg13g2"):
@@ -349,6 +397,9 @@ def main(argv=None):
         sta = parse_sta_report(_read(a.sta), a.period_ns) if a.sta else {}
         doc = build_asic(stat, sta, a.variant, a.commit,
                          block_stat=block_stat, target=a.target)
+    elif a.target in ("asic-sky130-pnr", "asic-ihp-sg13g2-pnr"):
+        parsed = parse_openlane_metrics(_read(a.openlane_metrics)) if a.openlane_metrics else {}
+        doc = build_asic_pnr(parsed, a.variant, a.commit, a.target)
     elif a.target == "ice40-up5k":
         parsed = parse_nextpnr_ice40_log(_read(a.nextpnr_ice40)) if a.nextpnr_ice40 else {"util": {}}
         fmax_rep = parse_nextpnr_fmax(_read(a.nextpnr_ice40)) if a.nextpnr_ice40 else None

@@ -91,3 +91,86 @@ jobs:
           path: ${{ env.SYNTH_OUT }}
           if-no-files-found: ignore
           retention-days: 14
+
+  # Assembly functional guards: the priv-arch + MMU exception tests in
+  # sim/tests/*.S. These need BOTH the SH cross-toolchain (sh2-elf-gcc, to build
+  # the test .img) AND -- for mmucolor -- the jcore-soc cache/memory_tech_lib
+  # deps. pr-quick has neither, so the guards run here (heavy-toolchain
+  # container + mountain-reverie/jcore-soc). Without this job, none of the
+  # exception-path work (per-access-type vectors, EXPEVT persistence, RTE return
+  # from a TLB exception, D-store fault detection + write suppression, IMISS TEA
+  # capture, SR-state-on-entry, VIPT page-coloring) is exercised in CI.
+  functional-guards:
+    name: priv-arch + MMU functional guards
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout jcore-cpu
+        uses: actions/checkout@v4
+        with:
+          path: jcore-cpu
+
+      - name: Checkout jcore-soc (tools + cache deps)
+        uses: actions/checkout@v4
+        with:
+          repository: mountain-reverie/jcore-soc
+          path: jcore-soc
+
+      - name: Build MMU-on co-sim + run all functional guards
+        working-directory: jcore-cpu
+        env:
+          TOOLS_DIR: ${{ github.workspace }}/jcore-soc/tools
+          JCORE_SOC: ${{ github.workspace }}/jcore-soc
+        run: |
+          set -euo pipefail
+          # J4 overlay decoder (PRIV_ARCH + MMU instructions).
+          make -C decode generate-j4
+          # The dcache CCL/MCL cores are .vhm templates; preprocess to .vhd via
+          # jcore-soc's v2p so cpu_cache_tb (mmucolor) elaborates on a clean CI
+          # checkout (same as sim/cache_sim.sh / synth).
+          for f in cache/dcache_ccl cache/dcache_mcl; do
+            LD_LIBRARY_PATH='' perl "$JCORE_SOC/tools/v2p" < "$f.vhm" > "$f.vhd"
+          done
+          # One MMU-on build provides BOTH cpu_tb (the 16 cpu_ctb guards) and
+          # cpu_cache_tb (mmucolor, selected at run time via SIM_TOP).
+          cd sim
+          rm -f work-obj93.cf cpu_tb.vhh cpu_ctb
+          make TOOLS_DIR="$TOOLS_DIR" JCORE_SOC="$JCORE_SOC" \
+            CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 \
+            cpu_ctb cpu_tb cpu_cache_tb work-obj93.cf >/dev/null
+          grep -q 'MMU_ARCH => true' cpu_tb.vhh \
+            || { echo "FAIL: build is not MMU-on (stale cpu_tb.vhh?)"; exit 1; }
+
+          fail=0
+          run_guard() {  # <name> <sim_top-or-default>
+            local t="$1" top="${2:-}"
+            rm -f tests/$t.img tests/$t.o tests/$t.elf
+            make CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 -C tests $t.img >/dev/null 2>&1
+            local out
+            out="$(SIM_TOP="$top" timeout 120 ./cpu_ctb --stop-time=80us \
+                   -i tests/$t.img --ieee-asserts=disable 2>&1 || true)"
+            if echo "$out" | grep -qi 'Test Passed'; then
+              echo "  PASS  $t${top:+ [$top]}"
+            else
+              echo "  FAIL  $t${top:+ [$top]}"
+              echo "$out" | grep -iE 'result|fail|invalid' | tail -3
+              fail=1
+            fi
+          }
+
+          # priv-arch + MMU guards run on the default cpu_tb top.
+          for t in exctest trapatest pm3vec pm3guard privmode banktest excguard \
+                   rteredir mmureg mmuguard mmuxlate mmurte mmustore mmuimiss \
+                   mmusr mmufault; do
+            run_guard "$t"
+          done
+          # VIPT page-coloring runs the CPU through the live D-cache (cpu_cache_tb).
+          run_guard mmucolor cpu_cache_tb
+
+          [ "$fail" = 0 ] || { echo "==> functional guards FAILED" >&2; exit 1; }
+          echo "==> all 17 priv-arch + MMU functional guards PASSED"

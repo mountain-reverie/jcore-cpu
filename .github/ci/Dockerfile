@@ -238,6 +238,31 @@ RUN set -eux; \
 ENV NANGATE_LIB=/opt/nangate45/nangate45.lib
 
 # ---------------------------------------------------------------------------
+# 10) Open PDKs for ASIC area/timing metrics (cheap tier).
+#     SKY130: fetched via ciel (volare successor); pinned open_pdks build hash.
+#     IHP SG13G2: shallow clone of IHP-Open-PDK at a pinned tag.
+#     Only the typical-corner Liberty file is kept in the image.
+# ---------------------------------------------------------------------------
+ARG SKY130_VERSION=bdc9412b3e468c102d01b7cf6337be06ec6e9c9a
+ARG IHP_REF=v1.0
+RUN pip3 install --no-cache-dir ciel \
+ && ciel enable --pdk-family sky130 ${SKY130_VERSION} \
+ && mkdir -p /opt/sky130 \
+ && cp "$(ciel prl path)"/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib \
+       /opt/sky130/ \
+ && test -s /opt/sky130/sky130_fd_sc_hd__tt_025C_1v80.lib
+
+RUN git clone --depth 1 --branch ${IHP_REF} https://github.com/IHP-GmbH/IHP-Open-PDK /tmp/ihp \
+ && mkdir -p /opt/ihp-sg13g2 \
+ && cp /tmp/ihp/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib \
+       /opt/ihp-sg13g2/ \
+ && rm -rf /tmp/ihp \
+ && test -s /opt/ihp-sg13g2/sg13g2_stdcell_typ_1p20V_25C.lib
+
+ENV SKY130_LIB=/opt/sky130/sky130_fd_sc_hd__tt_025C_1v80.lib
+ENV IHP_SG13G2_LIB=/opt/ihp-sg13g2/sg13g2_stdcell_typ_1p20V_25C.lib
+
+# ---------------------------------------------------------------------------
 # Final smoke test: confirm all entry points are on PATH.
 # ---------------------------------------------------------------------------
 RUN set -eux; \
@@ -247,7 +272,9 @@ RUN set -eux; \
     yosys -m ghdl -p 'help ghdl' >/dev/null; \
     sh2-elf-gcc --version | head -1; \
     sta -version 2>&1 | head -1 || true; \
-    test -f "$NANGATE_LIB"
+    test -f "$NANGATE_LIB"; \
+    test -f "$SKY130_LIB"; \
+    test -f "$IHP_SG13G2_LIB"
 
 # ---------------------------------------------------------------------------
 # FPGA P&R backends: prjtrellis (ECP5 chip DB + ecppack) and icestorm (iCE40

@@ -16,6 +16,8 @@ by `.github/workflows/full-regression.yml`. The image is published to
 | sh2-elf-gcc | 14.2.0 (binutils 2.43.1) | Step 6 cross-compile of sim/tests |
 | openSTA | apt (`opensta`) | Step 8 static timing analysis |
 | Nangate45 Liberty | upstream OpenSTA examples, `nangate45_slow.lib.gz` | Step 8 cell library, installed at `/opt/nangate45/nangate45.lib` |
+| SKY130 Liberty (tt 025C 1v80) | open_pdks build `bdc9412b` (via `ciel`) | ASIC cheap-tier timing, installed at `/opt/sky130/sky130_fd_sc_hd__tt_025C_1v80.lib`; env `SKY130_LIB` |
+| IHP SG13G2 Liberty (typ 1p20V 25C) | IHP-Open-PDK tag `v1.0` | ASIC cheap-tier timing, installed at `/opt/ihp-sg13g2/sg13g2_stdcell_typ_1p20V_25C.lib`; env `IHP_SG13G2_LIB` |
 
 The image size is roughly 2.5–3.0 GB. Cold build time on a 4-core
 ubuntu-24.04 runner is 30–60 minutes (sh2-elf-gcc and GHDL dominate).

@@ -96,6 +96,11 @@ type datapath_reg_t is record
    sr         : sr_t;
    priv       : priv_reg_t;   -- SH-4 EXPEVT/INTEVT/TRA (J4)
    mmu        : mmu_reg_t;   -- SH-4 MMU CSRs: PTEH/PTEL/ASIDR/MMUCR/TEA/TTB (J4+MMU_ARCH)
+   -- High after TEA/PTEH have been captured for the current TLB-fault episode,
+   -- so the capture happens once (on the first faulting cycle) and is not
+   -- overwritten by a later cycle of the same fault. Needed for IMISS, where the
+   -- I-fetch stream advances a word while the miss persists (J4+MMU_ARCH).
+   tlb_exc_captured : std_logic;
    mac_s      : std_logic;
    data_o_size: mem_size_t;
    data_o_lock: std_logic;
@@ -125,7 +130,7 @@ type datapath_reg_t is record
    ybus_override : ybus_val_pipeline_t;
 end record;
 
-constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, mac_s => '0', data_o_size => BYTE, data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
+constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, tlb_exc_captured => '0', mac_s => '0', data_o_size => BYTE, data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
 
 subtype regnum_t is std_logic_vector(4 downto 0);
 component register_file is

@@ -273,5 +273,19 @@ class TestNextpnrFmax(unittest.TestCase):
         self.assertIsNone(metrics.parse_nextpnr_fmax("no frequency lines here\n"))
 
 
+class TestAsicTargetParam(unittest.TestCase):
+    def test_build_asic_default_target_unchanged(self):
+        stat = metrics.parse_yosys_stat(read("yosys_stat_asic.txt"))
+        doc = metrics.build_asic(stat, {}, "j2", "abc123")
+        self.assertEqual(doc["target"], "asic-nangate45")
+
+    def test_build_asic_accepts_target(self):
+        stat = metrics.parse_yosys_stat(read("yosys_stat_asic.txt"))
+        doc = metrics.build_asic(stat, {}, "j2c", "abc123", target="asic-sky130")
+        self.assertEqual(doc["target"], "asic-sky130")
+        # series payload identical apart from the target field
+        self.assertTrue(any(m["name"] == "cpu/area" for m in doc["metrics"]))
+
+
 if __name__ == "__main__":
     unittest.main()

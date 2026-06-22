@@ -207,7 +207,7 @@ def _metric(name, unit, value, direction):
     return {"name": name, "unit": unit, "value": value, "dir": direction}
 
 
-def build_asic(stat, sta, variant, commit, block_stat=None):
+def build_asic(stat, sta, variant, commit, block_stat=None, target="asic-nangate45"):
     """Canonical doc for the Nangate45 ASIC flow.
 
     `stat` is the primary (flattened) mapped stat: it sources the `cpu` total
@@ -247,7 +247,7 @@ def build_asic(stat, sta, variant, commit, block_stat=None):
         metrics_.append(_metric("cpu/Fmax (relative)", "MHz", round(sta["fmax_mhz"], 3), "bigger"))
     if "power_mw" in sta:
         metrics_.append(_metric("cpu/power", "mW", round(sta["power_mw"], 4), "smaller"))
-    return {"target": "asic-nangate45", "variant": variant,
+    return {"target": target, "variant": variant,
             "commit": commit, "metrics": metrics_}
 
 
@@ -328,7 +328,9 @@ def main(argv=None):
 
     p = argparse.ArgumentParser(description="emit canonical synth metrics JSON")
     p.add_argument("--target", required=True,
-                   choices=["asic-nangate45", "ecp5-lfe5u-85f", "ice40-up5k"])
+                   choices=["asic-nangate45", "asic-sky130", "asic-ihp-sg13g2",
+                            "asic-sky130-pnr", "asic-ihp-sg13g2-pnr",
+                            "ecp5-lfe5u-85f", "ice40-up5k"])
     p.add_argument("--variant", default="direct-rom72")
     p.add_argument("--commit", required=True)
     p.add_argument("--out", required=True)
@@ -341,11 +343,12 @@ def main(argv=None):
     p.add_argument("--period-ns", type=float, default=20.0)
     a = p.parse_args(argv)
 
-    if a.target == "asic-nangate45":
+    if a.target in ("asic-nangate45", "asic-sky130", "asic-ihp-sg13g2"):
         stat = parse_yosys_stat(_read(a.stat)) if a.stat else {}
         block_stat = parse_yosys_stat(_read(a.block_stat)) if a.block_stat else None
         sta = parse_sta_report(_read(a.sta), a.period_ns) if a.sta else {}
-        doc = build_asic(stat, sta, a.variant, a.commit, block_stat=block_stat)
+        doc = build_asic(stat, sta, a.variant, a.commit,
+                         block_stat=block_stat, target=a.target)
     elif a.target == "ice40-up5k":
         parsed = parse_nextpnr_ice40_log(_read(a.nextpnr_ice40)) if a.nextpnr_ice40 else {"util": {}}
         fmax_rep = parse_nextpnr_fmax(_read(a.nextpnr_ice40)) if a.nextpnr_ice40 else None

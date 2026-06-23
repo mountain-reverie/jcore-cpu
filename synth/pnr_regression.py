@@ -26,10 +26,11 @@ def find_regressions(history, threshold=1.10):
     return out
 
 
-def to_markdown(regs):
+def to_markdown(regs, threshold=1.10):
     if not regs:
         return ""
-    lines = ["The daily ASIC P&R run detected post-route regression(s) over the 110% threshold:", ""]
+    lines = ["The daily ASIC P&R run detected post-route regression(s) over the "
+             "%.0f%% threshold:" % (threshold * 100), ""]
     lines.append("| metric | prev | current | change |")
     lines.append("|---|---|---|---|")
     for r in regs:
@@ -52,7 +53,7 @@ def main(argv=None):
         hist = {}
     regs = find_regressions(hist, a.threshold)
     with open(a.out, "w") as f:
-        f.write(to_markdown(regs))
+        f.write(to_markdown(regs, a.threshold))
     print("regressions=%d" % len(regs))
     return 0
 

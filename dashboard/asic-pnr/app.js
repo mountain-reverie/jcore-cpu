@@ -4,12 +4,17 @@
   var data = window.BENCHMARK_DATA;
   var host = document.getElementById("trends");
   if (!data || !data.entries) { document.getElementById("empty").hidden = false; return; }
-  var COLORS = { J1: "#e6b800", J2: "#1f77b4", J4: "#2ca02c",
+  // Keys cover both the lowercase suffixes to_gha_bench emits for bare variants
+  // ([j1]/[j4]) and the cpu+cache display labels ([J2+cache]/[J4+cache]).
+  var COLORS = { j1: "#e6b800", j2: "#1f77b4", j4: "#2ca02c",
+                 J1: "#e6b800", J2: "#1f77b4", J4: "#2ca02c",
                  "J2+cache": "#9467bd", "J4+cache": "#d62728" };
   // Flatten all suites' entries (there is one pnr suite).
   var entries = [];
   Object.keys(data.entries).forEach(function (k) { entries = entries.concat(data.entries[k]); });
-  entries.sort(function (a, b) { return a.commit.timestamp - b.commit.timestamp || a.date - b.date; });
+  entries.sort(function (a, b) {
+    return (a.commit.timestamp - b.commit.timestamp) || (Date.parse(a.date) - Date.parse(b.date));
+  });
 
   // group: metric (name without " [variant]" suffix) -> variant -> [{x,y}]
   var groups = {};

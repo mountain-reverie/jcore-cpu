@@ -36,7 +36,7 @@ def canonical_variant(variant):
 
 
 def convert(canon_paths):
-    size, speed = [], []
+    size, speed, pnr = [], [], []
     for path in canon_paths:
         with open(path) as f:
             doc = json.load(f)
@@ -48,6 +48,7 @@ def convert(canon_paths):
         _LABEL = {"j2": "", "j1": " [j1]", "j4": " [j4]",
                   "j2c": " [J2+cache]", "j4c": " [J4+cache]"}
         suffix = _LABEL.get(cvar, " [%s]" % cvar)
+        is_pnr = target.endswith("-pnr")
         for m in doc["metrics"]:
             entry = {
                 "name": "%s · %s%s" % (target, m["name"], suffix),
@@ -55,10 +56,16 @@ def convert(canon_paths):
                 "value": m["value"],
                 "extra": cvar,
             }
-            (size if m["dir"] == "smaller" else speed).append(entry)
+            if is_pnr:
+                pnr.append(entry)                       # pnr is all smaller-is-better
+            elif m["dir"] == "smaller":
+                size.append(entry)
+            else:
+                speed.append(entry)
     size.sort(key=lambda e: e["name"])
     speed.sort(key=lambda e: e["name"])
-    return size, speed
+    pnr.sort(key=lambda e: e["name"])
+    return size, speed, pnr
 
 
 def main(argv=None):
@@ -67,13 +74,14 @@ def main(argv=None):
     p.add_argument("inputs", nargs="+", help="canonical metric JSON files")
     p.add_argument("--size-out", required=True)
     p.add_argument("--speed-out", required=True)
+    p.add_argument("--pnr-out", required=True)
     a = p.parse_args(argv)
-    size, speed = convert(a.inputs)
-    for path, data in ((a.size_out, size), (a.speed_out, speed)):
+    size, speed, pnr = convert(a.inputs)
+    for path, data in ((a.size_out, size), (a.speed_out, speed), (a.pnr_out, pnr)):
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
             f.write("\n")
-    print("to_gha_bench.py: %d size, %d speed metrics" % (len(size), len(speed)))
+    print("to_gha_bench.py: %d size, %d speed, %d pnr metrics" % (len(size), len(speed), len(pnr)))
     return 0
 
 

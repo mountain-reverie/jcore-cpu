@@ -394,6 +394,10 @@ func assignXBus(v, rn, rm string, out AssignMap) error {
 		setSelReg(SigXbusSel, SigRegnumX, up, out)
 	case up == "PC":
 		out[SigXbusSel] = "SEL_PC"
+	case up == "TLBPC":
+		// J4+MMU_ARCH: the hardware-captured faulting-instruction PC, used by the
+		// D-side TLB-fault exception entry so SPC<-restart re-executes the access.
+		out[SigXbusSel] = "SEL_TLBPC"
 	case up == "W":
 		// :w → :wbus in Clojure x-bus
 		out[SigXbusSel] = "SEL_WBUS"
@@ -442,6 +446,11 @@ func assignYBus(v, rn, rm string, out AssignMap) error {
 		out[SigYbusSel] = "SEL_MACL"
 	case up == "SR":
 		out[SigYbusSel] = "SEL_SR"
+	case up == "TLBSR":
+		// J4+MMU_ARCH: the user SR captured at the first D-fault cycle, used by
+		// the D-fault entry's SSR save so a stalled-slot re-evaluation cannot
+		// capture the post-entry SR (RB=1).
+		out[SigYbusSel] = "SEL_TLBSR"
 	case up == "EXPEVT":
 		// SH-4 cause-register read (J4): STC EXPEVT/INTEVT/TRA, Rn.
 		out[SigYbusSel] = "SEL_EXPEVT"

@@ -170,11 +170,11 @@ jobs:
           # priv-arch + MMU guards run on the default cpu_tb top.
           for t in exctest trapatest pm3vec pm3guard privmode banktest excguard \
                    rteredir mmureg mmuguard mmuxlate mmurte mmustore mmuimiss \
-                   mmusr mmufault mmuldtlbr mmutsb mmuidx mmustres; do
+                   mmusr mmufault mmuldtlbr mmutsb mmuidx mmustres mmustr2; do
             run_guard "$t"
           done
           # VIPT page-coloring runs the CPU through the live D-cache (cpu_cache_tb).
           run_guard mmucolor cpu_cache_tb
 
           [ "$fail" = 0 ] || { echo "==> functional guards FAILED" >&2; exit 1; }
-          echo "==> all 21 priv-arch + MMU functional guards PASSED"
+          echo "==> all 22 priv-arch + MMU functional guards PASSED"

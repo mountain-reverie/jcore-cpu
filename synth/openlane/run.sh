@@ -1,25 +1,38 @@
 #!/usr/bin/env bash
 # Heavy-tier LibreLane RTL->GDS for one (design, pdk). Non-gating: any failure
 # warns and exits 0 with no metrics file, so master CI stays green (trend gap).
-# Env: OL_PDK, OL_DESIGN, OL_PERIOD_NS (default 10.0). Output: build/openlane_metrics.json
+# Env: OL_PDK, OL_DESIGN, OL_PERIOD_NS (default 10.0), OL_IMAGE (optional: run
+# LibreLane via `docker run <image>` instead of a librelane binary on PATH — the
+# LibreLane image is Nix-based and can't be a GHA job container, so CI runs it
+# through docker on a plain runner). Output: build/openlane_metrics.json
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"
 OUT="$ROOT/build"; mkdir -p "$OUT"
 PDK="${OL_PDK:?set OL_PDK}"; DESIGN="${OL_DESIGN:?set OL_DESIGN}"
 PERIOD="${OL_PERIOD_NS:-10.0}"
+OL_IMAGE="${OL_IMAGE:-}"
 
-if ! command -v librelane >/dev/null 2>&1; then
-  echo "WARN: librelane not installed — skipping heavy tier" >&2; exit 0
+# How to invoke LibreLane: a native binary if present, else via docker run with
+# the repo bind-mounted at the same path and CWD=$ROOT (so runs/ lands under
+# $ROOT and the bind-mounted config/netlist resolve identically inside/outside).
+if command -v librelane >/dev/null 2>&1; then
+  LIBRELANE=(librelane)
+elif [ -n "$OL_IMAGE" ] && command -v docker >/dev/null 2>&1; then
+  LIBRELANE=(docker run --rm -v "$ROOT:$ROOT" -w "$ROOT" "$OL_IMAGE" librelane)
+else
+  echo "WARN: no librelane binary and no OL_IMAGE/docker — skipping heavy tier" >&2; exit 0
 fi
 if [ ! -f "$OUT/cpu_asic.v" ]; then
   echo "WARN: $OUT/cpu_asic.v missing — run cpu_synth.sh asic first; skipping" >&2; exit 0
 fi
 
-CFG="$(mktemp -d)/config.json"
+# Config lives in build/ (inside the bind-mounted repo) alongside cpu_asic.v, so
+# the template's `dir::cpu_asic.v` resolves relative to the config's directory.
+CFG="$OUT/openlane_config.json"
 sed -e "s/__DESIGN__/$DESIGN/" -e "s/__PERIOD__/$PERIOD/" \
     synth/openlane/config.template.json > "$CFG"
 
-if ! timeout 7200 librelane --pdk "$PDK" --run-tag ci "$CFG"; then
+if ! timeout 7200 "${LIBRELANE[@]}" --pdk "$PDK" --run-tag ci "$CFG"; then
   echo "WARN: librelane run failed/timed out for $DESIGN on $PDK — no metrics" >&2
   exit 0
 fi

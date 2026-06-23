@@ -1,6 +1,6 @@
 {
   "DESIGN_NAME": "__DESIGN__",
-  "VERILOG_FILES": ["dir::../../build/cpu_asic.v"],
+  "VERILOG_FILES": ["dir::cpu_asic.v"],
   "CLOCK_PORT": "clk",
   "CLOCK_PERIOD": __PERIOD__,
   "FP_CORE_UTIL": 40,

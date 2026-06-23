@@ -10,6 +10,8 @@ on:
   pull_request:
   push:
     branches: [master]
+  schedule:
+    - cron: "0 8 * * *"   # 08:00 UTC = 00:00 PST / 01:00 PDT (overnight in BC)
   workflow_dispatch:
 
 env:
@@ -417,14 +419,15 @@ jobs:
           retention-days: 14
 
   synth-asic-pnr:
-    # Heavy tier: full LibreLane RTL->GDS. master push only (trend, no PR alert).
-    # Runs on a PLAIN runner and invokes LibreLane via `docker run` — the LibreLane
-    # image is Nix-based (non-FHS), so it cannot be used as a GHA job `container:`
-    # (the runner-injected node breaks, killing checkout/upload-artifact). Running
-    # it through docker run keeps the JS actions native AND keeps the heavy tier
-    # genuinely non-gating: a docker-run failure stays inside the continue-on-error
-    # step instead of failing container-init. Reuses the synth-asic netlist artifact.
-    if: github.event_name == 'push'
+    # Heavy tier: full LibreLane RTL->GDS. Daily schedule + manual dispatch only
+    # (trend, no push/PR alert). Runs on a PLAIN runner and invokes LibreLane via
+    # `docker run` — the LibreLane image is Nix-based (non-FHS), so it cannot be
+    # used as a GHA job `container:` (the runner-injected node breaks, killing
+    # checkout/upload-artifact). Running it through docker run keeps the JS actions
+    # native AND keeps the heavy tier genuinely non-gating: a docker-run failure
+    # stays inside the continue-on-error step instead of failing container-init.
+    # Reuses the synth-asic netlist artifact.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: synth-asic
     runs-on: ubuntu-24.04
     strategy:

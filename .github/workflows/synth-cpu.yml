@@ -502,29 +502,34 @@ jobs:
       - name: Build action inputs
         run: |
           set -euo pipefail
-          mkdir -p site/bench-size site/bench-speed metrics-in
+          mkdir -p site/bench-size site/bench-speed site/bench-asic-pnr metrics-in
           shopt -s nullglob globstar
           # Recurse: each per-variant artifact lands in its own metrics-in subdir.
           inputs=(metrics-in/**/*.json)
           if [ ${#inputs[@]} -eq 0 ]; then
             echo "WARN: no metric artifacts found — emitting empty suites" >&2
             echo "[]" > build-size.json; echo "[]" > build-speed.json
+            echo "[]" > build-pnr.json
           else
             python3 synth/to_gha_bench.py "${inputs[@]}" \
-              --size-out build-size.json --speed-out build-speed.json
+              --size-out build-size.json --speed-out build-speed.json --pnr-out build-pnr.json
           fi
-          ls -l build-size.json build-speed.json
+          ls -l build-size.json build-speed.json build-pnr.json
       - name: Bootstrap prior history from the live site
         run: |
           set -euo pipefail
           base="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY##*/}"
-          for kind in size speed; do
-            url="$base/bench-$kind/benchmark-data.json"
+          for kind in size speed asic-pnr; do
+            case "$kind" in
+              asic-pnr) dir="bench-asic-pnr" ;;
+              *)        dir="bench-$kind" ;;
+            esac
+            url="$base/$dir/benchmark-data.json"
             if curl -fsSL --head "$url" >/dev/null 2>&1; then
-              curl -fsSL "$url" -o "site/bench-$kind/benchmark-data.json"
+              curl -fsSL "$url" -o "site/$dir/benchmark-data.json"
               echo "fetched prior $kind history"
             else
-              : > "site/bench-$kind/benchmark-data.json"
+              : > "site/$dir/benchmark-data.json"
               echo "no prior $kind history (first run)"
             fi
           done
@@ -563,23 +568,71 @@ jobs:
           fail-on-alert: false
           auto-push: false
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Append ASIC P&R suite
+        uses: benchmark-action/github-action-benchmark@v1
+        continue-on-error: true
+        with:
+          name: synth-asic-pnr
+          tool: customSmallerIsBetter
+          output-file-path: build-pnr.json
+          external-data-json-path: site/bench-asic-pnr/benchmark-data.json
+          benchmark-data-dir-path: site/bench-asic-pnr
+          alert-threshold: "110%"
+          comment-on-alert: false
+          fail-on-alert: false
+          auto-push: false
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Assemble site
         run: |
           set -euo pipefail
-          for kind in size speed; do
-            f="site/bench-$kind/benchmark-data.json"
+          for kind in size speed asic-pnr; do
+            case "$kind" in asic-pnr) dir="bench-asic-pnr" ;; *) dir="bench-$kind" ;; esac
+            f="site/$dir/benchmark-data.json"
             # If an Append step no-op'd (empty suite / comment 403 on a fork PR),
             # the data file may be empty. Substitute a valid empty history so the
             # generated data.js is always parseable JavaScript.
             if [ ! -s "$f" ]; then
               echo '{"lastUpdate":0,"repoUrl":"","entries":{}}' > "$f"
             fi
-            echo "window.BENCHMARK_DATA = $(cat "$f")" > "site/bench-$kind/data.js"
+            echo "window.BENCHMARK_DATA = $(cat "$f")" > "site/$dir/data.js"
           done
           cp dashboard/index.html dashboard/app.js site/
           mkdir -p site/fixtures && cp dashboard/fixtures/data.js site/fixtures/
           mkdir -p site/insns
           cp docs/insns.json docs/insns/index.html docs/insns/star_icon-*.png site/insns/
+          # Dedicated P&R page: reuse the suite's data.js as the page's local data.js.
+          mkdir -p site/asic-pnr
+          cp dashboard/asic-pnr/index.html dashboard/asic-pnr/app.js site/asic-pnr/
+          cp site/bench-asic-pnr/data.js site/asic-pnr/data.js
+      - name: ASIC P&R regression issue
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        run: python3 synth/pnr_regression.py site/bench-asic-pnr/benchmark-data.json --out pnr_regression.md
+      - name: Open/update regression issue
+        if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '';
+            try { body = fs.readFileSync('pnr_regression.md', 'utf8'); } catch (e) {}
+            if (!body.trim()) { core.info('no P&R regression'); return; }
+            const marker = '<!-- asic-pnr-regression -->';
+            const label = 'asic-pnr-regression';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const full = `${marker}\n\n${body}\n\n[workflow run](${runUrl}) · [trend page](https://${context.repo.owner}.github.io/${context.repo.repo}/asic-pnr/)`;
+            const open = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner, repo: context.repo.repo, state: 'open', labels: label, per_page: 100 });
+            if (open.length) {
+              await github.rest.issues.update({ owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: open[0].number, body: full });
+              core.info(`updated issue #${open[0].number}`);
+            } else {
+              await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo,
+                title: 'ASIC P&R post-route regression detected', body: full, labels: [label] });
+              core.info('created regression issue');
+            }
       - name: iCE40 up5k fit milestone — evaluate
         id: ice40_fit
         if: github.event_name == 'pull_request'

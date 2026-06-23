@@ -23,6 +23,13 @@ package datapath_pack is
 
    type segment_t is (SEG_P0, SEG_P1, SEG_P2, SEG_P3, SEG_P4);
 
+   -- P4 MMU-register MMIO selector (J4+MMU_ARCH). Kept separate from
+   -- decode_pack.mmu_reg_sel_t so the cold TSBBR/TSBCFG selectors do NOT widen
+   -- that base-present pipeline enum (which would leak flops into j1/j2). This
+   -- type is used only by a datapath process variable inside MMU_ARCH-guarded
+   -- code, so it is dead/eliminated in base builds.
+   type p4_sel_t is (P4_NONE, P4_MMUCR, P4_TTB, P4_TEA, P4_TSBBR, P4_TSBCFG, P4_TSBPTR);
+
    function seg_decode(va : std_logic_vector(31 downto 0)) return segment_t;
 
    component datapath is

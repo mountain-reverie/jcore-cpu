@@ -102,7 +102,14 @@ func newStaticPackage() *Package {
 			{Name: "macin2_sel_t", Literals: []string{"SEL_YBUS", "SEL_ZBUS", "SEL_WBUS"}},
 			{Name: "mem_addr_sel_t", Literals: []string{"SEL_XBUS", "SEL_YBUS", "SEL_ZBUS"}},
 			{Name: "mem_wdata_sel_t", Literals: []string{"SEL_ZBUS", "SEL_YBUS"}},
-			{Name: "mmu_reg_sel_t", Literals: []string{"SEL_PTEH", "SEL_PTEL", "SEL_ASIDR", "SEL_MMUCR", "SEL_TTB", "SEL_TEA"}},
+			// SEL_TSBPTR is the only TSB addition here: it is decoder-emitted
+			// (STC TSBPTR) and flows through the base-present pipeline records
+			// (pipeline_ex_t / pipeline_ex_stall_t), so it must live in this enum.
+			// Keeping the count at 7 preserves the 3-bit encoding (==master's 6),
+			// so j1/j2 stay byte-identical (no extra constant-0 flop bit). The
+			// MMIO-only TSBBR/TSBCFG selectors live in datapath_pkg.p4_sel_t
+			// (datapath-local, dead in base) to avoid widening this enum to 4 bits.
+			{Name: "mmu_reg_sel_t", Literals: []string{"SEL_PTEH", "SEL_PTEL", "SEL_ASIDR", "SEL_MMUCR", "SEL_TTB", "SEL_TEA", "SEL_TSBPTR"}},
 			{Name: "reg_sel_t", Literals: []string{"SEL_R0", "SEL_R15", "SEL_RA", "SEL_RB"}},
 			{Name: "sr_sel_t", Literals: []string{"SEL_PREV", "SEL_WBUS", "SEL_ZBUS", "SEL_DIV0U", "SEL_ARITH", "SEL_LOGIC", "SEL_INT_MASK", "SEL_SET_T", "SEL_EXCEPTION", "SEL_EXPEVT", "SEL_INTEVT", "SEL_TRA"}},
 			{Name: "t_sel_t", Literals: []string{"SEL_CLEAR", "SEL_SET", "SEL_SHIFT", "SEL_CARRY"}},

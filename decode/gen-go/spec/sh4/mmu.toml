@@ -82,6 +82,25 @@
     zbus = "Rn"
     zbus_sel = "Y"
 
+# ---- STC TSBPTR, Rn: read-only TSB slot pointer (M5, hardware-spec §2.8) ----
+# Hardware computes TSBPTR on every TLB miss; software reads it on the miss hot
+# path in one cycle. Read-only: there is no LDC TSBPTR (such an encoding would
+# be illegal). The SH-4 STC control family `xxxx 0010` is fully occupied in base
+# J-core, so this uses a free slot in the `xxxx 0011` family (xxxx=0100),
+# co-located with the other MMU STC regs (PTEH=0101 / PTEL=0110 / ASIDR=0111).
+[[instr]]
+  name = "STC TSBPTR, Rn"
+  privileged = true
+  format = "n"
+  opcode = "0000 nnnn 0100 0011"
+  operation = "TSBPTR -> Rn (read-only TSB slot pointer)"
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "TSBPTR"
+    zbus = "Rn"
+    zbus_sel = "Y"
+
 [[instr]]
   name = "LDTLB"
   privileged = true

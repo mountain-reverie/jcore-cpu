@@ -326,7 +326,14 @@ begin
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
           variable seg_v   : segment_t;
-          variable p4_sel_v : mmu_reg_sel_t;
+          variable p4_sel_v : p4_sel_t;
+          -- TSB pointer-assist hash (M5): computed on the first fault cycle.
+          variable v_vpn   : unsigned(31 downto 0);
+          variable v_hash  : unsigned(31 downto 0);
+          variable v_mask  : unsigned(31 downto 0);
+          variable v_idx   : unsigned(31 downto 0);
+          variable v_shift : integer range 0 to 31;
+          variable v_size  : integer range 0 to 31;
           variable next_state : debug_state_t;
           variable slot_inst_en : std_logic;
         begin
@@ -350,6 +357,28 @@ begin
             this.mmu.pteh(31 downto 14) := tlb_fault_va(31 downto 14);
             this.mmu.pteh(13 downto 0)  := (others => '0');
             this.tlb_exc_captured       := '1';
+            -- TSB pointer assist (hardware-spec §2.8): compute the address of
+            -- the TSB slot for the faulting VPN and latch it into TSBPTR (read-
+            -- only via STC TSBPTR / MMIO 0xFF00001C).
+            --   vpn    = faulting_VA[31:12]               (4 KB page number)
+            --   hash   = HASH_MODE=1 ? vpn xor (vpn >> HASH_SHIFT) : vpn
+            --   mask   = (1 << TSB_SIZE_LOG) - 1
+            --   TSBPTR = (TSBBR and not 0xF) or ((hash and mask) << 4)
+            -- TSBBR[N+3:4] are reserved-0 so clearing the low nibble and ORing
+            -- the 16-byte-scaled index suffices (no variable base mask needed).
+            v_vpn   := x"000" & unsigned(tlb_fault_va(31 downto 12));
+            v_shift := to_integer(unsigned(this.mmu.tsbcfg(7 downto 4)));
+            v_size  := to_integer(unsigned(this.mmu.tsbbr(3 downto 0)));
+            if this.mmu.tsbcfg(3 downto 0) = x"1" then
+              v_hash := v_vpn xor shift_right(v_vpn, v_shift);
+            else
+              v_hash := v_vpn;
+            end if;
+            v_mask := shift_left(to_unsigned(1, 32), v_size) - 1;
+            v_idx  := (v_hash and v_mask);
+            this.mmu.tsbptr :=
+              (this.mmu.tsbbr and x"FFFFFFF0")
+              or std_logic_vector(shift_left(v_idx, 4));
             -- EXPEVT is NOT written here: the fault cause is latched via a
             -- slot-gated sr="EXPEVT" microcode write in the TLB exception
             -- handler microcode (exceptions.toml), mirroring TRAPA/Error, so
@@ -493,32 +522,41 @@ begin
                 -- value from a prior process iteration: an unconditional read-
                 -- before-write on a process variable synthesises to a
                 -- combinational feedback loop (yosys check -assert) on
-                -- datapath.p4_sel_v. SEL_PTEH is a "none of TTB/TEA/MMUCR"
-                -- sentinel here (falls into the case `others` branch); PTEH/
-                -- PTEL/ASIDR are never P4-MMIO selected (handled via LDC).
-                p4_sel_v := SEL_PTEH;
-                if    ma_ad(7 downto 0) = x"08" then p4_sel_v := SEL_TTB;
-                elsif ma_ad(7 downto 0) = x"0C" then p4_sel_v := SEL_TEA;
-                elsif ma_ad(7 downto 0) = x"10" then p4_sel_v := SEL_MMUCR;
+                -- datapath.p4_sel_v. P4_NONE is the "no MMU register at this P4
+                -- address" sentinel (falls into the case `others` branch);
+                -- PTEH/PTEL/ASIDR are never P4-MMIO selected (handled via LDC).
+                p4_sel_v := P4_NONE;
+                if    ma_ad(7 downto 0) = x"08" then p4_sel_v := P4_TTB;
+                elsif ma_ad(7 downto 0) = x"0C" then p4_sel_v := P4_TEA;
+                elsif ma_ad(7 downto 0) = x"10" then p4_sel_v := P4_MMUCR;
+                elsif ma_ad(7 downto 0) = x"14" then p4_sel_v := P4_TSBBR;
+                elsif ma_ad(7 downto 0) = x"18" then p4_sel_v := P4_TSBCFG;
+                elsif ma_ad(7 downto 0) = x"1C" then p4_sel_v := P4_TSBPTR;
                 end if;
               end if;
               if MMU_ARCH and seg_v = SEG_P4 then
                 if mem.wr = '1' then
                   case p4_sel_v is
-                    when SEL_MMUCR =>
+                    when P4_MMUCR =>
                       this.mmu.mmucr := ma_dw;
                       -- TI bit (bit 2) self-clears; the TLB ti port is driven
                       -- combinatorially from mmu_regs so a 1-cycle pulse suffices.
                       this.mmu.mmucr(2) := '0';
-                    when SEL_TTB  => this.mmu.ttb  := ma_dw;
-                    when SEL_TEA  => this.mmu.tea  := ma_dw;
+                    when P4_TTB    => this.mmu.ttb    := ma_dw;
+                    when P4_TEA    => this.mmu.tea    := ma_dw;
+                    when P4_TSBBR  => this.mmu.tsbbr  := ma_dw;
+                    when P4_TSBCFG => this.mmu.tsbcfg := ma_dw;
+                    -- P4_TSBPTR is read-only: a write is silently ignored.
                     when others   => null;
                   end case;
                 else
                   case p4_sel_v is
-                    when SEL_MMUCR => this.m_dr_next := this.mmu.mmucr;
-                    when SEL_TTB   => this.m_dr_next := this.mmu.ttb;
-                    when SEL_TEA   => this.m_dr_next := this.mmu.tea;
+                    when P4_MMUCR  => this.m_dr_next := this.mmu.mmucr;
+                    when P4_TTB    => this.m_dr_next := this.mmu.ttb;
+                    when P4_TEA    => this.m_dr_next := this.mmu.tea;
+                    when P4_TSBBR  => this.m_dr_next := this.mmu.tsbbr;
+                    when P4_TSBCFG => this.m_dr_next := this.mmu.tsbcfg;
+                    when P4_TSBPTR => this.m_dr_next := this.mmu.tsbptr;
                     when others    => this.m_dr_next := (others => '0');
                   end case;
                   this.m_en := '1';
@@ -675,11 +713,12 @@ begin
 	priv_regs <= this'register.priv;
 	-- MMU CSR registered copy + ybus sub-mux (J4+MMU_ARCH); constant-0 otherwise
 	mmu_regs <= this'register.mmu when MMU_ARCH else MMU_REG_RESET;
-	mmu_ybus <= mmu_regs.ptel  when buses.mmu_reg_sel = SEL_PTEL  else
-	            mmu_regs.asidr when buses.mmu_reg_sel = SEL_ASIDR else
-	            mmu_regs.mmucr when buses.mmu_reg_sel = SEL_MMUCR else
-	            mmu_regs.ttb   when buses.mmu_reg_sel = SEL_TTB   else
-	            mmu_regs.tea   when buses.mmu_reg_sel = SEL_TEA   else
+	mmu_ybus <= mmu_regs.ptel   when buses.mmu_reg_sel = SEL_PTEL   else
+	            mmu_regs.asidr  when buses.mmu_reg_sel = SEL_ASIDR  else
+	            mmu_regs.mmucr  when buses.mmu_reg_sel = SEL_MMUCR  else
+	            mmu_regs.ttb    when buses.mmu_reg_sel = SEL_TTB    else
+	            mmu_regs.tea    when buses.mmu_reg_sel = SEL_TEA    else
+	            mmu_regs.tsbptr when buses.mmu_reg_sel = SEL_TSBPTR else
 	            mmu_regs.pteh;
 
 	-- Export the SH-4 cause registers (J4). Constant-0 on a non-PRIV_ARCH build

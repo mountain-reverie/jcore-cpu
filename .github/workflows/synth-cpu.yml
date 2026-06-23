@@ -418,7 +418,10 @@ jobs:
 
   synth-asic-pnr:
     # Heavy tier: full OpenLane2 RTL->GDS. master push only (trend, no PR alert).
+    # Reuses the pre-synthesized netlist artifact from synth-asic (the OpenLane2
+    # container image has no GHDL/Go/v2p; synthesis runs in the jcore-cpu-ci image).
     if: github.event_name == 'push'
+    needs: synth-asic
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/efabless/openlane2:latest   # TODO pin a digest once validated
@@ -431,19 +434,11 @@ jobs:
           - { id: ihp-sg13g2,  target: asic-ihp-sg13g2-pnr }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - name: Fetch synthesized netlist
+        uses: actions/download-artifact@v4
         with:
-          repository: mountain-reverie/jcore-soc
-          path: jcore-soc
-      - name: Generate decoder + preprocess vhm
-        run: |
-          set -eux
-          make -C decode generate
-          for f in core/mult core/datapath decode/decode_core; do
-            LD_LIBRARY_PATH='' perl "$GITHUB_WORKSPACE/jcore-soc/tools/v2p" < "$f.vhm" > "$f.vhd"
-          done
-      - name: Synthesize netlist (generic)
-        run: SYNTH_VARIANT=${{ matrix.variant }} synth/cpu_synth.sh asic
+          name: synth-asic-${{ matrix.variant }}
+          path: build
       - name: Heavy P&R + metrics
         continue-on-error: true
         env:

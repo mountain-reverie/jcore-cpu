@@ -637,6 +637,7 @@ var csvInstrOrder = []string{
 	"LDC Rm, ASIDR",
 	"STC ASIDR, Rn",
 	"LDTLB",
+	"LDTLB.R",
 	// System-plane instructions (at end, in CSV row order):
 	"General Illegal",
 	"Slot Illegal",

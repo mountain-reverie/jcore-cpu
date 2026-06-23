@@ -361,8 +361,18 @@
     zbus_sel = "Y"
 
 # ---- TLB miss/protection exceptions (J4+MMU_ARCH; system-plane) ----
-# Structurally identical to General Illegal (restart = faulting instruction,
-# SPC<-PC-2) but with distinct EXPEVT codes and per-access-type vector offsets.
+# Restart = faulting instruction, with distinct EXPEVT codes and per-access-type
+# vector offsets.
+# SPC adjustment differs by fault stage:
+#   * I-fetch faults (IMISS/IPROT) are detected at the fetch pointer, so the
+#     normal SPC<-PC-2 restart adjustment applies (alu_y=2).
+#   * D-access faults (DMISS_R/W, DPROT_R/W) are detected in the MA stage, by
+#     which time the fetch PC has run 3 slots (6 bytes) ahead of the faulting
+#     instruction. PC is frozen at the fault-detect cycle (pc=HOLD through entry),
+#     so the faulting instruction's PC = frozen_PC - 6. SPC must equal that PC so
+#     the resolved access RE-EXECUTES after LDTLB.R/RTE; without it a faulting
+#     STORE returns past itself and the write is lost (load is masked because its
+#     dest reg was already written). Hence alu_y=8 (SPC<-PC-8) on D-side entries.
 # TEA and PTEH[31:14] are written as a datapath hardware side-effect when the
 # fault is detected (see datapath.vhm).
 # system_instr_codes: IMISS=x"8" DMISS_R=x"9" DMISS_W=x"A" IPROT=x"B"
@@ -416,10 +426,10 @@
   name = "TLB DMISS R"
   format = "d8"
   opcode = "---- 1001 dddd dddd"
-  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x060; PC<-VBR+0x420"
+  operation = "SPC<-PC-8; SSR<-SR; MD/RB/BL; EXPEVT<-0x060; PC<-VBR+0x420"
   plane = "system"
   [[instr.slots]]
-    alu_y = "2"
+    alu_y = "8"
     arith = "SUB"
     pc = "HOLD"
     xbus = "PC"
@@ -456,10 +466,10 @@
   name = "TLB DMISS W"
   format = "d8"
   opcode = "---- 1010 dddd dddd"
-  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x080; PC<-VBR+0x440"
+  operation = "SPC<-PC-8; SSR<-SR; MD/RB/BL; EXPEVT<-0x080; PC<-VBR+0x440"
   plane = "system"
   [[instr.slots]]
-    alu_y = "2"
+    alu_y = "8"
     arith = "SUB"
     pc = "HOLD"
     xbus = "PC"
@@ -536,10 +546,10 @@
   name = "TLB DPROT R"
   format = "d8"
   opcode = "---- 1100 dddd dddd"
-  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x420"
+  operation = "SPC<-PC-8; SSR<-SR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x420"
   plane = "system"
   [[instr.slots]]
-    alu_y = "2"
+    alu_y = "8"
     arith = "SUB"
     pc = "HOLD"
     xbus = "PC"
@@ -576,10 +586,10 @@
   name = "TLB DPROT W"
   format = "d8"
   opcode = "---- 1101 dddd dddd"
-  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x440"
+  operation = "SPC<-PC-8; SSR<-SR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x440"
   plane = "system"
   [[instr.slots]]
-    alu_y = "2"
+    alu_y = "8"
     arith = "SUB"
     pc = "HOLD"
     xbus = "PC"

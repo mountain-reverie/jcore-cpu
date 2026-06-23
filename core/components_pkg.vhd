@@ -107,6 +107,24 @@ type datapath_reg_t is record
    -- overwritten by a later cycle of the same fault. Needed for IMISS, where the
    -- I-fetch stream advances a word while the miss persists (J4+MMU_ARCH).
    tlb_exc_captured : std_logic;
+   -- Faulting-instruction restart-PC capture (J4+MMU_ARCH). ma_pc shadows the
+   -- architectural PC of the instruction that launches each data access (a fixed
+   -- pipeline point, so the offset to the access's own instruction is constant
+   -- regardless of how far the fetch pointer later runs ahead). On the first
+   -- cycle of a D-side TLB fault ma_pc is latched into tlb_exc_pc and routed to
+   -- the SPC computation, so RTE/LDTLB.R re-executes the faulting access even
+   -- under back-to-back faults (where the frozen fetch PC's lead is variable).
+   -- It is read onto xbus via SEL_TLBPC for the D-fault exception entry only
+   -- (I-fetch faults keep SEL_PC / the live PC); the decoder scopes the use.
+   ma_pc      : std_logic_vector(31 downto 0);
+   tlb_exc_pc : std_logic_vector(31 downto 0);
+   -- User SR captured at the first D-fault cycle, read onto ybus via SEL_TLBSR
+   -- for the D-fault entry's SSR save. The shared SEL_EXCEPTION SSR slot reads
+   -- the live SR, which under back-to-back faults can re-evaluate after this
+   -- entry already set RB=1 -> SSR.RB=1 -> the handler's LDTLB.R/RTE resumes in
+   -- bank 1 and user code reads uninitialised bank-1 registers. The captured
+   -- value is stable across the stalled slot's re-evaluations.
+   tlb_exc_sr : sr_t;
    mac_s      : std_logic;
    data_o_size: mem_size_t;
    data_o_lock: std_logic;
@@ -136,7 +154,7 @@ type datapath_reg_t is record
    ybus_override : ybus_val_pipeline_t;
 end record;
 
-constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, tlb_exc_captured => '0', mac_s => '0', data_o_size => BYTE, data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
+constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, tlb_exc_captured => '0', ma_pc => (others => '0'), tlb_exc_pc => (others => '0'), tlb_exc_sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), mac_s => '0', data_o_size => BYTE, data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
 
 subtype regnum_t is std_logic_vector(4 downto 0);
 component register_file is

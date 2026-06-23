@@ -247,7 +247,7 @@ begin
     process(i_at_translated, d_at_translated,
             sig_inst_o, sig_db_o,
             tlb_i_hit, tlb_i_prot, tlb_d_hit, tlb_d_prot,
-            i_va_32, d_va_32)
+            i_va_32, d_va_32, dp_sr)
       variable exc_en   : std_logic;
       variable exc_kind : tlb_exc_kind_t;
       variable fva      : std_logic_vector(31 downto 0);
@@ -255,7 +255,19 @@ begin
       exc_en   := '0';
       exc_kind := IMISS;
       fva      := (others => '0');
-      if i_at_translated = '1' and sig_inst_o.en = '1' then
+      -- Block further exceptions while one is being handled. Without this, a
+      -- second faulting access (the instruction right after a faulting one, whose
+      -- access already launched -- back-to-back D-faults) dispatches a SECOND
+      -- exception entry that re-saves SSR<-SR while already in exception mode
+      -- (RB=1). The handler's LDTLB.R/RTE then restores RB=1, so the resumed user
+      -- code reads bank-1 (uninitialised) registers and corrupts addresses.
+      -- SR.RB is this design's handler indicator: user code runs RB=0, exception
+      -- entry sets RB=1, and LDTLB.R/RTE restores it -- so RB=1 means "in the
+      -- handler". (SR.BL, the architectural block bit, is left set from reset by
+      -- the bare-metal guards, so it cannot serve as the gate here.) The lingering
+      -- second access then raises no exception while RB=1; it re-faults cleanly
+      -- after the handler returns (RB back to 0). (J4+MMU_ARCH.)
+      if i_at_translated = '1' and sig_inst_o.en = '1' and dp_sr.rb = '0' then
         if tlb_i_hit = '0' then
           exc_en   := '1';
           exc_kind := IMISS;
@@ -266,7 +278,7 @@ begin
           fva      := i_va_32;
         end if;
       end if;
-      if exc_en = '0' and d_at_translated = '1' and sig_db_o.en = '1' then
+      if exc_en = '0' and d_at_translated = '1' and sig_db_o.en = '1' and dp_sr.rb = '0' then
         if tlb_d_hit = '0' then
           if sig_db_o.wr = '1' then
             exc_en   := '1';

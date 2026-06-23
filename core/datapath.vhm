@@ -76,6 +76,10 @@ architecture stru of datapath is
 	signal priv_regs : priv_reg_t;   -- SH-4 EXPEVT/INTEVT/TRA (J4); 0 on J1/J2
 	signal mmu_regs  : mmu_reg_t;    -- SH-4 MMU CSRs (J4+MMU_ARCH); 0 otherwise
 	signal mmu_ybus  : std_logic_vector(31 downto 0);  -- sub-mux for SEL_MMU
+	-- Faulting-instruction restart-PC capture (J4+MMU_ARCH): registered copy
+	-- routed onto xbus via SEL_TLBPC for the D-fault exception entry.
+	signal tlb_exc_pc : std_logic_vector(31 downto 0);
+	signal tlb_exc_sr_r : sr_t;  -- registered captured user SR (SEL_TLBSR)
 	-- regfile addresses after SH-4 bank remapping (pass-through on J2)
 	signal num_x_r, num_y_r, num_z_r, num_w_r : regnum_t;
 	signal num_0_r : regnum_t;
@@ -225,12 +229,22 @@ architecture stru of datapath is
         end align_read_data;
 begin
 	-- Multiplexors for the internal buses
-	with buses.x_sel select xbus      <= reg_x when SEL_REG, pc when SEL_PC,                                                                 buses.imm_val when others;
+	-- SEL_TLBPC delivers the hardware-captured faulting-instruction PC
+	-- (tlb_exc_pc) for the D-side TLB-fault exception entry, so SPC<-TLBPC-adjust
+	-- restarts the faulting access even when the frozen fetch PC's lead is
+	-- variable (back-to-back faults). The decoder asserts SEL_TLBPC for exactly
+	-- the one SPC slot of the D-fault entries (spec/sh4/exceptions.toml), so the
+	-- substitution is scoped by the microcode -- no held flag, and every
+	-- (possibly stalled, re-evaluated) cycle of that slot sees the same value.
+	-- I-fetch faults keep SEL_PC (live PC). tlb_exc_pc is 0 on a non-MMU build
+	-- and SEL_TLBPC never appears there, so J1/J2 are unaffected.
+	with buses.x_sel select xbus      <= reg_x when SEL_REG, pc when SEL_PC, tlb_exc_pc when SEL_TLBPC, buses.imm_val when others;
 	with buses.y_sel select ybus_temp <= reg_y when SEL_REG, pc when SEL_PC, mach when SEL_MACH, macl when SEL_MACL, to_slv(sr) when SEL_SR,
 	                                     (x"00000" & priv_regs.expevt) when SEL_EXPEVT,
 	                                     (x"00000" & priv_regs.intevt) when SEL_INTEVT,
 	                                     (x"00000" & "00" & priv_regs.tra) when SEL_TRA,
 	                                     mmu_ybus when SEL_MMU,
+	                                     to_slv(tlb_exc_sr_r) when SEL_TLBSR,
 	                                     buses.imm_val when others;
 	ybus <= ybus_override.d when ybus_override.en = '1' else ybus_temp;
 
@@ -369,6 +383,24 @@ begin
             this.mmu.pteh(31 downto 12) := tlb_fault_va(31 downto 12);
             this.mmu.pteh(11 downto 0)  := (others => '0');
             this.tlb_exc_captured       := '1';
+            -- Latch the faulting instruction's restart PC (D-side faults only).
+            -- ma_pc still holds the faulting access's launch PC: any following
+            -- access launches a slot later, after this first-fault capture. The
+            -- SPC adjustment (exceptions.toml D-fault slot 0) subtracts the
+            -- constant launch-to-instruction offset. tlb_exc_is_d gates the
+            -- xbus=PC substitution to the D-fault entry; I-fetch faults
+            -- (EXPEVT 0x040 IMISS / 0x0A0 IPROT) keep the live PC.
+            -- ma_pc holds the faulting access launch PC = faulting_instr + 4
+            -- (the architectural PC during EX). The D-fault entry slot reads this
+            -- via SEL_TLBPC and subtracts alu_y=4; the resume (LDTLB.R/RTE)
+            -- re-enters one slot ahead, so the restart PC must be
+            -- faulting_instr - 2. Pre-bias by 2 here so tlb_exc_pc - 4 =
+            -- faulting_instr - 2. Captured for every fault (I-fetch faults read
+            -- SEL_PC, not SEL_TLBPC, so this value is simply unused for them).
+            this.tlb_exc_pc := std_logic_vector(unsigned(this.ma_pc) - 2);
+            -- Capture the user SR for the D-fault entry's SSR save (read via
+            -- SEL_TLBSR), stable across the stalled entry slot's re-evaluations.
+            this.tlb_exc_sr := this.sr;
             -- TSB pointer assist (hardware-spec §2.8): compute the address of
             -- the TSB slot for the faulting VPN and latch it into TSBPTR (read-
             -- only via STC TSBPTR / MMIO 0xFF00001C).
@@ -575,6 +607,11 @@ begin
                 end if;
               else
                 this.data_o := to_data_o(mem, coproc, ma_ad, ma_dw);
+                -- Shadow the architectural PC of the instruction launching this
+                -- data access (a fixed pipeline point). On a later fault this is
+                -- the faulting instruction's PC, independent of how far the fetch
+                -- pointer has since advanced. (J4+MMU_ARCH only.)
+                if MMU_ARCH then this.ma_pc := this.pc; end if;
               end if;
             end if;
             if instr.issue = '1' then
@@ -721,6 +758,8 @@ begin
 	end process;
 
 	pc <= this'register.pc;
+	tlb_exc_pc         <= this'register.tlb_exc_pc;
+	tlb_exc_sr_r       <= this'register.tlb_exc_sr;
 	sr <= this'register.sr;
 	priv_regs <= this'register.priv;
 	-- MMU CSR registered copy + ybus sub-mux (J4+MMU_ARCH); constant-0 otherwise

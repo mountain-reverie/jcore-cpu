@@ -359,8 +359,15 @@ begin
           -- tlb_exc_pend deasserts, re-arming for the next fault.
           if MMU_ARCH and tlb_exc_pend = '1' and this.tlb_exc_captured = '0' then
             this.mmu.tea                := tlb_fault_va;
-            this.mmu.pteh(31 downto 14) := tlb_fault_va(31 downto 14);
-            this.mmu.pteh(13 downto 0)  := (others => '0');
+            -- PTEH captures the 4 KB-granular VPN on a miss: VA[31:12]. 4 KB is
+            -- the finest supported page size (PageMask 0); the actual page size
+            -- is unknown at miss time and is resolved by software at LDTLB, which
+            -- masks coarser if needed. A coarser capture (e.g. 16 KB, VA[31:14])
+            -- aliases pages differing only in VA[13:12], so the walker installs
+            -- the wrong page and the access re-faults forever; the TSB tag match
+            -- also needs the full 4 KB VPN.
+            this.mmu.pteh(31 downto 12) := tlb_fault_va(31 downto 12);
+            this.mmu.pteh(11 downto 0)  := (others => '0');
             this.tlb_exc_captured       := '1';
             -- TSB pointer assist (hardware-spec §2.8): compute the address of
             -- the TSB slot for the faulting VPN and latch it into TSBPTR (read-

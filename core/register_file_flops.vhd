@@ -20,7 +20,9 @@ begin
 
   dout_a <= read_with_forwarding(addr_ra, bank(to_reg_index(addr_ra)), wb_pipe, ex_pipes);
   dout_b <= read_with_forwarding(addr_rb, bank(to_reg_index(addr_rb)), wb_pipe, ex_pipes);
-  dout_0 <= read_with_forwarding(ZERO_ADDR, bank(0), wb_pipe, ex_pipes);
+  -- Bank-aware R0 read: bank holds the remapped R0 (writes use the remapped
+  -- index), so reading bank(addr_r0) follows SR.RB.
+  dout_0 <= read_with_forwarding(addr_r0, bank(to_reg_index(addr_r0)), wb_pipe, ex_pipes);
 
   process (clk, rst, ce, wb_pipe, ex_pipes)
     variable addr : integer;

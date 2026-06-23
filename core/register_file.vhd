@@ -31,6 +31,10 @@ entity register_file is
     addr_rb : in  std_logic_vector(ADDR_WIDTH-1 downto 0);
     dout_b  : out std_logic_vector(REG_WIDTH-1 downto 0);
     dout_0  : out std_logic_vector(REG_WIDTH-1 downto 0);
+    -- Bank-remapped index for the dedicated R0 read port (dout_0). Default = R0
+    -- of bank 0, so J1/J2 (no banking) are byte-identical; the datapath drives
+    -- bank_remap("00000",md,rb) under PRIV_ARCH so dout_0 follows SR.RB.
+    addr_r0 : in  std_logic_vector(ADDR_WIDTH-1 downto 0) := (others => '0');
     -- One-cycle-early read addresses, used only by architecture(ebr) for its
     -- rising-edge (full-cycle) RAM read. Default = (others=>'0'); two_bank and
     -- flops ignore them, so J2/J4/sim see no change.

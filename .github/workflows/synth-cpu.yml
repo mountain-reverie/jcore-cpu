@@ -418,18 +418,15 @@ jobs:
 
   synth-asic-pnr:
     # Heavy tier: full LibreLane RTL->GDS. master push only (trend, no PR alert).
-    # Reuses the pre-synthesized netlist artifact from synth-asic (the LibreLane
-    # container image has no GHDL/Go/v2p; synthesis runs in the jcore-cpu-ci image).
+    # Runs on a PLAIN runner and invokes LibreLane via `docker run` — the LibreLane
+    # image is Nix-based (non-FHS), so it cannot be used as a GHA job `container:`
+    # (the runner-injected node breaks, killing checkout/upload-artifact). Running
+    # it through docker run keeps the JS actions native AND keeps the heavy tier
+    # genuinely non-gating: a docker-run failure stays inside the continue-on-error
+    # step instead of failing container-init. Reuses the synth-asic netlist artifact.
     if: github.event_name == 'push'
     needs: synth-asic
     runs-on: ubuntu-24.04
-    container:
-      # LibreLane (the maintained successor to efabless/openlane2), pinned by
-      # digest for a reproducible trend. Tag 2.4.2 (multi-arch index digest).
-      # NOTE: a container-image pull failure fails the whole job before any step
-      # runs, so step-level continue-on-error cannot make this non-gating — the
-      # digest pin keeps pulls reliable. Re-pin on intentional toolchain bumps.
-      image: ghcr.io/librelane/librelane@sha256:009feda0c9c40236e138edf85acaa79270e500352d21c950203489ed9a8c205d
     strategy:
       fail-fast: false
       matrix:
@@ -449,6 +446,9 @@ jobs:
         env:
           OL_PDK: ${{ matrix.pdk.id }}
           OL_PERIOD_NS: "10.0"
+          # LibreLane 2.4.2, pinned by multi-arch index digest. run.sh invokes it
+          # via `docker run` when OL_IMAGE is set. Re-pin on toolchain bumps.
+          OL_IMAGE: ghcr.io/librelane/librelane@sha256:009feda0c9c40236e138edf85acaa79270e500352d21c950203489ed9a8c205d
         run: |
           set -uo pipefail
           case "${{ matrix.variant }}" in

@@ -25,10 +25,11 @@ if ! timeout 7200 openlane --pdk "$PDK" --run-tag ci "$CFG"; then
 fi
 
 # LibreLane writes the final metrics under the run dir; copy the newest.
-FINAL="$(ls -t "$(dirname "$CFG")"/runs/ci/final/metrics.json 2>/dev/null | head -1 || true)"
-if [ -z "$FINAL" ]; then
-  FINAL="$(find "$(dirname "$CFG")"/runs -name metrics.json -path '*final*' 2>/dev/null | head -1 || true)"
-fi
+# Dual-location search: LibreLane may write runs/ relative to the config file's
+# directory OR relative to CWD ($ROOT). Both are searched until confirmed against
+# the real tool (Task 8 of the ASIC plan).
+FINAL="$(find "$(dirname "$CFG")/runs" "$ROOT/runs" -name metrics.json -path '*final*' \
+         2>/dev/null | xargs -r ls -t 2>/dev/null | head -1 || true)"
 if [ -z "$FINAL" ]; then
   echo "WARN: no final metrics.json produced — no metrics" >&2; exit 0
 fi

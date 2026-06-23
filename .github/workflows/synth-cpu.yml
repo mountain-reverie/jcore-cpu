@@ -416,13 +416,66 @@ jobs:
           path: build/
           retention-days: 14
 
+  synth-asic-pnr:
+    # Heavy tier: full OpenLane2 RTL->GDS. master push only (trend, no PR alert).
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/efabless/openlane2:latest   # TODO pin a digest once validated
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [j2c, j4c, j1, j2, j4]   # j2c/j4c first: primary interest
+        pdk:
+          - { id: sky130A,     target: asic-sky130-pnr }
+          - { id: ihp-sg13g2,  target: asic-ihp-sg13g2-pnr }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: mountain-reverie/jcore-soc
+          path: jcore-soc
+      - name: Generate decoder + preprocess vhm
+        run: |
+          set -eux
+          make -C decode generate
+          for f in core/mult core/datapath decode/decode_core; do
+            LD_LIBRARY_PATH='' perl "$GITHUB_WORKSPACE/jcore-soc/tools/v2p" < "$f.vhm" > "$f.vhd"
+          done
+      - name: Synthesize netlist (generic)
+        run: SYNTH_VARIANT=${{ matrix.variant }} synth/cpu_synth.sh asic
+      - name: Heavy P&R + metrics
+        continue-on-error: true
+        env:
+          OL_PDK: ${{ matrix.pdk.id }}
+          OL_PERIOD_NS: "10.0"
+        run: |
+          set -uo pipefail
+          case "${{ matrix.variant }}" in
+            j2c|j4c) export OL_DESIGN=cpu_cache_timing_top ;;
+            *)       export OL_DESIGN=cpu ;;
+          esac
+          synth/openlane/run.sh
+          python3 synth/metrics.py --target "${{ matrix.pdk.target }}" \
+            --variant "${{ matrix.variant }}" \
+            --commit "${GITHUB_SHA}" \
+            --out "synth/metrics/${{ matrix.pdk.target }}.json" \
+            --openlane-metrics build/openlane_metrics.json || true
+      - name: Upload P&R metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics-${{ matrix.pdk.target }}-${{ matrix.variant }}
+          path: synth/metrics/*.json
+          retention-days: 14
+
   # Benchmark comparison runs on PRs AND master push: it posts the regression
   # comment/alert and assembles the site tree. It deliberately does NOT declare
   # the github-pages environment, so a PR (which cannot deploy to that
   # environment) is never rejected by its branch-protection rule. Deployment is
   # confined to the separate push-only deploy-pages job below.
   benchmark:
-    needs: [synth-asic, synth-ecp5, synth-ice40]
+    needs: [synth-asic, synth-ecp5, synth-ice40, synth-asic-pnr]
     if: always()
     runs-on: ubuntu-24.04
     permissions:

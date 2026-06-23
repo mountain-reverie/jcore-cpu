@@ -123,6 +123,10 @@ jobs:
 
       - name: Build MMU-on co-sim + run all functional guards
         working-directory: jcore-cpu
+        # The CI image runs container steps under `sh` (dash) by default, which
+        # rejects `set -o pipefail` (and the `local`/`${var:+...}` bashisms
+        # below). Force bash so the guard script runs as written.
+        shell: bash
         env:
           TOOLS_DIR: ${{ github.workspace }}/jcore-soc/tools
           JCORE_SOC: ${{ github.workspace }}/jcore-soc

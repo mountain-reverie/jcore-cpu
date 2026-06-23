@@ -46,6 +46,12 @@ type mmu_reg_t is record
   mmucr  : std_logic_vector(31 downto 0);
   tea    : std_logic_vector(31 downto 0);
   ttb    : std_logic_vector(31 downto 0);
+  -- TSB pointer assist (M5, hardware-spec §2.6-2.8). tsbbr/tsbcfg are MMIO
+  -- config (0xFF000014/18); tsbptr is hardware-computed on every TLB miss and
+  -- is read-only (STC TSBPTR,Rn / MMIO 0xFF00001C).
+  tsbbr  : std_logic_vector(31 downto 0);
+  tsbcfg : std_logic_vector(31 downto 0);
+  tsbptr : std_logic_vector(31 downto 0);
 end record;
 constant MMU_REG_RESET : mmu_reg_t := (others => (others => '0'));
 

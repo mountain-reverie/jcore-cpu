@@ -449,9 +449,11 @@ func assignYBus(v, rn, rm string, out AssignMap) error {
 		out[SigYbusSel] = "SEL_INTEVT"
 	case up == "TRA":
 		out[SigYbusSel] = "SEL_TRA"
-	case up == "PTEH" || up == "PTEL" || up == "ASIDR":
+	case up == "PTEH" || up == "PTEL" || up == "ASIDR" || up == "TSBPTR":
 		// SH-4 MMU register read (J4 + MMU_ARCH): consolidated ybus source
-		// SEL_MMU, sub-selected by mmu_reg_sel. STC PTEH/PTEL/ASIDR, Rn.
+		// SEL_MMU, sub-selected by mmu_reg_sel. STC PTEH/PTEL/ASIDR/TSBPTR, Rn.
+		// TSBPTR is read-only (M5): it appears here but NOT in the zbus write
+		// case below, so no LDC path exists for it.
 		out[SigYbusSel] = "SEL_MMU"
 		out[SigMmuRegSel] = "SEL_" + up
 	default:

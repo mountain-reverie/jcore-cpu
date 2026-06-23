@@ -75,11 +75,18 @@ begin
                                  wb_pipe, ex_pipes);
   dout_b <= read_with_forwarding(addr_rb, fwd_last(addr_rb, q_b, last_wr),
                                  wb_pipe, ex_pipes);
-  -- reg0 is a rising-edge flop (vs q_a/q_b's falling-edge latch) on purpose:
-  -- R0's just-committed value is always served by the forwarding overlay, never
-  -- read straight from reg0 in the same slot it is written, so the half-clock
-  -- difference in when reg0 updates is never observable -- same result as q.
-  dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes);
+  -- Bank-aware R0 read. reg0 stays a rising-edge flop tracking the bank-0 R0
+  -- (the common, RB=0 case): R0's just-committed value is always served by the
+  -- forwarding overlay, never read straight from reg0 in the same slot it is
+  -- written, so the half-clock difference in when reg0 updates is never
+  -- observable. When addr_r0 selects a non-zero (bank-1 R0) index under RB=1,
+  -- read the committed value straight from ram_a (with last_wr overlay), exactly
+  -- like dout_a/dout_b; forwarding still overlays in-flight EX/WB writes.
+  dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes)
+              when to_reg_index(addr_r0) = 0
+            else read_with_forwarding(addr_r0,
+                   fwd_last(addr_r0, ram_a(to_reg_index(addr_r0)), last_wr),
+                   wb_pipe, ex_pipes);
 
   -- Full-cycle read: clock the block-RAM read on the RISING edge using the
   -- one-cycle-early addresses, so q_a/q_b are valid at the START of the EX slot

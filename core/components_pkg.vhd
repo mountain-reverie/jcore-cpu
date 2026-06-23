@@ -151,6 +151,9 @@ component register_file is
     addr_rb : in  std_logic_vector(ADDR_WIDTH-1 downto 0);
     dout_b  : out std_logic_vector(REG_WIDTH-1 downto 0);
     dout_0  : out std_logic_vector(REG_WIDTH-1 downto 0);
+    -- Bank-remapped index for the dedicated R0 read port (dout_0); defaulted to
+    -- bank-0 R0 so two_bank/flops/J1 instantiations are unchanged.
+    addr_r0 : in  std_logic_vector(ADDR_WIDTH-1 downto 0) := (others => '0');
     -- One-cycle-early read addresses (J1 architecture(ebr) full-cycle read);
     -- defaulted so two_bank/flops instantiations need not drive them.
     addr_ra_early : in std_logic_vector(ADDR_WIDTH-1 downto 0) := (others => '0');

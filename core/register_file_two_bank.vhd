@@ -3,7 +3,6 @@ architecture two_bank of register_file is
 
   type ram_type is array(0 to NUM_REGS - 1) of data_t;
   signal bank_a, bank_b : ram_type;
-  signal reg0 : data_t;
 
   signal ex_pipes : ex_pipeline_t;
   signal wb_pipe : reg_pipe_t;
@@ -19,7 +18,9 @@ begin
 
   dout_a <= read_with_forwarding(addr_ra, bank_a(to_reg_index(addr_ra)), wb_pipe, ex_pipes);
   dout_b <= read_with_forwarding(addr_rb, bank_b(to_reg_index(addr_rb)), wb_pipe, ex_pipes);
-  dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes);
+  -- Bank-aware R0 read: bank_a already stores the remapped R0 (the write side
+  -- writes the remapped index), so reading bank_a(addr_r0) follows SR.RB.
+  dout_0 <= read_with_forwarding(addr_r0, bank_a(to_reg_index(addr_r0)), wb_pipe, ex_pipes);
   
   process (clk, rst, ce, wb_pipe, ex_pipes)
     variable addr : integer;
@@ -29,7 +30,6 @@ begin
       addr := 0;
       data := (others => '0');
       wr_data_o <= (others => '0');
-      reg0 <= (others => '0');
       ex_pipes(1) <= REG_PIPE_RESET;
       ex_pipes(2) <= REG_PIPE_RESET;
     elsif (rising_edge(clk) and ce = '1') then
@@ -49,9 +49,6 @@ begin
         wr_data_o <= data;
         bank_a(addr) <= data;
         bank_b(addr) <= data;
-        if (addr = 0) then
-          reg0 <= data;
-        end if;
       end if;
       ex_pipes(2) <= ex_pipes(1);
       ex_pipes(1) <= ex_pipes(0);

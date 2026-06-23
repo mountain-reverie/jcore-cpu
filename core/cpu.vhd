@@ -77,6 +77,8 @@ architecture stru of cpu is
    signal tlb_exc_kind : tlb_exc_kind_t;
    signal tlb_exc_pend : std_logic;
    signal tlb_fault_va : std_logic_vector(31 downto 0);
+   -- D-store-on-bus is itself faulting (drives the external demote-to-read).
+   signal d_store_faulting : std_logic;
    signal tlb_exc_expevt : std_logic_vector(11 downto 0);
 begin
 
@@ -137,11 +139,24 @@ begin
   -- load does. The internal sig_db_o keeps wr='1' so the TLB still sees a write
   -- and detects the fault. Must be on the external db_o, after the TLB has
   -- consumed sig_db_o; gating the internal db_o on tlb_exc_pend forms a comb loop.
+  -- True iff the D-store currently on the bus is ITSELF the faulting access
+  -- (its own TLB lookup missed or is protection-violating). This must NOT use
+  -- the global tlb_exc_pend: that signal also rises for an I-side fault, and
+  -- for the *next* instruction's fault while a prior, already-resolved store is
+  -- still completing its write on the bus. Demoting on tlb_exc_pend alone would
+  -- collateral-damage such a non-faulting in-flight store (back-to-back fault:
+  -- a resumed store followed by another faulting access loses its write). Key
+  -- the demote on the D-side's own hit/prot status instead.
+  d_store_faulting <= '1' when MMU_ARCH and d_at_translated = '1'
+                              and sig_db_o.en = '1' and sig_db_o.wr = '1'
+                              and (tlb_d_hit = '0' or tlb_d_prot = '1')
+                      else '0';
+
   g_dstore_squash : if MMU_ARCH generate
-    process(sig_db_o, tlb_exc_pend)
+    process(sig_db_o, d_store_faulting)
     begin
       db_o <= sig_db_o;
-      if tlb_exc_pend = '1' and sig_db_o.en = '1' and sig_db_o.wr = '1' then
+      if d_store_faulting = '1' then
         db_o.rd <= '1';
         db_o.wr <= '0';
         db_o.we <= "0000";

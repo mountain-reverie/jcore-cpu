@@ -159,13 +159,14 @@ begin
 
   g_inst_p1_fold : if MMU_ARCH generate
     -- SH P1 (0x8000_0000-0x9FFF_FFFF) is untranslated: PA = VA and 0x1FFFFFFF.
-    -- inst_o.a is PA[31:1], so P1 is a(30 downto 28)="100". Fold AFTER i_va_32
-    -- has sampled sig_inst_o.a, so seg_decode still sees the true P1 VA.
+    -- inst_o.a is PA[31:1] (indices preserved 31..1, not reindexed), so P1 is
+    -- a(31 downto 29)="100". Fold AFTER i_va_32 has sampled sig_inst_o.a, so
+    -- seg_decode still sees the true P1 VA.
     process(sig_inst_o)
     begin
       inst_o <= sig_inst_o;
-      if sig_inst_o.a(30 downto 28) = "100" then
-        inst_o.a(30 downto 28) <= "000";
+      if sig_inst_o.a(31 downto 29) = "100" then
+        inst_o.a(31 downto 29) <= "000";
       end if;
     end process;
   end generate g_inst_p1_fold;

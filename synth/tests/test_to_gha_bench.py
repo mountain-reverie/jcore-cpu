@@ -23,7 +23,7 @@ class TestConvert(unittest.TestCase):
     def test_splits_by_direction_and_prefixes_target(self):
         # The committed fixtures use legacy variant "direct-rom72" -> maps to J2,
         # so names stay BARE (continuous with the published J2 history).
-        size, speed = to_gha_bench.convert(
+        size, speed, pnr = to_gha_bench.convert(
             [os.path.join(FIX, "canon_asic.json"),
              os.path.join(FIX, "canon_ecp5.json")])
         size_names = {e["name"]: e for e in size}
@@ -37,7 +37,7 @@ class TestConvert(unittest.TestCase):
         self.assertEqual(size_names["ecp5-lfe5u-85f · cpu/LUT4"]["extra"], "j2")
 
     def test_deterministic_order(self):
-        size, _ = to_gha_bench.convert(
+        size, _, _pnr = to_gha_bench.convert(
             [os.path.join(FIX, "canon_ecp5.json"),
              os.path.join(FIX, "canon_asic.json")])
         names = [e["name"] for e in size]
@@ -54,13 +54,38 @@ class TestConvert(unittest.TestCase):
                 _write_canon(d, "ecp5-lfe5u-85f", "j1", m),
                 _write_canon(d, "ecp5-lfe5u-85f", "j4", m),
             ]
-            size, _ = to_gha_bench.convert(paths)
+            size, _, _pnr = to_gha_bench.convert(paths)
         names = {e["name"]: e for e in size}
         self.assertIn("ecp5-lfe5u-85f · cpu/LUT4", names)          # j2 bare
         self.assertIn("ecp5-lfe5u-85f · cpu/LUT4 [j1]", names)     # j1 suffixed
         self.assertIn("ecp5-lfe5u-85f · cpu/LUT4 [j4]", names)     # j4 suffixed
         self.assertEqual(names["ecp5-lfe5u-85f · cpu/LUT4"]["extra"], "j2")
         self.assertEqual(names["ecp5-lfe5u-85f · cpu/LUT4 [j1]"]["extra"], "j1")
+
+
+def _doc(tmp, target, variant, metrics):
+    p = os.path.join(tmp, "%s-%s.json" % (target, variant))
+    with open(p, "w") as f:
+        json.dump({"target": target, "variant": variant, "metrics": metrics}, f)
+    return p
+
+
+class TestPnrBucket(unittest.TestCase):
+    def test_pnr_target_isolated_from_size_and_speed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cheap = _doc(tmp, "asic-sky130", "j2",
+                         [{"name": "cpu/area", "unit": "um2", "value": 1.0, "dir": "smaller"}])
+            pnr = _doc(tmp, "asic-sky130-pnr", "j2",
+                       [{"name": "cpu/area", "unit": "um2", "value": 2.0, "dir": "smaller"}])
+            size, speed, pnrb = to_gha_bench.convert([cheap, pnr])
+            size_names = [e["name"] for e in size]
+            pnr_names = [e["name"] for e in pnrb]
+            # cheap sky130 stays in size; pnr only in pnr bucket
+            self.assertTrue(any("asic-sky130 ·" in n for n in size_names))
+            self.assertFalse(any("-pnr" in n for n in size_names))
+            self.assertFalse(any("-pnr" in e["name"] for e in speed))
+            self.assertTrue(all("asic-sky130-pnr ·" in n for n in pnr_names))
+            self.assertEqual(len(pnr_names), 1)
 
 
 if __name__ == "__main__":

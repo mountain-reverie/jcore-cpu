@@ -92,6 +92,36 @@
     mask_int = "YES"
     pc = "INC"
 
+# ---- LDTLB.R: fused Load-TLB-and-Return (hardware-spec.md §3.2) ----
+# Equivalent to LDTLB immediately followed by RTE, but atomic: latch
+# {PTEH, PTEL, ASIDR} into a TLB entry AND restore PC<-SPC, SR<-SSR and take
+# the delayed branch. The three return slots are identical to RTE (see
+# spec/sh4/exceptions.toml); slot 0 additionally pulses the TLB write port
+# (tlb_wr) so the install commits in the same atomic sequence as the return.
+# Both LDTLB (0x0038, install only) and LDTLB.R (0x0068) are required.
+[[instr]]
+  name = "LDTLB.R"
+  privileged = true
+  format = "0"
+  opcode = "0000 0000 0110 1000"
+  operation = "PTEH/PTEL/ASIDR -> TLB; SR<-SSR, PC<-SPC (delayed branch)"
+
+  [[instr.slots]]
+    tlb_wr = "YES"
+    pc = "INC"
+    ybus = "SSR"
+    zbus_sel = "Y"
+    sr = "Z"
+  [[instr.slots]]
+    pc = "HOLD"
+    ybus = "SPC"
+    zbus_sel = "Y"
+    zbus = "PC"
+  [[instr.slots]]
+    pc = "HOLD"
+    delay_jmp = "SET"
+    if_addy = "ZBUS"
+
 # ---- Break / Reset CPU: bit-11 pin (J4+MMU_ARCH overlay only) ----
 # The base spec uses don't-care bit 11 (---- -010 / ---- -011). That is correct
 # for J1/J2/J4 without MMU, because no TLB exception opcodes exist to alias with.

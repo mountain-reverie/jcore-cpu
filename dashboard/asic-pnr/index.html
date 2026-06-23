@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>jcore-cpu — ASIC P&R (post-route) trends</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 1.5rem; color: #1b1b1b; }
+    h1 { font-size: 1.4rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1rem; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 0.75rem; }
+    .muted { color: #666; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <h1>ASIC place-and-route (post-route) trends</h1>
+  <p class="muted"><a href="../">&larr; back to synthesis metrics</a> ·
+     daily LibreLane RTL&rarr;GDS on SKY130 &amp; IHP SG13G2.
+     Raw data: <a href="./benchmark-data.json">benchmark-data.json</a>.</p>
+  <div id="trends" class="grid"></div>
+  <p id="empty" class="muted" hidden>No P&amp;R data yet — the daily run has not produced metrics.</p>
+  <script src="./data.js" onerror="document.getElementById('empty').hidden=false"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

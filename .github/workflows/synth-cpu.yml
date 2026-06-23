@@ -417,14 +417,19 @@ jobs:
           retention-days: 14
 
   synth-asic-pnr:
-    # Heavy tier: full OpenLane2 RTL->GDS. master push only (trend, no PR alert).
-    # Reuses the pre-synthesized netlist artifact from synth-asic (the OpenLane2
+    # Heavy tier: full LibreLane RTL->GDS. master push only (trend, no PR alert).
+    # Reuses the pre-synthesized netlist artifact from synth-asic (the LibreLane
     # container image has no GHDL/Go/v2p; synthesis runs in the jcore-cpu-ci image).
     if: github.event_name == 'push'
     needs: synth-asic
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/efabless/openlane2:latest   # TODO pin a digest once validated
+      # LibreLane (the maintained successor to efabless/openlane2), pinned by
+      # digest for a reproducible trend. Tag 2.4.2 (multi-arch index digest).
+      # NOTE: a container-image pull failure fails the whole job before any step
+      # runs, so step-level continue-on-error cannot make this non-gating — the
+      # digest pin keeps pulls reliable. Re-pin on intentional toolchain bumps.
+      image: ghcr.io/librelane/librelane@sha256:009feda0c9c40236e138edf85acaa79270e500352d21c950203489ed9a8c205d
     strategy:
       fail-fast: false
       matrix:

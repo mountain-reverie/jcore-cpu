@@ -146,12 +146,32 @@ begin
         db_o.wr <= '0';
         db_o.we <= "0000";
       end if;
+      -- SH P1 untranslated fold on the external data bus (P1 only; P2 holds
+      -- the sim result MMIO at 0xBCDE0010 and must pass through unmasked).
+      if sig_db_o.a(31 downto 29) = "100" then
+        db_o.a(31 downto 29) <= "000";
+      end if;
     end process;
   end generate g_dstore_squash;
   g_no_dstore_squash : if not MMU_ARCH generate
     db_o <= sig_db_o;
   end generate g_no_dstore_squash;
-  inst_o <= sig_inst_o;
+
+  g_inst_p1_fold : if MMU_ARCH generate
+    -- SH P1 (0x8000_0000-0x9FFF_FFFF) is untranslated: PA = VA and 0x1FFFFFFF.
+    -- inst_o.a is PA[31:1], so P1 is a(30 downto 28)="100". Fold AFTER i_va_32
+    -- has sampled sig_inst_o.a, so seg_decode still sees the true P1 VA.
+    process(sig_inst_o)
+    begin
+      inst_o <= sig_inst_o;
+      if sig_inst_o.a(30 downto 28) = "100" then
+        inst_o.a(30 downto 28) <= "000";
+      end if;
+    end process;
+  end generate g_inst_p1_fold;
+  g_inst_no_fold : if not MMU_ARCH generate
+    inst_o <= sig_inst_o;
+  end generate g_inst_no_fold;
 
   coproc.cpu_data_mux <= coproc_decode.cpu_data_mux when COPRO_DECODE
                          else DBUS;

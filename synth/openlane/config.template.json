@@ -4,6 +4,6 @@
   "CLOCK_PORT": "clk",
   "CLOCK_PERIOD": __PERIOD__,
   "FP_CORE_UTIL": 40,
-  "PL_TARGET_DENSITY_PCT": 55,
+  "PL_TARGET_DENSITY_PCT": 45,
   "RUN_LINTER": false
 }

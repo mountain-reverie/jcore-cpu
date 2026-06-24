@@ -430,6 +430,11 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: synth-asic
     runs-on: ubuntu-24.04
+    # Backstop: run.sh caps LibreLane at OL_TIMEOUT (2h) via a docker-kill
+    # watchdog; this job cap (well under GitHub's 6h max) guarantees a cell that
+    # somehow outlives the watchdog still dies fast as a clean trend gap, not a
+    # 6h runner burn. Bump together with OL_TIMEOUT if the cap is raised.
+    timeout-minutes: 160
     strategy:
       fail-fast: false
       matrix:

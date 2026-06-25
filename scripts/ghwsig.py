@@ -21,7 +21,7 @@ import re, subprocess, sys
 RECORDS = {
     'sr_t':        [('t',1),('s',1),('q',1),('m',1),('int_mask',4),('md',1),('rb',1),('bl',1)],
     'priv_reg_t':  [('expevt',12),('intevt',12),('tra',10)],
-    'mmu_reg_t':   [('pteh',32),('ptel',32),('asidr',32),('mmucr',32),('tea',32),('ttb',32)],
+    'mmu_reg_t':   [('pteh',32),('ptel',32),('asidr',32),('mmucr',32),('tea',32),('ttb',32),('tsbbr',32),('tsbcfg',32),('tsbptr',32)],
     'cpu_data_o_t':[('en',1),('a',32),('rd',1),('wr',1),('we',4),('d',32)],
     'cpu_instruction_o_t':[('en',1),('a',31),('jp',1)],
     'cpu_data_i_t':[('d',32),('ack',1)],
@@ -31,7 +31,9 @@ RECORDS = {
     # ybus_val_pipeline_t = array(2 downto 0) of bus_val_t -> handled specially
     'datapath_reg_t':[
         ('pc',32),('sr','sr_t'),('priv','priv_reg_t'),('mmu','mmu_reg_t'),
-        ('tlb_exc_captured',1),('mac_s',1),('data_o_size',1),('data_o_lock',1),
+        ('tlb_exc_captured',1),
+        ('ma_pc',32),('tlb_exc_pc',32),('tlb_exc_sr','sr_t'),('tlb_squash',1),
+        ('mac_s',1),('data_o_size',1),('data_o_lock',1),
         ('data_o','cpu_data_o_t'),('inst_o','cpu_instruction_o_t'),
         ('pc_inc',32),('if_dr',16),('if_dr_next',16),
         ('illegal_delay_slot',1),('illegal_instr',1),('if_en',1),
@@ -140,6 +142,6 @@ def dump(ghw, resolver, sigspec, lo_ps, hi_ps, clk='/cpu_tb/clk', pcsig=None, pc
 if __name__ == '__main__':
     # quick self-test: datapath_reg_t must be 650 leaves
     w = type_width('datapath_reg_t')
-    print(f'datapath_reg_t width = {w} (expect 650)')
-    assert w == 650, 'type model mismatch!'
+    print(f'datapath_reg_t width = {w} (expect 822)')
+    assert w == 822, 'type model mismatch!'
     print('OK')

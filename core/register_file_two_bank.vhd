@@ -8,7 +8,14 @@ architecture two_bank of register_file is
   signal ex_pipes : ex_pipeline_t;
   signal wb_pipe : reg_pipe_t;
 
+  -- Bank-remapped R0 index. On non-PRIV_ARCH (BANKED=false) builds this folds to
+  -- a hard ZERO_ADDR constant at elaboration, so the bank-aware dout_0 read
+  -- collapses to the original bank-0 R0 read on BOTH the generic (ASIC) and the
+  -- synth_ecp5 (FPGA) yosys backends -- no residual addr_r0 mux on either, and
+  -- (unlike a `generate`-gated split) abc9 maps J2 back to ~the pre-leak LUT4.
+  signal r0_addr : addr_t;
 begin
+  r0_addr <= addr_r0 when BANKED else ZERO_ADDR;
   wb_pipe.en <= we_wb;
   wb_pipe.addr <= w_addr_wb;
   wb_pipe.data <= din_wb;
@@ -25,15 +32,9 @@ begin
   -- addr_r0 selects a non-zero (bank-1 R0) index under RB=1, read the remapped
   -- value straight from bank_a (the write side writes the remapped index), so
   -- the R0-banking fix is unchanged. Forwarding overlays in-flight EX/WB writes.
-  banked_r0: if BANKED generate
-    dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes)
-                when to_reg_index(addr_r0) = 0
-              else read_with_forwarding(addr_r0, bank_a(to_reg_index(addr_r0)), wb_pipe, ex_pipes);
-  end generate banked_r0;
-  unbanked_r0: if not BANKED generate
-    -- J1/J2: original bank-0 R0 read, no addr_r0 path (byte-identical netlist).
-    dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes);
-  end generate unbanked_r0;
+  dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes)
+              when to_reg_index(r0_addr) = 0
+            else read_with_forwarding(r0_addr, bank_a(to_reg_index(r0_addr)), wb_pipe, ex_pipes);
   
   process (clk, rst, ce, wb_pipe, ex_pipes)
     variable addr : integer;

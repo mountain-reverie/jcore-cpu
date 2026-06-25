@@ -25,9 +25,15 @@ begin
   -- addr_r0 selects a non-zero (bank-1 R0) index under RB=1, read the remapped
   -- value straight from bank_a (the write side writes the remapped index), so
   -- the R0-banking fix is unchanged. Forwarding overlays in-flight EX/WB writes.
-  dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes)
-              when to_reg_index(addr_r0) = 0
-            else read_with_forwarding(addr_r0, bank_a(to_reg_index(addr_r0)), wb_pipe, ex_pipes);
+  banked_r0: if BANKED generate
+    dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes)
+                when to_reg_index(addr_r0) = 0
+              else read_with_forwarding(addr_r0, bank_a(to_reg_index(addr_r0)), wb_pipe, ex_pipes);
+  end generate banked_r0;
+  unbanked_r0: if not BANKED generate
+    -- J1/J2: original bank-0 R0 read, no addr_r0 path (byte-identical netlist).
+    dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes);
+  end generate unbanked_r0;
   
   process (clk, rst, ce, wb_pipe, ex_pipes)
     variable addr : integer;

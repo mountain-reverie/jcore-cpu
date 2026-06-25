@@ -20,7 +20,11 @@ entity register_file is
   generic (
     ADDR_WIDTH : integer;
     NUM_REGS : integer;
-    REG_WIDTH : integer);
+    REG_WIDTH : integer;
+    -- When true (PRIV_ARCH/J4), dout_0 follows SR.RB via the addr_r0 index.
+    -- When false (J1/J2) the bank-aware read path is never elaborated, so the
+    -- regfile emits the original bank-0 R0 read and the netlist is unchanged.
+    BANKED : boolean := false);
   port (
     clk     : in  std_logic;
     rst     : in  std_logic;

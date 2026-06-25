@@ -188,7 +188,8 @@ constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_m
 
 subtype regnum_t is std_logic_vector(4 downto 0);
 component register_file is
-  generic ( ADDR_WIDTH : integer; NUM_REGS : integer; REG_WIDTH : integer );
+  generic ( ADDR_WIDTH : integer; NUM_REGS : integer; REG_WIDTH : integer;
+            BANKED : boolean := false );
   port (
     clk     : in  std_logic;
     rst     : in  std_logic;

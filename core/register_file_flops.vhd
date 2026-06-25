@@ -22,7 +22,13 @@ begin
   dout_b <= read_with_forwarding(addr_rb, bank(to_reg_index(addr_rb)), wb_pipe, ex_pipes);
   -- Bank-aware R0 read: bank holds the remapped R0 (writes use the remapped
   -- index), so reading bank(addr_r0) follows SR.RB.
-  dout_0 <= read_with_forwarding(addr_r0, bank(to_reg_index(addr_r0)), wb_pipe, ex_pipes);
+  banked_r0: if BANKED generate
+    dout_0 <= read_with_forwarding(addr_r0, bank(to_reg_index(addr_r0)), wb_pipe, ex_pipes);
+  end generate banked_r0;
+  unbanked_r0: if not BANKED generate
+    -- J1/J2: original bank-0 R0 read, no addr_r0 path (byte-identical netlist).
+    dout_0 <= read_with_forwarding(ZERO_ADDR, bank(0), wb_pipe, ex_pipes);
+  end generate unbanked_r0;
 
   process (clk, rst, ce, wb_pipe, ex_pipes)
     variable addr : integer;

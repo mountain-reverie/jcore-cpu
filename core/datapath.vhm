@@ -333,7 +333,8 @@ begin
 	u_regfile : register_file
           generic map (ADDR_WIDTH => 5,
                        NUM_REGS => REGFILE_DEPTH,
-                       REG_WIDTH => 32)
+                       REG_WIDTH => 32,
+                       BANKED => PRIV_ARCH)
           port map(clk => clk, rst => rst, ce => slot_o, addr_ra => num_x_r, dout_a => reg_x,
                    addr_ra_early => num_x_early_r,
                    addr_rb_early => num_y_early_r,

@@ -82,11 +82,17 @@ begin
   -- observable. When addr_r0 selects a non-zero (bank-1 R0) index under RB=1,
   -- read the committed value straight from ram_a (with last_wr overlay), exactly
   -- like dout_a/dout_b; forwarding still overlays in-flight EX/WB writes.
-  dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes)
-              when to_reg_index(addr_r0) = 0
-            else read_with_forwarding(addr_r0,
-                   fwd_last(addr_r0, ram_a(to_reg_index(addr_r0)), last_wr),
-                   wb_pipe, ex_pipes);
+  banked_r0: if BANKED generate
+    dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes)
+                when to_reg_index(addr_r0) = 0
+              else read_with_forwarding(addr_r0,
+                     fwd_last(addr_r0, ram_a(to_reg_index(addr_r0)), last_wr),
+                     wb_pipe, ex_pipes);
+  end generate banked_r0;
+  unbanked_r0: if not BANKED generate
+    -- J1/J2: original bank-0 R0 read, no addr_r0 path (byte-identical netlist).
+    dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes);
+  end generate unbanked_r0;
 
   -- Full-cycle read: clock the block-RAM read on the RISING edge using the
   -- one-cycle-early addresses, so q_a/q_b are valid at the START of the EX slot

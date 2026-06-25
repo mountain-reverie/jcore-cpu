@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
-# Heavy-tier LibreLane RTL->GDS for one (design, pdk). Non-gating: any failure
-# warns and exits 0 with no metrics file, so master CI stays green (trend gap).
-# Env: OL_PDK, OL_DESIGN, OL_PERIOD_NS (default 10.0), OL_TIMEOUT (seconds,
-# default 7200), OL_IMAGE (optional: run LibreLane via `docker run <image>`
-# instead of a librelane binary on PATH — the LibreLane image is Nix-based and
-# can't be a GHA job container, so CI runs it through docker on a plain runner).
+# Light-tier LibreLane for one (design, pdk): synth + floorplan + placement,
+# stopping BEFORE the slow detailed-routing + signoff (DRC/LVS/RCX/GDS) tail.
+# This is a superficial "does it map & place into the real PDK?" gate plus an
+# area/placement-timing trend hint — NOT a full RTL->GDS signoff. Non-gating:
+# any failure warns and exits 0 with no metrics file, so master CI stays green
+# (trend gap).
+# Env: OL_PDK, OL_DESIGN, OL_PERIOD_NS (default 10.0), OL_TO (LibreLane step to
+# stop at, default OpenROAD.DetailedPlacement), OL_TIMEOUT (seconds, default
+# 1800), OL_IMAGE (optional: run LibreLane via `docker run <image>` instead of a
+# librelane binary on PATH — the LibreLane image is Nix-based and can't be a GHA
+# job container, so CI runs it through docker on a plain runner).
 # Output: build/openlane_metrics.json
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"
@@ -12,7 +17,11 @@ OUT="$ROOT/build"; mkdir -p "$OUT"
 PDK="${OL_PDK:?set OL_PDK}"; DESIGN="${OL_DESIGN:?set OL_DESIGN}"
 PERIOD="${OL_PERIOD_NS:-10.0}"
 OL_IMAGE="${OL_IMAGE:-}"
-OL_TIMEOUT="${OL_TIMEOUT:-7200}"
+OL_TIMEOUT="${OL_TIMEOUT:-1800}"
+# Stop the flow early: synth+floorplan+placement is enough to confirm the design
+# maps into the PDK and to read cells/core-area/placement-WNS. Skipping detailed
+# routing + signoff is what turns hours into minutes. Override with OL_TO.
+OL_TO="${OL_TO:-OpenROAD.DetailedPlacement}"
 
 # Pick the invocation mode: a native binary if present, else docker run.
 USE_DOCKER=0
@@ -48,22 +57,24 @@ if [ "$USE_DOCKER" -eq 1 ]; then
     docker kill "$CNAME" >/dev/null 2>&1 ) &
   WD=$!
   docker run --rm --name "$CNAME" -v "$ROOT:$ROOT" -w "$ROOT" \
-    "$OL_IMAGE" librelane --pdk "$PDK" --run-tag ci "$CFG" || rc=$?
+    "$OL_IMAGE" librelane --pdk "$PDK" --to "$OL_TO" --run-tag ci "$CFG" || rc=$?
   kill "$WD" >/dev/null 2>&1 || true
   wait "$WD" 2>/dev/null || true
 else
-  timeout --kill-after=60 "$OL_TIMEOUT" librelane --pdk "$PDK" --run-tag ci "$CFG" || rc=$?
+  timeout --kill-after=60 "$OL_TIMEOUT" librelane --pdk "$PDK" --to "$OL_TO" --run-tag ci "$CFG" || rc=$?
 fi
 if [ "$rc" -ne 0 ]; then
   echo "WARN: librelane failed/killed for $DESIGN on $PDK (rc=$rc) — no metrics" >&2
   exit 0
 fi
 
-# LibreLane writes the final metrics under the run dir; copy the newest.
+# LibreLane writes a metrics.json per step under the run dir; copy the newest.
+# Because we stop early (OL_TO) there is no `final/` summary, so take the most
+# recent metrics.json from any step — that's the last step that ran (placement).
 # Dual-location search: LibreLane may write runs/ relative to the config file's
 # directory OR relative to CWD ($ROOT). Both are searched until confirmed against
 # the real tool (Phase B of the ASIC plan).
-FINAL="$(find "$(dirname "$CFG")/runs" "$ROOT/runs" -name metrics.json -path '*final*' \
+FINAL="$(find "$(dirname "$CFG")/runs" "$ROOT/runs" -name metrics.json \
          2>/dev/null | xargs -r ls -t 2>/dev/null | head -1 || true)"
 if [ -z "$FINAL" ]; then
   echo "WARN: no final metrics.json produced — no metrics" >&2; exit 0

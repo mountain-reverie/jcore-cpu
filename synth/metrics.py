@@ -281,17 +281,19 @@ def parse_openlane_metrics(text):
 
 
 def build_asic_pnr(parsed, variant, commit, target):
-    """Canonical doc for the heavy OpenLane2 P&R tier (post-route numbers).
-    WNS is surfaced as a positive violation magnitude (max(0, -ws)),
-    smaller-is-better, matching build_asic's convention so the benchmark
-    regression ratio compares correctly."""
+    """Canonical doc for the light LibreLane P&R tier (post-placement numbers:
+    the flow stops before detailed routing/signoff). Cells/core-area are final
+    for placement; WNS is a placement-stage estimate. WNS is surfaced as a
+    positive violation magnitude (max(0, -ws)), smaller-is-better, matching
+    build_asic's convention so the benchmark regression ratio compares
+    correctly."""
     metrics_ = []
     if "core_area_um2" in parsed:
         metrics_.append(_metric("cpu/area", "um2", parsed["core_area_um2"], "smaller"))
     if "cells" in parsed:
         metrics_.append(_metric("cpu/cells", "cells", parsed["cells"], "smaller"))
     if "wns_ns" in parsed:
-        metrics_.append(_metric("cpu/WNS violation (post-route)", "ns",
+        metrics_.append(_metric("cpu/WNS violation (post-placement est.)", "ns",
                                 round(max(0.0, -parsed["wns_ns"]), 3), "smaller"))
     if "power_mw" in parsed:
         metrics_.append(_metric("cpu/power", "mW", round(parsed["power_mw"], 4), "smaller"))

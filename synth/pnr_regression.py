@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Detect post-route (-pnr) regressions in a github-action-benchmark history.
+"""Detect post-placement (-pnr) regressions in a github-action-benchmark history.
 Pure compare: all pnr metrics are smaller-is-better, so a metric regresses when
 cur/prev exceeds the threshold. Used by the daily synth-asic-pnr CI to file a
 rolling GitHub issue."""
@@ -29,7 +29,7 @@ def find_regressions(history, threshold=1.10):
 def to_markdown(regs, threshold=1.10):
     if not regs:
         return ""
-    lines = ["The daily ASIC P&R run detected post-route regression(s) over the "
+    lines = ["The daily ASIC P&R run detected post-placement regression(s) over the "
              "%.0f%% threshold:" % (threshold * 100), ""]
     lines.append("| metric | prev | current | change |")
     lines.append("|---|---|---|---|")

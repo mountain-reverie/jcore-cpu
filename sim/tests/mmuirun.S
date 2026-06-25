@@ -70,6 +70,9 @@ kmain:
         ! ---- Build the one code PTE (PTEL image: PA | 0x3F1 incl. EXEC). ----
         mov.l   k_pte, r0 ; mov.l v_pte, r1 ; mov.l r1, @r0
 
+        ! ---- Build the data PTE for the mixed-leg load page (VA 0x00102000). ----
+        mov.l   k_pteData, r0 ; mov.l v_pteData, r1 ; mov.l r1, @r0
+
         ! ---- Zero the 16-entry TSB (64 words). ----
         mov.l   k_tsb,  r0             ! 0x80002C00
         mov     #64, r2
@@ -92,18 +95,30 @@ kmain:
         cmp/hs  r3, r2                ! T if r2 >= end
         bf      2b
 
-        ! ---- Zero the ran_flag and walker_calls / tsb_hits counters. ----
+        ! ---- Seed the mixed-leg data backing page PA 0x00102000 (AT off). ----
+        mov.l   k_bkData, r0 ; mov.l v_seedData, r1 ; mov.l r1, @r0  ! = 0xDA7A0003
+
+        ! ---- Zero the ran_flags and walker_calls / tsb_hits counters and the
+        ! mixed-leg scratch/result words. ----
         mov.l   k_ranf, r0 ; mov #0, r1 ; mov.l r1, @r0         ! ran_flag=0
         mov.l   k_ranf2, r0 ; mov #0, r1 ; mov.l r1, @r0        ! ran_flag2=0
+        mov.l   k_ranf3, r0 ; mov #0, r1 ; mov.l r1, @r0        ! ran_flag3=0
         mov.l   k_wcnt, r0 ; mov #0, r1 ; mov.l r1, @r0         ! walker_calls=0
         mov.l   k_hcnt, r0 ; mov #0, r1 ; mov.l r1, @r0         ! tsb_hits=0
+        mov.l   k_scratch, r0 ; mov #0, r1 ; mov.l r1, @r0      ! scratch=0
+        mov.l   k_mixedval, r0 ; mov #0, r1 ; mov.l r1, @r0     ! mixed_val=0
 
         ! ---- Init stub control block for the COLD leg:
-        ! {ran_flag, sentinel1=0xC0DE0001, _after_ifetch}. ----
+        ! {ran_flag, sentinel1, data_src=scratch, result=scratch, _after_ifetch}.
+        ! The stub always performs a load+store; the cold/warm legs point it at a
+        ! safe P1 scratch word (untranslated, no D-miss). The mixed leg re-points
+        ! data_src at the translated VA 0x00102000. ----
         mov.l   k_ctl0, r0
         mov.l   k_ranf, r1     ; mov.l r1, @r0                  ! ctl[0] = ran_flag
         mov.l   v_sentinel, r1 ; mov.l r1, @(4,r0)             ! ctl[1] = sentinel1
-        mov.l   p_after, r1    ; mov.l r1, @(8,r0)             ! ctl[2] = _after_ifetch
+        mov.l   k_scratch, r1  ; mov.l r1, @(8,r0)             ! ctl[2] = data_src=scratch
+        mov.l   k_scratch, r1  ; mov.l r1, @(12,r0)            ! ctl[3] = result=scratch
+        mov.l   p_after, r1    ; mov.l r1, @(16,r0)            ! ctl[4] = _after_ifetch
 
         ! ---- VBR = P1 alias of the vector base. ----
         mov.l   k_vbr, r0
@@ -136,30 +151,60 @@ ENTRY(_after_ifetch)
         mov.l   k_ctl0, r0
         mov.l   k_ranf2, r1 ; mov.l r1, @r0                     ! ctl[0] = ran_flag2
         mov.l   v_sent2, r1 ; mov.l r1, @(4,r0)                ! ctl[1] = sentinel2
-        mov.l   p_after2, r1 ; mov.l r1, @(8,r0)               ! ctl[2] = _after_ifetch2
+        mov.l   k_scratch, r1 ; mov.l r1, @(8,r0)             ! ctl[2] = data_src=scratch
+        mov.l   k_scratch, r1 ; mov.l r1, @(12,r0)            ! ctl[3] = result=scratch
+        mov.l   p_after2, r1 ; mov.l r1, @(16,r0)             ! ctl[4] = _after_ifetch2
         mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0        ! flush TLB, AT+TSB warm
         mov.l   va_code, r0
         jmp     @r0                                            ! warm IMISS -> hot path
         nop
 
 ENTRY(_after_ifetch2)
-        ! Warm leg resumed inside the page (second sentinel written via
-        ! translation). Disable AT, then verify both legs.
+        ! Warm leg resumed inside the page. Now run the MIXED I+D leg: re-arm the
+        ! stub control block so its load reads a TRANSLATED data page
+        ! (VA 0x00102000) and stores the value to mixed_val. Keep AT ON and flush
+        ! the TLB (TI|AT, TSB warm) so the code-page fetch is a §4.1 hot-path hit
+        ! (tsb_hits++) while the never-touched data page is a cold DMISS_R that
+        ! goes to the walker (walker_calls++). The stub's load instruction is thus
+        ! fetched through the I-TLB and has its operand fetched through the D-TLB.
+        mov.l   k_ranf3, r0 ; mov #0, r1 ; mov.l r1, @r0        ! ran_flag3 = 0
+        mov.l   k_mixedval, r0 ; mov #0, r1 ; mov.l r1, @r0     ! mixed_val = 0
+        mov.l   k_ctl0, r0
+        mov.l   k_ranf3, r1 ; mov.l r1, @r0                     ! ctl[0] = ran_flag3
+        mov.l   v_sent3, r1 ; mov.l r1, @(4,r0)                ! ctl[1] = sentinel3
+        mov.l   va_data, r1 ; mov.l r1, @(8,r0)               ! ctl[2] = data_src=VA 0x00102000
+        mov.l   k_mixedval, r1 ; mov.l r1, @(12,r0)            ! ctl[3] = result=mixed_val
+        mov.l   p_after3, r1 ; mov.l r1, @(16,r0)             ! ctl[4] = _after_ifetch3
+        mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0        ! flush TLB, AT+TSB warm
+        mov.l   va_code, r0
+        jmp     @r0                                            ! mixed: IMISS (hot) + DMISS_R (walker)
+        nop
+
+ENTRY(_after_ifetch3)
+        ! Mixed leg resumed inside the page. Disable AT, then verify all legs.
         mov.l   k_mmucr, r0 ; mov #0, r1 ; mov.l r1, @r0
 
         ! Cold sentinel still present (cold-leg assert, preserved).
         mov.l   k_ranf, r0 ; mov.l @r0, r2
         mov.l   v_sentinel, r3 ; cmp/eq r3, r2 ; mov #1, r9 ; bf _fail
 
-        ! Warm sentinel was written by the translated-fetch instruction.
+        ! Warm sentinel still present (warm-leg assert, preserved).
         mov.l   k_ranf2, r0 ; mov.l @r0, r2
         mov.l   v_sent2, r3 ; cmp/eq r3, r2 ; mov #10, r9 ; bf _fail
 
-        ! tsb_hits must be exactly 1 (warm leg took the §4.1 hot path once).
-        mov.l   k_hcnt, r0 ; mov.l @r0, r2 ; mov #1, r3 ; cmp/eq r3, r2 ; mov #9, r9 ; bf _fail
+        ! Mixed sentinel: the stub was I-fetched through translation a 3rd time.
+        mov.l   k_ranf3, r0 ; mov.l @r0, r2
+        mov.l   v_sent3, r3 ; cmp/eq r3, r2 ; mov #12, r9 ; bf _fail
 
-        ! walker_calls must STILL be 1 (no second walk -- cold-leg assert, preserved).
-        mov.l   k_wcnt, r0 ; mov.l @r0, r2 ; mov #1, r3 ; cmp/eq r3, r2 ; mov #8, r9 ; bf _fail
+        ! Mixed data: the translated LOAD read the seeded data page (0xDA7A0003).
+        mov.l   k_mixedval, r0 ; mov.l @r0, r2
+        mov.l   v_seedData, r3 ; cmp/eq r3, r2 ; mov #11, r9 ; bf _fail
+
+        ! tsb_hits == 2 (warm code fetch + mixed code fetch took the hot path).
+        mov.l   k_hcnt, r0 ; mov.l @r0, r2 ; mov #2, r3 ; cmp/eq r3, r2 ; mov #9, r9 ; bf _fail
+
+        ! walker_calls == 2 (cold code fetch + mixed cold data load).
+        mov.l   k_wcnt, r0 ; mov.l @r0, r2 ; mov #2, r3 ; cmp/eq r3, r2 ; mov #8, r9 ; bf _fail
 
         mov     #0, r9
         bra     _done
@@ -172,17 +217,36 @@ ENTRY(_after_ifetch2)
         ! twice (cold: ran_flag/0xC0DE0001/_after_ifetch; warm: ran_flag2/
         ! 0xC0DE0002/_after_ifetch2) without re-copying. The literal it loads is
         ! an absolute P1 address, so the verbatim word-copy stays valid.
+        ! Control block (5 words): {flag, sentinel, data_src, result, ret}. The
+        ! stub writes the sentinel (proves the fetch translated), then LOADS from
+        ! data_src and STORES the value to result (the load is the mixed-leg's
+        ! translated D-access), then returns. Cold/warm legs point data_src at a
+        ! P1 scratch word (untranslated); the mixed leg points it at the
+        ! translated VA 0x00102000.
+        !
+        ! IMPORTANT: every ctl access uses DISPLACEMENT addressing @(disp,r3)
+        ! (r3 constant), NOT post-increment @r3+. A DMISS_R on the translated
+        ! load re-enters the workload at the instruction PRECEDING the faulting
+        ! load (faulting_PC-2) and re-executes it; with a constant base every
+        ! instruction is idempotent, so the re-run reloads the same data_src and
+        ! the load then resolves correctly (this mirrors mmurun's robust
+        ! `mov.l <lit>,r0 ; mov.l @r0,rX` pattern). A post-increment here would be
+        ! re-run and corrupt the pointer.
         .balign 4
 u_code_img:
-        mov.l   3f, r3                 ! r3 = &ctl (P1 control block)
-        mov.l   @r3+, r0               ! r0 = target flag addr
-        mov.l   @r3+, r1               ! r1 = sentinel value
+        mov.l   9f, r3                 ! r3 = &ctl (P1 control block, constant)
+        mov.l   @(0,r3), r0            ! r0 = target flag addr
+        mov.l   @(4,r3), r1           ! r1 = sentinel value
         mov.l   r1, @r0                ! write sentinel  (this instr proves I-fetch ran)
-        mov.l   @r3, r0                ! r0 = return addr (P1)
+        mov.l   @(8,r3), r5           ! r5 = data_src addr (idempotent setup)
+        mov.l   @r5, r6               ! LOAD (mixed leg: operand fetched through D-TLB)
+        mov.l   @(12,r3), r5          ! r5 = result addr
+        mov.l   r6, @r5               ! store loaded value
+        mov.l   @(16,r3), r0          ! r0 = return addr (P1)
         jmp     @r0                    ! return to P1 kernel
         nop
         .align 2
-3:      .long   0x80002D10            ! P1 addr of ctl block {flag, sentinel, ret}
+9:      .long   0x80002D10            ! P1 addr of ctl block {flag,sent,src,res,ret}
 u_code_end:
 
         .align 2
@@ -191,17 +255,27 @@ k_pgd:     .long 0x80002000
 k_pgd0:    .long 0x80002401
 k_pte:     .long 0x80002800           ! PTE table[idx(0x00100000)=0x100] = 0x80002400+0x400
 v_pte:     .long 0x001003F1           ! identity PTE: PA(==VA) | flags 0x3F1 (incl EXEC)
+k_pteData: .long 0x80002808           ! PTE table[idx(0x00102000)=0x102] = 0x80002400+0x408
+v_pteData: .long 0x001023F1           ! identity PTE for data page (same flags as code)
+k_bkData:  .long 0x00102000           ! identity backing == data VA (seed direct, AT off)
+v_seedData:.long 0xDA7A0003           ! seed for the mixed-leg translated load
+va_data:   .long 0x00102000           ! mixed-leg load VA (translated when AT on)
 k_tsb:     .long 0x80002C00
 k_img:     .long 0x80000000 + u_code_img
 k_imgend:  .long 0x80000000 + u_code_end
 k_bk:      .long 0x00100000           ! identity backing == workload VA (copy direct, AT off)
 k_ranf:    .long 0x80002D08
 k_ranf2:   .long 0x80002D0C
+k_ranf3:   .long 0x80002D2C
 v_sentinel:.long 0xC0DE0001
 v_sent2:   .long 0xC0DE0002
-k_ctl0:    .long 0x80002D10           ! stub control block {flag, sentinel, ret}
+v_sent3:   .long 0xC0DE0003
+k_ctl0:    .long 0x80002D10           ! stub control block {flag,sent,src,res,ret} (D10..D20)
+k_scratch: .long 0x80002D28           ! P1 scratch (cold/warm legs' load+store target)
+k_mixedval:.long 0x80002D24           ! mixed-leg translated-load result
 p_after:   .long 0x80000000 + _after_ifetch
 p_after2:  .long 0x80000000 + _after_ifetch2
+p_after3:  .long 0x80000000 + _after_ifetch3
 k_wcnt:    .long 0x80002D00
 k_hcnt:    .long 0x80002D04
 k_vbr:     .long 0x80000000 + _vbase

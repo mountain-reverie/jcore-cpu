@@ -125,6 +125,15 @@ type datapath_reg_t is record
    -- bank 1 and user code reads uninitialised bank-1 registers. The captured
    -- value is stable across the stalled slot's re-evaluations.
    tlb_exc_sr : sr_t;
+   -- Precise-exception squash (J4+MMU_ARCH). Set on the first cycle a D/I-side
+   -- TLB fault is detected and held until the handler is entered (SR.RB=1). The
+   -- faulting access stalls/redirects a slot late, so the instruction(s) issued
+   -- behind the faulting one would otherwise commit their GPR writeback before
+   -- the exception is taken -- corrupting a base register the restarted faulting
+   -- access depends on (e.g. a store whose base was loaded two instructions
+   -- earlier). While tlb_squash is high the GPR write-enables (we_ex/we_wb) are
+   -- forced low, so no post-fault instruction retires -> a precise restart.
+   tlb_squash : std_logic;
    mac_s      : std_logic;
    data_o_size: mem_size_t;
    data_o_lock: std_logic;
@@ -154,7 +163,7 @@ type datapath_reg_t is record
    ybus_override : ybus_val_pipeline_t;
 end record;
 
-constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, tlb_exc_captured => '0', ma_pc => (others => '0'), tlb_exc_pc => (others => '0'), tlb_exc_sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), mac_s => '0', data_o_size => BYTE, data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
+constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, tlb_exc_captured => '0', ma_pc => (others => '0'), tlb_exc_pc => (others => '0'), tlb_exc_sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), tlb_squash => '0', mac_s => '0', data_o_size => BYTE, data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
 
 subtype regnum_t is std_logic_vector(4 downto 0);
 component register_file is

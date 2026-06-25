@@ -94,6 +94,10 @@ architecture stru of datapath is
 	signal aluiny, aluinx : std_logic_vector(31 downto 0);
 
 	signal reg_wr_data_o : std_logic_vector(31 downto 0);
+	-- GPR write-enables, gated low during the precise-exception squash window
+	-- (J4+MMU_ARCH). On a non-MMU build these are exactly reg.wr_z/reg.wr_w, so
+	-- J1/J2 behaviour is byte-identical and tlb_squash prunes away.
+	signal reg_wr_z_g, reg_wr_w_g : std_logic;
 	signal ybus_override : bus_val_t;
 	signal slot_o : std_logic;
 
@@ -257,6 +261,14 @@ begin
 	-- Bank-remap the dedicated R0-index read port too (drives dout_0); pass-through
 	-- (bank-0 R0) on J2, so mov.l @(R0,Rn) uses the correct R0 under SR.RB=1.
 	num_0_r <= bank_remap("00000", sr.md, sr.rb) when PRIV_ARCH else "00000";
+	-- Suppress memory-load writeback retirement while a TLB fault is pending
+	-- entry, so the load instruction(s) behind the faulting access cannot
+	-- corrupt its operands before the precise restart (J4+MMU_ARCH only;
+	-- pass-through otherwise). Only the writeback (we_wb) path is gated: the
+	-- exception-entry SPC/SSR saves use the EX-stage (we_ex) path to regfile
+	-- 21/22 and must NOT be suppressed, else RTE restores garbage SR/PC.
+	reg_wr_z_g <= reg.wr_z;
+	reg_wr_w_g <= reg.wr_w and not this'register.tlb_squash when MMU_ARCH else reg.wr_w;
 	-- J1 early-read addresses (architecture(ebr) reads on rising edge); zero on J2/J4.
 	num_x_early_r <= reg.num_x_early when EARLY_REGFILE_READ else (others => '0');
 	num_y_early_r <= reg.num_y_early when EARLY_REGFILE_READ else (others => '0');
@@ -269,8 +281,8 @@ begin
                    addr_rb_early => num_y_early_r,
                    addr_rb => num_y_r, dout_b => reg_y, dout_0 => reg_0,
                    addr_r0 => num_0_r,
-                   we_wb => reg.wr_w, w_addr_wb => num_w_r, din_wb => wbus,
-                   we_ex => reg.wr_z, w_addr_ex => num_z_r, din_ex => gpf_zwd,
+                   we_wb => reg_wr_w_g, w_addr_wb => num_w_r, din_wb => wbus,
+                   we_ex => reg_wr_z_g, w_addr_ex => num_z_r, din_ex => gpf_zwd,
                    wr_data_o => reg_wr_data_o);
 -- setup arithmetic inputs function
 	with func.alu.inx_sel select
@@ -433,6 +445,31 @@ begin
             this.tlb_exc_captured := '0';
           end if;
 
+          -- Precise-exception squash window. Arm on the first fault cycle; hold
+          -- until the handler is entered (SR.RB=1, this design's "in handler"
+          -- indicator). Across this window every retiring instruction was issued
+          -- AFTER the faulting access (the fault redirect lands a slot late), so
+          -- their GPR writebacks are suppressed (see the we gating at the
+          -- register_file instantiation) to keep the faulting access's operands
+          -- intact for the restart. RB=1 gates tlb_exc_pend off in cpu.vhd, so a
+          -- fault never arms this while already in the handler.
+          if MMU_ARCH then
+            if this.sr.rb = '1' then
+              this.tlb_squash := '0';
+            elsif tlb_exc_pend = '1' then
+              this.tlb_squash := '1';
+            end if;
+          end if;
+
+          -- Deferred MMUCR.TI (bit 2) self-clear. The P4 MMUCR write below stores
+          -- the TI bit set; here -- evaluated against the REGISTERED mmucr at the
+          -- top of the process, i.e. one cycle after the write -- it is cleared.
+          -- That leaves mmucr(2) registered high for exactly one cycle, which the
+          -- TLB's clocked ti port samples to flush all entries. (J4+MMU_ARCH.)
+          if MMU_ARCH and this.mmu.mmucr(2) = '1' then
+            this.mmu.mmucr(2) := '0';
+          end if;
+
           next_state := this.debug_state;
 
           if this.old_debug = '0' and debug = '1' and -- debug input rose
@@ -582,10 +619,14 @@ begin
                 if mem.wr = '1' then
                   case p4_sel_v is
                     when P4_MMUCR =>
+                      -- Write the full value INCLUDING the TI bit (bit 2). It is
+                      -- self-cleared one cycle later (see the deferred clear near
+                      -- the top of this process) so it is registered high for
+                      -- exactly one cycle -- long enough for the TLB's clocked
+                      -- ti flush to fire. Clearing it here (same evaluation as the
+                      -- write) would mean the registered bit is NEVER high and the
+                      -- flush never happens.
                       this.mmu.mmucr := ma_dw;
-                      -- TI bit (bit 2) self-clears; the TLB ti port is driven
-                      -- combinatorially from mmu_regs so a 1-cycle pulse suffices.
-                      this.mmu.mmucr(2) := '0';
                     when P4_TTB    => this.mmu.ttb    := ma_dw;
                     when P4_TEA    => this.mmu.tea    := ma_dw;
                     when P4_TSBBR  => this.mmu.tsbbr  := ma_dw;

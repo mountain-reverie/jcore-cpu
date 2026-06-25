@@ -115,7 +115,7 @@ kmain:
 
         ! ================= SECOND TOUCHES (4 TSB hot-path hits) ==============
         mov.l   va_A, r0 ; mov.l @r0, r8           ! A: load (recheck seed)
-        mov.l   va_B, r0 ; mov.l @r0, r9           ! B: load (read back store)
+        mov.l   va_B, r0 ; mov.l @r0, r12          ! B: load -- r12, NOT r9: the verify reuses r9 as its fail-code register (mov #1,r9 on the A line below), which would clobber the B readback before line 127 compares it
         mov.l   va_C, r0 ; mov.l @r0, r10          ! C: load
         mov.l   va_D, r0 ; mov.l @r0, r11          ! D: load (read back store)
 
@@ -124,7 +124,7 @@ kmain:
 
         ! ================= VERIFY =================
         mov.l   v_seedA, r1 ; cmp/eq r1, r8  ; mov #1, r9 ; bf _fail
-        mov.l   sv_B,    r1 ; cmp/eq r1, r9  ; mov #2, r9 ; bf _fail  ! r9 holds B readback
+        mov.l   sv_B,    r1 ; cmp/eq r1, r12 ; mov #2, r9 ; bf _fail  ! r12 holds B readback
         mov.l   v_seedC, r1 ; cmp/eq r1, r10 ; mov #3, r9 ; bf _fail
         mov.l   sv_D,    r1 ; cmp/eq r1, r11 ; mov #4, r9 ; bf _fail
         mov.l   k_wcnt, r0 ; mov.l @r0, r2 ; mov #4, r3 ; cmp/eq r3, r2 ; mov #5, r9 ; bf _fail

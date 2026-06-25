@@ -306,7 +306,7 @@ class TestOpenlaneMetrics(unittest.TestCase):
         names = {m["name"]: m for m in doc["metrics"]}
         self.assertEqual(names["cpu/area"]["value"], 182340.5)
         self.assertEqual(names["cpu/cells"]["value"], 41250)
-        self.assertAlmostEqual(names["cpu/WNS violation (post-route)"]["value"], 0.42)
+        self.assertAlmostEqual(names["cpu/WNS violation (post-placement est.)"]["value"], 0.42)
         self.assertAlmostEqual(names["cpu/power"]["value"], 12.3)
 
 

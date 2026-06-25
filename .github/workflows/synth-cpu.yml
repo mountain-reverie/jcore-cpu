@@ -419,8 +419,12 @@ jobs:
           retention-days: 14
 
   synth-asic-pnr:
-    # Heavy tier: full LibreLane RTL->GDS. Daily schedule + manual dispatch only
-    # (trend, no push/PR alert). Runs on a PLAIN runner and invokes LibreLane via
+    # Light P&R tier: LibreLane synth + floorplan + placement (stops BEFORE
+    # detailed routing + signoff — see synth/openlane/run.sh / OL_TO). Superficial
+    # "maps & places into the real PDK" check plus an area/placement-timing trend
+    # hint; NOT a full RTL->GDS signoff (a hosted runner can't finish that in the
+    # job cap). Daily schedule + manual dispatch only (trend, no push/PR alert).
+    # Runs on a PLAIN runner and invokes LibreLane via
     # `docker run` — the LibreLane image is Nix-based (non-FHS), so it cannot be
     # used as a GHA job `container:` (the runner-injected node breaks, killing
     # checkout/upload-artifact). Running it through docker run keeps the JS actions
@@ -430,11 +434,11 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: synth-asic
     runs-on: ubuntu-24.04
-    # Backstop: run.sh caps LibreLane at OL_TIMEOUT (2h) via a docker-kill
-    # watchdog; this job cap (well under GitHub's 6h max) guarantees a cell that
-    # somehow outlives the watchdog still dies fast as a clean trend gap, not a
-    # 6h runner burn. Bump together with OL_TIMEOUT if the cap is raised.
-    timeout-minutes: 160
+    # Backstop: run.sh caps LibreLane at OL_TIMEOUT (30m, placement-only) via a
+    # docker-kill watchdog; this job cap guarantees a cell that somehow outlives
+    # the watchdog still dies fast as a clean trend gap, not a 6h runner burn.
+    # Bump together with OL_TIMEOUT if the stop step (OL_TO) is pushed later.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -449,7 +453,7 @@ jobs:
         with:
           name: synth-asic-${{ matrix.variant }}
           path: build
-      - name: Heavy P&R + metrics
+      - name: Light P&R (placement) + metrics
         continue-on-error: true
         env:
           OL_PDK: ${{ matrix.pdk.id }}
@@ -635,7 +639,7 @@ jobs:
               core.info(`updated issue #${open[0].number}`);
             } else {
               await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo,
-                title: 'ASIC P&R post-route regression detected', body: full, labels: [label] });
+                title: 'ASIC P&R (post-placement) regression detected', body: full, labels: [label] });
               core.info('created regression issue');
             }
       - name: iCE40 up5k fit milestone — evaluate

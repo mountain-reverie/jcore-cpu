@@ -7,10 +7,12 @@
 ! load RE-EXECUTES. Architecturally the post-increment must occur EXACTLY ONCE:
 ! Rm == VA+4, PR == seed.
 !
-! This is the CO-LOCATED post-increment form: the base auto-update uses
-! addr_sel=XBUS, arith=ADD and commits on the SAME slot's EX z-port as the
-! faulting read (one slot), distinct from mov @Rm+ (two-slot, SUB+ZBUS) that
-! fix 1d5064a targets. Highest-impact case: a TLB fault on a stack pop of the
+! This is the CO-LOCATED post-increment form: also two-slot, but in the OPPOSITE
+! order to mov @Rm+ -- slot0 is the faulting READ (ma_addy=XBUS, xbus=Rm), slot1
+! is the base post-increment (arith=ADD, z-port). The increment therefore rides
+! the EX z-port of slot1, IN the fault shadow of slot0, distinct from mov @Rm+
+! (slot0 INCREMENT SUB+ZBUS then slot1 READ) that fix 1d5064a targets via a
+! pre-increment restore. Highest-impact case: a TLB fault on a stack pop of the
 ! return address double-increments the stack pointer.
 !
 ! Defect: the precise-exception squash (tlb_squash, 441a25a) gates only we_wb,

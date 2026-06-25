@@ -293,10 +293,23 @@ begin
 	-- Suppress memory-load writeback retirement while a TLB fault is pending
 	-- entry, so the load instruction(s) behind the faulting access cannot
 	-- corrupt its operands before the precise restart (J4+MMU_ARCH only;
-	-- pass-through otherwise). Only the writeback (we_wb) path is gated: the
-	-- exception-entry SPC/SSR saves use the EX-stage (we_ex) path to regfile
-	-- 21/22 and must NOT be suppressed, else RTE restores garbage SR/PC.
-	reg_wr_z_g <= (reg.wr_z or restore_fire) when MMU_ARCH else reg.wr_z;
+	-- pass-through otherwise). BOTH ports are gated:
+	--   * we_wb (writeback): plain MOV @Rm+ et al. retire their loaded value
+	--     here a slot late, in the fault shadow -- suppressed.
+	--   * we_ex (EX z-port): the co-located LDS.L/LDC.L/MAC @Rm+ forms place
+	--     their base post-increment (ADD, z-port) in slot1, AFTER the faulting
+	--     slot0 read -- i.e. IN the fault shadow. tlb_squash must also gate this
+	--     z-write, else the base double-increments after RTE re-executes both
+	--     slots. The ONLY legitimate shadow z-writes are the exception-entry
+	--     system-register saves SPC(21)/SSR(22) -- regfile "10xxx" -- which are
+	--     exempted so RTE still restores the correct SR/PC. The precise
+	--     auto-increment restore (restore_fire, 1d5064a) overrides on top and is
+	--     never squashed (it IS the corrective base write).
+	-- exemption = num_z_r(4 downto 3) = "10" (system regs 16-23: SPC=21,SSR=22),
+	-- expressed bit-wise to stay in std_logic for the squash term.
+	reg_wr_z_g <= ((reg.wr_z and (not this'register.tlb_squash
+	                              or (num_z_r(4) and not num_z_r(3))))
+	               or restore_fire) when MMU_ARCH else reg.wr_z;
 	reg_wr_w_g <= reg.wr_w and not this'register.tlb_squash when MMU_ARCH else reg.wr_w;
 	-- J1 early-read addresses (architecture(ebr) reads on rising edge); zero on J2/J4.
 	num_x_early_r <= reg.num_x_early when EARLY_REGFILE_READ else (others => '0');

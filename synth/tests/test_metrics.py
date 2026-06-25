@@ -84,6 +84,28 @@ class TestAggregateBlocks(unittest.TestCase):
         self.assertEqual(agg["cpu"]["cells"], 153)  # 3 + 100 + 50
 
 
+class TestYosysStatCells(unittest.TestCase):
+    def test_parses_per_module_celltypes(self):
+        got = metrics.parse_yosys_stat_cells(read("yosys_stat_ecp5_block.txt"))
+        self.assertEqual(got["datapath_Bstru"]["TRELLIS_COMB"], 2100)
+        self.assertEqual(got["datapath_Bstru"]["TRELLIS_FF"], 320)
+        self.assertEqual(got["shifter_Bcomb"]["TRELLIS_COMB"], 329)
+        # summary rows ("Number of cells:") must NOT be parsed as a cell type
+        self.assertNotIn("Number", got["datapath_Bstru"])
+
+    def test_empty_returns_empty(self):
+        self.assertEqual(metrics.parse_yosys_stat_cells(""), {})
+
+    def test_aggregate_rolls_up_to_blocks(self):
+        agg = metrics.aggregate_blocks_ecp5(
+            metrics.parse_yosys_stat_cells(read("yosys_stat_ecp5_block.txt")))
+        self.assertEqual(agg["datapath"]["LUT4"], 2100)
+        self.assertEqual(agg["decode"]["LUT4"], 1200)   # 200 + 1000
+        self.assertEqual(agg["register_file"]["FF"], 530)
+        self.assertNotIn("cpu", agg)                    # top glue excluded
+        self.assertNotIn("design hierarchy", agg)
+
+
 class TestStaReport(unittest.TestCase):
     def test_wns_tns(self):
         got = metrics.parse_sta_report(read("sta_cpu.txt"), period_ns=20.0)
@@ -232,6 +254,38 @@ class TestBuildCanonical(unittest.TestCase):
         self.assertEqual(names["cpu/Fmax (representative)"]["value"], 42.86)
         self.assertEqual(names["cpu/Fmax (representative)"]["dir"], "bigger")
         self.assertEqual(names["cpu/Fmax (IO-unconstrained)"]["value"], 27.22)
+
+    def test_ecp5_per_block_lut4_ff_from_block_stat(self):
+        util = metrics.parse_nextpnr_log(read("nextpnr_ecp5.log"))["util"]
+        block_stat = metrics.parse_yosys_stat_cells(read("yosys_stat_ecp5_block.txt"))
+        doc = metrics.build_ecp5(util, fmax_rep=42.0, fmax_bare=27.0,
+                                 variant="j1", commit="abc123",
+                                 block_stat=block_stat)
+        names = {x["name"]: x for x in doc["metrics"]}
+        # cpu-level total still comes from nextpnr util, unchanged
+        self.assertEqual(names["cpu/LUT4"]["value"], 6789)
+        # per-block LUT4 (TRELLIS_COMB) + FF (TRELLIS_FF), smaller-is-better
+        self.assertEqual(names["datapath/LUT4"]["value"], 2100)
+        self.assertEqual(names["datapath/LUT4"]["dir"], "smaller")
+        self.assertEqual(names["datapath/FF"]["value"], 320)
+        self.assertEqual(names["register_file/LUT4"]["value"], 300)
+        self.assertEqual(names["register_file/FF"]["value"], 530)
+        self.assertEqual(names["mult/LUT4"]["value"], 120)
+        self.assertEqual(names["shifter/LUT4"]["value"], 329)
+        self.assertNotIn("shifter/FF", names)  # shifter has no TRELLIS_FF row
+        # decode rolls up decode_Barch + decode_core_Bcomb
+        self.assertEqual(names["decode/LUT4"]["value"], 200 + 1000)
+        self.assertEqual(names["decode/FF"]["value"], 10 + 10)
+        # the thin top `cpu` glue is NOT surfaced as its own per-block series
+        self.assertNotIn("cpu/cells", names)
+
+    def test_ecp5_without_block_stat_unchanged(self):
+        # back-compat: no block_stat -> only the cpu-level series (existing schema)
+        util = metrics.parse_nextpnr_log(read("nextpnr_ecp5.log"))["util"]
+        doc = metrics.build_ecp5(util, fmax_rep=42.86, fmax_bare=27.22,
+                                 variant="direct-rom72", commit="abc123")
+        names = [m["name"] for m in doc["metrics"]]
+        self.assertFalse(any("/LUT4" in n and not n.startswith("cpu/") for n in names))
 
     def test_ecp5_omits_absent_fmax(self):
         doc = metrics.build_ecp5({"TRELLIS_COMB": 10}, fmax_rep=None,

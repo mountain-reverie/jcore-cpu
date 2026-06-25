@@ -11,6 +11,9 @@
 # Usage: synth/cpu_synth.sh <asic|ecp5|timing|ice40>
 #   asic   -> build/cpu_asic.v    (generic netlist)
 #   ecp5   -> build/cpu_ecp5.json  (synth_ecp5/abc9 netlist of the bare cpu)
+#   ecp5-block -> build/ecp5_block_stat.txt (hierarchical synth_ecp5 `stat` so
+#             metrics.py --block-stat can attribute per-block LUT4/FF, mirroring
+#             the ASIC per-block flow)
 #   timing -> build/cpu_timing.json (synth_ecp5 of the cpu_timing_top harness;
 #             the netlist the ECP5 Fmax regression gate is measured on)
 #   ice40  -> build/cpu_ice40.json (synth_ice40 of the cpu_timing_top harness;
@@ -231,6 +234,15 @@ case "$BACKEND" in
       PRIV_DROP="$PRIV_DROP opt_clean;"
     fi
     yosys -m ghdl -p "$GHDL_BASE -e $AREA_TOP; synth_ecp5 -top $AREA_CPUTOP; check -assert; chformal -remove; delete t:\$check t:\$print; $PRIV_DROP stat; write_json $OUT/cpu_ecp5.json"
+    ;;
+  ecp5-block)
+    # Per-block ECP5 area breakdown. synth_ecp5 normally flattens (single cpu
+    # module -> no per-block attribution, the gap that let a +43% register_file
+    # regression hide on FPGA). Run it with -noflatten so the RTL hierarchy
+    # (datapath/decode/mult/register_file/shifter) survives techmap, then `stat`
+    # per module. `tee -o` captures the stat dump to a file metrics.py parses via
+    # --block-stat. No P&R, so the priv_o/mmu_o IO drops are unnecessary here.
+    yosys -m ghdl -p "$GHDL_BASE -e $AREA_TOP; synth_ecp5 -noflatten -top $AREA_CPUTOP; check -assert; chformal -remove; delete t:\$check t:\$print; tee -o $OUT/ecp5_block_stat.txt stat"
     ;;
   timing)
     # Representative Fmax benchmark: the cpu_timing_top harness registers the

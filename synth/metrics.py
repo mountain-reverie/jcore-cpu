@@ -109,6 +109,64 @@ def aggregate_blocks(stat):
     return agg
 
 
+def parse_yosys_stat_cells(text):
+    """yosys `stat` (no -liberty) -> {module: {celltype: count}}.
+
+    Per-section parse keyed by the RAW GHDL-mangled module name (same naming as
+    parse_yosys_stat). Under `synth_ecp5 -noflatten -top cpu` the hierarchy is
+    kept, so each block prints its own `=== <module> ===` section followed by a
+    cell-type breakdown ("     TRELLIS_COMB   1234"). We capture every
+    `<celltype> <count>` row (a single non-space token then an integer); summary
+    rows like "Number of cells:" / "Number of wires:" have multiple words before
+    the number and do NOT match, so they are skipped. Use aggregate_blocks_ecp5
+    to roll these up to BLOCKS, summing TRELLIS_COMB (LUT4) and TRELLIS_FF (FF).
+    """
+    out = {}
+    cur = None
+    for line in text.splitlines():
+        m = re.match(r"^=== (.+?) ===\s*$", line)
+        if m:
+            cur = m.group(1)
+            out.setdefault(cur, {})
+            continue
+        if cur is None:
+            continue
+        m = re.match(r"^\s+(\S+)\s+(\d+)\s*$", line)
+        if m:
+            out[cur][m.group(1)] = int(m.group(2))
+    return out
+
+
+# ECP5 cell types that count as a LUT4 / FF for the per-block breakdown. abc9
+# maps combinational logic to TRELLIS_COMB; a pre-abc/inferred LUT4 may also
+# appear, so both fold into LUT4.
+_ECP5_LUT_CELLS = ("TRELLIS_COMB", "LUT4")
+_ECP5_FF_CELLS = ("TRELLIS_FF",)
+
+
+def aggregate_blocks_ecp5(stat):
+    """Roll a per-module ECP5 cell stat (parse_yosys_stat_cells) up to BLOCKS,
+    summing LUT4 (TRELLIS_COMB/LUT4) and FF (TRELLIS_FF) per block. Mirrors
+    aggregate_blocks but for FPGA primitives instead of liberty cells/area. The
+    thin top `cpu` glue is excluded (its block is None); the whole-design LUT4/FF
+    totals are surfaced from the bare-cpu nextpnr util, not from here."""
+    agg = {}
+    for mod, cells in stat.items():
+        if mod == "design hierarchy":
+            continue
+        blk = _block_for(_canonical(mod))
+        if blk is None:
+            continue
+        d = agg.setdefault(blk, {})
+        for t in _ECP5_LUT_CELLS:
+            if t in cells:
+                d["LUT4"] = d.get("LUT4", 0) + cells[t]
+        for t in _ECP5_FF_CELLS:
+            if t in cells:
+                d["FF"] = d.get("FF", 0) + cells[t]
+    return agg
+
+
 def parse_sta_report(text, period_ns):
     """OpenSTA stdout -> {"wns","tns","fmax_mhz","power_mw"} (keys present only
     when parsed). `report_wns`/`report_tns` print "wns max -4.83"; take the last
@@ -314,19 +372,35 @@ def parse_nextpnr_fmax(text):
     return val
 
 
-def build_ecp5(util, fmax_rep, fmax_bare, variant, commit):
+def build_ecp5(util, fmax_rep, fmax_bare, variant, commit, block_stat=None):
     """Canonical doc for the ECP5 FPGA flow.
 
     util: {block: used} from the bare-cpu nextpnr log (LUT/FF/hard blocks).
     fmax_rep: representative Fmax (MHz) from the cpu_timing_top harness P&R —
               the number the CI gate measures. fmax_bare: the bare-cpu Fmax,
               depressed by the unconstrained-IO artifact. Both surfaced, labelled.
+    block_stat: per-module ECP5 cell stat (parse_yosys_stat_cells) from a
+              hierarchical (`-noflatten`) synth_ecp5. When given, emits per-block
+              `<block>/LUT4` + `<block>/FF` so a per-block base-core area
+              regression trips the size-suite alert (the cpu-level total alone is
+              too coarse — a +43% register_file jump hid under the 110% cpu LUT4
+              threshold). Mirrors build_asic's --block-stat per-block breakdown.
     """
     unit_for = {"TRELLIS_COMB": "LUT4", "TRELLIS_FF": "FF"}
     metrics_ = []
     for blk, used in sorted(util.items()):
         label = unit_for.get(blk, blk)
         metrics_.append(_metric("cpu/%s" % label, label, used, "smaller"))
+    if block_stat is not None:
+        per_block = aggregate_blocks_ecp5(block_stat)
+        for blk in BLOCKS:
+            if blk == "cpu":
+                continue  # whole-design totals come from util, not per-block
+            info = per_block.get(blk, {})
+            if "LUT4" in info:
+                metrics_.append(_metric("%s/LUT4" % blk, "LUT4", info["LUT4"], "smaller"))
+            if "FF" in info:
+                metrics_.append(_metric("%s/FF" % blk, "FF", info["FF"], "smaller"))
     if fmax_rep is not None:
         metrics_.append(_metric("cpu/Fmax (representative)", "MHz", round(fmax_rep, 2), "bigger"))
     if fmax_bare is not None:
@@ -384,7 +458,8 @@ def main(argv=None):
     p.add_argument("--commit", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--stat", help="yosys stat -liberty dump (asic/ecp5); flattened cpu total")
-    p.add_argument("--block-stat", help="hierarchical yosys stat -liberty dump (asic) for per-block area/cells")
+    p.add_argument("--block-stat", help="hierarchical yosys stat dump for per-block breakdown: "
+                   "-liberty cells/area (asic) or plain ECP5 cell counts (ecp5)")
     p.add_argument("--sta", help="OpenSTA report (asic)")
     p.add_argument("--nextpnr", help="bare-cpu nextpnr-ecp5 log (util + IO-unconstrained Fmax)")
     p.add_argument("--nextpnr-timing", help="cpu_timing_top harness nextpnr log (representative Fmax)")
@@ -410,7 +485,9 @@ def main(argv=None):
         bare = parse_nextpnr_log(_read(a.nextpnr)) if a.nextpnr else {"util": {}}
         fmax_bare = parse_nextpnr_fmax(_read(a.nextpnr)) if a.nextpnr else None
         fmax_rep = parse_nextpnr_fmax(_read(a.nextpnr_timing)) if a.nextpnr_timing else None
-        doc = build_ecp5(bare.get("util", {}), fmax_rep, fmax_bare, a.variant, a.commit)
+        block_stat = parse_yosys_stat_cells(_read(a.block_stat)) if a.block_stat else None
+        doc = build_ecp5(bare.get("util", {}), fmax_rep, fmax_bare, a.variant, a.commit,
+                         block_stat=block_stat)
 
     if not doc["metrics"]:
         print("WARN: no metrics parsed for %s — writing empty doc" % a.target)

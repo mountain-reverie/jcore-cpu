@@ -1,0 +1,56 @@
+
+2.50. Printing statistics.
+
+=== cpu ===
+
+   Number of wires:                  120
+   Number of wire bits:             4096
+   Number of cells:                    3
+     TRELLIS_IO                        3
+
+=== datapath_Bstru ===
+
+   Number of wires:                  900
+   Number of wire bits:             3200
+   Number of cells:                 2456
+     TRELLIS_COMB                   2100
+     TRELLIS_FF                      320
+     MULT18X18D                       36
+
+=== decode_Barch ===
+
+   Number of cells:                  210
+     TRELLIS_COMB                    200
+     TRELLIS_FF                       10
+
+=== decode_core_Bcomb ===
+
+   Number of cells:                 1010
+     TRELLIS_COMB                   1000
+     TRELLIS_FF                       10
+
+=== mult_Bstru ===
+
+   Number of cells:                  140
+     TRELLIS_COMB                    120
+     TRELLIS_FF                       20
+
+=== register_file_Btwo_bank_5_21_32 ===
+
+   Number of cells:                  830
+     TRELLIS_COMB                    300
+     TRELLIS_FF                       530
+
+=== shifter_Bcomb ===
+
+   Number of cells:                  329
+     TRELLIS_COMB                    329
+
+=== design hierarchy ===
+
+   cpu                                 1
+     datapath_Bstru                    1
+
+   Number of cells:                 5547
+     TRELLIS_COMB                   4049
+     TRELLIS_FF                      890

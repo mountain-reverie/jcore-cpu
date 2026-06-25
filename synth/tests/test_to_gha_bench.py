@@ -63,6 +63,28 @@ class TestConvert(unittest.TestCase):
         self.assertEqual(names["ecp5-lfe5u-85f · cpu/LUT4 [j1]"]["extra"], "j1")
 
 
+class TestEcp5PerBlock(unittest.TestCase):
+    def test_per_block_lut4_routes_to_size_variant_suffixed(self):
+        # The per-block ECP5 LUT4 metrics (dir=smaller) must land in the size
+        # suite and be variant-suffixed like ASIC so the 110% alert keys each
+        # variant's own series (and J1 isn't compared against J2).
+        m = [{"name": "register_file/LUT4", "unit": "LUT4", "value": 300, "dir": "smaller"},
+             {"name": "cpu/LUT4", "unit": "LUT4", "value": 6789, "dir": "smaller"}]
+        with tempfile.TemporaryDirectory() as d:
+            paths = [
+                _write_canon(d, "ecp5-lfe5u-85f", "j2", m),
+                _write_canon(d, "ecp5-lfe5u-85f", "j1", m),
+            ]
+            size, speed, _pnr = to_gha_bench.convert(paths)
+        size_names = {e["name"]: e for e in size}
+        self.assertIn("ecp5-lfe5u-85f · register_file/LUT4", size_names)        # j2 bare
+        self.assertIn("ecp5-lfe5u-85f · register_file/LUT4 [j1]", size_names)   # j1 suffixed
+        self.assertEqual(size_names["ecp5-lfe5u-85f · register_file/LUT4"]["value"], 300)
+        self.assertEqual(size_names["ecp5-lfe5u-85f · register_file/LUT4 [j1]"]["extra"], "j1")
+        # not a speed metric
+        self.assertFalse(any("register_file/LUT4" in e["name"] for e in speed))
+
+
 def _doc(tmp, target, variant, metrics):
     p = os.path.join(tmp, "%s-%s.json" % (target, variant))
     with open(p, "w") as f:

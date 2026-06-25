@@ -295,18 +295,34 @@ begin
 	-- corrupt its operands before the precise restart (J4+MMU_ARCH only;
 	-- pass-through otherwise). BOTH ports are gated:
 	--   * we_wb (writeback): plain MOV @Rm+ et al. retire their loaded value
-	--     here a slot late, in the fault shadow -- suppressed.
-	--   * we_ex (EX z-port): the co-located LDS.L/LDC.L/MAC @Rm+ forms place
-	--     their base post-increment (ADD, z-port) in slot1, AFTER the faulting
-	--     slot0 read -- i.e. IN the fault shadow. tlb_squash must also gate this
-	--     z-write, else the base double-increments after RTE re-executes both
-	--     slots. The ONLY legitimate shadow z-writes are the exception-entry
+	--     here a slot late, in the fault shadow -- suppressed. Faulting @-Rn
+	--     pre-decrement STORES (STS.L/STC.L/MOV.L Rm,@-Rn) carry the SYMMETRIC
+	--     base-decrement hazard (data corruption on restart) and are a DEFERRED
+	--     follow-up -- the mem.wr exclusion below leaves them precise-unsafe.
+	--   * we_ex (EX z-port): the co-located single-base LDS.L/LDC.L/MAC @Rm+
+	--     forms place their base post-increment (ADD, z-port) in slot1, AFTER the
+	--     faulting slot0 read -- i.e. IN the fault shadow. tlb_squash must also
+	--     gate this z-write, else the base double-increments after RTE
+	--     re-executes both slots.
+	--     NOTE -- MAC.L/W @Rm+,@Rn+ fault-on-the-SECOND-operand (@Rn+) is NOT
+	--     covered and is a KNOWN DEFERRED limitation: the first-operand Rm
+	--     increment has ALREADY committed before the second access faults, so it
+	--     is neither in the squash shadow nor captured by the single-base restore
+	--     (restore_fire holds only one base, tlb_fault_zreg=ma_numz) -> the MAC
+	--     re-executes and double-increments that first base on restart. Only
+	--     fault-on-the-first-operand MAC is precise.
+	--     The ONLY legitimate shadow z-writes are the exception-entry
 	--     system-register saves SPC(21)/SSR(22) -- regfile "10xxx" -- which are
 	--     exempted so RTE still restores the correct SR/PC. The precise
 	--     auto-increment restore (restore_fire, 1d5064a) overrides on top and is
 	--     never squashed (it IS the corrective base write).
 	-- exemption = num_z_r(4 downto 3) = "10" (system regs 16-23: SPC=21,SSR=22),
 	-- expressed bit-wise to stay in std_logic for the squash term.
+	-- CAVEAT -- this is COARSE: "10" exempts the entire reg-16..23 block, not just
+	-- SPC(21)/SSR(22). A shadow instruction writing any reg 16-23 via the EX
+	-- z-port (e.g. a trailing LDC Rm,<sysreg>) would be wrongly exempted and
+	-- commit non-precisely. Accepted -- strictly better than the pre-fix (no
+	-- we_ex squash at all) and the exposure window is only 1-2 slots.
 	reg_wr_z_g <= ((reg.wr_z and (not this'register.tlb_squash
 	                              or (num_z_r(4) and not num_z_r(3))))
 	               or restore_fire) when MMU_ARCH else reg.wr_z;

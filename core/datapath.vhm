@@ -100,6 +100,13 @@ architecture stru of datapath is
 	signal reg_wr_z_g, reg_wr_w_g : std_logic;
 	signal ybus_override : bus_val_t;
 	signal slot_o : std_logic;
+	-- Precise auto-increment restore (J4+MMU_ARCH). mem_autoupd marks the current
+	-- EX op as a memory base post-increment (@Rn+): a data access whose base
+	-- register (xbus = Rn) feeds the address while the z-bus writes Rn+size back.
+	-- restore_fire drives the one-shot base restore on the first EX-write slot the
+	-- microcode leaves free after the fault (reg.wr_z='0' => not an SPC/SSR save).
+	signal mem_autoupd  : std_logic;
+	signal restore_fire : std_logic;
 
         signal div1_arith_func : arith_func_t;
         signal arith_func : arith_func_t;
@@ -252,11 +259,33 @@ begin
 	                                     buses.imm_val when others;
 	ybus <= ybus_override.d when ybus_override.en = '1' else ybus_temp;
 
-	gpf_zwd <= pc when pc_ctrl.wrpr = '1' else zbus;
+	-- On the precise auto-increment restore cycle the EX write data is the
+	-- captured pre-increment base (tlb_restore_val); otherwise the normal z path.
+	gpf_zwd <= this'register.tlb_restore_val when (MMU_ARCH and restore_fire = '1')
+	           else pc when pc_ctrl.wrpr = '1' else zbus;
+	-- mem_autoupd: marks the memory-access slot of a post-increment load @Rm+.
+	-- In j-core a post-increment is a two-slot op: slot0 commits Rm := Rm+size on
+	-- the EX z-port (no access), then THIS slot reads memory with the address
+	-- recomputed as Rm-size, i.e. ma_addy=ZBUS, arith=SUB, base (Rm) on xbus, a
+	-- READ. That arith=SUB + ZBUS-addressed READ is unique to @Rm+ (plain @Rm uses
+	-- zbus_sel=Y; @(disp,Rm) and indexed loads use ADD; pre-decrement @-Rn is a
+	-- WRITE). The faulting VA equals Rm-size = the original pre-increment base, so
+	-- restoring Rm := tlb_fault_va undoes slot0's early bump. MMU_ARCH only.
+	mem_autoupd <= '1' when MMU_ARCH and mem.issue = '1' and mem.wr = '0'
+	                        and mem.addr_sel = SEL_ZBUS and func.arith.func = SUB
+	               else '0';
+	-- Fire the base restore on the first committed slot after the fault on which
+	-- the microcode itself is not driving the z-write port (reg.wr_z='0'): this is
+	-- clear of the exception entry's slot0/slot1 SPC(21)/SSR(22) saves, so the two
+	-- never collide on the shared EX write port.
+	restore_fire <= '1' when MMU_ARCH and this'register.tlb_restore_pend = '1'
+	                         and reg.wr_z = '0' and slot_o = '1'
+	                else '0';
 	-- SH-4 register-bank remap on the four address ports; pass-through on J2.
 	num_x_r <= bank_remap(reg.num_x, sr.md, sr.rb) when PRIV_ARCH else reg.num_x;
 	num_y_r <= bank_remap(reg.num_y, sr.md, sr.rb) when PRIV_ARCH else reg.num_y;
-	num_z_r <= bank_remap(reg.num_z, sr.md, sr.rb) when PRIV_ARCH else reg.num_z;
+	num_z_r <= this'register.tlb_fault_zreg when (MMU_ARCH and restore_fire = '1')
+	           else bank_remap(reg.num_z, sr.md, sr.rb) when PRIV_ARCH else reg.num_z;
 	num_w_r <= bank_remap(reg.num_w, sr.md, sr.rb) when PRIV_ARCH else reg.num_w;
 	-- Bank-remap the dedicated R0-index read port too (drives dout_0); pass-through
 	-- (bank-0 R0) on J2, so mov.l @(R0,Rn) uses the correct R0 under SR.RB=1.
@@ -267,7 +296,7 @@ begin
 	-- pass-through otherwise). Only the writeback (we_wb) path is gated: the
 	-- exception-entry SPC/SSR saves use the EX-stage (we_ex) path to regfile
 	-- 21/22 and must NOT be suppressed, else RTE restores garbage SR/PC.
-	reg_wr_z_g <= reg.wr_z;
+	reg_wr_z_g <= (reg.wr_z or restore_fire) when MMU_ARCH else reg.wr_z;
 	reg_wr_w_g <= reg.wr_w and not this'register.tlb_squash when MMU_ARCH else reg.wr_w;
 	-- J1 early-read addresses (architecture(ebr) reads on rising edge); zero on J2/J4.
 	num_x_early_r <= reg.num_x_early when EARLY_REGFILE_READ else (others => '0');
@@ -352,7 +381,7 @@ begin
 
 	ibit <= sr.int_mask;
 
-	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, tlb_fault_va, tlb_exc_expevt)
+	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, tlb_fault_va, tlb_exc_expevt, reg, num_x_r, mem_autoupd, restore_fire)
 	  register this when clk='1' and clk'event reset when rst='1';
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
@@ -413,6 +442,13 @@ begin
             -- Capture the user SR for the D-fault entry's SSR save (read via
             -- SEL_TLBSR), stable across the stalled entry slot's re-evaluations.
             this.tlb_exc_sr := this.sr;
+            -- Latch the faulting @Rn+ load's base register and its pre-increment
+            -- base (= the faulting VA, the un-incremented Rn). tlb_restore_pend is
+            -- armed only for a genuine post-increment (ma_autoupd) so plain loads,
+            -- displacement loads and ALU EX writes are never restored.
+            this.tlb_fault_zreg  := this.ma_numz;
+            this.tlb_restore_val := tlb_fault_va;
+            this.tlb_restore_pend := this.ma_autoupd;
             -- TSB pointer assist (hardware-spec §2.8): compute the address of
             -- the TSB slot for the faulting VPN and latch it into TSBPTR (read-
             -- only via STC TSBPTR / MMIO 0xFF00001C).
@@ -459,6 +495,12 @@ begin
             elsif tlb_exc_pend = '1' then
               this.tlb_squash := '1';
             end if;
+          end if;
+
+          -- One-shot: once the base restore has been driven onto the EX write
+          -- port (restore_fire), disarm so it commits exactly once.
+          if MMU_ARCH and restore_fire = '1' then
+            this.tlb_restore_pend := '0';
           end if;
 
           -- Deferred MMUCR.TI (bit 2) self-clear. The P4 MMUCR write below stores
@@ -652,7 +694,16 @@ begin
                 -- data access (a fixed pipeline point). On a later fault this is
                 -- the faulting instruction's PC, independent of how far the fetch
                 -- pointer has since advanced. (J4+MMU_ARCH only.)
-                if MMU_ARCH then this.ma_pc := this.pc; end if;
+                if MMU_ARCH then
+                  this.ma_pc := this.pc;
+                  -- Shadow the (bank-remapped) base register (Rm = num_x in the
+                  -- @Rm+ access slot) and the post-increment marker of the
+                  -- instruction launching this access, at the same fixed pipeline
+                  -- point as ma_pc, so a later fault can restore the pre-increment
+                  -- base of the faulting @Rm+ load.
+                  this.ma_numz    := num_x_r;
+                  this.ma_autoupd := mem_autoupd;
+                end if;
               end if;
             end if;
             if instr.issue = '1' then

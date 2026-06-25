@@ -94,8 +94,16 @@ kmain:
 
         ! ---- Zero the ran_flag and walker_calls / tsb_hits counters. ----
         mov.l   k_ranf, r0 ; mov #0, r1 ; mov.l r1, @r0         ! ran_flag=0
+        mov.l   k_ranf2, r0 ; mov #0, r1 ; mov.l r1, @r0        ! ran_flag2=0
         mov.l   k_wcnt, r0 ; mov #0, r1 ; mov.l r1, @r0         ! walker_calls=0
         mov.l   k_hcnt, r0 ; mov #0, r1 ; mov.l r1, @r0         ! tsb_hits=0
+
+        ! ---- Init stub control block for the COLD leg:
+        ! {ran_flag, sentinel1=0xC0DE0001, _after_ifetch}. ----
+        mov.l   k_ctl0, r0
+        mov.l   k_ranf, r1     ; mov.l r1, @r0                  ! ctl[0] = ran_flag
+        mov.l   v_sentinel, r1 ; mov.l r1, @(4,r0)             ! ctl[1] = sentinel1
+        mov.l   p_after, r1    ; mov.l r1, @(8,r0)             ! ctl[2] = _after_ifetch
 
         ! ---- VBR = P1 alias of the vector base. ----
         mov.l   k_vbr, r0
@@ -117,15 +125,40 @@ kmain:
         ! happens and we never reach _after_ifetch; the sim times out (RED).
 
 ENTRY(_after_ifetch)
-        ! Reached by the stub's jmp back into P1 -- proves the translated fetch
-        ! ran. Disable AT, then verify.
+        ! Cold leg resumed inside the translated page (proves the translated
+        ! fetch ran). Keep AT ON. Re-arm the stub for a SECOND invocation by
+        ! re-pointing its control block at ran_flag2 / sentinel2 /
+        ! _after_ifetch2, then flush the TLB (TI|AT) leaving the TSB warm and
+        ! re-jump into the page. The second IMISS must hit the §4.1 asm hot path
+        ! (PTEH/ASIDR match against the warm TSB) -> tsb_hits++ and LDTLB.R, with
+        ! NO second walker call.
+        mov.l   k_ranf2, r0 ; mov #0, r1 ; mov.l r1, @r0        ! ran_flag2 = 0
+        mov.l   k_ctl0, r0
+        mov.l   k_ranf2, r1 ; mov.l r1, @r0                     ! ctl[0] = ran_flag2
+        mov.l   v_sent2, r1 ; mov.l r1, @(4,r0)                ! ctl[1] = sentinel2
+        mov.l   p_after2, r1 ; mov.l r1, @(8,r0)               ! ctl[2] = _after_ifetch2
+        mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0        ! flush TLB, AT+TSB warm
+        mov.l   va_code, r0
+        jmp     @r0                                            ! warm IMISS -> hot path
+        nop
+
+ENTRY(_after_ifetch2)
+        ! Warm leg resumed inside the page (second sentinel written via
+        ! translation). Disable AT, then verify both legs.
         mov.l   k_mmucr, r0 ; mov #0, r1 ; mov.l r1, @r0
 
-        ! ran_flag must equal the sentinel the resumed instruction wrote.
+        ! Cold sentinel still present (cold-leg assert, preserved).
         mov.l   k_ranf, r0 ; mov.l @r0, r2
         mov.l   v_sentinel, r3 ; cmp/eq r3, r2 ; mov #1, r9 ; bf _fail
 
-        ! walker_calls must be exactly 1 (single cold touch).
+        ! Warm sentinel was written by the translated-fetch instruction.
+        mov.l   k_ranf2, r0 ; mov.l @r0, r2
+        mov.l   v_sent2, r3 ; cmp/eq r3, r2 ; mov #10, r9 ; bf _fail
+
+        ! tsb_hits must be exactly 1 (warm leg took the §4.1 hot path once).
+        mov.l   k_hcnt, r0 ; mov.l @r0, r2 ; mov #1, r3 ; cmp/eq r3, r2 ; mov #9, r9 ; bf _fail
+
+        ! walker_calls must STILL be 1 (no second walk -- cold-leg assert, preserved).
         mov.l   k_wcnt, r0 ; mov.l @r0, r2 ; mov #1, r3 ; cmp/eq r3, r2 ; mov #8, r9 ; bf _fail
 
         mov     #0, r9
@@ -133,19 +166,23 @@ ENTRY(_after_ifetch)
         nop
 
         ! ---- User-code stub image (assembled in P1, COPIED to PA 0x00100000). ----
-        ! mov.l ranf,r0 ; mov.l sent,r1 ; mov.l r1,@r0 ; mov.l back,r0 ; jmp @r0
+        ! Re-runnable: instead of baked-in literals the stub indirects through a
+        ! P1 control block {flag_addr, sentinel, return_addr}. The kernel patches
+        ! that block between the cold and warm legs, so the SAME copied stub runs
+        ! twice (cold: ran_flag/0xC0DE0001/_after_ifetch; warm: ran_flag2/
+        ! 0xC0DE0002/_after_ifetch2) without re-copying. The literal it loads is
+        ! an absolute P1 address, so the verbatim word-copy stays valid.
         .balign 4
 u_code_img:
-        mov.l   3f, r0                 ! r0 = 0x80002D08 (P1 ran_flag)
-        mov.l   4f, r1                 ! r1 = 0xC0DE0001 (sentinel)
+        mov.l   3f, r3                 ! r3 = &ctl (P1 control block)
+        mov.l   @r3+, r0               ! r0 = target flag addr
+        mov.l   @r3+, r1               ! r1 = sentinel value
         mov.l   r1, @r0                ! write sentinel  (this instr proves I-fetch ran)
-        mov.l   5f, r0                 ! r0 = 0x80000000 + _after_ifetch
+        mov.l   @r3, r0                ! r0 = return addr (P1)
         jmp     @r0                    ! return to P1 kernel
         nop
         .align 2
-3:      .long   0x80002D08
-4:      .long   0xC0DE0001
-5:      .long   0x80000000 + _after_ifetch
+3:      .long   0x80002D10            ! P1 addr of ctl block {flag, sentinel, ret}
 u_code_end:
 
         .align 2
@@ -159,7 +196,12 @@ k_img:     .long 0x80000000 + u_code_img
 k_imgend:  .long 0x80000000 + u_code_end
 k_bk:      .long 0x00100000           ! identity backing == workload VA (copy direct, AT off)
 k_ranf:    .long 0x80002D08
+k_ranf2:   .long 0x80002D0C
 v_sentinel:.long 0xC0DE0001
+v_sent2:   .long 0xC0DE0002
+k_ctl0:    .long 0x80002D10           ! stub control block {flag, sentinel, ret}
+p_after:   .long 0x80000000 + _after_ifetch
+p_after2:  .long 0x80000000 + _after_ifetch2
 k_wcnt:    .long 0x80002D00
 k_hcnt:    .long 0x80002D04
 k_vbr:     .long 0x80000000 + _vbase

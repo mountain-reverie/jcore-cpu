@@ -6,6 +6,9 @@ name: full-regression
 #
 # Triggered on:
 #   - push to master/main           (gates merges)
+#   - pull_request                  (runs the MMU/priv-arch functional guards
+#                                     per-PR; the heavy 8-step regression.sh job
+#                                     is gated off PRs — see its `if:` below)
 #   - nightly schedule (08:00 UTC)  (catches toolchain drift)
 #   - manual workflow_dispatch      (re-run on demand)
 #
@@ -19,6 +22,7 @@ on:
     branches:
       - master
       - main
+  pull_request:
   schedule:
     # 08:00 UTC every day. Cron uses UTC regardless of repo timezone.
     - cron: '0 8 * * *'
@@ -31,6 +35,9 @@ concurrency:
 jobs:
   full-regression:
     name: regression.sh (all 8 steps)
+    # Heavy (~90 min synth + STA). Keep it on master-push / nightly / dispatch;
+    # PRs run only the MMU functional-guards job below.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
 
@@ -96,7 +103,8 @@ jobs:
   # sim/tests/*.S. These need BOTH the SH cross-toolchain (sh2-elf-gcc, to build
   # the test .img) AND -- for mmucolor -- the jcore-soc cache/memory_tech_lib
   # deps. pr-quick has neither, so the guards run here (heavy-toolchain
-  # container + mountain-reverie/jcore-soc). Without this job, none of the
+  # container + mountain-reverie/jcore-soc). This job DOES run per-PR (it is the
+  # MMU CI gate); only the heavy 8-step regression.sh job above is PR-gated off. Without this job, none of the
   # exception-path work (per-access-type vectors, EXPEVT persistence, RTE return
   # from a TLB exception, D-store fault detection + write suppression, IMISS TEA
   # capture, SR-state-on-entry, VIPT page-coloring) is exercised in CI.

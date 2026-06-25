@@ -131,8 +131,10 @@ type datapath_reg_t is record
    -- behind the faulting one would otherwise commit their GPR writeback before
    -- the exception is taken -- corrupting a base register the restarted faulting
    -- access depends on (e.g. a store whose base was loaded two instructions
-   -- earlier). While tlb_squash is high the GPR write-enables (we_ex/we_wb) are
-   -- forced low, so no post-fault instruction retires -> a precise restart.
+   -- earlier). While tlb_squash is high the WB-stage GPR write-enable (we_wb) is
+   -- forced low, so no post-fault instruction retires its writeback -> a precise
+   -- restart. (The EX-stage we is left live so the exception entry's own
+   -- SPC/SSR saves to the regfile are not suppressed.)
    tlb_squash : std_logic;
    mac_s      : std_logic;
    data_o_size: mem_size_t;

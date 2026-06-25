@@ -136,6 +136,25 @@ type datapath_reg_t is record
    -- restart. (The EX-stage we is left live so the exception entry's own
    -- SPC/SSR saves to the regfile are not suppressed.)
    tlb_squash : std_logic;
+   -- Precise auto-increment restore (J4+MMU_ARCH). On an @Rn+ load the base
+   -- post-increment commits via the EX-stage z-write one cycle BEFORE the load's
+   -- TLB fault is detectable in MEM, so neither the we_wb squash nor any later
+   -- gate can suppress it -> Rn is double-incremented when RTE re-executes the
+   -- load. ma_numz/ma_autoupd shadow the access-launching instruction's
+   -- (bank-remapped) z-write register and a "this EX write is a memory base
+   -- post-increment (@Rn+)" marker, captured at the same pipeline point as ma_pc.
+   -- On the first fault cycle they are latched into tlb_fault_zreg/tlb_restore_val
+   -- and tlb_restore_pend is armed; on the next EX-write slot the microcode leaves
+   -- free (reg.wr_z='0', i.e. clear of the slot0/slot1 SPC/SSR saves) the captured
+   -- pre-increment base (tlb_restore_val = the faulting VA) is written back to
+   -- tlb_fault_zreg, so the RTE-restarted load re-applies the single architectural
+   -- increment. ma_autoupd is 0 for @Rn, @(disp,Rn) and ALU-result EX writes, so
+   -- only genuine post-increments are restored.
+   ma_numz          : std_logic_vector(4 downto 0);
+   ma_autoupd       : std_logic;
+   tlb_fault_zreg   : std_logic_vector(4 downto 0);
+   tlb_restore_val  : std_logic_vector(31 downto 0);
+   tlb_restore_pend : std_logic;
    mac_s      : std_logic;
    data_o_size: mem_size_t;
    data_o_lock: std_logic;
@@ -165,7 +184,7 @@ type datapath_reg_t is record
    ybus_override : ybus_val_pipeline_t;
 end record;
 
-constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, tlb_exc_captured => '0', ma_pc => (others => '0'), tlb_exc_pc => (others => '0'), tlb_exc_sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), tlb_squash => '0', mac_s => '0', data_o_size => BYTE, data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
+constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, tlb_exc_captured => '0', ma_pc => (others => '0'), tlb_exc_pc => (others => '0'), tlb_exc_sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), tlb_squash => '0', ma_numz => (others => '0'), ma_autoupd => '0', tlb_fault_zreg => (others => '0'), tlb_restore_val => (others => '0'), tlb_restore_pend => '0', mac_s => '0', data_o_size => BYTE, data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
 
 subtype regnum_t is std_logic_vector(4 downto 0);
 component register_file is

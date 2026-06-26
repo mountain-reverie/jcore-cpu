@@ -121,6 +121,57 @@ func encodeWord(c Class) (uint16, error) {
 	return word, nil
 }
 
+// dispScale returns the displacement scale (1/2/4) of the memory-accessing
+// slot, read from its alu_y field ("U"=*1, "U*2", "U*4").
+func dispScale(c Class) int {
+	for _, sl := range c.Instr.Slots {
+		if sl["ma_op"] != "WRITE" && sl["ma_op"] != "READ" {
+			continue
+		}
+		switch sl["alu_y"] {
+		case "U*4":
+			return 4
+		case "U*2":
+			return 2
+		default:
+			return 1
+		}
+	}
+	return 1
+}
+
+// storeProbeAddr returns the effective address a store writes, so the snapshot
+// can probe the actual written word. ok=false (with a human-readable reason for
+// the image manifest) means the target cannot be modelled with the emitter's
+// fixed register choice and the case must be skipped rather than emit a probe
+// that neither leg writes (which would pass vacuously).
+func storeProbeAddr(c Class, word uint16, va int) (addr int, reason string, ok bool) {
+	switch c.Addr {
+	case PreDec:
+		// @-Rn: base seeded at VA+8, the store lands at VA+4 (BaseInit=VA+8).
+		return va + 4, "", true
+	case Plain, PostInc:
+		// @Rn (and @Rn+ stores) write at the base before any auto-modify.
+		return va, "", true
+	case Disp:
+		// Indexed @(R0,Rn): the implicit R0 operand is not modelled by the
+		// base->r0 / other->r8 substitution (R0 is itself loaded with VA), so
+		// the effective address is not probeable here.
+		if strings.Contains(c.Instr.Name, "@(R0") {
+			return 0, "store effective address not probeable: indexed @(R0,Rn) uses implicit R0 (=VA) not modelled by fixed register choice", false
+		}
+		// @(disp,Rn): EA = Rn + disp*scale. The disp nibble is the encoded
+		// word's low 4 bits; scale comes from alu_y.
+		off := int(word&0xF) * dispScale(c)
+		if off < 0 || off > 12 {
+			return 0, fmt.Sprintf("store effective address not probeable: @(disp,Rn) offset +%d outside seeded window [0,12]", off), false
+		}
+		return va + off, "", true
+	default:
+		return va, "", true
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Control-register access (PrivMem bucket).
 // ---------------------------------------------------------------------------
@@ -200,12 +251,25 @@ func emitDSide(c Class, id int) (string, string, error) {
 	}
 
 	base := fmt.Sprintf("0x%08X", workloadVA)
-	probe := fmt.Sprintf("0x%08X", workloadVA)
+	probeAddr := workloadVA
 	if c.Addr == PreDec {
 		// Pre-decrement starts above the seeded region and writes/reads below.
 		base = fmt.Sprintf("0x%08X", workloadVA+8)
-		probe = fmt.Sprintf("0x%08X", workloadVA+4)
 	}
+	// For stores the snapshot probe must read the word the store actually
+	// writes (the effective address), not the base. A probe of an address that
+	// neither leg touches makes SNAP_A==SNAP_B unconditionally -> a vacuously
+	// passing oracle. Compute the effective address per store mode, or skip
+	// honestly (with a manifest reason) when it cannot be modelled.
+	if c.Mem == Write {
+		pa, reason, ok := storeProbeAddr(c, word, workloadVA)
+		if !ok {
+			return fmt.Sprintf("! case %d skipped: %s: %s\n", id, c.Instr.Name, reason),
+				"", errSkip
+		}
+		probeAddr = pa
+	}
+	probe := fmt.Sprintf("0x%08X", probeAddr)
 
 	d := caseData{
 		ID:       id,
@@ -294,6 +358,15 @@ func EmitImage(classes []Class, axis Axis) (string, error) {
 		b.WriteString("!   (none)\n")
 	} else {
 		b.WriteString(manifest.String())
+	}
+	if axis == IFetch && n > 0 {
+		// The I-fetch axis self-modifies the workload code page and relies on
+		// icache coherence that is NOT yet provided. The emitted cases are
+		// provisional; surface that here so a spurious Result is traceable.
+		b.WriteString("! PROVISIONAL: I-fetch axis cases self-modify the code page and assume\n")
+		b.WriteString("!   icache coherence not yet provided -- icache-coherence unvalidated,\n")
+		b.WriteString("!   Task 4 to finish. A spurious Result on an I-fetch case may be a\n")
+		b.WriteString("!   harness gap rather than a real CPU divergence.\n")
 	}
 	b.WriteString(`#include "m8_runtime.inc"` + "\n\n")
 	b.WriteString("#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH\n")

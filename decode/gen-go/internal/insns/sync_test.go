@@ -45,6 +45,37 @@ func TestSyncPatchesAndAppends(t *testing.T) {
 	}
 }
 
+func TestSyncDisambiguatesCollidingCodes(t *testing.T) {
+	d, err := Load(filepath.Join("testdata", "collide_in.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lds := spec.Instr{Name: "LDS Rm, CPI_COM", Opcode: "0100mmmm01011010", Slots: []spec.Slot{{}}}
+	j2 := &InstrSet{ByKey: map[Key]spec.Instr{}}
+	k, _ := KeyOf(lds.Opcode)
+	j2.ByKey[k] = lds
+	j2.Order = append(j2.Order, lds)
+	if _, err := Sync(d, []VariantData{{Variant{Name: "J2"}, j2, &Table{}}}); err != nil {
+		t.Fatal(err)
+	}
+	var cpi, fpul *Row
+	for _, r := range d.Rows {
+		f, _ := r.Get("format")
+		switch f {
+		case "lds Rm,CPI_COM":
+			cpi = r
+		case "lds Rm,FPUL":
+			fpul = r
+		}
+	}
+	if v, _ := cpi.Get("J2"); v != true {
+		t.Fatalf("CPI_COM row should be J2=true, got %v", v)
+	}
+	if v, _ := fpul.Get("J2"); v != false {
+		t.Fatalf("FPUL row must NOT be marked, got %v", v)
+	}
+}
+
 func TestSyncIdempotent(t *testing.T) {
 	d, _ := Load(filepath.Join("testdata", "expected.json"))
 	before, _ := d.Bytes()

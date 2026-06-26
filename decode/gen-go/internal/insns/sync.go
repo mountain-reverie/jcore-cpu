@@ -21,95 +21,114 @@ type Report struct {
 func Sync(d *Doc, vds []VariantData) (*Report, error) {
 	rep := &Report{}
 
-	byKey := map[Key]*Row{}
+	byKey := map[Key][]*Row{}
 	for _, r := range d.Rows {
 		cv, ok := r.Get("code")
 		if !ok {
 			continue
 		}
 		code, _ := cv.(string)
-		k, ok := KeyOf(code)
-		if !ok {
-			continue
-		}
-		if _, dup := byKey[k]; dup {
-			return nil, fmt.Errorf("duplicate row code %q", code)
-		}
-		byKey[k] = r
-	}
-
-	// patch existing rows
-	for _, r := range d.Rows {
-		cv, ok := r.Get("code")
-		if !ok {
-			continue
-		}
-		code, _ := cv.(string)
-		k, ok := KeyOf(code)
-		if !ok {
-			continue
-		}
-		for _, vd := range vds {
-			setCols(r, vd, k)
+		if k, ok := KeyOf(code); ok {
+			byKey[k] = append(byKey[k], r)
 		}
 	}
 
-	// collect unmatched instrs, dedup by key
-	type pending struct {
+	matched := map[*Row]bool{}
+	seenKey := map[Key]bool{}
+	type pend struct {
 		in  spec.Instr
 		vd  VariantData
 		key Key
 	}
-	seen := map[Key]bool{}
-	var pend []pending
+	var pending []pend
+
 	for _, vd := range vds {
 		for _, in := range vd.Set.Order {
 			k, _ := KeyOf(in.Opcode)
-			if _, ok := byKey[k]; ok {
-				rep.Matched++
+			cands := byKey[k]
+			if len(cands) == 0 {
+				if !seenKey[k] {
+					seenKey[k] = true
+					pending = append(pending, pend{in, vd, k})
+				}
 				continue
 			}
-			if seen[k] {
-				continue
+			row, err := pickRow(cands, in)
+			if err != nil {
+				return nil, err
 			}
-			seen[k] = true
-			pend = append(pend, pending{in, vd, k})
+			setCols(row, vd, vd.Set.ByKey[k])
+			matched[row] = true
 		}
 	}
 
-	// sort by (group, code) and append
-	sort.Slice(pend, func(i, j int) bool {
-		gi, gj := pend[i].vd.Variant.Group, pend[j].vd.Variant.Group
+	// Any variant column not set on a row defaults to false/0:
+	for _, r := range d.Rows {
+		for _, vd := range vds {
+			if _, ok := r.Get(vd.Variant.Name); !ok {
+				setColsFalse(r, vd.Variant.Name)
+			}
+		}
+	}
+
+	// append unmatched (dedup already via seenKey), sorted by (group, code)
+	sort.Slice(pending, func(i, j int) bool {
+		gi, gj := pending[i].vd.Variant.Group, pending[j].vd.Variant.Group
 		if gi != gj {
 			return gi < gj
 		}
-		return normOpcode(pend[i].in.Opcode) < normOpcode(pend[j].in.Opcode)
+		return normOpcode(pending[i].in.Opcode) < normOpcode(pending[j].in.Opcode)
 	})
-	for _, p := range pend {
+	for _, p := range pending {
 		r := newRow(p.in, p.vd.Variant.Group)
-		byKey[p.key] = r
 		for _, vd := range vds {
-			setCols(r, vd, p.key)
+			if vd.Variant.Name == p.vd.Variant.Name {
+				setCols(r, vd, p.in)
+			} else {
+				setColsFalse(r, vd.Variant.Name)
+			}
 		}
 		d.Rows = append(d.Rows, r)
+		byKey[p.key] = append(byKey[p.key], r)
 		rep.Appended = append(rep.Appended, p.in.Name)
 	}
 
+	rep.Matched = len(matched)
 	return rep, nil
 }
 
-func setCols(r *Row, vd VariantData, k Key) {
-	name := vd.Variant.Name
-	if in, ok := vd.Set.ByKey[k]; ok {
-		tm := vd.Tab.For(in)
-		r.Set(name, true)
-		r.Set(name+".issue", intToNum(tm.Issue))
-		r.Set(name+".latency", intToNum(tm.Latency))
-	} else {
-		r.Set(name, false)
-		r.Set(name+".issue", intToNum(0))
-		r.Set(name+".latency", intToNum(0))
+func pickRow(cands []*Row, in spec.Instr) (*Row, error) {
+	if len(cands) == 1 {
+		return cands[0], nil
 	}
+	want := NormAsm(in.Name)
+	var hit *Row
+	n := 0
+	for _, r := range cands {
+		f, _ := r.Get("format")
+		if fs, ok := f.(string); ok && NormAsm(fs) == want {
+			hit = r
+			n++
+		}
+	}
+	if n == 1 {
+		return hit, nil
+	}
+	return nil, fmt.Errorf("opcode %q (%s): %d of %d candidate rows match by mnemonic; cannot disambiguate", in.Opcode, in.Name, n, len(cands))
+}
+
+func setCols(r *Row, vd VariantData, in spec.Instr) {
+	name := vd.Variant.Name
+	tm := vd.Tab.For(in)
+	r.Set(name, true)
+	r.Set(name+".issue", intToNum(tm.Issue))
+	r.Set(name+".latency", intToNum(tm.Latency))
+}
+
+func setColsFalse(r *Row, name string) {
+	r.Set(name, false)
+	r.Set(name+".issue", intToNum(0))
+	r.Set(name+".latency", intToNum(0))
 }
 
 func newRow(in spec.Instr, group string) *Row {

@@ -103,6 +103,25 @@ func TestSyncIdempotent(t *testing.T) {
 	}
 }
 
+func TestSyncAnnotatesCollides(t *testing.T) {
+	d, _ := Load(filepath.Join("testdata", "collide_in.json"))
+	_, err := Sync(d, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range d.Rows {
+		f, _ := r.Get("format")
+		c, ok := r.Get("collides")
+		if !ok {
+			t.Fatalf("row %v missing collides", f)
+		}
+		arr, _ := c.([]any)
+		if len(arr) != 1 {
+			t.Fatalf("row %v: want 1 collide, got %v", f, c)
+		}
+	}
+}
+
 func TestSyncAppendedRowMarksAllVariants(t *testing.T) {
 	// Create an empty doc (no rows)
 	d := &Doc{Rows: []*Row{}}

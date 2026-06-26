@@ -98,6 +98,13 @@ kmain:
         mov     #0, r0
         lds     r0, pr
 
+        ! ---- Initialise GBR to a concrete value. The I-fetch axis plants
+        ! `STC GBR, Rn` as a case; an uninitialised GBR reads 'U' in the co-sim,
+        ! and the snapshot store of that 'U' wedges the SRAM bus (invalid write /
+        ! ACK timeout). Seeding GBR makes the case precise rather than vacuous. ----
+        mov     #0, r0
+        ldc     r0, gbr
+
         ! ---- ASIDR = 0. ----
         mov     #0, r0
         .word   0x407E                 ! LDC r0, ASIDR

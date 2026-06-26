@@ -1,6 +1,8 @@
 package faultgen
 
 import (
+	"fmt"
+	"sort"
 	"strings"
 	"testing"
 
@@ -109,7 +111,7 @@ func TestEmitCaseMacDualBase(t *testing.T) {
 		".word   0x080F", // MAC.L with m->r0,n->r8
 		"c5_seedva: .long 0x00100000",
 		"c5_seedvb: .long 0x00101000", // second mapped page (distinct fault)
-		"lds     r9, mach", // deterministic accumulator clear (not clrmac: TEMP1-xor sim-X)
+		"lds     r9, mach",            // deterministic accumulator clear (not clrmac: TEMP1-xor sim-X)
 		"lds     r9, macl",
 		"sts     mach, r1",
 		"sts     macl, r1",
@@ -187,8 +189,8 @@ func TestEmitCaseCtrlLoad(t *testing.T) {
 	for _, want := range []string{
 		"_m8_case_8:",
 		"mode-preserving",
-		"stc     sr, r1", // seed payload = current SR (and snapshot read-back)
-		".word   0x4007", // LDC.L @Rm+,SR with m->r0
+		"stc     sr, r1",  // seed payload = current SR (and snapshot read-back)
+		".word   0x4007",  // LDC.L @Rm+,SR with m->r0
 		"mov.l   r1, @r0", // seed the payload word
 	} {
 		if !strings.Contains(sblock, want) {
@@ -257,13 +259,13 @@ func TestEmitIFetchGeneral(t *testing.T) {
 		t.Fatalf("load spec: %v", err)
 	}
 
-	// ADD Rm,Rn: General non-memory -> emitted, snapshot 20 bytes, jmp stub.
+	// ADD Rm,Rn: General non-memory -> emitted, snapshot 24 bytes (incl SR), jmp stub.
 	c := Classify(find(t, s, "ADD Rm, Rn"))
 	block, _, err := emitCase(c, 1, IFetch)
 	if err != nil {
 		t.Fatalf("ADD Rm,Rn should emit on I-fetch: %v", err)
 	}
-	for _, want := range []string{"_m8_case_1:", "jmp     @r5", "0x4C2B", "mov     #20, r4", "0x00100000"} {
+	for _, want := range []string{"_m8_case_1:", "jmp     @r5", "0x4C2B", "mov     #24, r4", "0x00100000", "stc     sr, r1", "c1_srmsk"} {
 		if !strings.Contains(block, want) {
 			t.Errorf("I-fetch ADD block missing %q:\n%s", want, block)
 		}
@@ -284,6 +286,66 @@ func TestEmitIFetchGeneral(t *testing.T) {
 		c := Classify(find(t, s, name))
 		if _, _, err := emitCase(c, 2, IFetch); !IsSkip(err) {
 			t.Errorf("%s should be skipped on I-fetch axis, got err=%v", name, err)
+		}
+	}
+}
+
+// TestEmitIFetchImagesPartition checks the I-fetch axis is split into sub-images
+// of at most IFetchPerImage cases, that every emitted case appears exactly once
+// across the set with GLOBAL contiguous IDs, and that each sub-image has its own
+// _m8_run_all whose m8_count equals that sub-image's case count.
+func TestEmitIFetchImagesPartition(t *testing.T) {
+	s, err := spec.LoadProfile("../../spec", "../../spec/sh4")
+	if err != nil {
+		t.Fatalf("load spec: %v", err)
+	}
+	instrs := make([]spec.Instr, len(s.Instrs))
+	copy(instrs, s.Instrs)
+	sort.SliceStable(instrs, func(i, j int) bool { return instrs[i].Name < instrs[j].Name })
+	classes := make([]Class, len(instrs))
+	for i, in := range instrs {
+		classes[i] = Classify(in)
+	}
+
+	imgs, err := EmitIFetchImages(classes)
+	if err != nil {
+		t.Fatalf("EmitIFetchImages: %v", err)
+	}
+	total := 0
+	seen := map[int]bool{}
+	for k, img := range imgs {
+		n := strings.Count(img, "_m8_case_")
+		// crude case-label count: each routine label "_m8_case_N:" appears once
+		// in its block plus once in the dispatch ".long ... + _m8_case_N".
+		labels := 0
+		for _, line := range strings.Split(img, "\n") {
+			l := strings.TrimSpace(line)
+			if strings.HasPrefix(l, "_m8_case_") && strings.Contains(l, ":") {
+				labels++
+				var id int
+				fmt.Sscanf(l, "_m8_case_%d:", &id)
+				if seen[id] {
+					t.Errorf("case %d appears in more than one sub-image", id)
+				}
+				seen[id] = true
+			}
+		}
+		if labels > IFetchPerImage {
+			t.Errorf("sub-image %d has %d cases > IFetchPerImage=%d", k, labels, IFetchPerImage)
+		}
+		if !strings.Contains(img, fmt.Sprintf("m8_count:  .long %d", labels)) {
+			t.Errorf("sub-image %d m8_count != case count %d", k, labels)
+		}
+		total += labels
+		_ = n
+	}
+	if total != len(seen) {
+		t.Errorf("duplicate cases across sub-images: total=%d unique=%d", total, len(seen))
+	}
+	// Global IDs must be contiguous 1..total.
+	for id := 1; id <= total; id++ {
+		if !seen[id] {
+			t.Errorf("missing global case ID %d", id)
 		}
 	}
 }

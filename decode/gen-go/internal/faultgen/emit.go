@@ -36,18 +36,21 @@ const (
 	regOther   = 8 // chosen GPR for the dest / "n" operand
 )
 
-// IFetchDispatchCap bounds how many I-fetch cases the generated image actually
-// DISPATCHES (runs), independent of how many are emitted. Each I-fetch case
-// plants an instruction into the translated code page and fetches it cold then
-// warm; every case is precise in isolation AND the first ~38 run green in one
-// batch, but the co-sim hits a hard CUMULATIVE ceiling (~38 translated-fetch
-// cases) beyond which the run hangs -- a co-sim/testbench limit, NOT a CPU
-// precise-exception defect (validated: cases 1..38 pass in sequence; every case
-// passes standalone). To keep the committed image runnable + CI-safe we dispatch
-// only the first `IFetchDispatchCap` cases; the rest stay EMITTED (labels/IDs
-// preserved, fully traceable) but are excluded from `_m8_run_all` with a manifest
-// note. 30 leaves margin under the empirical ~38 ceiling.
-const IFetchDispatchCap = 30
+// IFetchPerImage bounds how many I-fetch cases go into ONE generated sub-image.
+// Each I-fetch case plants an instruction into the translated code page and
+// fetches it cold then warm; every case is precise in isolation, but the co-sim
+// hits a hard CUMULATIVE ceiling (~38 translated-fetch cases) within a SINGLE
+// run beyond which it hangs -- a co-sim/testbench limit, NOT a CPU precise-
+// exception defect (validated: every case passes standalone and the first ~38
+// pass in sequence). The ceiling is the co-sim's per-run translated-fetch state,
+// not a trivially-bumpable constant, so the I-fetch axis is partitioned into
+// sub-images of IFetchPerImage cases each: every sub-image is a SEPARATE .img /
+// sim run (separate CPU reset -> the cumulative ceiling resets), so ALL emitted
+// cases execute across the set. 24 keeps each sub-image comfortably under ~38
+// and splits the 72-case axis into exactly 3 images. Case IDs stay GLOBAL
+// (1-based over all emitted I-fetch cases), so a co-sim Result=<ID> in any
+// sub-image decodes against the single manifest unchanged.
+const IFetchPerImage = 24
 
 // errSkip marks a case the emitter deliberately does not generate (Bespoke, an
 // unrepresentable control register, or a memory instruction on the I-fetch
@@ -478,10 +481,10 @@ type macPos struct {
 // self-checks back to back -- fault on operand 1 only, operand 2 only, and both
 // cold -- so the acc_squash fix is regression-locked at every fault position.
 type macData struct {
-	ID            int
-	Word, Name    string
+	ID             int
+	Word, Name     string
 	SeedVA, SeedVB string
-	Positions     []macPos
+	Positions      []macPos
 }
 
 // emitMacD emits a MAC.L/MAC.W @Rm+,@Rn+ dual-pointer case. Rm->r0 seeded at
@@ -621,9 +624,21 @@ func EmitImage(classes []Class, axis Axis) (string, error) {
 // per-axis emitted IDs (== co-sim Result=<ID>). A nil/empty skip is identical
 // to EmitImage and preserves byte-for-byte determinism.
 func EmitImageSkip(classes []Class, axis Axis, skip map[int]bool) (string, error) {
+	if axis == IFetch {
+		// The I-fetch axis is partitioned into sub-images (see EmitIFetchImages);
+		// a single combined image would exceed the co-sim cumulative-fetch ceiling.
+		// Concatenating the sub-images here keeps EmitImage(IFetch) meaningful for
+		// callers/tests that only inspect scaffolding, but production generation
+		// (m8gen) calls EmitIFetchImages directly to write separate .S files.
+		imgs, err := EmitIFetchImages(classes)
+		if err != nil {
+			return "", err
+		}
+		return strings.Join(imgs, "\n"), nil
+	}
 	var blocks, dispatch, manifest strings.Builder
-	n := 0       // stable emitted-case ID counter (unaffected by skip)
-	dcount := 0  // number of cases actually in the dispatch table
+	n := 0      // stable emitted-case ID counter (unaffected by skip)
+	dcount := 0 // number of cases actually in the dispatch table
 	for _, c := range classes {
 		id := n + 1
 		block, disp, err := emitCase(c, id, axis)
@@ -643,11 +658,6 @@ func EmitImageSkip(classes []Class, axis Axis, skip map[int]bool) (string, error
 			fmt.Fprintf(&manifest, "! case %d skipped-for-enumeration: %s (emitted, excluded from _m8_run_all)\n", id, c.Instr.Name)
 			continue
 		}
-		if axis == IFetch && dcount >= IFetchDispatchCap {
-			// Past the co-sim cumulative-fetch ceiling: emit but do not dispatch.
-			fmt.Fprintf(&manifest, "! case %d excluded-from-dispatch: %s (emitted; beyond IFetchDispatchCap=%d, co-sim cumulative-fetch ceiling)\n", id, c.Instr.Name, IFetchDispatchCap)
-			continue
-		}
 		dispatch.WriteString(disp)
 		dcount++
 	}
@@ -660,28 +670,19 @@ func EmitImageSkip(classes []Class, axis Axis, skip map[int]bool) (string, error
 	} else {
 		b.WriteString(manifest.String())
 	}
-	if axis == IFetch && n > 0 {
-		// The I-fetch axis plants each instruction into the translated code page
-		// and fetches it cold (IMISS) then warm, exactly like mmuirun.S (proven
-		// on the same cpu_ctb DUT -- no icache in the co-sim CPU model, so a
-		// store-then-fetch of an instruction is coherent without an explicit
-		// sync). Each case snapshots {r0, r8, T, MACH, MACL}; a precise IMISS is
-		// invisible so the cold and warm legs must agree.
-		b.WriteString("! I-fetch axis: each case plants [instr ; jmp @r12 ; nop] into the\n")
-		b.WriteString("!   translated code page VA 0x00100000 and fetches it cold (IMISS at\n")
-		b.WriteString("!   VBR+0x400 -> walker installs -> re-fetch -> execute -> return) then\n")
-		b.WriteString("!   warm; snapshot {r0,r8,T,MACH,MACL} must match (mechanism per mmuirun.S).\n")
-		fmt.Fprintf(&b, "!   NOTE: only the first %d cases are DISPATCHED (run); the co-sim hits a\n", IFetchDispatchCap)
-		b.WriteString("!   cumulative-fetch ceiling (~38 cases) above which one batch hangs (a\n")
-		b.WriteString("!   co-sim limit, not a CPU defect -- every case is precise standalone).\n")
-	}
 	b.WriteString(`#include "m8_runtime.inc"` + "\n\n")
 	b.WriteString("#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH\n")
 	b.WriteString("        .text\n")
 	b.WriteString(blocks.String())
+	writeRunAll(&b, dispatch.String(), dcount)
+	b.WriteString("#endif\n")
+	return b.String(), nil
+}
 
-	// Table-walk dispatcher: r13=count, r14=table ptr; mov.l @r14+ has no
-	// PC-relative range limit (unlike a per-case bsr/mov.l call).
+// writeRunAll appends the _m8_run_all table-walk dispatcher and its count/table.
+// r13=count, r14=table ptr; mov.l @r14+ has no PC-relative range limit (unlike a
+// per-case bsr/mov.l call).
+func writeRunAll(b *strings.Builder, dispatch string, dcount int) {
 	b.WriteString("ENTRY(_m8_run_all)\n")
 	b.WriteString("        sts.l   pr, @-r15\n")
 	b.WriteString("        mov.l   m8_tab_p, r14\n")
@@ -695,12 +696,102 @@ func EmitImageSkip(classes []Class, axis Axis, skip map[int]bool) (string, error
 	b.WriteString("        rts\n")
 	b.WriteString("        nop\n")
 	b.WriteString("        .align 2\n")
-	fmt.Fprintf(&b, "m8_count:  .long %d\n", dcount)
+	fmt.Fprintf(b, "m8_count:  .long %d\n", dcount)
 	b.WriteString("m8_tab_p:  .long 0x80000000 + m8_tab\n")
 	b.WriteString("m8_tab:\n")
-	b.WriteString(dispatch.String())
-	b.WriteString("#endif\n")
-	return b.String(), nil
+	b.WriteString(dispatch)
+}
+
+// ifetchEmitted is one emitted I-fetch case: its global (1-based) ID, the case
+// routine body, and its dispatch-table entry.
+type ifetchEmitted struct {
+	id       int
+	block    string
+	dispatch string
+}
+
+// EmitIFetchImages partitions the I-fetch axis into sub-images of at most
+// IFetchPerImage cases each, so every emitted case executes within a single
+// sim run kept under the co-sim cumulative-fetch ceiling. Case IDs are GLOBAL
+// (1-based over all emitted I-fetch cases, matching ImageManifest), so a co-sim
+// Result=<ID> in any sub-image decodes against the single manifest. The returned
+// slice has one .S per sub-image, in order (image 0 = cases 1..IFetchPerImage).
+func EmitIFetchImages(classes []Class) ([]string, error) {
+	var emitted []ifetchEmitted
+	var manifest strings.Builder
+	n := 0
+	for _, c := range classes {
+		id := n + 1
+		block, disp, err := emitCase(c, id, IFetch)
+		if IsSkip(err) {
+			manifest.WriteString(block)
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		n++
+		emitted = append(emitted, ifetchEmitted{id: id, block: block, dispatch: disp})
+	}
+
+	per := IFetchPerImage
+	if per < 1 {
+		per = 1
+	}
+	nImages := (len(emitted) + per - 1) / per
+	if nImages == 0 {
+		nImages = 1
+	}
+
+	out := make([]string, 0, nImages)
+	for img := 0; img < nImages; img++ {
+		lo := img * per
+		hi := lo + per
+		if hi > len(emitted) {
+			hi = len(emitted)
+		}
+		chunk := emitted[lo:hi]
+
+		var blocks, dispatch strings.Builder
+		for _, e := range chunk {
+			blocks.WriteString(e.block)
+			blocks.WriteString("\n")
+			dispatch.WriteString(e.dispatch)
+		}
+
+		var b strings.Builder
+		fmt.Fprintf(&b, "! GENERATED by faultgen (M8). Axis=IFetch sub-image %d of %d. Do not edit.\n", img, nImages)
+		if len(chunk) > 0 {
+			fmt.Fprintf(&b, "! This sub-image runs global case IDs %d..%d (of %d emitted I-fetch cases).\n",
+				chunk[0].id, chunk[len(chunk)-1].id, len(emitted))
+		}
+		b.WriteString("! Manifest of excluded (skipped) instructions (whole axis):\n")
+		if manifest.Len() == 0 {
+			b.WriteString("!   (none)\n")
+		} else {
+			b.WriteString(manifest.String())
+		}
+		// The I-fetch axis plants each instruction into the translated code page
+		// and fetches it cold (IMISS) then warm, exactly like mmuirun.S (proven on
+		// the same cpu_ctb DUT -- no icache in the co-sim CPU model, so a store-
+		// then-fetch of an instruction is coherent without an explicit sync). Each
+		// case snapshots {r0, r8, T, MACH, MACL}; a precise IMISS is invisible so
+		// the cold and warm legs must agree.
+		b.WriteString("! I-fetch axis: each case plants [instr ; jmp @r12 ; nop] into the\n")
+		b.WriteString("!   translated code page VA 0x00100000 and fetches it cold (IMISS at\n")
+		b.WriteString("!   VBR+0x400 -> walker installs -> re-fetch -> execute -> return) then\n")
+		b.WriteString("!   warm; snapshot {r0,r8,T,MACH,MACL} must match (mechanism per mmuirun.S).\n")
+		fmt.Fprintf(&b, "!   The axis is split into %d sub-images of <=%d cases (separate sim runs,\n", nImages, per)
+		b.WriteString("!   separate CPU reset) to stay under the co-sim cumulative-fetch ceiling.\n")
+		b.WriteString(`#include "m8_runtime.inc"` + "\n\n")
+		b.WriteString("#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH\n")
+		b.WriteString("        .text\n")
+		b.WriteString(blocks.String())
+		writeRunAll(&b, dispatch.String(), len(chunk))
+		b.WriteString("#endif\n")
+		out = append(out, b.String())
+	}
+	return out, nil
 }
 
 // ManifestEntry records one instruction's place in an axis image. ID is the
@@ -1036,7 +1127,14 @@ c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
 // I-fetch (General non-memory only): plant [instr ; jmp @r12 ; nop] into the
 // translated code page (VA 0x00100000), fetch it cold (IMISS) then warm, and
 // snapshot the full post-instruction architectural state {r0, r8, T, MACH,
-// MACL}. Inputs (r0,r8) and the accumulator/T are seeded IDENTICALLY before each
+// MACL, SR&0x303}. The SR word captures SR.{M,Q,S,T} so DIV0S/DIV0U (which set
+// Q/M, not just T) are now COMPARED between legs, not just implicitly trusted --
+// a precise-exception bug that corrupted Q/M on the faulting leg would be caught.
+// (A negative r0 seed was tried to make Q/M non-zero too, but a negative GPR
+// input wedges the co-sim bus on one of the General cases -- a sim artifact, not
+// a CPU defect -- so the input stays positive and the SR-mask comparison carries
+// the strengthening.) Inputs (r0,r8) and the accumulator/T are seeded
+// IDENTICALLY before each
 // leg; the only difference is cold-vs-warm I-TLB. A precise IMISS is invisible,
 // so SNAP_A must equal SNAP_B. r12 (in-page return) and r5 (jump target) are
 // mechanism registers; the instruction-under-test only writes r0/r8/T/MAC.
@@ -1082,6 +1180,10 @@ c{{.ID}}_ireta_l:
         mov.l   r1, @(12,r12)
         sts     macl, r1
         mov.l   r1, @(16,r12)
+        stc     sr, r1                  ! capture SR.{S,Q,M,T} (DIV0S/DIV0U set Q/M)
+        mov.l   c{{.ID}}_srmsk, r2
+        and     r2, r1
+        mov.l   r1, @(20,r12)
         ! ---- control leg (warm I-fetch; stub present, I-TLB warm) ----
         mov     #0, r9
         lds     r9, mach
@@ -1103,8 +1205,12 @@ c{{.ID}}_iretb_l:
         mov.l   r1, @(12,r12)
         sts     macl, r1
         mov.l   r1, @(16,r12)
-        ! ---- compare {r0,r8,T,MACH,MACL} = 20 bytes ----
-        mov     #20, r4
+        stc     sr, r1
+        mov.l   c{{.ID}}_srmsk, r2
+        and     r2, r1
+        mov.l   r1, @(20,r12)
+        ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
+        mov     #24, r4
         mov.l   c{{.ID}}_id, r5
         mov.l   c{{.ID}}_cmp, r3
         jsr     @r3
@@ -1122,6 +1228,7 @@ c{{.ID}}_ireta:  .long 0x80000000 + c{{.ID}}_ireta_l
 c{{.ID}}_iretb:  .long 0x80000000 + c{{.ID}}_iretb_l
 c{{.ID}}_in0:    .long 0x00000011
 c{{.ID}}_in8:    .long 0x00000022
+c{{.ID}}_srmsk:  .long 0x00000303        ! SR.{M(9),Q(8),S(1),T(0)} -- arch result bits
 c{{.ID}}_snapa:  .long SNAP_A
 c{{.ID}}_snapb:  .long SNAP_B
 c{{.ID}}_id:     .long {{.ID}}

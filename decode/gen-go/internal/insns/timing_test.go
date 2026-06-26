@@ -16,7 +16,7 @@ func TestTimingBaseIsSlotCount(t *testing.T) {
 }
 
 func TestTimingOverrideWins(t *testing.T) {
-	tab := &Table{Overrides: map[string]Timing{"1100001100000000": {Issue: 2, Latency: 8}}}
+	tab := &Table{Overrides: map[string]Timing{"11000011iiiiiiii": {Issue: 2, Latency: 8}}}
 	in := spec.Instr{Opcode: "1100 0011 iiii iiii", Slots: []spec.Slot{{}}}
 	got := tab.For(in)
 	if got.Issue != 2 || got.Latency != 8 {

@@ -176,17 +176,46 @@ func TestEmitCaseCtrlLoad(t *testing.T) {
 		t.Errorf("MACH ctrl-load missing benign-init/read-back:\n%s", mblock)
 	}
 
-	// LDC.L @Rm+, SR -> still skipped, with the precise mode-unsafe reason.
+	// LDC.L @Rm+, SR -> now EMITTED with a mode-preserving payload: the @Rm+ word
+	// is seeded to the current SR (via stc sr,r1), so the load is a no-op while the
+	// base auto-modify is exercised + snapshotted. No benign-init/restore needed.
 	cs := Classify(find(t, s, "LDC.L @Rm+, SR"))
 	sblock, sdisp, serr := EmitCase(cs, 8)
-	if !IsSkip(serr) {
-		t.Fatalf("LDC.L @Rm+,SR must stay skipped, got err=%v", serr)
+	if serr != nil {
+		t.Fatalf("LDC.L @Rm+,SR must now be emitted, got err=%v\n%s", serr, sblock)
 	}
-	if !strings.Contains(sblock, "mode-unsafe") || !strings.Contains(sblock, "covered by the GBR/MACH/MACL/PR siblings") {
-		t.Errorf("SR skip lacks the precise mode-unsafe reason: %q", sblock)
+	for _, want := range []string{
+		"_m8_case_8:",
+		"mode-preserving",
+		"stc     sr, r1", // seed payload = current SR (and snapshot read-back)
+		".word   0x4007", // LDC.L @Rm+,SR with m->r0
+		"mov.l   r1, @r0", // seed the payload word
+	} {
+		if !strings.Contains(sblock, want) {
+			t.Errorf("SR mode-preserving block missing %q:\n%s", want, sblock)
+		}
 	}
-	if sdisp != "" {
-		t.Errorf("skipped SR load must not emit a dispatch entry: %q", sdisp)
+	// Must NOT clobber SR via an arbitrary load (no ldc r1,sr in the body).
+	if strings.Contains(sblock, "ldc     r1, sr") {
+		t.Errorf("SR mode-preserving block must not reload SR from an arbitrary value:\n%s", sblock)
+	}
+	if sdisp == "" {
+		t.Errorf("emitted SR load must produce a dispatch entry")
+	}
+
+	// LDC.L @Rm+, VBR -> likewise emitted with a current-VBR payload.
+	cv := Classify(find(t, s, "LDC.L @Rm+, VBR"))
+	vblock, vdisp, verr := EmitCase(cv, 9)
+	if verr != nil {
+		t.Fatalf("LDC.L @Rm+,VBR must now be emitted, got err=%v\n%s", verr, vblock)
+	}
+	for _, want := range []string{"_m8_case_9:", "mode-preserving", "stc     vbr, r1", ".word   0x4027"} {
+		if !strings.Contains(vblock, want) {
+			t.Errorf("VBR mode-preserving block missing %q:\n%s", want, vblock)
+		}
+	}
+	if vdisp == "" {
+		t.Errorf("emitted VBR load must produce a dispatch entry")
 	}
 }
 

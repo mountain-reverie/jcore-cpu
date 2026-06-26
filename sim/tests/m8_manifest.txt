@@ -4,35 +4,37 @@
 ## D-side axis (m8_dside.S)
 1    CAS.L Rm, Rn, @R0    General
 2    LDC.L @Rm+, GBR      PrivMem
-3    LDS.L @Rm+, MACH     General
-4    LDS.L @Rm+, MACL     General
-5    LDS.L @Rm+, PR       PrivMem
-6    MAC.L @Rm+, @Rn+     General
-7    MAC.W @Rm+, @Rn+     General
-8    MOV.B @(disp, Rm), R0 General
-9    MOV.B @Rm+, Rn       General
-10   MOV.B @Rm, Rn        General
-11   MOV.B R0, @(disp, Rn) General
-12   MOV.B Rm, @Rn        General
-13   MOV.B Rm,@-Rn        General
-14   MOV.L @(disp, Rm), Rn General
-15   MOV.L @Rm+, Rn       General
-16   MOV.L @Rm, Rn        General
-17   MOV.L Rm, @(disp, Rn) General
-18   MOV.L Rm, @Rn        General
-19   MOV.L Rm,@-Rn        General
-20   MOV.W @(disp, Rm), R0 General
-21   MOV.W @Rm+, Rn       General
-22   MOV.W @Rm, Rn        General
-23   MOV.W R0, @(disp, Rn) General
-24   MOV.W Rm, @Rn        General
-25   MOV.W Rm,@-Rn        General
-26   STC.L GBR, @-Rn      General
-27   STS.L MACH, @-Rn     General
-28   STS.L MACL, @-Rn     General
-29   STS.L PR, @-Rn       General
-30   TAS.B @Rn            General
-# 30 emitted; skipped:
+3    LDC.L @Rm+, SR       PrivMem
+4    LDC.L @Rm+, VBR      PrivMem
+5    LDS.L @Rm+, MACH     General
+6    LDS.L @Rm+, MACL     General
+7    LDS.L @Rm+, PR       PrivMem
+8    MAC.L @Rm+, @Rn+     General
+9    MAC.W @Rm+, @Rn+     General
+10   MOV.B @(disp, Rm), R0 General
+11   MOV.B @Rm+, Rn       General
+12   MOV.B @Rm, Rn        General
+13   MOV.B R0, @(disp, Rn) General
+14   MOV.B Rm, @Rn        General
+15   MOV.B Rm,@-Rn        General
+16   MOV.L @(disp, Rm), Rn General
+17   MOV.L @Rm+, Rn       General
+18   MOV.L @Rm, Rn        General
+19   MOV.L Rm, @(disp, Rn) General
+20   MOV.L Rm, @Rn        General
+21   MOV.L Rm,@-Rn        General
+22   MOV.W @(disp, Rm), R0 General
+23   MOV.W @Rm+, Rn       General
+24   MOV.W @Rm, Rn        General
+25   MOV.W R0, @(disp, Rn) General
+26   MOV.W Rm, @Rn        General
+27   MOV.W Rm,@-Rn        General
+28   STC.L GBR, @-Rn      General
+29   STS.L MACH, @-Rn     General
+30   STS.L MACL, @-Rn     General
+31   STS.L PR, @-Rn       General
+32   TAS.B @Rn            General
+# 32 emitted; skipped:
 #   ADD #imm, Rn         ADD #imm, Rn has no D-side memory access
 #   ADD Rm, Rn           ADD Rm, Rn has no D-side memory access
 #   ADDC Rm, Rn          ADDC Rm, Rn has no D-side memory access
@@ -89,8 +91,6 @@
 #   LDC Rm, SSR          LDC Rm, SSR has no D-side memory access
 #   LDC Rm, VBR          LDC Rm, VBR has no D-side memory access
 #   LDC, Rm, GBR         LDC, Rm, GBR has no D-side memory access
-#   LDC.L @Rm+, SR       LDC.L @Rm+, SR: mode-unsafe (SR/VBR govern execution/vectoring); the @Rm+ base auto-modify path is already covered by the GBR/MACH/MACL/PR siblings, so no precise-exception coverage is lost
-#   LDC.L @Rm+, VBR      LDC.L @Rm+, VBR: mode-unsafe (SR/VBR govern execution/vectoring); the @Rm+ base auto-modify path is already covered by the GBR/MACH/MACL/PR siblings, so no precise-exception coverage is lost
 #   LDS Rm, CP0_COM      LDS Rm, CP0_COM has no D-side memory access
 #   LDS Rm, CPI_COM      LDS Rm, CPI_COM has no D-side memory access
 #   LDS Rm, MACH         LDS Rm, MACH has no D-side memory access

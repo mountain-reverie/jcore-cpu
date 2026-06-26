@@ -186,6 +186,14 @@ type ctrlAccess struct {
 // depends on; the fault harness cannot clobber them across a fault.
 var exceptionCritical = map[string]bool{"SR": true, "VBR": true, "SSR": true, "SPC": true}
 
+// ctrlStore gives the STC mnemonic ("%s" = GPR) that reads an exception-critical
+// control register WITHOUT changing it -- used to seed a mode-preserving @Rm+
+// payload (= the current register value) and to read it back for the snapshot.
+var ctrlStore = map[string]string{
+	"SR":  "stc     sr, %s",
+	"VBR": "stc     vbr, %s",
+}
+
 func ctrlFor(reg string) ctrlAccess {
 	switch reg {
 	case "PR":
@@ -375,8 +383,17 @@ func ctrlLoadDest(name string) string {
 // {base GPR, ctrl value}; both legs are byte-identical save cold-vs-warm TLB.
 func emitCtrlLoadD(c Class, id int) (string, string, error) {
 	reg := ctrlLoadDest(c.Instr.Name)
+	// SR/VBR govern execution mode / vector base, so they cannot be benign-init'd
+	// to 0 and reloaded from an arbitrary payload like the GBR/MACH/MACL/PR
+	// siblings. Instead, seed the @Rm+ payload to the CURRENT SR/VBR value so the
+	// LDC.L is a machine-state no-op while the base auto-modify (the real
+	// precise-exception risk -- the same separate Rm+4->Rm slot as GBR) is still
+	// exercised + snapshotted. See emitModePreservingCtrlLoadD.
 	if exceptionCritical[reg] {
-		return fmt.Sprintf("! case %d skipped: %s: mode-unsafe (SR/VBR govern execution/vectoring); the @Rm+ base auto-modify path is already covered by the GBR/MACH/MACL/PR siblings, so no precise-exception coverage is lost\n",
+		if st, ok := ctrlStore[reg]; ok {
+			return emitModePreservingCtrlLoadD(c, id, st)
+		}
+		return fmt.Sprintf("! case %d skipped: %s: mode-unsafe (SR/VBR govern execution/vectoring) and no STC available for the mode-preserving payload\n",
 				id, c.Instr.Name),
 			"", errSkip
 	}
@@ -398,6 +415,41 @@ func emitCtrlLoadD(c Class, id int) (string, string, error) {
 		CtrlLoad: fmt.Sprintf(ca.load, "r1"),
 	}
 	return render(tmplPrivMemD, d)
+}
+
+// modePreservingData drives tmplModePreservingD for LDC.L @Rm+,{SR,VBR}.
+type modePreservingData struct {
+	ID        int
+	Word      string
+	Name      string
+	CtrlStore string // formatted STC insn (ctrl -> r1)
+}
+
+// emitModePreservingCtrlLoadD emits LDC.L @Rm+,{SR,VBR} safely: the @Rm+ payload
+// is seeded to the CURRENT control-register value (read via STC), so the load is
+// a no-op on machine state while the base GPR auto-modify (Rm:=Rm+4 -- the real
+// precise-exception risk, a separate microcode slot identical to GBR) is still
+// exercised. Snapshot {base GPR (post-increment), ctrl read-back}; both legs are
+// byte-identical save cold-vs-warm TLB. No benign-init / restore is needed since
+// the payload equals the current value (the load changes nothing). `store` is the
+// STC mnemonic with a single "%s" GPR placeholder.
+func emitModePreservingCtrlLoadD(c Class, id int, store string) (string, string, error) {
+	word, err := encodeWord(c)
+	if err != nil {
+		return "", "", err
+	}
+	d := modePreservingData{
+		ID:        id,
+		Word:      fmt.Sprintf("0x%04X", word),
+		Name:      c.Instr.Name,
+		CtrlStore: fmt.Sprintf(store, "r1"),
+	}
+	var b strings.Builder
+	if err := tmplModePreservingD.Execute(&b, d); err != nil {
+		return "", "", err
+	}
+	dispatch := fmt.Sprintf("        .long   0x80000000 + _m8_case_%d\n", id)
+	return b.String(), dispatch, nil
 }
 
 // macPos is one fault-position variant of a MAC dual-base case. Prewarm holds
@@ -651,7 +703,57 @@ var (
 	tmplPrivMemD = template.Must(template.New("privD").Parse(privMemDText))
 	tmplMacD     = template.Must(template.New("macD").Parse(macDText))
 	tmplIFetch   = template.Must(template.New("ifetch").Parse(iFetchText))
+
+	tmplModePreservingD = template.Must(template.New("modePreservingD").Parse(modePreservingDText))
 )
+
+// Mode-preserving PrivMem D-side: LDC.L @Rm+,{SR,VBR}. The payload at @Rm+ is the
+// CURRENT control-register value (STC -> r1 -> backing word), so the load is a
+// machine-state no-op; only the base auto-modify (Rm:=Rm+4) is exercised, which is
+// the precise-exception risk. Snapshot {base GPR, ctrl read-back}.
+const modePreservingDText = `        .balign 4
+_m8_case_{{.ID}}:                       ! {{.Name}}  (PrivMem mode-preserving, D-side)
+        sts.l   pr, @-r15
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   c{{.ID}}_va, r0
+        {{.CtrlStore}}            ! r1 = current ctrl (mode-preserving payload)
+        mov.l   r1, @r0                  ! seed payload = current ctrl (warms TLB)
+        mov.l   c{{.ID}}_flush, r3
+        jsr     @r3
+        nop
+        mov.l   c{{.ID}}_va, r0
+        .word   {{.Word}}                ! instruction under test (payload==ctrl => no-op)
+        {{.CtrlStore}}            ! read resulting ctrl
+        mov.l   c{{.ID}}_snapa, r2
+        mov.l   r0, @r2                  ! base auto-modify (Rm+4)
+        mov.l   r1, @(4,r2)              ! ctrl value (unchanged)
+        ! ---- control leg (warm TLB) ----
+        mov.l   c{{.ID}}_va, r0
+        {{.CtrlStore}}            ! same payload
+        mov.l   r1, @r0                  ! re-seed (re-warms TLB; do NOT flush)
+        mov.l   c{{.ID}}_va, r0
+        .word   {{.Word}}
+        {{.CtrlStore}}
+        mov.l   c{{.ID}}_snapb, r2
+        mov.l   r0, @r2
+        mov.l   r1, @(4,r2)
+        ! ---- compare ----
+        mov     #8, r4
+        mov.l   c{{.ID}}_id, r5
+        mov.l   c{{.ID}}_cmp, r3
+        jsr     @r3
+        nop
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+c{{.ID}}_va:     .long 0x00100000
+c{{.ID}}_snapa:  .long SNAP_A
+c{{.ID}}_snapb:  .long SNAP_B
+c{{.ID}}_id:     .long {{.ID}}
+c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
+c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
+`
 
 // General D-side: snapshot {base reg, dest reg | written word}.
 const generalDText = `        .balign 4

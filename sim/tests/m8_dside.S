@@ -56,104 +56,102 @@
 ! case 2 skipped: LDC Rm, SSR has no D-side memory access
 ! case 2 skipped: LDC Rm, VBR has no D-side memory access
 ! case 2 skipped: LDC, Rm, GBR has no D-side memory access
-! case 3 skipped: LDC.L @Rm+, SR: mode-unsafe (SR/VBR govern execution/vectoring); the @Rm+ base auto-modify path is already covered by the GBR/MACH/MACL/PR siblings, so no precise-exception coverage is lost
-! case 3 skipped: LDC.L @Rm+, VBR: mode-unsafe (SR/VBR govern execution/vectoring); the @Rm+ base auto-modify path is already covered by the GBR/MACH/MACL/PR siblings, so no precise-exception coverage is lost
-! case 3 skipped: LDS Rm, CP0_COM has no D-side memory access
-! case 3 skipped: LDS Rm, CPI_COM has no D-side memory access
-! case 3 skipped: LDS Rm, MACH has no D-side memory access
-! case 3 skipped: LDS Rm, MACL has no D-side memory access
-! case 3 skipped: LDS Rm, PR has no D-side memory access
-! case 6 skipped: LDTLB is Bespoke (dedicated guard)
-! case 6 skipped: LDTLB.R is Bespoke (dedicated guard)
-! case 8 skipped: MOV #imm, Rn has no D-side memory access
-! case 8 skipped: MOV Rm, Rn has no D-side memory access
-! case 8 skipped: MOV.B @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 8 skipped: MOV.B @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 11 skipped: MOV.B R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 12 skipped: MOV.B Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 14 skipped: MOV.L @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 14 skipped: MOV.L @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 14 skipped: MOV.L @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
-! case 17 skipped: MOV.L R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 17 skipped: MOV.L Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 20 skipped: MOV.W @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 20 skipped: MOV.W @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 20 skipped: MOV.W @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
-! case 23 skipped: MOV.W R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 24 skipped: MOV.W Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 26 skipped: MOVA @(disp, PC), R0 has no D-side memory access
-! case 26 skipped: MOVT Rn has no D-side memory access
-! case 26 skipped: MUL.L Rm, Rn has no D-side memory access
-! case 26 skipped: MULS.W Rm, Rn has no D-side memory access
-! case 26 skipped: MULU.W Rm, Rn has no D-side memory access
-! case 26 skipped: NEG Rm, Rn has no D-side memory access
-! case 26 skipped: NEGC Rm, Rn has no D-side memory access
-! case 26 skipped: NOP has no D-side memory access
-! case 26 skipped: NOT Rm, Rn has no D-side memory access
-! case 26 skipped: OR #imm, R0 has no D-side memory access
-! case 26 skipped: OR Rm, Rn has no D-side memory access
-! case 26 skipped: OR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 26 skipped: ROTCL Rn has no D-side memory access
-! case 26 skipped: ROTCR Rn has no D-side memory access
-! case 26 skipped: ROTL Rn has no D-side memory access
-! case 26 skipped: ROTR Rn has no D-side memory access
-! case 26 skipped: RTE is Bespoke (dedicated guard)
-! case 26 skipped: RTS is Bespoke (dedicated guard)
-! case 26 skipped: Reset CPU writes control reg "PC" (mode-unsafe / not representable)
-! case 26 skipped: SETT has no D-side memory access
-! case 26 skipped: SHAD Rm, Rn has no D-side memory access
-! case 26 skipped: SHAL Rn has no D-side memory access
-! case 26 skipped: SHAR Rn has no D-side memory access
-! case 26 skipped: SHLD Rm, Rn has no D-side memory access
-! case 26 skipped: SHLL Rn has no D-side memory access
-! case 26 skipped: SHLL16 Rn has no D-side memory access
-! case 26 skipped: SHLL2 Rn has no D-side memory access
-! case 26 skipped: SHLL8 Rn has no D-side memory access
-! case 26 skipped: SHLR Rn has no D-side memory access
-! case 26 skipped: SHLR16 Rn has no D-side memory access
-! case 26 skipped: SHLR2 Rn has no D-side memory access
-! case 26 skipped: SHLR8 Rn has no D-side memory access
-! case 26 skipped: SLEEP is Bespoke (dedicated guard)
-! case 26 skipped: STC ASIDR, Rn has no D-side memory access
-! case 26 skipped: STC EXPEVT, Rn has no D-side memory access
-! case 26 skipped: STC GBR, Rn has no D-side memory access
-! case 26 skipped: STC INTEVT, Rn has no D-side memory access
-! case 26 skipped: STC PTEH, Rn has no D-side memory access
-! case 26 skipped: STC PTEL, Rn has no D-side memory access
-! case 26 skipped: STC Rm_BANK, Rn has no D-side memory access
-! case 26 skipped: STC SPC, Rn has no D-side memory access
-! case 26 skipped: STC SR, Rn has no D-side memory access
-! case 26 skipped: STC SSR, Rn has no D-side memory access
-! case 26 skipped: STC TRA, Rn has no D-side memory access
-! case 26 skipped: STC TSBPTR, Rn has no D-side memory access
-! case 26 skipped: STC VBR, Rn has no D-side memory access
-! case 27 skipped: STC.L SR, @-Rn writes control reg "" (mode-unsafe / not representable)
-! case 27 skipped: STC.L VBR, @-Rn writes control reg "" (mode-unsafe / not representable)
-! case 27 skipped: STS CP0_COM, Rn has no D-side memory access
-! case 27 skipped: STS CPI_COM, Rn has no D-side memory access
-! case 27 skipped: STS MACH, Rn has no D-side memory access
-! case 27 skipped: STS MACL, Rn has no D-side memory access
-! case 27 skipped: STS PR, Rn has no D-side memory access
-! case 30 skipped: SUB Rm, Rn has no D-side memory access
-! case 30 skipped: SUBC Rm, Rn has no D-side memory access
-! case 30 skipped: SUBV Rm, Rn has no D-side memory access
-! case 30 skipped: SWAP.B Rm, Rn has no D-side memory access
-! case 30 skipped: SWAP.W Rm, Rn has no D-side memory access
-! case 30 skipped: Slot Illegal has no D-side memory access
-! case 31 skipped: TLB DMISS R has no D-side memory access
-! case 31 skipped: TLB DMISS W has no D-side memory access
-! case 31 skipped: TLB DPROT R has no D-side memory access
-! case 31 skipped: TLB DPROT W has no D-side memory access
-! case 31 skipped: TLB IMISS has no D-side memory access
-! case 31 skipped: TLB IPROT has no D-side memory access
-! case 31 skipped: TRAPA #imm has no D-side memory access
-! case 31 skipped: TST #imm, R0 has no D-side memory access
-! case 31 skipped: TST Rm, Rn has no D-side memory access
-! case 31 skipped: TST.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 31 skipped: XOR #imm, R0 has no D-side memory access
-! case 31 skipped: XOR Rm, Rn has no D-side memory access
-! case 31 skipped: XOR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 31 skipped: XTRACT Rm, Rn has no D-side memory access
+! case 5 skipped: LDS Rm, CP0_COM has no D-side memory access
+! case 5 skipped: LDS Rm, CPI_COM has no D-side memory access
+! case 5 skipped: LDS Rm, MACH has no D-side memory access
+! case 5 skipped: LDS Rm, MACL has no D-side memory access
+! case 5 skipped: LDS Rm, PR has no D-side memory access
+! case 8 skipped: LDTLB is Bespoke (dedicated guard)
+! case 8 skipped: LDTLB.R is Bespoke (dedicated guard)
+! case 10 skipped: MOV #imm, Rn has no D-side memory access
+! case 10 skipped: MOV Rm, Rn has no D-side memory access
+! case 10 skipped: MOV.B @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 10 skipped: MOV.B @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 13 skipped: MOV.B R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 14 skipped: MOV.B Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 16 skipped: MOV.L @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 16 skipped: MOV.L @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 16 skipped: MOV.L @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
+! case 19 skipped: MOV.L R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 19 skipped: MOV.L Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 22 skipped: MOV.W @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 22 skipped: MOV.W @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 22 skipped: MOV.W @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
+! case 25 skipped: MOV.W R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 26 skipped: MOV.W Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 28 skipped: MOVA @(disp, PC), R0 has no D-side memory access
+! case 28 skipped: MOVT Rn has no D-side memory access
+! case 28 skipped: MUL.L Rm, Rn has no D-side memory access
+! case 28 skipped: MULS.W Rm, Rn has no D-side memory access
+! case 28 skipped: MULU.W Rm, Rn has no D-side memory access
+! case 28 skipped: NEG Rm, Rn has no D-side memory access
+! case 28 skipped: NEGC Rm, Rn has no D-side memory access
+! case 28 skipped: NOP has no D-side memory access
+! case 28 skipped: NOT Rm, Rn has no D-side memory access
+! case 28 skipped: OR #imm, R0 has no D-side memory access
+! case 28 skipped: OR Rm, Rn has no D-side memory access
+! case 28 skipped: OR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 28 skipped: ROTCL Rn has no D-side memory access
+! case 28 skipped: ROTCR Rn has no D-side memory access
+! case 28 skipped: ROTL Rn has no D-side memory access
+! case 28 skipped: ROTR Rn has no D-side memory access
+! case 28 skipped: RTE is Bespoke (dedicated guard)
+! case 28 skipped: RTS is Bespoke (dedicated guard)
+! case 28 skipped: Reset CPU writes control reg "PC" (mode-unsafe / not representable)
+! case 28 skipped: SETT has no D-side memory access
+! case 28 skipped: SHAD Rm, Rn has no D-side memory access
+! case 28 skipped: SHAL Rn has no D-side memory access
+! case 28 skipped: SHAR Rn has no D-side memory access
+! case 28 skipped: SHLD Rm, Rn has no D-side memory access
+! case 28 skipped: SHLL Rn has no D-side memory access
+! case 28 skipped: SHLL16 Rn has no D-side memory access
+! case 28 skipped: SHLL2 Rn has no D-side memory access
+! case 28 skipped: SHLL8 Rn has no D-side memory access
+! case 28 skipped: SHLR Rn has no D-side memory access
+! case 28 skipped: SHLR16 Rn has no D-side memory access
+! case 28 skipped: SHLR2 Rn has no D-side memory access
+! case 28 skipped: SHLR8 Rn has no D-side memory access
+! case 28 skipped: SLEEP is Bespoke (dedicated guard)
+! case 28 skipped: STC ASIDR, Rn has no D-side memory access
+! case 28 skipped: STC EXPEVT, Rn has no D-side memory access
+! case 28 skipped: STC GBR, Rn has no D-side memory access
+! case 28 skipped: STC INTEVT, Rn has no D-side memory access
+! case 28 skipped: STC PTEH, Rn has no D-side memory access
+! case 28 skipped: STC PTEL, Rn has no D-side memory access
+! case 28 skipped: STC Rm_BANK, Rn has no D-side memory access
+! case 28 skipped: STC SPC, Rn has no D-side memory access
+! case 28 skipped: STC SR, Rn has no D-side memory access
+! case 28 skipped: STC SSR, Rn has no D-side memory access
+! case 28 skipped: STC TRA, Rn has no D-side memory access
+! case 28 skipped: STC TSBPTR, Rn has no D-side memory access
+! case 28 skipped: STC VBR, Rn has no D-side memory access
+! case 29 skipped: STC.L SR, @-Rn writes control reg "" (mode-unsafe / not representable)
+! case 29 skipped: STC.L VBR, @-Rn writes control reg "" (mode-unsafe / not representable)
+! case 29 skipped: STS CP0_COM, Rn has no D-side memory access
+! case 29 skipped: STS CPI_COM, Rn has no D-side memory access
+! case 29 skipped: STS MACH, Rn has no D-side memory access
+! case 29 skipped: STS MACL, Rn has no D-side memory access
+! case 29 skipped: STS PR, Rn has no D-side memory access
+! case 32 skipped: SUB Rm, Rn has no D-side memory access
+! case 32 skipped: SUBC Rm, Rn has no D-side memory access
+! case 32 skipped: SUBV Rm, Rn has no D-side memory access
+! case 32 skipped: SWAP.B Rm, Rn has no D-side memory access
+! case 32 skipped: SWAP.W Rm, Rn has no D-side memory access
+! case 32 skipped: Slot Illegal has no D-side memory access
+! case 33 skipped: TLB DMISS R has no D-side memory access
+! case 33 skipped: TLB DMISS W has no D-side memory access
+! case 33 skipped: TLB DPROT R has no D-side memory access
+! case 33 skipped: TLB DPROT W has no D-side memory access
+! case 33 skipped: TLB IMISS has no D-side memory access
+! case 33 skipped: TLB IPROT has no D-side memory access
+! case 33 skipped: TRAPA #imm has no D-side memory access
+! case 33 skipped: TST #imm, R0 has no D-side memory access
+! case 33 skipped: TST Rm, Rn has no D-side memory access
+! case 33 skipped: TST.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 33 skipped: XOR #imm, R0 has no D-side memory access
+! case 33 skipped: XOR Rm, Rn has no D-side memory access
+! case 33 skipped: XOR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 33 skipped: XTRACT Rm, Rn has no D-side memory access
 #include "m8_runtime.inc"
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
@@ -280,50 +278,32 @@ c2_cmp:    .long 0x80000000 + _m8_cmp
 c2_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_3:                       ! LDS.L @Rm+, MACH  (PrivMem, D-side)
+_m8_case_3:                       ! LDC.L @Rm+, SR  (PrivMem mode-preserving, D-side)
         sts.l   pr, @-r15
-        mov     #0, r1
-        lds     r1, mach            ! benign-init ctrl (never read 'U' on save)
-        sts     mach, r1            ! save baseline ctrl -> r1
-        mov.l   c3_ctlsv, r2
-        mov.l   r1, @r2
         ! ---- faulting leg (cold TLB) ----
-        mov.l   c3_seedva, r0
-        mov.l   c3_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
+        mov.l   c3_va, r0
+        stc     sr, r1            ! r1 = current ctrl (mode-preserving payload)
+        mov.l   r1, @r0                  ! seed payload = current ctrl (warms TLB)
         mov.l   c3_flush, r3
         jsr     @r3
         nop
         mov.l   c3_va, r0
-        mov     #0, r1
-        lds     r1, mach            ! benign ctrl = 0
-        .word   0x4006                ! instruction under test
-        sts     mach, r1            ! read resulting ctrl
+        .word   0x4007                ! instruction under test (payload==ctrl => no-op)
+        stc     sr, r1            ! read resulting ctrl
         mov.l   c3_snapa, r2
-        mov.l   r0, @r2
-        mov.l   r1, @(4,r2)
+        mov.l   r0, @r2                  ! base auto-modify (Rm+4)
+        mov.l   r1, @(4,r2)              ! ctrl value (unchanged)
         ! ---- control leg (warm TLB) ----
-        mov.l   c3_seedva, r0
-        mov.l   c3_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
         mov.l   c3_va, r0
-        mov     #0, r1
-        lds     r1, mach
-        .word   0x4006
-        sts     mach, r1
+        stc     sr, r1            ! same payload
+        mov.l   r1, @r0                  ! re-seed (re-warms TLB; do NOT flush)
+        mov.l   c3_va, r0
+        .word   0x4007
+        stc     sr, r1
         mov.l   c3_snapb, r2
         mov.l   r0, @r2
         mov.l   r1, @(4,r2)
-        ! ---- restore original ctrl + compare ----
-        mov.l   c3_ctlsv, r2
-        mov.l   @r2, r1
-        lds     r1, mach
+        ! ---- compare ----
         mov     #8, r4
         mov.l   c3_id, r5
         mov.l   c3_cmp, r3
@@ -334,9 +314,6 @@ _m8_case_3:                       ! LDS.L @Rm+, MACH  (PrivMem, D-side)
         nop
         .align 2
 c3_va:     .long 0x00100000
-c3_seedva: .long 0x00100000
-c3_seed:   .long 0xA11C0001
-c3_ctlsv:  .long 0x80003200
 c3_snapa:  .long SNAP_A
 c3_snapb:  .long SNAP_B
 c3_id:     .long 3
@@ -344,50 +321,32 @@ c3_cmp:    .long 0x80000000 + _m8_cmp
 c3_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_4:                       ! LDS.L @Rm+, MACL  (PrivMem, D-side)
+_m8_case_4:                       ! LDC.L @Rm+, VBR  (PrivMem mode-preserving, D-side)
         sts.l   pr, @-r15
-        mov     #0, r1
-        lds     r1, macl            ! benign-init ctrl (never read 'U' on save)
-        sts     macl, r1            ! save baseline ctrl -> r1
-        mov.l   c4_ctlsv, r2
-        mov.l   r1, @r2
         ! ---- faulting leg (cold TLB) ----
-        mov.l   c4_seedva, r0
-        mov.l   c4_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
+        mov.l   c4_va, r0
+        stc     vbr, r1            ! r1 = current ctrl (mode-preserving payload)
+        mov.l   r1, @r0                  ! seed payload = current ctrl (warms TLB)
         mov.l   c4_flush, r3
         jsr     @r3
         nop
         mov.l   c4_va, r0
-        mov     #0, r1
-        lds     r1, macl            ! benign ctrl = 0
-        .word   0x4016                ! instruction under test
-        sts     macl, r1            ! read resulting ctrl
+        .word   0x4027                ! instruction under test (payload==ctrl => no-op)
+        stc     vbr, r1            ! read resulting ctrl
         mov.l   c4_snapa, r2
-        mov.l   r0, @r2
-        mov.l   r1, @(4,r2)
+        mov.l   r0, @r2                  ! base auto-modify (Rm+4)
+        mov.l   r1, @(4,r2)              ! ctrl value (unchanged)
         ! ---- control leg (warm TLB) ----
-        mov.l   c4_seedva, r0
-        mov.l   c4_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
         mov.l   c4_va, r0
-        mov     #0, r1
-        lds     r1, macl
-        .word   0x4016
-        sts     macl, r1
+        stc     vbr, r1            ! same payload
+        mov.l   r1, @r0                  ! re-seed (re-warms TLB; do NOT flush)
+        mov.l   c4_va, r0
+        .word   0x4027
+        stc     vbr, r1
         mov.l   c4_snapb, r2
         mov.l   r0, @r2
         mov.l   r1, @(4,r2)
-        ! ---- restore original ctrl + compare ----
-        mov.l   c4_ctlsv, r2
-        mov.l   @r2, r1
-        lds     r1, macl
+        ! ---- compare ----
         mov     #8, r4
         mov.l   c4_id, r5
         mov.l   c4_cmp, r3
@@ -398,9 +357,6 @@ _m8_case_4:                       ! LDS.L @Rm+, MACL  (PrivMem, D-side)
         nop
         .align 2
 c4_va:     .long 0x00100000
-c4_seedva: .long 0x00100000
-c4_seed:   .long 0xA11C0001
-c4_ctlsv:  .long 0x80003200
 c4_snapa:  .long SNAP_A
 c4_snapb:  .long SNAP_B
 c4_id:     .long 4
@@ -408,11 +364,11 @@ c4_cmp:    .long 0x80000000 + _m8_cmp
 c4_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_5:                       ! LDS.L @Rm+, PR  (PrivMem, D-side)
+_m8_case_5:                       ! LDS.L @Rm+, MACH  (PrivMem, D-side)
         sts.l   pr, @-r15
         mov     #0, r1
-        lds     r1, pr            ! benign-init ctrl (never read 'U' on save)
-        sts     pr, r1            ! save baseline ctrl -> r1
+        lds     r1, mach            ! benign-init ctrl (never read 'U' on save)
+        sts     mach, r1            ! save baseline ctrl -> r1
         mov.l   c5_ctlsv, r2
         mov.l   r1, @r2
         ! ---- faulting leg (cold TLB) ----
@@ -427,9 +383,9 @@ _m8_case_5:                       ! LDS.L @Rm+, PR  (PrivMem, D-side)
         nop
         mov.l   c5_va, r0
         mov     #0, r1
-        lds     r1, pr            ! benign ctrl = 0
-        .word   0x4026                ! instruction under test
-        sts     pr, r1            ! read resulting ctrl
+        lds     r1, mach            ! benign ctrl = 0
+        .word   0x4006                ! instruction under test
+        sts     mach, r1            ! read resulting ctrl
         mov.l   c5_snapa, r2
         mov.l   r0, @r2
         mov.l   r1, @(4,r2)
@@ -442,16 +398,16 @@ _m8_case_5:                       ! LDS.L @Rm+, PR  (PrivMem, D-side)
         mov.l   r1, @(12,r0)
         mov.l   c5_va, r0
         mov     #0, r1
-        lds     r1, pr
-        .word   0x4026
-        sts     pr, r1
+        lds     r1, mach
+        .word   0x4006
+        sts     mach, r1
         mov.l   c5_snapb, r2
         mov.l   r0, @r2
         mov.l   r1, @(4,r2)
         ! ---- restore original ctrl + compare ----
         mov.l   c5_ctlsv, r2
         mov.l   @r2, r1
-        lds     r1, pr
+        lds     r1, mach
         mov     #8, r4
         mov.l   c5_id, r5
         mov.l   c5_cmp, r3
@@ -472,170 +428,51 @@ c5_cmp:    .long 0x80000000 + _m8_cmp
 c5_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_6:                       ! MAC.L @Rm+, @Rn+  (MAC dual-base, D-side; 3 fault positions)
+_m8_case_6:                       ! LDS.L @Rm+, MACL  (PrivMem, D-side)
         sts.l   pr, @-r15
-        ! ===== position: fault on operand 1 only (Rm page cold, Rn page pre-warmed) =====
+        mov     #0, r1
+        lds     r1, macl            ! benign-init ctrl (never read 'U' on save)
+        sts     macl, r1            ! save baseline ctrl -> r1
+        mov.l   c6_ctlsv, r2
+        mov.l   r1, @r2
         ! ---- faulting leg (cold TLB) ----
-        mov.l   c6_seedva, r0     ! page A (Rm)
+        mov.l   c6_seedva, r0
         mov.l   c6_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
-        mov.l   c6_seedvb, r0     ! page B (Rn)
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
         mov.l   c6_flush, r3
         jsr     @r3
         nop
-        mov.l   c6_seedvb, r0          ! pre-warm page B (Rn): only operand 1 (Rm) faults
-        mov.l   @r0, r1
-        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
-        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
-        mov     #0, r9
-        lds     r9, mach
-        lds     r9, macl
-        mov.l   c6_seedva, r0     ! Rm base
-        mov.l   c6_seedvb, r8     ! Rn base
-        .word   0x080F                ! instruction under test
+        mov.l   c6_va, r0
+        mov     #0, r1
+        lds     r1, macl            ! benign ctrl = 0
+        .word   0x4016                ! instruction under test
+        sts     macl, r1            ! read resulting ctrl
         mov.l   c6_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
-        sts     mach, r1
-        mov.l   r1, @(8,r2)
-        sts     macl, r1
-        mov.l   r1, @(12,r2)
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm TLB) ----
         mov.l   c6_seedva, r0
         mov.l   c6_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
-        mov.l   c6_seedvb, r0
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov     #0, r9                 ! deterministic accumulator clear (see above)
-        lds     r9, mach
-        lds     r9, macl
-        mov.l   c6_seedva, r0
-        mov.l   c6_seedvb, r8
-        .word   0x080F
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   c6_va, r0
+        mov     #0, r1
+        lds     r1, macl
+        .word   0x4016
+        sts     macl, r1
         mov.l   c6_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
-        sts     mach, r1
-        mov.l   r1, @(8,r2)
-        sts     macl, r1
-        mov.l   r1, @(12,r2)
-        ! ---- compare ----
-        mov     #16, r4
-        mov.l   c6_id, r5
-        mov.l   c6_cmp, r3
-        jsr     @r3
-        nop
-        ! ===== position: fault on operand 2 only (Rm page pre-warmed, Rn page cold) =====
-        ! ---- faulting leg (cold TLB) ----
-        mov.l   c6_seedva, r0     ! page A (Rm)
-        mov.l   c6_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   c6_seedvb, r0     ! page B (Rn)
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   c6_flush, r3
-        jsr     @r3
-        nop
-        mov.l   c6_seedva, r0          ! pre-warm page A (Rm): only operand 2 (Rn) faults
-        mov.l   @r0, r1
-        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
-        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
-        mov     #0, r9
-        lds     r9, mach
-        lds     r9, macl
-        mov.l   c6_seedva, r0     ! Rm base
-        mov.l   c6_seedvb, r8     ! Rn base
-        .word   0x080F                ! instruction under test
-        mov.l   c6_snapa, r2
-        mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
-        sts     mach, r1
-        mov.l   r1, @(8,r2)
-        sts     macl, r1
-        mov.l   r1, @(12,r2)
-        ! ---- control leg (warm TLB) ----
-        mov.l   c6_seedva, r0
-        mov.l   c6_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   c6_seedvb, r0
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov     #0, r9                 ! deterministic accumulator clear (see above)
-        lds     r9, mach
-        lds     r9, macl
-        mov.l   c6_seedva, r0
-        mov.l   c6_seedvb, r8
-        .word   0x080F
-        mov.l   c6_snapb, r2
-        mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
-        sts     mach, r1
-        mov.l   r1, @(8,r2)
-        sts     macl, r1
-        mov.l   r1, @(12,r2)
-        ! ---- compare ----
-        mov     #16, r4
-        mov.l   c6_id, r5
-        mov.l   c6_cmp, r3
-        jsr     @r3
-        nop
-        ! ===== position: both operands cold (both Rm and Rn faults) =====
-        ! ---- faulting leg (cold TLB) ----
-        mov.l   c6_seedva, r0     ! page A (Rm)
-        mov.l   c6_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   c6_seedvb, r0     ! page B (Rn)
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   c6_flush, r3
-        jsr     @r3
-        nop
-        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
-        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
-        mov     #0, r9
-        lds     r9, mach
-        lds     r9, macl
-        mov.l   c6_seedva, r0     ! Rm base
-        mov.l   c6_seedvb, r8     ! Rn base
-        .word   0x080F                ! instruction under test
-        mov.l   c6_snapa, r2
-        mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
-        sts     mach, r1
-        mov.l   r1, @(8,r2)
-        sts     macl, r1
-        mov.l   r1, @(12,r2)
-        ! ---- control leg (warm TLB) ----
-        mov.l   c6_seedva, r0
-        mov.l   c6_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   c6_seedvb, r0
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov     #0, r9                 ! deterministic accumulator clear (see above)
-        lds     r9, mach
-        lds     r9, macl
-        mov.l   c6_seedva, r0
-        mov.l   c6_seedvb, r8
-        .word   0x080F
-        mov.l   c6_snapb, r2
-        mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
-        sts     mach, r1
-        mov.l   r1, @(8,r2)
-        sts     macl, r1
-        mov.l   r1, @(12,r2)
-        ! ---- compare ----
-        mov     #16, r4
+        mov.l   r1, @(4,r2)
+        ! ---- restore original ctrl + compare ----
+        mov.l   c6_ctlsv, r2
+        mov.l   @r2, r1
+        lds     r1, macl
+        mov     #8, r4
         mov.l   c6_id, r5
         mov.l   c6_cmp, r3
         jsr     @r3
@@ -644,9 +481,10 @@ _m8_case_6:                       ! MAC.L @Rm+, @Rn+  (MAC dual-base, D-side; 3 
         rts
         nop
         .align 2
+c6_va:     .long 0x00100000
 c6_seedva: .long 0x00100000
-c6_seedvb: .long 0x00101000
 c6_seed:   .long 0xA11C0001
+c6_ctlsv:  .long 0x80003200
 c6_snapa:  .long SNAP_A
 c6_snapb:  .long SNAP_B
 c6_id:     .long 6
@@ -654,170 +492,51 @@ c6_cmp:    .long 0x80000000 + _m8_cmp
 c6_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_7:                       ! MAC.W @Rm+, @Rn+  (MAC dual-base, D-side; 3 fault positions)
+_m8_case_7:                       ! LDS.L @Rm+, PR  (PrivMem, D-side)
         sts.l   pr, @-r15
-        ! ===== position: fault on operand 1 only (Rm page cold, Rn page pre-warmed) =====
+        mov     #0, r1
+        lds     r1, pr            ! benign-init ctrl (never read 'U' on save)
+        sts     pr, r1            ! save baseline ctrl -> r1
+        mov.l   c7_ctlsv, r2
+        mov.l   r1, @r2
         ! ---- faulting leg (cold TLB) ----
-        mov.l   c7_seedva, r0     ! page A (Rm)
+        mov.l   c7_seedva, r0
         mov.l   c7_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
-        mov.l   c7_seedvb, r0     ! page B (Rn)
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
         mov.l   c7_flush, r3
         jsr     @r3
         nop
-        mov.l   c7_seedvb, r0          ! pre-warm page B (Rn): only operand 1 (Rm) faults
-        mov.l   @r0, r1
-        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
-        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
-        mov     #0, r9
-        lds     r9, mach
-        lds     r9, macl
-        mov.l   c7_seedva, r0     ! Rm base
-        mov.l   c7_seedvb, r8     ! Rn base
-        .word   0x480F                ! instruction under test
+        mov.l   c7_va, r0
+        mov     #0, r1
+        lds     r1, pr            ! benign ctrl = 0
+        .word   0x4026                ! instruction under test
+        sts     pr, r1            ! read resulting ctrl
         mov.l   c7_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
-        sts     mach, r1
-        mov.l   r1, @(8,r2)
-        sts     macl, r1
-        mov.l   r1, @(12,r2)
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm TLB) ----
         mov.l   c7_seedva, r0
         mov.l   c7_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
-        mov.l   c7_seedvb, r0
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov     #0, r9                 ! deterministic accumulator clear (see above)
-        lds     r9, mach
-        lds     r9, macl
-        mov.l   c7_seedva, r0
-        mov.l   c7_seedvb, r8
-        .word   0x480F
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   c7_va, r0
+        mov     #0, r1
+        lds     r1, pr
+        .word   0x4026
+        sts     pr, r1
         mov.l   c7_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
-        sts     mach, r1
-        mov.l   r1, @(8,r2)
-        sts     macl, r1
-        mov.l   r1, @(12,r2)
-        ! ---- compare ----
-        mov     #16, r4
-        mov.l   c7_id, r5
-        mov.l   c7_cmp, r3
-        jsr     @r3
-        nop
-        ! ===== position: fault on operand 2 only (Rm page pre-warmed, Rn page cold) =====
-        ! ---- faulting leg (cold TLB) ----
-        mov.l   c7_seedva, r0     ! page A (Rm)
-        mov.l   c7_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   c7_seedvb, r0     ! page B (Rn)
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   c7_flush, r3
-        jsr     @r3
-        nop
-        mov.l   c7_seedva, r0          ! pre-warm page A (Rm): only operand 2 (Rn) faults
-        mov.l   @r0, r1
-        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
-        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
-        mov     #0, r9
-        lds     r9, mach
-        lds     r9, macl
-        mov.l   c7_seedva, r0     ! Rm base
-        mov.l   c7_seedvb, r8     ! Rn base
-        .word   0x480F                ! instruction under test
-        mov.l   c7_snapa, r2
-        mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
-        sts     mach, r1
-        mov.l   r1, @(8,r2)
-        sts     macl, r1
-        mov.l   r1, @(12,r2)
-        ! ---- control leg (warm TLB) ----
-        mov.l   c7_seedva, r0
-        mov.l   c7_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   c7_seedvb, r0
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov     #0, r9                 ! deterministic accumulator clear (see above)
-        lds     r9, mach
-        lds     r9, macl
-        mov.l   c7_seedva, r0
-        mov.l   c7_seedvb, r8
-        .word   0x480F
-        mov.l   c7_snapb, r2
-        mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
-        sts     mach, r1
-        mov.l   r1, @(8,r2)
-        sts     macl, r1
-        mov.l   r1, @(12,r2)
-        ! ---- compare ----
-        mov     #16, r4
-        mov.l   c7_id, r5
-        mov.l   c7_cmp, r3
-        jsr     @r3
-        nop
-        ! ===== position: both operands cold (both Rm and Rn faults) =====
-        ! ---- faulting leg (cold TLB) ----
-        mov.l   c7_seedva, r0     ! page A (Rm)
-        mov.l   c7_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   c7_seedvb, r0     ! page B (Rn)
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   c7_flush, r3
-        jsr     @r3
-        nop
-        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
-        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
-        mov     #0, r9
-        lds     r9, mach
-        lds     r9, macl
-        mov.l   c7_seedva, r0     ! Rm base
-        mov.l   c7_seedvb, r8     ! Rn base
-        .word   0x480F                ! instruction under test
-        mov.l   c7_snapa, r2
-        mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
-        sts     mach, r1
-        mov.l   r1, @(8,r2)
-        sts     macl, r1
-        mov.l   r1, @(12,r2)
-        ! ---- control leg (warm TLB) ----
-        mov.l   c7_seedva, r0
-        mov.l   c7_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   c7_seedvb, r0
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov     #0, r9                 ! deterministic accumulator clear (see above)
-        lds     r9, mach
-        lds     r9, macl
-        mov.l   c7_seedva, r0
-        mov.l   c7_seedvb, r8
-        .word   0x480F
-        mov.l   c7_snapb, r2
-        mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
-        sts     mach, r1
-        mov.l   r1, @(8,r2)
-        sts     macl, r1
-        mov.l   r1, @(12,r2)
-        ! ---- compare ----
-        mov     #16, r4
+        mov.l   r1, @(4,r2)
+        ! ---- restore original ctrl + compare ----
+        mov.l   c7_ctlsv, r2
+        mov.l   @r2, r1
+        lds     r1, pr
+        mov     #8, r4
         mov.l   c7_id, r5
         mov.l   c7_cmp, r3
         jsr     @r3
@@ -826,9 +545,10 @@ _m8_case_7:                       ! MAC.W @Rm+, @Rn+  (MAC dual-base, D-side; 3 
         rts
         nop
         .align 2
+c7_va:     .long 0x00100000
 c7_seedva: .long 0x00100000
-c7_seedvb: .long 0x00101000
 c7_seed:   .long 0xA11C0001
+c7_ctlsv:  .long 0x80003200
 c7_snapa:  .long SNAP_A
 c7_snapb:  .long SNAP_B
 c7_id:     .long 7
@@ -836,39 +556,170 @@ c7_cmp:    .long 0x80000000 + _m8_cmp
 c7_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_8:                       ! MOV.B @(disp, Rm), R0  (General, D-side)
+_m8_case_8:                       ! MAC.L @Rm+, @Rn+  (MAC dual-base, D-side; 3 fault positions)
         sts.l   pr, @-r15
+        ! ===== position: fault on operand 1 only (Rm page cold, Rn page pre-warmed) =====
         ! ---- faulting leg (cold TLB) ----
-        mov.l   c8_seedva, r0
+        mov.l   c8_seedva, r0     ! page A (Rm)
         mov.l   c8_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
+        mov.l   c8_seedvb, r0     ! page B (Rn)
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
         mov.l   c8_flush, r3
         jsr     @r3
         nop
-        mov.l   c8_va, r0
-        mov     #0, r8
-        .word   0x8400                ! instruction under test
+        mov.l   c8_seedvb, r0          ! pre-warm page B (Rn): only operand 1 (Rm) faults
+        mov.l   @r0, r1
+        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
+        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
+        mov     #0, r9
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c8_seedva, r0     ! Rm base
+        mov.l   c8_seedvb, r8     ! Rn base
+        .word   0x080F                ! instruction under test
         mov.l   c8_snapa, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
         ! ---- control leg (warm TLB) ----
         mov.l   c8_seedva, r0
         mov.l   c8_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c8_va, r0
-        mov     #0, r8
-        .word   0x8400
+        mov.l   c8_seedvb, r0
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov     #0, r9                 ! deterministic accumulator clear (see above)
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c8_seedva, r0
+        mov.l   c8_seedvb, r8
+        .word   0x080F
         mov.l   c8_snapb, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
         ! ---- compare ----
-        mov     #8, r4
+        mov     #16, r4
+        mov.l   c8_id, r5
+        mov.l   c8_cmp, r3
+        jsr     @r3
+        nop
+        ! ===== position: fault on operand 2 only (Rm page pre-warmed, Rn page cold) =====
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   c8_seedva, r0     ! page A (Rm)
+        mov.l   c8_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c8_seedvb, r0     ! page B (Rn)
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c8_flush, r3
+        jsr     @r3
+        nop
+        mov.l   c8_seedva, r0          ! pre-warm page A (Rm): only operand 2 (Rn) faults
+        mov.l   @r0, r1
+        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
+        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
+        mov     #0, r9
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c8_seedva, r0     ! Rm base
+        mov.l   c8_seedvb, r8     ! Rn base
+        .word   0x080F                ! instruction under test
+        mov.l   c8_snapa, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- control leg (warm TLB) ----
+        mov.l   c8_seedva, r0
+        mov.l   c8_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c8_seedvb, r0
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov     #0, r9                 ! deterministic accumulator clear (see above)
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c8_seedva, r0
+        mov.l   c8_seedvb, r8
+        .word   0x080F
+        mov.l   c8_snapb, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- compare ----
+        mov     #16, r4
+        mov.l   c8_id, r5
+        mov.l   c8_cmp, r3
+        jsr     @r3
+        nop
+        ! ===== position: both operands cold (both Rm and Rn faults) =====
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   c8_seedva, r0     ! page A (Rm)
+        mov.l   c8_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c8_seedvb, r0     ! page B (Rn)
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c8_flush, r3
+        jsr     @r3
+        nop
+        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
+        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
+        mov     #0, r9
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c8_seedva, r0     ! Rm base
+        mov.l   c8_seedvb, r8     ! Rn base
+        .word   0x080F                ! instruction under test
+        mov.l   c8_snapa, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- control leg (warm TLB) ----
+        mov.l   c8_seedva, r0
+        mov.l   c8_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c8_seedvb, r0
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov     #0, r9                 ! deterministic accumulator clear (see above)
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c8_seedva, r0
+        mov.l   c8_seedvb, r8
+        .word   0x080F
+        mov.l   c8_snapb, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- compare ----
+        mov     #16, r4
         mov.l   c8_id, r5
         mov.l   c8_cmp, r3
         jsr     @r3
@@ -877,11 +728,9 @@ _m8_case_8:                       ! MOV.B @(disp, Rm), R0  (General, D-side)
         rts
         nop
         .align 2
-c8_va:     .long 0x00100000
 c8_seedva: .long 0x00100000
-c8_probe:  .long 0x00100000
+c8_seedvb: .long 0x00101000
 c8_seed:   .long 0xA11C0001
-c8_pay:    .long 0x57013333
 c8_snapa:  .long SNAP_A
 c8_snapb:  .long SNAP_B
 c8_id:     .long 8
@@ -889,39 +738,170 @@ c8_cmp:    .long 0x80000000 + _m8_cmp
 c8_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_9:                       ! MOV.B @Rm+, Rn  (General, D-side)
+_m8_case_9:                       ! MAC.W @Rm+, @Rn+  (MAC dual-base, D-side; 3 fault positions)
         sts.l   pr, @-r15
+        ! ===== position: fault on operand 1 only (Rm page cold, Rn page pre-warmed) =====
         ! ---- faulting leg (cold TLB) ----
-        mov.l   c9_seedva, r0
+        mov.l   c9_seedva, r0     ! page A (Rm)
         mov.l   c9_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
+        mov.l   c9_seedvb, r0     ! page B (Rn)
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
         mov.l   c9_flush, r3
         jsr     @r3
         nop
-        mov.l   c9_va, r0
-        mov     #0, r8
-        .word   0x6804                ! instruction under test
+        mov.l   c9_seedvb, r0          ! pre-warm page B (Rn): only operand 1 (Rm) faults
+        mov.l   @r0, r1
+        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
+        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
+        mov     #0, r9
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c9_seedva, r0     ! Rm base
+        mov.l   c9_seedvb, r8     ! Rn base
+        .word   0x480F                ! instruction under test
         mov.l   c9_snapa, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
         ! ---- control leg (warm TLB) ----
         mov.l   c9_seedva, r0
         mov.l   c9_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c9_va, r0
-        mov     #0, r8
-        .word   0x6804
+        mov.l   c9_seedvb, r0
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov     #0, r9                 ! deterministic accumulator clear (see above)
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c9_seedva, r0
+        mov.l   c9_seedvb, r8
+        .word   0x480F
         mov.l   c9_snapb, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
         ! ---- compare ----
-        mov     #8, r4
+        mov     #16, r4
+        mov.l   c9_id, r5
+        mov.l   c9_cmp, r3
+        jsr     @r3
+        nop
+        ! ===== position: fault on operand 2 only (Rm page pre-warmed, Rn page cold) =====
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   c9_seedva, r0     ! page A (Rm)
+        mov.l   c9_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c9_seedvb, r0     ! page B (Rn)
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c9_flush, r3
+        jsr     @r3
+        nop
+        mov.l   c9_seedva, r0          ! pre-warm page A (Rm): only operand 2 (Rn) faults
+        mov.l   @r0, r1
+        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
+        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
+        mov     #0, r9
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c9_seedva, r0     ! Rm base
+        mov.l   c9_seedvb, r8     ! Rn base
+        .word   0x480F                ! instruction under test
+        mov.l   c9_snapa, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- control leg (warm TLB) ----
+        mov.l   c9_seedva, r0
+        mov.l   c9_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c9_seedvb, r0
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov     #0, r9                 ! deterministic accumulator clear (see above)
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c9_seedva, r0
+        mov.l   c9_seedvb, r8
+        .word   0x480F
+        mov.l   c9_snapb, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- compare ----
+        mov     #16, r4
+        mov.l   c9_id, r5
+        mov.l   c9_cmp, r3
+        jsr     @r3
+        nop
+        ! ===== position: both operands cold (both Rm and Rn faults) =====
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   c9_seedva, r0     ! page A (Rm)
+        mov.l   c9_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c9_seedvb, r0     ! page B (Rn)
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c9_flush, r3
+        jsr     @r3
+        nop
+        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
+        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
+        mov     #0, r9
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c9_seedva, r0     ! Rm base
+        mov.l   c9_seedvb, r8     ! Rn base
+        .word   0x480F                ! instruction under test
+        mov.l   c9_snapa, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- control leg (warm TLB) ----
+        mov.l   c9_seedva, r0
+        mov.l   c9_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c9_seedvb, r0
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov     #0, r9                 ! deterministic accumulator clear (see above)
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c9_seedva, r0
+        mov.l   c9_seedvb, r8
+        .word   0x480F
+        mov.l   c9_snapb, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- compare ----
+        mov     #16, r4
         mov.l   c9_id, r5
         mov.l   c9_cmp, r3
         jsr     @r3
@@ -930,11 +910,9 @@ _m8_case_9:                       ! MOV.B @Rm+, Rn  (General, D-side)
         rts
         nop
         .align 2
-c9_va:     .long 0x00100000
 c9_seedva: .long 0x00100000
-c9_probe:  .long 0x00100000
+c9_seedvb: .long 0x00101000
 c9_seed:   .long 0xA11C0001
-c9_pay:    .long 0x57013333
 c9_snapa:  .long SNAP_A
 c9_snapb:  .long SNAP_B
 c9_id:     .long 9
@@ -942,7 +920,7 @@ c9_cmp:    .long 0x80000000 + _m8_cmp
 c9_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_10:                       ! MOV.B @Rm, Rn  (General, D-side)
+_m8_case_10:                       ! MOV.B @(disp, Rm), R0  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c10_seedva, r0
@@ -956,7 +934,7 @@ _m8_case_10:                       ! MOV.B @Rm, Rn  (General, D-side)
         nop
         mov.l   c10_va, r0
         mov     #0, r8
-        .word   0x6800                ! instruction under test
+        .word   0x8400                ! instruction under test
         mov.l   c10_snapa, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
@@ -969,7 +947,7 @@ _m8_case_10:                       ! MOV.B @Rm, Rn  (General, D-side)
         mov.l   r1, @(12,r0)
         mov.l   c10_va, r0
         mov     #0, r8
-        .word   0x6800
+        .word   0x8400
         mov.l   c10_snapb, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
@@ -995,7 +973,7 @@ c10_cmp:    .long 0x80000000 + _m8_cmp
 c10_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_11:                       ! MOV.B R0, @(disp, Rn)  (General, D-side)
+_m8_case_11:                       ! MOV.B @Rm+, Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c11_seedva, r0
@@ -1008,13 +986,11 @@ _m8_case_11:                       ! MOV.B R0, @(disp, Rn)  (General, D-side)
         jsr     @r3
         nop
         mov.l   c11_va, r0
-        mov.l   c11_pay, r8
-        .word   0x8000                ! instruction under test
+        mov     #0, r8
+        .word   0x6804                ! instruction under test
         mov.l   c11_snapa, r2
         mov.l   r0, @r2
-        mov.l   c11_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm TLB) ----
         mov.l   c11_seedva, r0
         mov.l   c11_seed, r1
@@ -1023,13 +999,11 @@ _m8_case_11:                       ! MOV.B R0, @(disp, Rn)  (General, D-side)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c11_va, r0
-        mov.l   c11_pay, r8
-        .word   0x8000
+        mov     #0, r8
+        .word   0x6804
         mov.l   c11_snapb, r2
         mov.l   r0, @r2
-        mov.l   c11_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c11_id, r5
@@ -1052,7 +1026,7 @@ c11_cmp:    .long 0x80000000 + _m8_cmp
 c11_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_12:                       ! MOV.B Rm, @Rn  (General, D-side)
+_m8_case_12:                       ! MOV.B @Rm, Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c12_seedva, r0
@@ -1065,13 +1039,11 @@ _m8_case_12:                       ! MOV.B Rm, @Rn  (General, D-side)
         jsr     @r3
         nop
         mov.l   c12_va, r0
-        mov.l   c12_pay, r8
-        .word   0x2080                ! instruction under test
+        mov     #0, r8
+        .word   0x6800                ! instruction under test
         mov.l   c12_snapa, r2
         mov.l   r0, @r2
-        mov.l   c12_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm TLB) ----
         mov.l   c12_seedva, r0
         mov.l   c12_seed, r1
@@ -1080,13 +1052,11 @@ _m8_case_12:                       ! MOV.B Rm, @Rn  (General, D-side)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c12_va, r0
-        mov.l   c12_pay, r8
-        .word   0x2080
+        mov     #0, r8
+        .word   0x6800
         mov.l   c12_snapb, r2
         mov.l   r0, @r2
-        mov.l   c12_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c12_id, r5
@@ -1109,7 +1079,7 @@ c12_cmp:    .long 0x80000000 + _m8_cmp
 c12_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_13:                       ! MOV.B Rm,@-Rn  (General, D-side)
+_m8_case_13:                       ! MOV.B R0, @(disp, Rn)  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c13_seedva, r0
@@ -1123,7 +1093,7 @@ _m8_case_13:                       ! MOV.B Rm,@-Rn  (General, D-side)
         nop
         mov.l   c13_va, r0
         mov.l   c13_pay, r8
-        .word   0x2084                ! instruction under test
+        .word   0x8000                ! instruction under test
         mov.l   c13_snapa, r2
         mov.l   r0, @r2
         mov.l   c13_probe, r3
@@ -1138,7 +1108,7 @@ _m8_case_13:                       ! MOV.B Rm,@-Rn  (General, D-side)
         mov.l   r1, @(12,r0)
         mov.l   c13_va, r0
         mov.l   c13_pay, r8
-        .word   0x2084
+        .word   0x8000
         mov.l   c13_snapb, r2
         mov.l   r0, @r2
         mov.l   c13_probe, r3
@@ -1154,9 +1124,9 @@ _m8_case_13:                       ! MOV.B Rm,@-Rn  (General, D-side)
         rts
         nop
         .align 2
-c13_va:     .long 0x00100008
+c13_va:     .long 0x00100000
 c13_seedva: .long 0x00100000
-c13_probe:  .long 0x00100004
+c13_probe:  .long 0x00100000
 c13_seed:   .long 0xA11C0001
 c13_pay:    .long 0x57013333
 c13_snapa:  .long SNAP_A
@@ -1166,7 +1136,7 @@ c13_cmp:    .long 0x80000000 + _m8_cmp
 c13_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_14:                       ! MOV.L @(disp, Rm), Rn  (General, D-side)
+_m8_case_14:                       ! MOV.B Rm, @Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c14_seedva, r0
@@ -1179,11 +1149,13 @@ _m8_case_14:                       ! MOV.L @(disp, Rm), Rn  (General, D-side)
         jsr     @r3
         nop
         mov.l   c14_va, r0
-        mov     #0, r8
-        .word   0x5800                ! instruction under test
+        mov.l   c14_pay, r8
+        .word   0x2080                ! instruction under test
         mov.l   c14_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c14_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm TLB) ----
         mov.l   c14_seedva, r0
         mov.l   c14_seed, r1
@@ -1192,11 +1164,13 @@ _m8_case_14:                       ! MOV.L @(disp, Rm), Rn  (General, D-side)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c14_va, r0
-        mov     #0, r8
-        .word   0x5800
+        mov.l   c14_pay, r8
+        .word   0x2080
         mov.l   c14_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c14_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c14_id, r5
@@ -1219,7 +1193,7 @@ c14_cmp:    .long 0x80000000 + _m8_cmp
 c14_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_15:                       ! MOV.L @Rm+, Rn  (General, D-side)
+_m8_case_15:                       ! MOV.B Rm,@-Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c15_seedva, r0
@@ -1232,11 +1206,13 @@ _m8_case_15:                       ! MOV.L @Rm+, Rn  (General, D-side)
         jsr     @r3
         nop
         mov.l   c15_va, r0
-        mov     #0, r8
-        .word   0x6806                ! instruction under test
+        mov.l   c15_pay, r8
+        .word   0x2084                ! instruction under test
         mov.l   c15_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c15_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm TLB) ----
         mov.l   c15_seedva, r0
         mov.l   c15_seed, r1
@@ -1245,11 +1221,13 @@ _m8_case_15:                       ! MOV.L @Rm+, Rn  (General, D-side)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c15_va, r0
-        mov     #0, r8
-        .word   0x6806
+        mov.l   c15_pay, r8
+        .word   0x2084
         mov.l   c15_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c15_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c15_id, r5
@@ -1260,9 +1238,9 @@ _m8_case_15:                       ! MOV.L @Rm+, Rn  (General, D-side)
         rts
         nop
         .align 2
-c15_va:     .long 0x00100000
+c15_va:     .long 0x00100008
 c15_seedva: .long 0x00100000
-c15_probe:  .long 0x00100000
+c15_probe:  .long 0x00100004
 c15_seed:   .long 0xA11C0001
 c15_pay:    .long 0x57013333
 c15_snapa:  .long SNAP_A
@@ -1272,7 +1250,7 @@ c15_cmp:    .long 0x80000000 + _m8_cmp
 c15_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_16:                       ! MOV.L @Rm, Rn  (General, D-side)
+_m8_case_16:                       ! MOV.L @(disp, Rm), Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c16_seedva, r0
@@ -1286,7 +1264,7 @@ _m8_case_16:                       ! MOV.L @Rm, Rn  (General, D-side)
         nop
         mov.l   c16_va, r0
         mov     #0, r8
-        .word   0x6802                ! instruction under test
+        .word   0x5800                ! instruction under test
         mov.l   c16_snapa, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
@@ -1299,7 +1277,7 @@ _m8_case_16:                       ! MOV.L @Rm, Rn  (General, D-side)
         mov.l   r1, @(12,r0)
         mov.l   c16_va, r0
         mov     #0, r8
-        .word   0x6802
+        .word   0x5800
         mov.l   c16_snapb, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
@@ -1325,7 +1303,7 @@ c16_cmp:    .long 0x80000000 + _m8_cmp
 c16_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_17:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side)
+_m8_case_17:                       ! MOV.L @Rm+, Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c17_seedva, r0
@@ -1338,13 +1316,11 @@ _m8_case_17:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side)
         jsr     @r3
         nop
         mov.l   c17_va, r0
-        mov.l   c17_pay, r8
-        .word   0x1080                ! instruction under test
+        mov     #0, r8
+        .word   0x6806                ! instruction under test
         mov.l   c17_snapa, r2
         mov.l   r0, @r2
-        mov.l   c17_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm TLB) ----
         mov.l   c17_seedva, r0
         mov.l   c17_seed, r1
@@ -1353,13 +1329,11 @@ _m8_case_17:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c17_va, r0
-        mov.l   c17_pay, r8
-        .word   0x1080
+        mov     #0, r8
+        .word   0x6806
         mov.l   c17_snapb, r2
         mov.l   r0, @r2
-        mov.l   c17_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c17_id, r5
@@ -1382,7 +1356,7 @@ c17_cmp:    .long 0x80000000 + _m8_cmp
 c17_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_18:                       ! MOV.L Rm, @Rn  (General, D-side)
+_m8_case_18:                       ! MOV.L @Rm, Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c18_seedva, r0
@@ -1395,13 +1369,11 @@ _m8_case_18:                       ! MOV.L Rm, @Rn  (General, D-side)
         jsr     @r3
         nop
         mov.l   c18_va, r0
-        mov.l   c18_pay, r8
-        .word   0x2082                ! instruction under test
+        mov     #0, r8
+        .word   0x6802                ! instruction under test
         mov.l   c18_snapa, r2
         mov.l   r0, @r2
-        mov.l   c18_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm TLB) ----
         mov.l   c18_seedva, r0
         mov.l   c18_seed, r1
@@ -1410,13 +1382,11 @@ _m8_case_18:                       ! MOV.L Rm, @Rn  (General, D-side)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c18_va, r0
-        mov.l   c18_pay, r8
-        .word   0x2082
+        mov     #0, r8
+        .word   0x6802
         mov.l   c18_snapb, r2
         mov.l   r0, @r2
-        mov.l   c18_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c18_id, r5
@@ -1439,7 +1409,7 @@ c18_cmp:    .long 0x80000000 + _m8_cmp
 c18_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_19:                       ! MOV.L Rm,@-Rn  (General, D-side)
+_m8_case_19:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c19_seedva, r0
@@ -1453,7 +1423,7 @@ _m8_case_19:                       ! MOV.L Rm,@-Rn  (General, D-side)
         nop
         mov.l   c19_va, r0
         mov.l   c19_pay, r8
-        .word   0x2086                ! instruction under test
+        .word   0x1080                ! instruction under test
         mov.l   c19_snapa, r2
         mov.l   r0, @r2
         mov.l   c19_probe, r3
@@ -1468,7 +1438,7 @@ _m8_case_19:                       ! MOV.L Rm,@-Rn  (General, D-side)
         mov.l   r1, @(12,r0)
         mov.l   c19_va, r0
         mov.l   c19_pay, r8
-        .word   0x2086
+        .word   0x1080
         mov.l   c19_snapb, r2
         mov.l   r0, @r2
         mov.l   c19_probe, r3
@@ -1484,9 +1454,9 @@ _m8_case_19:                       ! MOV.L Rm,@-Rn  (General, D-side)
         rts
         nop
         .align 2
-c19_va:     .long 0x00100008
+c19_va:     .long 0x00100000
 c19_seedva: .long 0x00100000
-c19_probe:  .long 0x00100004
+c19_probe:  .long 0x00100000
 c19_seed:   .long 0xA11C0001
 c19_pay:    .long 0x57013333
 c19_snapa:  .long SNAP_A
@@ -1496,7 +1466,7 @@ c19_cmp:    .long 0x80000000 + _m8_cmp
 c19_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_20:                       ! MOV.W @(disp, Rm), R0  (General, D-side)
+_m8_case_20:                       ! MOV.L Rm, @Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c20_seedva, r0
@@ -1509,11 +1479,13 @@ _m8_case_20:                       ! MOV.W @(disp, Rm), R0  (General, D-side)
         jsr     @r3
         nop
         mov.l   c20_va, r0
-        mov     #0, r8
-        .word   0x8500                ! instruction under test
+        mov.l   c20_pay, r8
+        .word   0x2082                ! instruction under test
         mov.l   c20_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c20_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm TLB) ----
         mov.l   c20_seedva, r0
         mov.l   c20_seed, r1
@@ -1522,11 +1494,13 @@ _m8_case_20:                       ! MOV.W @(disp, Rm), R0  (General, D-side)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c20_va, r0
-        mov     #0, r8
-        .word   0x8500
+        mov.l   c20_pay, r8
+        .word   0x2082
         mov.l   c20_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c20_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c20_id, r5
@@ -1549,7 +1523,7 @@ c20_cmp:    .long 0x80000000 + _m8_cmp
 c20_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_21:                       ! MOV.W @Rm+, Rn  (General, D-side)
+_m8_case_21:                       ! MOV.L Rm,@-Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c21_seedva, r0
@@ -1562,11 +1536,13 @@ _m8_case_21:                       ! MOV.W @Rm+, Rn  (General, D-side)
         jsr     @r3
         nop
         mov.l   c21_va, r0
-        mov     #0, r8
-        .word   0x6805                ! instruction under test
+        mov.l   c21_pay, r8
+        .word   0x2086                ! instruction under test
         mov.l   c21_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c21_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm TLB) ----
         mov.l   c21_seedva, r0
         mov.l   c21_seed, r1
@@ -1575,11 +1551,13 @@ _m8_case_21:                       ! MOV.W @Rm+, Rn  (General, D-side)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c21_va, r0
-        mov     #0, r8
-        .word   0x6805
+        mov.l   c21_pay, r8
+        .word   0x2086
         mov.l   c21_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c21_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c21_id, r5
@@ -1590,9 +1568,9 @@ _m8_case_21:                       ! MOV.W @Rm+, Rn  (General, D-side)
         rts
         nop
         .align 2
-c21_va:     .long 0x00100000
+c21_va:     .long 0x00100008
 c21_seedva: .long 0x00100000
-c21_probe:  .long 0x00100000
+c21_probe:  .long 0x00100004
 c21_seed:   .long 0xA11C0001
 c21_pay:    .long 0x57013333
 c21_snapa:  .long SNAP_A
@@ -1602,7 +1580,7 @@ c21_cmp:    .long 0x80000000 + _m8_cmp
 c21_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_22:                       ! MOV.W @Rm, Rn  (General, D-side)
+_m8_case_22:                       ! MOV.W @(disp, Rm), R0  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c22_seedva, r0
@@ -1616,7 +1594,7 @@ _m8_case_22:                       ! MOV.W @Rm, Rn  (General, D-side)
         nop
         mov.l   c22_va, r0
         mov     #0, r8
-        .word   0x6801                ! instruction under test
+        .word   0x8500                ! instruction under test
         mov.l   c22_snapa, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
@@ -1629,7 +1607,7 @@ _m8_case_22:                       ! MOV.W @Rm, Rn  (General, D-side)
         mov.l   r1, @(12,r0)
         mov.l   c22_va, r0
         mov     #0, r8
-        .word   0x6801
+        .word   0x8500
         mov.l   c22_snapb, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
@@ -1655,7 +1633,7 @@ c22_cmp:    .long 0x80000000 + _m8_cmp
 c22_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_23:                       ! MOV.W R0, @(disp, Rn)  (General, D-side)
+_m8_case_23:                       ! MOV.W @Rm+, Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c23_seedva, r0
@@ -1668,13 +1646,11 @@ _m8_case_23:                       ! MOV.W R0, @(disp, Rn)  (General, D-side)
         jsr     @r3
         nop
         mov.l   c23_va, r0
-        mov.l   c23_pay, r8
-        .word   0x8100                ! instruction under test
+        mov     #0, r8
+        .word   0x6805                ! instruction under test
         mov.l   c23_snapa, r2
         mov.l   r0, @r2
-        mov.l   c23_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm TLB) ----
         mov.l   c23_seedva, r0
         mov.l   c23_seed, r1
@@ -1683,13 +1659,11 @@ _m8_case_23:                       ! MOV.W R0, @(disp, Rn)  (General, D-side)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c23_va, r0
-        mov.l   c23_pay, r8
-        .word   0x8100
+        mov     #0, r8
+        .word   0x6805
         mov.l   c23_snapb, r2
         mov.l   r0, @r2
-        mov.l   c23_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c23_id, r5
@@ -1712,7 +1686,7 @@ c23_cmp:    .long 0x80000000 + _m8_cmp
 c23_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_24:                       ! MOV.W Rm, @Rn  (General, D-side)
+_m8_case_24:                       ! MOV.W @Rm, Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c24_seedva, r0
@@ -1725,13 +1699,11 @@ _m8_case_24:                       ! MOV.W Rm, @Rn  (General, D-side)
         jsr     @r3
         nop
         mov.l   c24_va, r0
-        mov.l   c24_pay, r8
-        .word   0x2081                ! instruction under test
+        mov     #0, r8
+        .word   0x6801                ! instruction under test
         mov.l   c24_snapa, r2
         mov.l   r0, @r2
-        mov.l   c24_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm TLB) ----
         mov.l   c24_seedva, r0
         mov.l   c24_seed, r1
@@ -1740,13 +1712,11 @@ _m8_case_24:                       ! MOV.W Rm, @Rn  (General, D-side)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c24_va, r0
-        mov.l   c24_pay, r8
-        .word   0x2081
+        mov     #0, r8
+        .word   0x6801
         mov.l   c24_snapb, r2
         mov.l   r0, @r2
-        mov.l   c24_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c24_id, r5
@@ -1769,7 +1739,7 @@ c24_cmp:    .long 0x80000000 + _m8_cmp
 c24_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_25:                       ! MOV.W Rm,@-Rn  (General, D-side)
+_m8_case_25:                       ! MOV.W R0, @(disp, Rn)  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c25_seedva, r0
@@ -1783,7 +1753,7 @@ _m8_case_25:                       ! MOV.W Rm,@-Rn  (General, D-side)
         nop
         mov.l   c25_va, r0
         mov.l   c25_pay, r8
-        .word   0x2085                ! instruction under test
+        .word   0x8100                ! instruction under test
         mov.l   c25_snapa, r2
         mov.l   r0, @r2
         mov.l   c25_probe, r3
@@ -1798,7 +1768,7 @@ _m8_case_25:                       ! MOV.W Rm,@-Rn  (General, D-side)
         mov.l   r1, @(12,r0)
         mov.l   c25_va, r0
         mov.l   c25_pay, r8
-        .word   0x2085
+        .word   0x8100
         mov.l   c25_snapb, r2
         mov.l   r0, @r2
         mov.l   c25_probe, r3
@@ -1814,9 +1784,9 @@ _m8_case_25:                       ! MOV.W Rm,@-Rn  (General, D-side)
         rts
         nop
         .align 2
-c25_va:     .long 0x00100008
+c25_va:     .long 0x00100000
 c25_seedva: .long 0x00100000
-c25_probe:  .long 0x00100004
+c25_probe:  .long 0x00100000
 c25_seed:   .long 0xA11C0001
 c25_pay:    .long 0x57013333
 c25_snapa:  .long SNAP_A
@@ -1826,7 +1796,7 @@ c25_cmp:    .long 0x80000000 + _m8_cmp
 c25_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_26:                       ! STC.L GBR, @-Rn  (General, D-side)
+_m8_case_26:                       ! MOV.W Rm, @Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c26_seedva, r0
@@ -1840,7 +1810,7 @@ _m8_case_26:                       ! STC.L GBR, @-Rn  (General, D-side)
         nop
         mov.l   c26_va, r0
         mov.l   c26_pay, r8
-        .word   0x4013                ! instruction under test
+        .word   0x2081                ! instruction under test
         mov.l   c26_snapa, r2
         mov.l   r0, @r2
         mov.l   c26_probe, r3
@@ -1855,7 +1825,7 @@ _m8_case_26:                       ! STC.L GBR, @-Rn  (General, D-side)
         mov.l   r1, @(12,r0)
         mov.l   c26_va, r0
         mov.l   c26_pay, r8
-        .word   0x4013
+        .word   0x2081
         mov.l   c26_snapb, r2
         mov.l   r0, @r2
         mov.l   c26_probe, r3
@@ -1871,9 +1841,9 @@ _m8_case_26:                       ! STC.L GBR, @-Rn  (General, D-side)
         rts
         nop
         .align 2
-c26_va:     .long 0x00100008
+c26_va:     .long 0x00100000
 c26_seedva: .long 0x00100000
-c26_probe:  .long 0x00100004
+c26_probe:  .long 0x00100000
 c26_seed:   .long 0xA11C0001
 c26_pay:    .long 0x57013333
 c26_snapa:  .long SNAP_A
@@ -1883,7 +1853,7 @@ c26_cmp:    .long 0x80000000 + _m8_cmp
 c26_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_27:                       ! STS.L MACH, @-Rn  (General, D-side)
+_m8_case_27:                       ! MOV.W Rm,@-Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c27_seedva, r0
@@ -1897,7 +1867,7 @@ _m8_case_27:                       ! STS.L MACH, @-Rn  (General, D-side)
         nop
         mov.l   c27_va, r0
         mov.l   c27_pay, r8
-        .word   0x4002                ! instruction under test
+        .word   0x2085                ! instruction under test
         mov.l   c27_snapa, r2
         mov.l   r0, @r2
         mov.l   c27_probe, r3
@@ -1912,7 +1882,7 @@ _m8_case_27:                       ! STS.L MACH, @-Rn  (General, D-side)
         mov.l   r1, @(12,r0)
         mov.l   c27_va, r0
         mov.l   c27_pay, r8
-        .word   0x4002
+        .word   0x2085
         mov.l   c27_snapb, r2
         mov.l   r0, @r2
         mov.l   c27_probe, r3
@@ -1940,7 +1910,7 @@ c27_cmp:    .long 0x80000000 + _m8_cmp
 c27_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_28:                       ! STS.L MACL, @-Rn  (General, D-side)
+_m8_case_28:                       ! STC.L GBR, @-Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c28_seedva, r0
@@ -1954,7 +1924,7 @@ _m8_case_28:                       ! STS.L MACL, @-Rn  (General, D-side)
         nop
         mov.l   c28_va, r0
         mov.l   c28_pay, r8
-        .word   0x4012                ! instruction under test
+        .word   0x4013                ! instruction under test
         mov.l   c28_snapa, r2
         mov.l   r0, @r2
         mov.l   c28_probe, r3
@@ -1969,7 +1939,7 @@ _m8_case_28:                       ! STS.L MACL, @-Rn  (General, D-side)
         mov.l   r1, @(12,r0)
         mov.l   c28_va, r0
         mov.l   c28_pay, r8
-        .word   0x4012
+        .word   0x4013
         mov.l   c28_snapb, r2
         mov.l   r0, @r2
         mov.l   c28_probe, r3
@@ -1997,7 +1967,7 @@ c28_cmp:    .long 0x80000000 + _m8_cmp
 c28_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_29:                       ! STS.L PR, @-Rn  (General, D-side)
+_m8_case_29:                       ! STS.L MACH, @-Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c29_seedva, r0
@@ -2011,7 +1981,7 @@ _m8_case_29:                       ! STS.L PR, @-Rn  (General, D-side)
         nop
         mov.l   c29_va, r0
         mov.l   c29_pay, r8
-        .word   0x4022                ! instruction under test
+        .word   0x4002                ! instruction under test
         mov.l   c29_snapa, r2
         mov.l   r0, @r2
         mov.l   c29_probe, r3
@@ -2026,7 +1996,7 @@ _m8_case_29:                       ! STS.L PR, @-Rn  (General, D-side)
         mov.l   r1, @(12,r0)
         mov.l   c29_va, r0
         mov.l   c29_pay, r8
-        .word   0x4022
+        .word   0x4002
         mov.l   c29_snapb, r2
         mov.l   r0, @r2
         mov.l   c29_probe, r3
@@ -2054,7 +2024,7 @@ c29_cmp:    .long 0x80000000 + _m8_cmp
 c29_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_30:                       ! TAS.B @Rn  (General, D-side)
+_m8_case_30:                       ! STS.L MACL, @-Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c30_seedva, r0
@@ -2068,7 +2038,7 @@ _m8_case_30:                       ! TAS.B @Rn  (General, D-side)
         nop
         mov.l   c30_va, r0
         mov.l   c30_pay, r8
-        .word   0x401B                ! instruction under test
+        .word   0x4012                ! instruction under test
         mov.l   c30_snapa, r2
         mov.l   r0, @r2
         mov.l   c30_probe, r3
@@ -2083,7 +2053,7 @@ _m8_case_30:                       ! TAS.B @Rn  (General, D-side)
         mov.l   r1, @(12,r0)
         mov.l   c30_va, r0
         mov.l   c30_pay, r8
-        .word   0x401B
+        .word   0x4012
         mov.l   c30_snapb, r2
         mov.l   r0, @r2
         mov.l   c30_probe, r3
@@ -2099,9 +2069,9 @@ _m8_case_30:                       ! TAS.B @Rn  (General, D-side)
         rts
         nop
         .align 2
-c30_va:     .long 0x00100000
+c30_va:     .long 0x00100008
 c30_seedva: .long 0x00100000
-c30_probe:  .long 0x00100000
+c30_probe:  .long 0x00100004
 c30_seed:   .long 0xA11C0001
 c30_pay:    .long 0x57013333
 c30_snapa:  .long SNAP_A
@@ -2109,6 +2079,120 @@ c30_snapb:  .long SNAP_B
 c30_id:     .long 30
 c30_cmp:    .long 0x80000000 + _m8_cmp
 c30_flush:  .long 0x80000000 + _m8_flush
+
+        .balign 4
+_m8_case_31:                       ! STS.L PR, @-Rn  (General, D-side)
+        sts.l   pr, @-r15
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   c31_seedva, r0
+        mov.l   c31_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   c31_flush, r3
+        jsr     @r3
+        nop
+        mov.l   c31_va, r0
+        mov.l   c31_pay, r8
+        .word   0x4022                ! instruction under test
+        mov.l   c31_snapa, r2
+        mov.l   r0, @r2
+        mov.l   c31_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm TLB) ----
+        mov.l   c31_seedva, r0
+        mov.l   c31_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   c31_va, r0
+        mov.l   c31_pay, r8
+        .word   0x4022
+        mov.l   c31_snapb, r2
+        mov.l   r0, @r2
+        mov.l   c31_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- compare ----
+        mov     #8, r4
+        mov.l   c31_id, r5
+        mov.l   c31_cmp, r3
+        jsr     @r3
+        nop
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+c31_va:     .long 0x00100008
+c31_seedva: .long 0x00100000
+c31_probe:  .long 0x00100004
+c31_seed:   .long 0xA11C0001
+c31_pay:    .long 0x57013333
+c31_snapa:  .long SNAP_A
+c31_snapb:  .long SNAP_B
+c31_id:     .long 31
+c31_cmp:    .long 0x80000000 + _m8_cmp
+c31_flush:  .long 0x80000000 + _m8_flush
+
+        .balign 4
+_m8_case_32:                       ! TAS.B @Rn  (General, D-side)
+        sts.l   pr, @-r15
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   c32_seedva, r0
+        mov.l   c32_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   c32_flush, r3
+        jsr     @r3
+        nop
+        mov.l   c32_va, r0
+        mov.l   c32_pay, r8
+        .word   0x401B                ! instruction under test
+        mov.l   c32_snapa, r2
+        mov.l   r0, @r2
+        mov.l   c32_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm TLB) ----
+        mov.l   c32_seedva, r0
+        mov.l   c32_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   c32_va, r0
+        mov.l   c32_pay, r8
+        .word   0x401B
+        mov.l   c32_snapb, r2
+        mov.l   r0, @r2
+        mov.l   c32_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- compare ----
+        mov     #8, r4
+        mov.l   c32_id, r5
+        mov.l   c32_cmp, r3
+        jsr     @r3
+        nop
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+c32_va:     .long 0x00100000
+c32_seedva: .long 0x00100000
+c32_probe:  .long 0x00100000
+c32_seed:   .long 0xA11C0001
+c32_pay:    .long 0x57013333
+c32_snapa:  .long SNAP_A
+c32_snapb:  .long SNAP_B
+c32_id:     .long 32
+c32_cmp:    .long 0x80000000 + _m8_cmp
+c32_flush:  .long 0x80000000 + _m8_flush
 
 ENTRY(_m8_run_all)
         sts.l   pr, @-r15
@@ -2123,7 +2207,7 @@ ENTRY(_m8_run_all)
         rts
         nop
         .align 2
-m8_count:  .long 30
+m8_count:  .long 32
 m8_tab_p:  .long 0x80000000 + m8_tab
 m8_tab:
         .long   0x80000000 + _m8_case_1
@@ -2156,4 +2240,6 @@ m8_tab:
         .long   0x80000000 + _m8_case_28
         .long   0x80000000 + _m8_case_29
         .long   0x80000000 + _m8_case_30
+        .long   0x80000000 + _m8_case_31
+        .long   0x80000000 + _m8_case_32
 #endif

@@ -43,7 +43,7 @@ func TestTimingMultUnit(t *testing.T) {
 		Slots:  []spec.Slot{{"mac_op": "MULL", "mac_stage": "EX"}},
 	}
 	got := tab.For(in)
-	if got.Issue != 3 {
-		t.Fatalf("mult unit: got issue=%d want 3", got.Issue)
+	if got.Issue != 3 || got.Latency != 3 {
+		t.Fatalf("mult unit: got %+v want issue=3 latency=3", got)
 	}
 }

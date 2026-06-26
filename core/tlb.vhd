@@ -7,11 +7,13 @@ entity tlb is
     clk      : in  std_logic;
     i_va     : in  std_logic_vector(31 downto 0);
     i_pa_tag : out std_logic_vector(14 downto 0);
+    i_c      : out std_logic;
     i_hit    : out std_logic;
     i_prot   : out std_logic;
     d_va     : in  std_logic_vector(31 downto 0);
     d_we     : in  std_logic;
     d_pa_tag : out std_logic_vector(14 downto 0);
+    d_c      : out std_logic;
     d_hit    : out std_logic;
     d_prot   : out std_logic;
     asid     : in  std_logic_vector(15 downto 0);
@@ -34,9 +36,10 @@ begin
     variable entry     : tlb_entry_t;
     variable hit_found : std_logic;
     variable hit_pa    : std_logic_vector(14 downto 0);
+    variable hit_c     : std_logic;
     variable prot      : std_logic;
   begin
-    hit_found := '0'; hit_pa := (others => '0'); prot := '0';
+    hit_found := '0'; hit_pa := (others => '0'); hit_c := '0'; prot := '0';
     for k in 0 to 31 loop
       entry := ram(k);
       if entry.valid = '1'
@@ -44,6 +47,7 @@ begin
          and (entry.global = '1' or entry.asid_tag = asid) then
         hit_found := '1';
         hit_pa    := entry.ppn(27 downto 13);  -- PA[27:13] = 15 bits
+        hit_c     := entry.c;
         if entry.x = '0' or (entry.u = '0' and md = '0') then
           prot := '1';
         end if;
@@ -51,6 +55,7 @@ begin
     end loop;
     i_hit    <= hit_found;
     i_pa_tag <= hit_pa;
+    i_c      <= hit_c;
     i_prot   <= prot and hit_found;
   end process;
 
@@ -59,9 +64,10 @@ begin
     variable entry     : tlb_entry_t;
     variable hit_found : std_logic;
     variable hit_pa    : std_logic_vector(14 downto 0);
+    variable hit_c     : std_logic;
     variable prot      : std_logic;
   begin
-    hit_found := '0'; hit_pa := (others => '0'); prot := '0';
+    hit_found := '0'; hit_pa := (others => '0'); hit_c := '0'; prot := '0';
     for k in 0 to 31 loop
       entry := ram(k);
       if entry.valid = '1'
@@ -69,6 +75,7 @@ begin
          and (entry.global = '1' or entry.asid_tag = asid) then
         hit_found := '1';
         hit_pa    := entry.ppn(27 downto 13);
+        hit_c     := entry.c;
         if (entry.u = '0' and md = '0') or (d_we = '1' and entry.w = '0') then
           prot := '1';
         end if;
@@ -76,6 +83,7 @@ begin
     end loop;
     d_hit    <= hit_found;
     d_pa_tag <= hit_pa;
+    d_c      <= hit_c;
     d_prot   <= prot and hit_found;
   end process;
 

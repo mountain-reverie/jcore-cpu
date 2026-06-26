@@ -213,7 +213,7 @@ begin
                      cop_o => copro_o, cop_i => copro_i,
                      mmu_o => cpu_mmu);
 
-  cpu_a_mmu <= (pa_tag => cpu_mmu.d_pa_tag, at => cpu_mmu.d_at);
+  cpu_a_mmu <= (pa_tag => cpu_mmu.d_pa_tag, at => cpu_mmu.d_at, c => cpu_mmu.d_c);
 
   u_dmux : entity work.dcache_cacheable_mux
     port map (

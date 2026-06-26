@@ -67,7 +67,7 @@ begin
     procedure tick is begin wait until rising_edge(clk); end procedure;
     procedure do_acc(a : word_t; wr : std_logic; d : word_t; at : std_logic) is
     begin
-      a_mmu <= (pa_tag => PA_TAG, at => at);
+      a_mmu <= (pa_tag => PA_TAG, at => at, c => '1');
       cpu_o <= (en=>'1', a=>a, rd=>not wr, wr=>wr, we=>(others=>wr), d=>d);
       loop tick; exit when cpu_i.ack = '1'; end loop;
       cpu_o <= NULL_DATA_O; a_mmu <= MMU_CACHE_I_RESET; tick;
@@ -81,7 +81,7 @@ begin
     do_acc(x"00010000", '1', PAT, '1');
     -- mis-colored READ: VA index bit12 = 1 (set 1), same pa_tag -> miss -> fills
     -- from a different physical line -> stale (zero), NOT the pattern.
-    a_mmu <= (pa_tag => PA_TAG, at => '1');
+    a_mmu <= (pa_tag => PA_TAG, at => '1', c => '1');
     cpu_o <= (en=>'1', a=>x"00011000", rd=>'1', wr=>'0', we=>"0000", d=>(others=>'0'));
     loop tick; exit when cpu_i.ack = '1'; end loop;
     got := cpu_i.d; cpu_o <= NULL_DATA_O; a_mmu <= MMU_CACHE_I_RESET; tick;

@@ -106,6 +106,7 @@ architecture stru of datapath is
 	-- restore_fire drives the one-shot base restore on the first EX-write slot the
 	-- microcode leaves free after the fault (reg.wr_z='0' => not an SPC/SSR save).
 	signal mem_autoupd  : std_logic;
+	signal mem_predec   : std_logic;
 	signal restore_fire : std_logic;
 
         signal div1_arith_func : arith_func_t;
@@ -274,6 +275,18 @@ begin
 	mem_autoupd <= '1' when MMU_ARCH and mem.issue = '1' and mem.wr = '0'
 	                        and mem.addr_sel = SEL_ZBUS and func.arith.func = SUB
 	               else '0';
+	-- mem_predec: marks the memory-access slot of a pre-decrement store @-Rn
+	-- (MOV.B/W/L Rm,@-Rn, STS.L/STC.L *,@-Rn). Symmetric to mem_autoupd but for
+	-- the WRITE direction: a single-slot op whose base Rn is decremented (zbus =
+	-- Rn-size, ARITH=SUB) on the EX z-port WHILE the same slot stores to that new
+	-- address (ma_addy=ZBUS, a WRITE). The store-address SUB+ZBUS+wr combination
+	-- is unique to @-Rn (plain @Rn stores use addr_sel=YBUS/XBUS; @(disp,Rn) and
+	-- indexed stores use ADD). Because the faulting VA equals Rn-size (the post-
+	-- decrement address) NOT the pre-decrement base, the original base is captured
+	-- separately (ma_base = xbus = Rn) for the restore. MMU_ARCH only.
+	mem_predec <= '1' when MMU_ARCH and mem.issue = '1' and mem.wr = '1'
+	                       and mem.addr_sel = SEL_ZBUS and func.arith.func = SUB
+	              else '0';
 	-- Fire the base restore on the first committed slot after the fault on which
 	-- the microcode itself is not driving the z-write port (reg.wr_z='0'): this is
 	-- clear of the exception entry's slot0/slot1 SPC(21)/SSR(22) saves, so the two
@@ -297,8 +310,10 @@ begin
 	--   * we_wb (writeback): plain MOV @Rm+ et al. retire their loaded value
 	--     here a slot late, in the fault shadow -- suppressed. Faulting @-Rn
 	--     pre-decrement STORES (STS.L/STC.L/MOV.L Rm,@-Rn) carry the SYMMETRIC
-	--     base-decrement hazard (data corruption on restart) and are a DEFERRED
-	--     follow-up -- the mem.wr exclusion below leaves them precise-unsafe.
+	--     base-decrement hazard and are now handled by the restore path too
+	--     (mem_predec / ma_base: the captured pre-decrement base is rewritten to
+	--     Rn on the fault, so the RTE-restart decrements exactly once). The store
+	--     itself issues no GPR writeback, so only the base restore is needed here.
 	--   * we_ex (EX z-port): the co-located single-base LDS.L/LDC.L/MAC @Rm+
 	--     forms place their base post-increment (ADD, z-port) in slot1, AFTER the
 	--     faulting slot0 read -- i.e. IN the fault shadow. tlb_squash must also
@@ -411,7 +426,7 @@ begin
 
 	ibit <= sr.int_mask;
 
-	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, tlb_fault_va, tlb_exc_expevt, reg, num_x_r, mem_autoupd, restore_fire)
+	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, tlb_fault_va, tlb_exc_expevt, reg, num_x_r, mem_autoupd, mem_predec, restore_fire)
 	  register this when clk='1' and clk'event reset when rst='1';
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
@@ -477,8 +492,17 @@ begin
             -- armed only for a genuine post-increment (ma_autoupd) so plain loads,
             -- displacement loads and ALU EX writes are never restored.
             this.tlb_fault_zreg  := this.ma_numz;
-            this.tlb_restore_val := tlb_fault_va;
-            this.tlb_restore_pend := this.ma_autoupd;
+            -- @Rn+ loads restore the pre-increment base = faulting VA; @-Rn
+            -- pre-decrement stores restore the captured pre-decrement base
+            -- (ma_base) since their faulting VA is the ALREADY-decremented
+            -- address. Both retarget the same shadowed base register (ma_numz).
+            if MMU_ARCH and this.ma_predec = '1' then
+              this.tlb_restore_val  := this.ma_base;
+              this.tlb_restore_pend := '1';
+            else
+              this.tlb_restore_val  := tlb_fault_va;
+              this.tlb_restore_pend := this.ma_autoupd;
+            end if;
             -- TSB pointer assist (hardware-spec §2.8): compute the address of
             -- the TSB slot for the faulting VPN and latch it into TSBPTR (read-
             -- only via STC TSBPTR / MMIO 0xFF00001C).
@@ -733,6 +757,12 @@ begin
                   -- base of the faulting @Rm+ load.
                   this.ma_numz    := num_x_r;
                   this.ma_autoupd := mem_autoupd;
+                  -- @-Rn pre-decrement store: also shadow the marker and the
+                  -- ORIGINAL pre-decrement base (xbus = Rn, read this slot before
+                  -- the decrement z-write commits). On a fault this restores Rn so
+                  -- the RTE-restart re-applies the decrement exactly once.
+                  this.ma_predec  := mem_predec;
+                  this.ma_base    := xbus;
                 end if;
               end if;
             end if;

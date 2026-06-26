@@ -38,6 +38,7 @@
 ! Scratch / fixed addresses:
 !   SNAP_A           0x80003000   (P1, untranslated)
 !   SNAP_B           0x80003100   (P1, untranslated)
+!   ctlsv            0x80003200   (PrivMem D-side control-reg baseline save slot)
 !   PGD              0x80002000 -> PTE table base 0x80002400 (PGD[0]=0x80002401)
 !   PTE for 0x00100  0x80002800   (= pte_tab[0x100])  value 0x001003F1
 !   TSB (16 entries) 0x80002C00

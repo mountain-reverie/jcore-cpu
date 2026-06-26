@@ -9,8 +9,8 @@
 5    LDS.L @Rm+, MACH     General
 6    LDS.L @Rm+, MACL     General
 7    LDS.L @Rm+, PR       PrivMem
-8    MAC.L @Rm+, @Rn+     General
-9    MAC.W @Rm+, @Rn+     General
+8    MAC.L @Rm+, @Rn+     General    (3 positions report 1008/2008/3008: 1=op1-only,2=op2-only,3=both-cold)
+9    MAC.W @Rm+, @Rn+     General    (3 positions report 1009/2009/3009: 1=op1-only,2=op2-only,3=both-cold)
 10   MOV.B @(disp, Rm), R0 General
 11   MOV.B @Rm+, Rn       General
 12   MOV.B @Rm, Rn        General
@@ -30,11 +30,13 @@
 26   MOV.W Rm, @Rn        General
 27   MOV.W Rm,@-Rn        General
 28   STC.L GBR, @-Rn      General
-29   STS.L MACH, @-Rn     General
-30   STS.L MACL, @-Rn     General
-31   STS.L PR, @-Rn       General
-32   TAS.B @Rn            General
-# 32 emitted; skipped:
+29   STC.L SR, @-Rn       PrivMem
+30   STC.L VBR, @-Rn      PrivMem
+31   STS.L MACH, @-Rn     General
+32   STS.L MACL, @-Rn     General
+33   STS.L PR, @-Rn       General
+34   TAS.B @Rn            General
+# 34 emitted; skipped:
 #   ADD #imm, Rn         ADD #imm, Rn has no D-side memory access
 #   ADD Rm, Rn           ADD Rm, Rn has no D-side memory access
 #   ADDC Rm, Rn          ADDC Rm, Rn has no D-side memory access
@@ -160,8 +162,6 @@
 #   STC TRA, Rn          STC TRA, Rn has no D-side memory access
 #   STC TSBPTR, Rn       STC TSBPTR, Rn has no D-side memory access
 #   STC VBR, Rn          STC VBR, Rn has no D-side memory access
-#   STC.L SR, @-Rn       STC.L SR, @-Rn writes control reg "" (mode-unsafe / not representable)
-#   STC.L VBR, @-Rn      STC.L VBR, @-Rn writes control reg "" (mode-unsafe / not representable)
 #   STS CP0_COM, Rn      STS CP0_COM, Rn has no D-side memory access
 #   STS CPI_COM, Rn      STS CPI_COM, Rn has no D-side memory access
 #   STS MACH, Rn         STS MACH, Rn has no D-side memory access

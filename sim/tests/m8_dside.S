@@ -125,33 +125,31 @@
 ! case 28 skipped: STC TRA, Rn has no D-side memory access
 ! case 28 skipped: STC TSBPTR, Rn has no D-side memory access
 ! case 28 skipped: STC VBR, Rn has no D-side memory access
-! case 29 skipped: STC.L SR, @-Rn writes control reg "" (mode-unsafe / not representable)
-! case 29 skipped: STC.L VBR, @-Rn writes control reg "" (mode-unsafe / not representable)
-! case 29 skipped: STS CP0_COM, Rn has no D-side memory access
-! case 29 skipped: STS CPI_COM, Rn has no D-side memory access
-! case 29 skipped: STS MACH, Rn has no D-side memory access
-! case 29 skipped: STS MACL, Rn has no D-side memory access
-! case 29 skipped: STS PR, Rn has no D-side memory access
-! case 32 skipped: SUB Rm, Rn has no D-side memory access
-! case 32 skipped: SUBC Rm, Rn has no D-side memory access
-! case 32 skipped: SUBV Rm, Rn has no D-side memory access
-! case 32 skipped: SWAP.B Rm, Rn has no D-side memory access
-! case 32 skipped: SWAP.W Rm, Rn has no D-side memory access
-! case 32 skipped: Slot Illegal has no D-side memory access
-! case 33 skipped: TLB DMISS R has no D-side memory access
-! case 33 skipped: TLB DMISS W has no D-side memory access
-! case 33 skipped: TLB DPROT R has no D-side memory access
-! case 33 skipped: TLB DPROT W has no D-side memory access
-! case 33 skipped: TLB IMISS has no D-side memory access
-! case 33 skipped: TLB IPROT has no D-side memory access
-! case 33 skipped: TRAPA #imm has no D-side memory access
-! case 33 skipped: TST #imm, R0 has no D-side memory access
-! case 33 skipped: TST Rm, Rn has no D-side memory access
-! case 33 skipped: TST.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 33 skipped: XOR #imm, R0 has no D-side memory access
-! case 33 skipped: XOR Rm, Rn has no D-side memory access
-! case 33 skipped: XOR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 33 skipped: XTRACT Rm, Rn has no D-side memory access
+! case 31 skipped: STS CP0_COM, Rn has no D-side memory access
+! case 31 skipped: STS CPI_COM, Rn has no D-side memory access
+! case 31 skipped: STS MACH, Rn has no D-side memory access
+! case 31 skipped: STS MACL, Rn has no D-side memory access
+! case 31 skipped: STS PR, Rn has no D-side memory access
+! case 34 skipped: SUB Rm, Rn has no D-side memory access
+! case 34 skipped: SUBC Rm, Rn has no D-side memory access
+! case 34 skipped: SUBV Rm, Rn has no D-side memory access
+! case 34 skipped: SWAP.B Rm, Rn has no D-side memory access
+! case 34 skipped: SWAP.W Rm, Rn has no D-side memory access
+! case 34 skipped: Slot Illegal has no D-side memory access
+! case 35 skipped: TLB DMISS R has no D-side memory access
+! case 35 skipped: TLB DMISS W has no D-side memory access
+! case 35 skipped: TLB DPROT R has no D-side memory access
+! case 35 skipped: TLB DPROT W has no D-side memory access
+! case 35 skipped: TLB IMISS has no D-side memory access
+! case 35 skipped: TLB IPROT has no D-side memory access
+! case 35 skipped: TRAPA #imm has no D-side memory access
+! case 35 skipped: TST #imm, R0 has no D-side memory access
+! case 35 skipped: TST Rm, Rn has no D-side memory access
+! case 35 skipped: TST.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 35 skipped: XOR #imm, R0 has no D-side memory access
+! case 35 skipped: XOR Rm, Rn has no D-side memory access
+! case 35 skipped: XOR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 35 skipped: XTRACT Rm, Rn has no D-side memory access
 #include "m8_runtime.inc"
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
@@ -608,9 +606,10 @@ _m8_case_8:                       ! MAC.L @Rm+, @Rn+  (MAC dual-base, D-side; 3 
         mov.l   r1, @(8,r2)
         sts     macl, r1
         mov.l   r1, @(12,r2)
-        ! ---- compare ----
+        ! ---- compare (per-position ID = 1000*pos + case ID; localises which
+        !      operand position faulted in a CI Result=<ID>) ----
         mov     #16, r4
-        mov.l   c8_id, r5
+        mov.l   c8_id1, r5
         mov.l   c8_cmp, r3
         jsr     @r3
         nop
@@ -664,9 +663,10 @@ _m8_case_8:                       ! MAC.L @Rm+, @Rn+  (MAC dual-base, D-side; 3 
         mov.l   r1, @(8,r2)
         sts     macl, r1
         mov.l   r1, @(12,r2)
-        ! ---- compare ----
+        ! ---- compare (per-position ID = 1000*pos + case ID; localises which
+        !      operand position faulted in a CI Result=<ID>) ----
         mov     #16, r4
-        mov.l   c8_id, r5
+        mov.l   c8_id2, r5
         mov.l   c8_cmp, r3
         jsr     @r3
         nop
@@ -718,9 +718,10 @@ _m8_case_8:                       ! MAC.L @Rm+, @Rn+  (MAC dual-base, D-side; 3 
         mov.l   r1, @(8,r2)
         sts     macl, r1
         mov.l   r1, @(12,r2)
-        ! ---- compare ----
+        ! ---- compare (per-position ID = 1000*pos + case ID; localises which
+        !      operand position faulted in a CI Result=<ID>) ----
         mov     #16, r4
-        mov.l   c8_id, r5
+        mov.l   c8_id3, r5
         mov.l   c8_cmp, r3
         jsr     @r3
         nop
@@ -733,7 +734,9 @@ c8_seedvb: .long 0x00101000
 c8_seed:   .long 0xA11C0001
 c8_snapa:  .long SNAP_A
 c8_snapb:  .long SNAP_B
-c8_id:     .long 8
+c8_id1: .long 1008
+c8_id2: .long 2008
+c8_id3: .long 3008
 c8_cmp:    .long 0x80000000 + _m8_cmp
 c8_flush:  .long 0x80000000 + _m8_flush
 
@@ -790,9 +793,10 @@ _m8_case_9:                       ! MAC.W @Rm+, @Rn+  (MAC dual-base, D-side; 3 
         mov.l   r1, @(8,r2)
         sts     macl, r1
         mov.l   r1, @(12,r2)
-        ! ---- compare ----
+        ! ---- compare (per-position ID = 1000*pos + case ID; localises which
+        !      operand position faulted in a CI Result=<ID>) ----
         mov     #16, r4
-        mov.l   c9_id, r5
+        mov.l   c9_id1, r5
         mov.l   c9_cmp, r3
         jsr     @r3
         nop
@@ -846,9 +850,10 @@ _m8_case_9:                       ! MAC.W @Rm+, @Rn+  (MAC dual-base, D-side; 3 
         mov.l   r1, @(8,r2)
         sts     macl, r1
         mov.l   r1, @(12,r2)
-        ! ---- compare ----
+        ! ---- compare (per-position ID = 1000*pos + case ID; localises which
+        !      operand position faulted in a CI Result=<ID>) ----
         mov     #16, r4
-        mov.l   c9_id, r5
+        mov.l   c9_id2, r5
         mov.l   c9_cmp, r3
         jsr     @r3
         nop
@@ -900,9 +905,10 @@ _m8_case_9:                       ! MAC.W @Rm+, @Rn+  (MAC dual-base, D-side; 3 
         mov.l   r1, @(8,r2)
         sts     macl, r1
         mov.l   r1, @(12,r2)
-        ! ---- compare ----
+        ! ---- compare (per-position ID = 1000*pos + case ID; localises which
+        !      operand position faulted in a CI Result=<ID>) ----
         mov     #16, r4
-        mov.l   c9_id, r5
+        mov.l   c9_id3, r5
         mov.l   c9_cmp, r3
         jsr     @r3
         nop
@@ -915,7 +921,9 @@ c9_seedvb: .long 0x00101000
 c9_seed:   .long 0xA11C0001
 c9_snapa:  .long SNAP_A
 c9_snapb:  .long SNAP_B
-c9_id:     .long 9
+c9_id1: .long 1009
+c9_id2: .long 2009
+c9_id3: .long 3009
 c9_cmp:    .long 0x80000000 + _m8_cmp
 c9_flush:  .long 0x80000000 + _m8_flush
 
@@ -1967,7 +1975,7 @@ c28_cmp:    .long 0x80000000 + _m8_cmp
 c28_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_29:                       ! STS.L MACH, @-Rn  (General, D-side)
+_m8_case_29:                       ! STC.L SR, @-Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c29_seedva, r0
@@ -1981,7 +1989,7 @@ _m8_case_29:                       ! STS.L MACH, @-Rn  (General, D-side)
         nop
         mov.l   c29_va, r0
         mov.l   c29_pay, r8
-        .word   0x4002                ! instruction under test
+        .word   0x4003                ! instruction under test
         mov.l   c29_snapa, r2
         mov.l   r0, @r2
         mov.l   c29_probe, r3
@@ -1996,7 +2004,7 @@ _m8_case_29:                       ! STS.L MACH, @-Rn  (General, D-side)
         mov.l   r1, @(12,r0)
         mov.l   c29_va, r0
         mov.l   c29_pay, r8
-        .word   0x4002
+        .word   0x4003
         mov.l   c29_snapb, r2
         mov.l   r0, @r2
         mov.l   c29_probe, r3
@@ -2024,7 +2032,7 @@ c29_cmp:    .long 0x80000000 + _m8_cmp
 c29_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_30:                       ! STS.L MACL, @-Rn  (General, D-side)
+_m8_case_30:                       ! STC.L VBR, @-Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c30_seedva, r0
@@ -2038,7 +2046,7 @@ _m8_case_30:                       ! STS.L MACL, @-Rn  (General, D-side)
         nop
         mov.l   c30_va, r0
         mov.l   c30_pay, r8
-        .word   0x4012                ! instruction under test
+        .word   0x4023                ! instruction under test
         mov.l   c30_snapa, r2
         mov.l   r0, @r2
         mov.l   c30_probe, r3
@@ -2053,7 +2061,7 @@ _m8_case_30:                       ! STS.L MACL, @-Rn  (General, D-side)
         mov.l   r1, @(12,r0)
         mov.l   c30_va, r0
         mov.l   c30_pay, r8
-        .word   0x4012
+        .word   0x4023
         mov.l   c30_snapb, r2
         mov.l   r0, @r2
         mov.l   c30_probe, r3
@@ -2081,7 +2089,7 @@ c30_cmp:    .long 0x80000000 + _m8_cmp
 c30_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_31:                       ! STS.L PR, @-Rn  (General, D-side)
+_m8_case_31:                       ! STS.L MACH, @-Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c31_seedva, r0
@@ -2095,7 +2103,7 @@ _m8_case_31:                       ! STS.L PR, @-Rn  (General, D-side)
         nop
         mov.l   c31_va, r0
         mov.l   c31_pay, r8
-        .word   0x4022                ! instruction under test
+        .word   0x4002                ! instruction under test
         mov.l   c31_snapa, r2
         mov.l   r0, @r2
         mov.l   c31_probe, r3
@@ -2110,7 +2118,7 @@ _m8_case_31:                       ! STS.L PR, @-Rn  (General, D-side)
         mov.l   r1, @(12,r0)
         mov.l   c31_va, r0
         mov.l   c31_pay, r8
-        .word   0x4022
+        .word   0x4002
         mov.l   c31_snapb, r2
         mov.l   r0, @r2
         mov.l   c31_probe, r3
@@ -2138,7 +2146,7 @@ c31_cmp:    .long 0x80000000 + _m8_cmp
 c31_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_32:                       ! TAS.B @Rn  (General, D-side)
+_m8_case_32:                       ! STS.L MACL, @-Rn  (General, D-side)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB) ----
         mov.l   c32_seedva, r0
@@ -2152,7 +2160,7 @@ _m8_case_32:                       ! TAS.B @Rn  (General, D-side)
         nop
         mov.l   c32_va, r0
         mov.l   c32_pay, r8
-        .word   0x401B                ! instruction under test
+        .word   0x4012                ! instruction under test
         mov.l   c32_snapa, r2
         mov.l   r0, @r2
         mov.l   c32_probe, r3
@@ -2167,7 +2175,7 @@ _m8_case_32:                       ! TAS.B @Rn  (General, D-side)
         mov.l   r1, @(12,r0)
         mov.l   c32_va, r0
         mov.l   c32_pay, r8
-        .word   0x401B
+        .word   0x4012
         mov.l   c32_snapb, r2
         mov.l   r0, @r2
         mov.l   c32_probe, r3
@@ -2183,9 +2191,9 @@ _m8_case_32:                       ! TAS.B @Rn  (General, D-side)
         rts
         nop
         .align 2
-c32_va:     .long 0x00100000
+c32_va:     .long 0x00100008
 c32_seedva: .long 0x00100000
-c32_probe:  .long 0x00100000
+c32_probe:  .long 0x00100004
 c32_seed:   .long 0xA11C0001
 c32_pay:    .long 0x57013333
 c32_snapa:  .long SNAP_A
@@ -2193,6 +2201,120 @@ c32_snapb:  .long SNAP_B
 c32_id:     .long 32
 c32_cmp:    .long 0x80000000 + _m8_cmp
 c32_flush:  .long 0x80000000 + _m8_flush
+
+        .balign 4
+_m8_case_33:                       ! STS.L PR, @-Rn  (General, D-side)
+        sts.l   pr, @-r15
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   c33_seedva, r0
+        mov.l   c33_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   c33_flush, r3
+        jsr     @r3
+        nop
+        mov.l   c33_va, r0
+        mov.l   c33_pay, r8
+        .word   0x4022                ! instruction under test
+        mov.l   c33_snapa, r2
+        mov.l   r0, @r2
+        mov.l   c33_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm TLB) ----
+        mov.l   c33_seedva, r0
+        mov.l   c33_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   c33_va, r0
+        mov.l   c33_pay, r8
+        .word   0x4022
+        mov.l   c33_snapb, r2
+        mov.l   r0, @r2
+        mov.l   c33_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- compare ----
+        mov     #8, r4
+        mov.l   c33_id, r5
+        mov.l   c33_cmp, r3
+        jsr     @r3
+        nop
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+c33_va:     .long 0x00100008
+c33_seedva: .long 0x00100000
+c33_probe:  .long 0x00100004
+c33_seed:   .long 0xA11C0001
+c33_pay:    .long 0x57013333
+c33_snapa:  .long SNAP_A
+c33_snapb:  .long SNAP_B
+c33_id:     .long 33
+c33_cmp:    .long 0x80000000 + _m8_cmp
+c33_flush:  .long 0x80000000 + _m8_flush
+
+        .balign 4
+_m8_case_34:                       ! TAS.B @Rn  (General, D-side)
+        sts.l   pr, @-r15
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   c34_seedva, r0
+        mov.l   c34_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   c34_flush, r3
+        jsr     @r3
+        nop
+        mov.l   c34_va, r0
+        mov.l   c34_pay, r8
+        .word   0x401B                ! instruction under test
+        mov.l   c34_snapa, r2
+        mov.l   r0, @r2
+        mov.l   c34_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm TLB) ----
+        mov.l   c34_seedva, r0
+        mov.l   c34_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   c34_va, r0
+        mov.l   c34_pay, r8
+        .word   0x401B
+        mov.l   c34_snapb, r2
+        mov.l   r0, @r2
+        mov.l   c34_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- compare ----
+        mov     #8, r4
+        mov.l   c34_id, r5
+        mov.l   c34_cmp, r3
+        jsr     @r3
+        nop
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+c34_va:     .long 0x00100000
+c34_seedva: .long 0x00100000
+c34_probe:  .long 0x00100000
+c34_seed:   .long 0xA11C0001
+c34_pay:    .long 0x57013333
+c34_snapa:  .long SNAP_A
+c34_snapb:  .long SNAP_B
+c34_id:     .long 34
+c34_cmp:    .long 0x80000000 + _m8_cmp
+c34_flush:  .long 0x80000000 + _m8_flush
 
 ENTRY(_m8_run_all)
         sts.l   pr, @-r15
@@ -2207,7 +2329,7 @@ ENTRY(_m8_run_all)
         rts
         nop
         .align 2
-m8_count:  .long 32
+m8_count:  .long 34
 m8_tab_p:  .long 0x80000000 + m8_tab
 m8_tab:
         .long   0x80000000 + _m8_case_1
@@ -2242,4 +2364,6 @@ m8_tab:
         .long   0x80000000 + _m8_case_30
         .long   0x80000000 + _m8_case_31
         .long   0x80000000 + _m8_case_32
+        .long   0x80000000 + _m8_case_33
+        .long   0x80000000 + _m8_case_34
 #endif

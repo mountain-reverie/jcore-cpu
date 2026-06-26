@@ -147,7 +147,7 @@ jobs:
           # Generator-diff gate: fail if committed images are out of sync.
           if ! git diff --quiet -- sim/tests/m8_dside.S sim/tests/m8_ifetch_0.S sim/tests/m8_ifetch_1.S sim/tests/m8_ifetch_2.S sim/tests/m8_manifest.txt; then
             echo "FAIL: committed m8 images out of sync with spec — run 'make -C decode m8gen' and commit"
-            git diff --stat -- sim/tests/m8_*.S sim/tests/m8_manifest.txt
+            git diff --stat -- sim/tests/m8_dside.S sim/tests/m8_ifetch_0.S sim/tests/m8_ifetch_1.S sim/tests/m8_ifetch_2.S sim/tests/m8_manifest.txt
             exit 1
           fi
           # The dcache CCL/MCL cores are .vhm templates; preprocess to .vhd via

@@ -162,6 +162,13 @@ func buildManifest(classes []faultgen.Class, skip map[int]bool) string {
 			if ax.axis == faultgen.DSide && skip[e.ID] {
 				tag = "    skipped-for-enumeration: " + fmt.Sprint(e.ID)
 			}
+			// MAC dual-base D-side cases run 3 fault positions, each reporting a
+			// distinct ID (1000*pos + case ID) so a CI Result=<ID> localises the
+			// faulting operand position.
+			if ax.axis == faultgen.DSide && strings.HasPrefix(e.Name, "MAC.") {
+				tag += fmt.Sprintf("    (3 positions report %d/%d/%d: 1=op1-only,2=op2-only,3=both-cold)",
+					1000+e.ID, 2000+e.ID, 3000+e.ID)
+			}
 			fmt.Fprintf(&b, "%-4d %-20s %s%s\n", e.ID, e.Name, bucketName(e.Bucket), tag)
 		}
 		fmt.Fprintf(&b, "# %d emitted; skipped:\n", emitted)

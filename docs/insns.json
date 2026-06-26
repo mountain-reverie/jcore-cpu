@@ -2968,7 +2968,7 @@
       "J1.latency": 4,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 4
     },
     {
       "group": "Data Transfer Instructions",
@@ -4632,8 +4632,8 @@
       "J1.issue": 34,
       "J1.latency": 34,
       "J4": true,
-      "J4.issue": 1,
-      "J4.latency": 1
+      "J4.issue": 2,
+      "J4.latency": 2
     },
     {
       "group": "Arithmetic Operation Instructions",
@@ -4677,8 +4677,8 @@
       "J1.issue": 34,
       "J1.latency": 34,
       "J4": true,
-      "J4.issue": 1,
-      "J4.latency": 1
+      "J4.issue": 2,
+      "J4.latency": 2
     },
     {
       "group": "Arithmetic Operation Instructions",
@@ -4947,8 +4947,8 @@
       "J1.issue": 34,
       "J1.latency": 34,
       "J4": true,
-      "J4.issue": 1,
-      "J4.latency": 1
+      "J4.issue": 2,
+      "J4.latency": 2
     },
     {
       "group": "Arithmetic Operation Instructions",
@@ -4992,8 +4992,8 @@
       "J1.issue": 34,
       "J1.latency": 34,
       "J4": true,
-      "J4.issue": 1,
-      "J4.latency": 1
+      "J4.issue": 2,
+      "J4.latency": 2
     },
     {
       "group": "Arithmetic Operation Instructions",
@@ -5037,8 +5037,8 @@
       "J1.issue": 34,
       "J1.latency": 34,
       "J4": true,
-      "J4.issue": 1,
-      "J4.latency": 1
+      "J4.issue": 2,
+      "J4.latency": 2
     },
     {
       "group": "Arithmetic Operation Instructions",
@@ -5127,7 +5127,7 @@
       "J1.issue": 34,
       "J1.latency": 34,
       "J4": true,
-      "J4.issue": 1,
+      "J4.issue": 2,
       "J4.latency": 1
     },
     {
@@ -5172,7 +5172,7 @@
       "J1.issue": 34,
       "J1.latency": 34,
       "J4": true,
-      "J4.issue": 1,
+      "J4.issue": 2,
       "J4.latency": 1
     },
     {
@@ -5532,8 +5532,8 @@
       "J1.issue": 2,
       "J1.latency": 3,
       "J4": true,
-      "J4.issue": 1,
-      "J4.latency": 1
+      "J4.issue": 2,
+      "J4.latency": 3
     },
     {
       "group": "Logic Operation Instructions",
@@ -5712,8 +5712,8 @@
       "J1.issue": 2,
       "J1.latency": 3,
       "J4": true,
-      "J4.issue": 1,
-      "J4.latency": 1
+      "J4.issue": 2,
+      "J4.latency": 3
     },
     {
       "group": "Logic Operation Instructions",
@@ -5757,8 +5757,8 @@
       "J1.issue": 2,
       "J1.latency": 4,
       "J4": true,
-      "J4.issue": 1,
-      "J4.latency": 1
+      "J4.issue": 2,
+      "J4.latency": 4
     },
     {
       "group": "Logic Operation Instructions",
@@ -5892,8 +5892,8 @@
       "J1.issue": 2,
       "J1.latency": 3,
       "J4": true,
-      "J4.issue": 1,
-      "J4.latency": 1
+      "J4.issue": 2,
+      "J4.latency": 3
     },
     {
       "group": "Logic Operation Instructions",
@@ -6027,8 +6027,8 @@
       "J1.issue": 2,
       "J1.latency": 3,
       "J4": true,
-      "J4.issue": 1,
-      "J4.latency": 1
+      "J4.issue": 2,
+      "J4.latency": 3
     },
     {
       "group": "Shift Instructions",
@@ -6252,8 +6252,8 @@
       "J1.issue": 32,
       "J1.latency": 32,
       "J4": true,
-      "J4.issue": 1,
-      "J4.latency": 1
+      "J4.issue": 0,
+      "J4.latency": 0
     },
     {
       "group": "Shift Instructions",
@@ -6387,8 +6387,8 @@
       "J1.issue": 32,
       "J1.latency": 32,
       "J4": true,
-      "J4.issue": 1,
-      "J4.latency": 1
+      "J4.issue": 0,
+      "J4.latency": 0
     },
     {
       "group": "Shift Instructions",
@@ -6973,7 +6973,7 @@
       "J1.latency": 2,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 2
     },
     {
       "group": "Branch Instructions",
@@ -7018,7 +7018,7 @@
       "J1.latency": 2,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 2
     },
     {
       "group": "Branch Instructions",
@@ -7063,7 +7063,7 @@
       "J1.latency": 2,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 2
     },
     {
       "group": "Branch Instructions",
@@ -7108,7 +7108,7 @@
       "J1.latency": 2,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 2
     },
     {
       "group": "Branch Instructions",
@@ -7153,7 +7153,7 @@
       "J1.latency": 2,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 2
     },
     {
       "group": "Branch Instructions",
@@ -7198,7 +7198,7 @@
       "J1.latency": 2,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 2
     },
     {
       "group": "Branch Instructions",
@@ -7333,7 +7333,7 @@
       "J1.latency": 2,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 2
     },
     {
       "group": "Branch Instructions",
@@ -7738,7 +7738,7 @@
       "J1.latency": 3,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 3
     },
     {
       "group": "System Control Instructions",
@@ -7873,7 +7873,7 @@
       "J1.latency": 3,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 3
     },
     {
       "group": "System Control Instructions",
@@ -7963,7 +7963,7 @@
       "J1.latency": 3,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 3
     },
     {
       "group": "System Control Instructions",
@@ -10037,7 +10037,7 @@
       "J1.latency": 4,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 4
     },
     {
       "group": "System Control Instructions",
@@ -10262,7 +10262,7 @@
       "J1.latency": 3,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 3
     },
     {
       "group": "System Control Instructions",
@@ -10397,7 +10397,7 @@
       "J1.latency": 2,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 2
     },
     {
       "group": "System Control Instructions",
@@ -10532,7 +10532,7 @@
       "J1.latency": 2,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 2
     },
     {
       "group": "System Control Instructions",
@@ -10622,7 +10622,7 @@
       "J1.latency": 2,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 2
     },
     {
       "group": "System Control Instructions",
@@ -12244,8 +12244,8 @@
       "J1.issue": 2,
       "J1.latency": 8,
       "J4": true,
-      "J4.issue": 1,
-      "J4.latency": 1
+      "J4.issue": 2,
+      "J4.latency": 8
     },
     {
       "group": "System Control Instructions",
@@ -12380,7 +12380,7 @@
       "J1.latency": 2,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1
+      "J4.latency": 2
     },
     {
       "group": "System Control Instructions",
@@ -12561,7 +12561,7 @@
       "J1.latency": 2,
       "J4": true,
       "J4.issue": 1,
-      "J4.latency": 1,
+      "J4.latency": 2,
       "collides": ["sts\tFPUL,Rn"]
     },
     {
@@ -20748,7 +20748,7 @@
       "DSP": false,
       "DSP.issue": 0,
       "DSP.latency": 0,
-      "format": "n",
+      "format": "STC TSBPTR, Rn",
       "abstract": "TSBPTR -\u003e Rn (read-only TSB slot pointer)",
       "code": "0000nnnn01000011",
       "J2": false,
@@ -20790,7 +20790,7 @@
       "DSP": false,
       "DSP.issue": 0,
       "DSP.latency": 0,
-      "format": "n",
+      "format": "STC PTEH, Rn",
       "abstract": "PTEH -\u003e Rn",
       "code": "0000nnnn01010011",
       "J2": false,

@@ -1,0 +1,50 @@
+# J4 shares J2's datapath; timing == J2 for shared ops. SH-4 overlay ops derive base/unit timing.
+[units]
+mult = 2          # mac.*, mul.l, dmul*.l → issue 2, latency max(2,1)=2
+
+[overrides]
+# Branches (delay slot → latency 2)
+"1010dddddddddddd" = { issue = 1, latency = 2 }   # bra label
+"1011dddddddddddd" = { issue = 1, latency = 2 }   # bsr label
+"0000mmmm00000011" = { issue = 1, latency = 2 }   # bsrf Rm
+"0000mmmm00100011" = { issue = 1, latency = 2 }   # braf Rm
+"0100mmmm00001011" = { issue = 1, latency = 2 }   # jsr @Rm
+"0100mmmm00101011" = { issue = 1, latency = 2 }   # jmp @Rm
+"0000000000001011" = { issue = 1, latency = 2 }   # rts
+
+# System instructions
+"0000000000101011" = { issue = 1, latency = 4 }   # rte
+"0000000000011011" = { issue = 1, latency = 3 }   # sleep
+"11000011iiiiiiii" = { issue = 2, latency = 8 }   # trapa #imm
+
+# Load/store control registers
+"0100nnnn00000011" = { issue = 1, latency = 2 }   # stc SR,Rn
+"0100nnnn00010011" = { issue = 1, latency = 2 }   # stc GBR,Rn
+"0100nnnn00100011" = { issue = 1, latency = 2 }   # stc VBR,Rn
+"0100mmmm00000111" = { issue = 1, latency = 3 }   # ldc.l @Rm+,SR
+"0100mmmm00010111" = { issue = 1, latency = 3 }   # ldc.l @Rm+,GBR
+"0100mmmm00100111" = { issue = 1, latency = 3 }   # ldc.l @Rm+,VBR
+
+# TAS.B (read-modify-write bus cycle)
+"0100nnnn00011011" = { issue = 2, latency = 4 }   # tas.b @Rn
+
+# XTRACT (J2 custom instruction)
+"0010nnnnmmmm1101" = { issue = 1, latency = 4 }   # xtract Rm,Rn
+
+# MULS.W / MULU.W (issue=2 from mult unit but latency=1, not 2)
+"0010nnnnmmmm1110" = { issue = 2, latency = 1 }   # mulu.w Rm,Rn
+"0010nnnnmmmm1111" = { issue = 2, latency = 1 }   # muls.w Rm,Rn
+
+# Byte RMW to GBR: TST.B, AND.B, OR.B, XOR.B
+"11001100iiiiiiii" = { issue = 2, latency = 3 }   # tst.b #imm,@(R0,GBR)
+"11001101iiiiiiii" = { issue = 2, latency = 3 }   # and.b #imm,@(R0,GBR)
+"11001110iiiiiiii" = { issue = 2, latency = 3 }   # xor.b #imm,@(R0,GBR)
+"11001111iiiiiiii" = { issue = 2, latency = 3 }   # or.b  #imm,@(R0,GBR)
+
+# Coprocessor STS
+"0000nnnn01011010" = { issue = 1, latency = 2 }   # sts CPI_COM,Rn
+"0100nnnn11001000" = { issue = 1, latency = 2 }   # sts CP0_COM,Rn
+
+# SHAD/SHLD — timing not characterized (J2=true, 0/0 in committed data)
+"0100nnnnmmmm1100" = { issue = 0, latency = 0 }   # shad Rm,Rn
+"0100nnnnmmmm1101" = { issue = 0, latency = 0 }   # shld Rm,Rn

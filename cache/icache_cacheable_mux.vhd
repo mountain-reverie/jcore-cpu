@@ -47,7 +47,8 @@ begin
       dbus_i => mem_i, dbus_ack_r => mem_ack_r);
 
   -- bypass: instruction fetch as a direct 32-bit data read with correct
-  -- 16-bit half selection (concurrent procedure call).
+  -- 16-bit half selection. Process wrapper required (VHDL-93 disallows
+  -- concurrent procedure calls in architecture bodies).
   process(ibus_o, mem_i) begin
     splice_instr_data_bus(ibus_o, b_ibus_i, b_mem_o, mem_i);
   end process;

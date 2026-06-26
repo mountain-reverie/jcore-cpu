@@ -404,9 +404,10 @@ func emitCtrlLoadD(c Class, id int) (string, string, error) {
 // page A (workloadVA), Rn->r8 seeded at page B (workloadVA+0x1000, a second
 // mapped page added to the runtime) so the two operands fault on DISTINCT cold
 // pages -- exercising fault-on-the-second-operand with the first base already
-// auto-incremented. Snapshots {r0, r8, MACH, MACL}; MAC is cleared (clrmac)
-// each leg so the accumulator start is identical. Both legs differ only in
-// cold-vs-warm TLB.
+// auto-incremented. Snapshots {r0, r8, MACH, MACL}; the accumulator is cleared
+// via lds r9,MACH/MACL (NOT clrmac -- clrmac is microcoded as TEMP1 xor TEMP1,
+// which is 'X' in sim until TEMP1 is first written) each leg so the accumulator
+// start is identical. Both legs differ only in cold-vs-warm TLB.
 func emitMacD(c Class, id int) (string, string, error) {
 	word, err := encodeWord(c)
 	if err != nil {
@@ -744,8 +745,8 @@ c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
 
 // MAC dual-base D-side: seed+snapshot BOTH bases (r0=Rm page A, r8=Rn page B,
 // two distinct mapped pages so the second operand faults cold after the first
-// base has auto-incremented) plus MACH+MACL. clrmac per leg fixes the
-// accumulator start. Snapshot {r0, r8, MACH, MACL} = 16 bytes.
+// base has auto-incremented) plus MACH+MACL. lds r9,MACH/MACL per leg fixes the
+// accumulator start deterministically. Snapshot {r0, r8, MACH, MACL} = 16 bytes.
 const macDText = `        .balign 4
 _m8_case_{{.ID}}:                       ! {{.Name}}  (MAC dual-base, D-side)
         sts.l   pr, @-r15
@@ -760,7 +761,17 @@ _m8_case_{{.ID}}:                       ! {{.Name}}  (MAC dual-base, D-side)
         mov.l   c{{.ID}}_flush, r3
         jsr     @r3
         nop
-        clrmac
+        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
+        ! microcoded as TEMP1 xor TEMP1 -> MACH,MACL, which yields 'X' in
+        ! simulation when TEMP1 has not yet been written (X xor X = X). Reaching
+        ! the MAC case with TEMP1 still uninitialised would store an undefined
+        ! MACH/MACL into the snapshot -> SRAM bus exception (image hang). On real
+        ! silicon TEMP1 holds a defined value so clrmac is fine; this is purely a
+        ! sim-init artifact. lds r9,MACH/MACL zeroes the accumulator with a
+        ! defined source either way.
+        mov     #0, r9
+        lds     r9, mach
+        lds     r9, macl
         mov.l   c{{.ID}}_seedva, r0     ! Rm base
         mov.l   c{{.ID}}_seedvb, r8     ! Rn base
         .word   {{.Word}}                ! instruction under test
@@ -779,7 +790,9 @@ _m8_case_{{.ID}}:                       ! {{.Name}}  (MAC dual-base, D-side)
         mov.l   c{{.ID}}_seedvb, r0
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
-        clrmac
+        mov     #0, r9                 ! deterministic accumulator clear (see above)
+        lds     r9, mach
+        lds     r9, macl
         mov.l   c{{.ID}}_seedva, r0
         mov.l   c{{.ID}}_seedvb, r8
         .word   {{.Word}}

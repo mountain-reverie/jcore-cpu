@@ -109,7 +109,8 @@ func TestEmitCaseMacDualBase(t *testing.T) {
 		".word   0x080F", // MAC.L with m->r0,n->r8
 		"c5_seedva: .long 0x00100000",
 		"c5_seedvb: .long 0x00101000", // second mapped page (distinct fault)
-		"clrmac",
+		"lds     r9, mach", // deterministic accumulator clear (not clrmac: TEMP1-xor sim-X)
+		"lds     r9, macl",
 		"sts     mach, r1",
 		"sts     macl, r1",
 		"mov     #16, r4", // 16-byte snapshot = r0,r8,MACH,MACL

@@ -485,7 +485,17 @@ _m8_case_6:                       ! MAC.L @Rm+, @Rn+  (MAC dual-base, D-side)
         mov.l   c6_flush, r3
         jsr     @r3
         nop
-        clrmac
+        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
+        ! microcoded as TEMP1 xor TEMP1 -> MACH,MACL, which yields 'X' in
+        ! simulation when TEMP1 has not yet been written (X xor X = X). Reaching
+        ! the MAC case with TEMP1 still uninitialised would store an undefined
+        ! MACH/MACL into the snapshot -> SRAM bus exception (image hang). On real
+        ! silicon TEMP1 holds a defined value so clrmac is fine; this is purely a
+        ! sim-init artifact. lds r9,MACH/MACL zeroes the accumulator with a
+        ! defined source either way.
+        mov     #0, r9
+        lds     r9, mach
+        lds     r9, macl
         mov.l   c6_seedva, r0     ! Rm base
         mov.l   c6_seedvb, r8     ! Rn base
         .word   0x080F                ! instruction under test
@@ -504,7 +514,9 @@ _m8_case_6:                       ! MAC.L @Rm+, @Rn+  (MAC dual-base, D-side)
         mov.l   c6_seedvb, r0
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
-        clrmac
+        mov     #0, r9                 ! deterministic accumulator clear (see above)
+        lds     r9, mach
+        lds     r9, macl
         mov.l   c6_seedva, r0
         mov.l   c6_seedvb, r8
         .word   0x080F
@@ -548,7 +560,17 @@ _m8_case_7:                       ! MAC.W @Rm+, @Rn+  (MAC dual-base, D-side)
         mov.l   c7_flush, r3
         jsr     @r3
         nop
-        clrmac
+        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
+        ! microcoded as TEMP1 xor TEMP1 -> MACH,MACL, which yields 'X' in
+        ! simulation when TEMP1 has not yet been written (X xor X = X). Reaching
+        ! the MAC case with TEMP1 still uninitialised would store an undefined
+        ! MACH/MACL into the snapshot -> SRAM bus exception (image hang). On real
+        ! silicon TEMP1 holds a defined value so clrmac is fine; this is purely a
+        ! sim-init artifact. lds r9,MACH/MACL zeroes the accumulator with a
+        ! defined source either way.
+        mov     #0, r9
+        lds     r9, mach
+        lds     r9, macl
         mov.l   c7_seedva, r0     ! Rm base
         mov.l   c7_seedvb, r8     ! Rn base
         .word   0x480F                ! instruction under test
@@ -567,7 +589,9 @@ _m8_case_7:                       ! MAC.W @Rm+, @Rn+  (MAC dual-base, D-side)
         mov.l   c7_seedvb, r0
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
-        clrmac
+        mov     #0, r9                 ! deterministic accumulator clear (see above)
+        lds     r9, mach
+        lds     r9, macl
         mov.l   c7_seedva, r0
         mov.l   c7_seedvb, r8
         .word   0x480F

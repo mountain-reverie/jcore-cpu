@@ -121,6 +121,7 @@ begin
 
     -- Bypass a lot of logic, same as mult_tap.
     mac_i.s       <= '0';
+    mac_i.acc_squash <= '0';  -- precise-exception MAC squash (MMU_ARCH); '0' = normal accumulate
     mac_i.wr_mach <= '0';
     mac_i.wr_macl <= '0';
 

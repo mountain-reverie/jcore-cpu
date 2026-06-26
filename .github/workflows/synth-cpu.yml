@@ -716,9 +716,20 @@ jobs:
   # on push, schedule, and workflow_dispatch (all run on master). On PRs this job
   # is skipped entirely, so the environment's branch-protection rule is never
   # evaluated and the run is not rejected.
+  #
+  # The `if` MUST include a status function (`!cancelled()`): benchmark uses
+  # `if: always()` so it runs even when synth-asic-pnr is skipped (pnr is
+  # schedule/dispatch-only). Without a status function here, GitHub applies the
+  # implicit "all needs (transitively) succeeded" gate, and the skipped
+  # synth-asic-pnr propagates through benchmark to skip THIS job -- which froze
+  # the Pages baseline on every master push (only dispatch/schedule deploys ran
+  # pnr, so only they deployed). `!cancelled() && needs.benchmark.result ==
+  # 'success'` deploys whenever benchmark produced data, regardless of pnr.
   deploy-pages:
     needs: benchmark
-    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: >-
+      ${{ !cancelled() && needs.benchmark.result == 'success'
+          && (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-24.04
     permissions:
       pages: write

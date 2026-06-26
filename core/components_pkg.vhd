@@ -152,6 +152,17 @@ type datapath_reg_t is record
    -- only genuine post-increments are restored.
    ma_numz          : std_logic_vector(4 downto 0);
    ma_autoupd       : std_logic;
+   -- Symmetric @-Rn pre-decrement STORE support (M8). ma_predec marks "this EX
+   -- write is a memory base pre-decrement store" (mem.wr='1', addr=ZBUS, SUB) and
+   -- ma_base shadows the access's ORIGINAL (pre-decrement) base = xbus (Rn) at the
+   -- launch point. Unlike @Rn+ loads (whose pre-modify base equals the faulting
+   -- VA), the @-Rn store's faulting VA is the ALREADY-decremented address, so the
+   -- value to restore is the captured original base, not tlb_fault_va. On the
+   -- first fault cycle ma_base is latched into tlb_restore_val and the restore is
+   -- armed, so the RTE-restarted store re-applies the single architectural
+   -- decrement instead of double-decrementing.
+   ma_predec        : std_logic;
+   ma_base          : std_logic_vector(31 downto 0);
    tlb_fault_zreg   : std_logic_vector(4 downto 0);
    tlb_restore_val  : std_logic_vector(31 downto 0);
    tlb_restore_pend : std_logic;
@@ -184,7 +195,7 @@ type datapath_reg_t is record
    ybus_override : ybus_val_pipeline_t;
 end record;
 
-constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, tlb_exc_captured => '0', ma_pc => (others => '0'), tlb_exc_pc => (others => '0'), tlb_exc_sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), tlb_squash => '0', ma_numz => (others => '0'), ma_autoupd => '0', tlb_fault_zreg => (others => '0'), tlb_restore_val => (others => '0'), tlb_restore_pend => '0', mac_s => '0', data_o_size => BYTE, data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
+constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, tlb_exc_captured => '0', ma_pc => (others => '0'), tlb_exc_pc => (others => '0'), tlb_exc_sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), tlb_squash => '0', ma_numz => (others => '0'), ma_autoupd => '0', ma_predec => '0', ma_base => (others => '0'), tlb_fault_zreg => (others => '0'), tlb_restore_val => (others => '0'), tlb_restore_pend => '0', mac_s => '0', data_o_size => BYTE, data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
 
 subtype regnum_t is std_logic_vector(4 downto 0);
 component register_file is

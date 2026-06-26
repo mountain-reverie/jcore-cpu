@@ -1,0 +1,772 @@
+{
+  "0000000000001000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000000000001001": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000000000001011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 2
+  },
+  "0000000000011000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000000000011001": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000000000011011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 3
+  },
+  "0000000000101000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000000000101011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 4
+  },
+  "0000000000111011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000mmmm00000011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 2
+  },
+  "0000mmmm00100011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 2
+  },
+  "0000nnnn00000010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000nnnn00001010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000nnnn00010010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000nnnn00011010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000nnnn00100010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000nnnn00101001": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000nnnn00101010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000nnnn01011010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 2
+  },
+  "0000nnnnmmmm0100": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000nnnnmmmm0101": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000nnnnmmmm0110": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000nnnnmmmm0111": {
+    "J2": true,
+    "issue": 2,
+    "latency": 2
+  },
+  "0000nnnnmmmm1100": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000nnnnmmmm1101": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000nnnnmmmm1110": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0000nnnnmmmm1111": {
+    "J2": true,
+    "issue": 2,
+    "latency": 2
+  },
+  "0001nnnnmmmmdddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0010nnnnmmmm0000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0010nnnnmmmm0001": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0010nnnnmmmm0010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0010nnnnmmmm0011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0010nnnnmmmm0100": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0010nnnnmmmm0101": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0010nnnnmmmm0110": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0010nnnnmmmm0111": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0010nnnnmmmm1000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0010nnnnmmmm1001": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0010nnnnmmmm1010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0010nnnnmmmm1011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0010nnnnmmmm1100": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0010nnnnmmmm1101": {
+    "J2": true,
+    "issue": 1,
+    "latency": 4
+  },
+  "0010nnnnmmmm1110": {
+    "J2": true,
+    "issue": 2,
+    "latency": 1
+  },
+  "0010nnnnmmmm1111": {
+    "J2": true,
+    "issue": 2,
+    "latency": 1
+  },
+  "0011nnnnmmmm0000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0011nnnnmmmm0010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0011nnnnmmmm0011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0011nnnnmmmm0100": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0011nnnnmmmm0101": {
+    "J2": true,
+    "issue": 2,
+    "latency": 2
+  },
+  "0011nnnnmmmm0110": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0011nnnnmmmm0111": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0011nnnnmmmm1000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0011nnnnmmmm1010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0011nnnnmmmm1011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0011nnnnmmmm1100": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0011nnnnmmmm1101": {
+    "J2": true,
+    "issue": 2,
+    "latency": 2
+  },
+  "0011nnnnmmmm1110": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0011nnnnmmmm1111": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100mmmm00000110": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100mmmm00000111": {
+    "J2": true,
+    "issue": 1,
+    "latency": 3
+  },
+  "0100mmmm00001010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100mmmm00001011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 2
+  },
+  "0100mmmm00001110": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100mmmm00010110": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100mmmm00010111": {
+    "J2": true,
+    "issue": 1,
+    "latency": 3
+  },
+  "0100mmmm00011010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100mmmm00011110": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100mmmm00100110": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100mmmm00100111": {
+    "J2": true,
+    "issue": 1,
+    "latency": 3
+  },
+  "0100mmmm00101010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100mmmm00101011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 2
+  },
+  "0100mmmm00101110": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100mmmm01011010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100mmmm10001000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100mmmm10001001": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00000000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00000001": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00000010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00000011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 2
+  },
+  "0100nnnn00000100": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00000101": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00001000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00001001": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00010000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00010001": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00010010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00010011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 2
+  },
+  "0100nnnn00010101": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00011000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00011001": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00011011": {
+    "J2": true,
+    "issue": 2,
+    "latency": 4
+  },
+  "0100nnnn00100000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00100001": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00100010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00100011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 2
+  },
+  "0100nnnn00100100": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00100101": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00101000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn00101001": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnn11001000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 2
+  },
+  "0100nnnn11001001": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0100nnnnmmmm1100": {
+    "J2": true,
+    "issue": 0,
+    "latency": 0
+  },
+  "0100nnnnmmmm1101": {
+    "J2": true,
+    "issue": 0,
+    "latency": 0
+  },
+  "0100nnnnmmmm1111": {
+    "J2": true,
+    "issue": 2,
+    "latency": 2
+  },
+  "0101nnnnmmmmdddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0110nnnnmmmm0000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0110nnnnmmmm0001": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0110nnnnmmmm0010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0110nnnnmmmm0011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0110nnnnmmmm0100": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0110nnnnmmmm0101": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0110nnnnmmmm0110": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0110nnnnmmmm0111": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0110nnnnmmmm1000": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0110nnnnmmmm1001": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0110nnnnmmmm1010": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0110nnnnmmmm1011": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0110nnnnmmmm1100": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0110nnnnmmmm1101": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0110nnnnmmmm1110": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0110nnnnmmmm1111": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "0111nnnniiiiiiii": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "10000000nnnndddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "10000001nnnndddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "10000100mmmmdddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "10000101mmmmdddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "10001000iiiiiiii": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "10001001dddddddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "10001011dddddddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "10001101dddddddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "10001111dddddddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "1001nnnndddddddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "1010dddddddddddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 2
+  },
+  "1011dddddddddddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 2
+  },
+  "11000000dddddddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "11000001dddddddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "11000010dddddddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "11000011iiiiiiii": {
+    "J2": true,
+    "issue": 2,
+    "latency": 8
+  },
+  "11000100dddddddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "11000101dddddddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "11000110dddddddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "11000111dddddddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "11001000iiiiiiii": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "11001001iiiiiiii": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "11001010iiiiiiii": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "11001011iiiiiiii": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "11001100iiiiiiii": {
+    "J2": true,
+    "issue": 2,
+    "latency": 3
+  },
+  "11001101iiiiiiii": {
+    "J2": true,
+    "issue": 2,
+    "latency": 3
+  },
+  "11001110iiiiiiii": {
+    "J2": true,
+    "issue": 2,
+    "latency": 3
+  },
+  "11001111iiiiiiii": {
+    "J2": true,
+    "issue": 2,
+    "latency": 3
+  },
+  "1101nnnndddddddd": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "1110nnnniiiiiiii": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "1111mmmm00011101": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  },
+  "1111nnnn00001101": {
+    "J2": true,
+    "issue": 1,
+    "latency": 1
+  }
+}

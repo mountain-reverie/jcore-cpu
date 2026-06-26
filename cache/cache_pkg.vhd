@@ -64,6 +64,12 @@ function vtoi(X : std_logic_vector) return integer;
   -- Cached: P0 0x0-0x7, P1 0x8-0x9, P3 0xC-0xD. Uncached: P2 0xA-0xB, P4 0xE-0xF.
   function is_cacheable(a : std_logic_vector(31 downto 0)) return boolean;
 
+  -- Combined cacheability: when address-translated (at='1') the PTE C-bit is
+  -- authoritative (a translated access is always in a cacheable region); when
+  -- untranslated (at='0', MMU off or P1/P2/P4) fall back to region decode.
+  function is_cacheable_mmu(a : std_logic_vector(31 downto 0);
+                            at : std_logic; c : std_logic) return boolean;
+
 type mem_i_t is record
    d     : std_logic_vector(CACHE_MEM_WIDTH-1 downto 0);
    ack   : std_logic;
@@ -820,6 +826,16 @@ end;
       when "111"  => return false;  -- P4
       when others => return true;   -- P0, P1, P3
     end case;
+  end function;
+
+  function is_cacheable_mmu(a : std_logic_vector(31 downto 0);
+                            at : std_logic; c : std_logic) return boolean is
+  begin
+    if at = '1' then
+      return c = '1';
+    else
+      return is_cacheable(a);
+    end if;
   end function;
 
 end cache_pack;

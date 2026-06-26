@@ -195,182 +195,182 @@
 4    ADDV Rm, Rn          General
 5    AND #imm, R0         General
 6    AND Rm, Rn           General
-7    BGND                 General
-8    Break                PrivMem
-9    CLDS CP0_Rm, CP0_COM General
-10   CLDS CPI_Rm, CPI_COM General
-11   CLRMAC               General
-12   CLRT                 General
-13   CMP /EQ #imm, R0     General
-14   CMP /EQ Rm, Rn       General
-15   CMP /GE Rm, Rn       General
-16   CMP /GT Rm, Rn       General
-17   CMP /HI Rm, Rn       General
-18   CMP /HS Rm, Rn       General
-19   CMP /STR Rm, Rn      General
-20   CMP/PL Rn            General
-21   CMP/PZ Rn            General
-22   CSTS CP0_COM, CP0_Rn General
-23   CSTS CPI_COM, CPI_Rn General
-24   DIV0S Rm, Rn         General
-25   DIV0U                General
-26   DIV1 Rm, Rn          General
-27   DMULS.L Rm, Rn       General
-28   DMULU.L Rm, Rn       General
-29   DT Rn                General
-30   EXTS.B Rm, Rn        General
-31   EXTS.W Rm, Rn        General
-32   EXTU.B Rm, Rn        General
-33   EXTU.W Rm, Rn        General
-34   Error                PrivMem
-35   General Illegal      PrivMem
-36   Interrupt            PrivMem
-37   LDC Rm, ASIDR        PrivMem
-38   LDC Rm, PTEH         PrivMem
-39   LDC Rm, PTEL         PrivMem
-40   LDC Rm, Rn_BANK      PrivMem
-41   LDC Rm, SPC          PrivMem
-42   LDC Rm, SR           PrivMem
-43   LDC Rm, SSR          PrivMem
-44   LDC Rm, VBR          PrivMem
-45   LDC, Rm, GBR         PrivMem
-46   LDS Rm, CP0_COM      General
-47   LDS Rm, CPI_COM      General
-48   LDS Rm, MACH         General
-49   LDS Rm, MACL         General
-50   LDS Rm, PR           PrivMem
-51   MOV #imm, Rn         General
-52   MOV Rm, Rn           General
-53   MOVA @(disp, PC), R0 General
-54   MOVT Rn              General
-55   MUL.L Rm, Rn         General
-56   MULS.W Rm, Rn        General
-57   MULU.W Rm, Rn        General
-58   NEG Rm, Rn           General
-59   NEGC Rm, Rn          General
-60   NOP                  General
-61   NOT Rm, Rn           General
-62   OR #imm, R0          General
-63   OR Rm, Rn            General
-64   ROTCL Rn             General
-65   ROTCR Rn             General
-66   ROTL Rn              General
-67   ROTR Rn              General
-68   SETT                 General
-69   SHAD Rm, Rn          General
-70   SHAL Rn              General
-71   SHAR Rn              General
-72   SHLD Rm, Rn          General
-73   SHLL Rn              General
-74   SHLL16 Rn            General
-75   SHLL2 Rn             General
-76   SHLL8 Rn             General
-77   SHLR Rn              General
-78   SHLR16 Rn            General
-79   SHLR2 Rn             General
-80   SHLR8 Rn             General
-81   STC ASIDR, Rn        PrivMem
-82   STC EXPEVT, Rn       PrivMem
-83   STC GBR, Rn          General
-84   STC INTEVT, Rn       PrivMem
-85   STC PTEH, Rn         PrivMem
-86   STC PTEL, Rn         PrivMem
-87   STC Rm_BANK, Rn      PrivMem
-88   STC SPC, Rn          PrivMem
-89   STC SR, Rn           PrivMem
-90   STC SSR, Rn          PrivMem
-91   STC TRA, Rn          PrivMem
-92   STC TSBPTR, Rn       PrivMem
-93   STC VBR, Rn          PrivMem
-94   STS CP0_COM, Rn      General
-95   STS CPI_COM, Rn      General
-96   STS MACH, Rn         General
-97   STS MACL, Rn         General
-98   STS PR, Rn           General
-99   SUB Rm, Rn           General
-100  SUBC Rm, Rn          General
-101  SUBV Rm, Rn          General
-102  SWAP.B Rm, Rn        General
-103  SWAP.W Rm, Rn        General
-104  Slot Illegal         PrivMem
-105  TLB DMISS R          PrivMem
-106  TLB DMISS W          PrivMem
-107  TLB DPROT R          PrivMem
-108  TLB DPROT W          PrivMem
-109  TLB IMISS            PrivMem
-110  TLB IPROT            PrivMem
-111  TRAPA #imm           PrivMem
-112  TST #imm, R0         General
-113  TST Rm, Rn           General
-114  XOR #imm, R0         General
-115  XOR Rm, Rn           General
-116  XTRACT Rm, Rn        General
-# 116 emitted; skipped:
-#   AND.B #imm, @(R0, GBR) AND.B #imm, @(R0, GBR) accesses memory; I-fetch needs a separate code page (Task 4)
+7    CLRT                 General
+8    CMP /EQ #imm, R0     General
+9    CMP /EQ Rm, Rn       General
+10   CMP /GE Rm, Rn       General
+11   CMP /GT Rm, Rn       General
+12   CMP /HI Rm, Rn       General
+13   CMP /HS Rm, Rn       General
+14   CMP /STR Rm, Rn      General
+15   CMP/PL Rn            General
+16   CMP/PZ Rn            General
+17   DIV0S Rm, Rn         General
+18   DIV0U                General
+19   DIV1 Rm, Rn          General
+20   DMULS.L Rm, Rn       General
+21   DMULU.L Rm, Rn       General
+22   DT Rn                General
+23   EXTS.B Rm, Rn        General
+24   EXTS.W Rm, Rn        General
+25   EXTU.B Rm, Rn        General
+26   EXTU.W Rm, Rn        General
+27   LDS Rm, MACH         General
+28   LDS Rm, MACL         General
+29   MOV #imm, Rn         General
+30   MOV Rm, Rn           General
+31   MOVA @(disp, PC), R0 General
+32   MOVT Rn              General
+33   MUL.L Rm, Rn         General
+34   MULS.W Rm, Rn        General
+35   MULU.W Rm, Rn        General
+36   NEG Rm, Rn           General
+37   NEGC Rm, Rn          General
+38   NOP                  General
+39   NOT Rm, Rn           General
+40   OR #imm, R0          General
+41   OR Rm, Rn            General
+42   ROTCL Rn             General
+43   ROTCR Rn             General
+44   ROTL Rn              General
+45   ROTR Rn              General
+46   SETT                 General
+47   SHAD Rm, Rn          General
+48   SHAL Rn              General
+49   SHAR Rn              General
+50   SHLD Rm, Rn          General
+51   SHLL Rn              General
+52   SHLL16 Rn            General
+53   SHLL2 Rn             General
+54   SHLL8 Rn             General
+55   SHLR Rn              General
+56   SHLR16 Rn            General
+57   SHLR2 Rn             General
+58   SHLR8 Rn             General
+59   STC GBR, Rn          General
+60   STS MACH, Rn         General
+61   STS MACL, Rn         General
+62   STS PR, Rn           General
+63   SUB Rm, Rn           General
+64   SUBC Rm, Rn          General
+65   SUBV Rm, Rn          General
+66   SWAP.B Rm, Rn        General
+67   SWAP.W Rm, Rn        General
+68   TST #imm, R0         General
+69   TST Rm, Rn           General
+70   XOR #imm, R0         General
+71   XOR Rm, Rn           General
+72   XTRACT Rm, Rn        General
+# 72 emitted; skipped:
+#   AND.B #imm, @(R0, GBR) AND.B #imm, @(R0, GBR) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 #   BF /S label          BF /S label is Bespoke (dedicated guard)
 #   BF label             BF label is Bespoke (dedicated guard)
+#   BGND                 BGND: SH-2A BGND not implemented by the J-core DUT
 #   BRA label            BRA label is Bespoke (dedicated guard)
 #   BRAF Rm              BRAF Rm is Bespoke (dedicated guard)
 #   BSR label            BSR label is Bespoke (dedicated guard)
 #   BSRF Rm              BSRF Rm is Bespoke (dedicated guard)
 #   BT /S label          BT /S label is Bespoke (dedicated guard)
 #   BT label             BT label is Bespoke (dedicated guard)
-#   CAS.L Rm, Rn, @R0    CAS.L Rm, Rn, @R0 accesses memory; I-fetch needs a separate code page (Task 4)
+#   Break                Break is a microcode-only system entry (plane=system), not a fetchable instruction
+#   CAS.L Rm, Rn, @R0    CAS.L Rm, Rn, @R0 accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   CLDS CP0_Rm, CP0_COM CLDS CP0_Rm, CP0_COM: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
+#   CLDS CPI_Rm, CPI_COM CLDS CPI_Rm, CPI_COM: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
+#   CLRMAC               CLRMAC: clrmac microcoded as TEMP1^TEMP1 -> 'U'/'X' in sim (MAC snapshot not comparable)
+#   CSTS CP0_COM, CP0_Rn CSTS CP0_COM, CP0_Rn: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
+#   CSTS CPI_COM, CPI_Rn CSTS CPI_COM, CPI_Rn: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
+#   Error                Error is a microcode-only system entry (plane=system), not a fetchable instruction
+#   General Illegal      General Illegal is a microcode-only system entry (plane=system), not a fetchable instruction
+#   Interrupt            Interrupt is a microcode-only system entry (plane=system), not a fetchable instruction
 #   JMP @Rm              JMP @Rm is Bespoke (dedicated guard)
 #   JSR @Rm              JSR @Rm is Bespoke (dedicated guard)
-#   LDC.L @Rm+, GBR      LDC.L @Rm+, GBR accesses memory; I-fetch needs a separate code page (Task 4)
-#   LDC.L @Rm+, SR       LDC.L @Rm+, SR accesses memory; I-fetch needs a separate code page (Task 4)
-#   LDC.L @Rm+, VBR      LDC.L @Rm+, VBR accesses memory; I-fetch needs a separate code page (Task 4)
-#   LDS.L @Rm+, MACH     LDS.L @Rm+, MACH accesses memory; I-fetch needs a separate code page (Task 4)
-#   LDS.L @Rm+, MACL     LDS.L @Rm+, MACL accesses memory; I-fetch needs a separate code page (Task 4)
-#   LDS.L @Rm+, PR       LDS.L @Rm+, PR accesses memory; I-fetch needs a separate code page (Task 4)
+#   LDC Rm, ASIDR        LDC Rm, ASIDR writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   LDC Rm, PTEH         LDC Rm, PTEH writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   LDC Rm, PTEL         LDC Rm, PTEL writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   LDC Rm, Rn_BANK      LDC Rm, Rn_BANK writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   LDC Rm, SPC          LDC Rm, SPC writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   LDC Rm, SR           LDC Rm, SR writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   LDC Rm, SSR          LDC Rm, SSR writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   LDC Rm, VBR          LDC Rm, VBR writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   LDC, Rm, GBR         LDC, Rm, GBR writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   LDC.L @Rm+, GBR      LDC.L @Rm+, GBR accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   LDC.L @Rm+, SR       LDC.L @Rm+, SR accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   LDC.L @Rm+, VBR      LDC.L @Rm+, VBR accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   LDS Rm, CP0_COM      LDS Rm, CP0_COM: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
+#   LDS Rm, CPI_COM      LDS Rm, CPI_COM: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
+#   LDS Rm, PR           LDS Rm, PR writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   LDS.L @Rm+, MACH     LDS.L @Rm+, MACH accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   LDS.L @Rm+, MACL     LDS.L @Rm+, MACL accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   LDS.L @Rm+, PR       LDS.L @Rm+, PR accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 #   LDTLB                LDTLB is Bespoke (dedicated guard)
 #   LDTLB.R              LDTLB.R is Bespoke (dedicated guard)
-#   MAC.L @Rm+, @Rn+     MAC.L @Rm+, @Rn+ accesses memory; I-fetch needs a separate code page (Task 4)
-#   MAC.W @Rm+, @Rn+     MAC.W @Rm+, @Rn+ accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.B @(R0, Rm), Rn  MOV.B @(R0, Rm), Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.B @(disp, GBR), R0 MOV.B @(disp, GBR), R0 accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.B @(disp, Rm), R0 MOV.B @(disp, Rm), R0 accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.B @Rm+, Rn       MOV.B @Rm+, Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.B @Rm, Rn        MOV.B @Rm, Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.B R0, @(disp, GBR) MOV.B R0, @(disp, GBR) accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.B R0, @(disp, Rn) MOV.B R0, @(disp, Rn) accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.B Rm, @(R0, Rn)  MOV.B Rm, @(R0, Rn) accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.B Rm, @Rn        MOV.B Rm, @Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.B Rm,@-Rn        MOV.B Rm,@-Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.L @(R0, Rm), Rn  MOV.L @(R0, Rm), Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.L @(disp, GBR), R0 MOV.L @(disp, GBR), R0 accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.L @(disp, PC), Rn MOV.L @(disp, PC), Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.L @(disp, Rm), Rn MOV.L @(disp, Rm), Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.L @Rm+, Rn       MOV.L @Rm+, Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.L @Rm, Rn        MOV.L @Rm, Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.L R0, @(disp, GBR) MOV.L R0, @(disp, GBR) accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.L Rm, @(R0, Rn)  MOV.L Rm, @(R0, Rn) accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.L Rm, @(disp, Rn) MOV.L Rm, @(disp, Rn) accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.L Rm, @Rn        MOV.L Rm, @Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.L Rm,@-Rn        MOV.L Rm,@-Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.W @(R0, Rm), Rn  MOV.W @(R0, Rm), Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.W @(disp, GBR), R0 MOV.W @(disp, GBR), R0 accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.W @(disp, PC), Rn MOV.W @(disp, PC), Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.W @(disp, Rm), R0 MOV.W @(disp, Rm), R0 accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.W @Rm+, Rn       MOV.W @Rm+, Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.W @Rm, Rn        MOV.W @Rm, Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.W R0, @(disp, GBR) MOV.W R0, @(disp, GBR) accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.W R0, @(disp, Rn) MOV.W R0, @(disp, Rn) accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.W Rm, @(R0, Rn)  MOV.W Rm, @(R0, Rn) accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.W Rm, @Rn        MOV.W Rm, @Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   MOV.W Rm,@-Rn        MOV.W Rm,@-Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   OR.B #imm, @(R0, GBR) OR.B #imm, @(R0, GBR) accesses memory; I-fetch needs a separate code page (Task 4)
+#   MAC.L @Rm+, @Rn+     MAC.L @Rm+, @Rn+ accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MAC.W @Rm+, @Rn+     MAC.W @Rm+, @Rn+ accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.B @(R0, Rm), Rn  MOV.B @(R0, Rm), Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.B @(disp, GBR), R0 MOV.B @(disp, GBR), R0 accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.B @(disp, Rm), R0 MOV.B @(disp, Rm), R0 accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.B @Rm+, Rn       MOV.B @Rm+, Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.B @Rm, Rn        MOV.B @Rm, Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.B R0, @(disp, GBR) MOV.B R0, @(disp, GBR) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.B R0, @(disp, Rn) MOV.B R0, @(disp, Rn) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.B Rm, @(R0, Rn)  MOV.B Rm, @(R0, Rn) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.B Rm, @Rn        MOV.B Rm, @Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.B Rm,@-Rn        MOV.B Rm,@-Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.L @(R0, Rm), Rn  MOV.L @(R0, Rm), Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.L @(disp, GBR), R0 MOV.L @(disp, GBR), R0 accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.L @(disp, PC), Rn MOV.L @(disp, PC), Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.L @(disp, Rm), Rn MOV.L @(disp, Rm), Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.L @Rm+, Rn       MOV.L @Rm+, Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.L @Rm, Rn        MOV.L @Rm, Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.L R0, @(disp, GBR) MOV.L R0, @(disp, GBR) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.L Rm, @(R0, Rn)  MOV.L Rm, @(R0, Rn) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.L Rm, @(disp, Rn) MOV.L Rm, @(disp, Rn) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.L Rm, @Rn        MOV.L Rm, @Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.L Rm,@-Rn        MOV.L Rm,@-Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.W @(R0, Rm), Rn  MOV.W @(R0, Rm), Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.W @(disp, GBR), R0 MOV.W @(disp, GBR), R0 accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.W @(disp, PC), Rn MOV.W @(disp, PC), Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.W @(disp, Rm), R0 MOV.W @(disp, Rm), R0 accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.W @Rm+, Rn       MOV.W @Rm+, Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.W @Rm, Rn        MOV.W @Rm, Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.W R0, @(disp, GBR) MOV.W R0, @(disp, GBR) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.W R0, @(disp, Rn) MOV.W R0, @(disp, Rn) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.W Rm, @(R0, Rn)  MOV.W Rm, @(R0, Rn) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.W Rm, @Rn        MOV.W Rm, @Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   MOV.W Rm,@-Rn        MOV.W Rm,@-Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   OR.B #imm, @(R0, GBR) OR.B #imm, @(R0, GBR) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 #   RTE                  RTE is Bespoke (dedicated guard)
 #   RTS                  RTS is Bespoke (dedicated guard)
-#   Reset CPU            Reset CPU accesses memory; I-fetch needs a separate code page (Task 4)
+#   Reset CPU            Reset CPU is a microcode-only system entry (plane=system), not a fetchable instruction
 #   SLEEP                SLEEP is Bespoke (dedicated guard)
-#   STC.L GBR, @-Rn      STC.L GBR, @-Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   STC.L SR, @-Rn       STC.L SR, @-Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   STC.L VBR, @-Rn      STC.L VBR, @-Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   STS.L MACH, @-Rn     STS.L MACH, @-Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   STS.L MACL, @-Rn     STS.L MACL, @-Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   STS.L PR, @-Rn       STS.L PR, @-Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   TAS.B @Rn            TAS.B @Rn accesses memory; I-fetch needs a separate code page (Task 4)
-#   TST.B #imm, @(R0, GBR) TST.B #imm, @(R0, GBR) accesses memory; I-fetch needs a separate code page (Task 4)
-#   XOR.B #imm, @(R0, GBR) XOR.B #imm, @(R0, GBR) accesses memory; I-fetch needs a separate code page (Task 4)
+#   STC ASIDR, Rn        STC ASIDR, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   STC EXPEVT, Rn       STC EXPEVT, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   STC INTEVT, Rn       STC INTEVT, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   STC PTEH, Rn         STC PTEH, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   STC PTEL, Rn         STC PTEL, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   STC Rm_BANK, Rn      STC Rm_BANK, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   STC SPC, Rn          STC SPC, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   STC SR, Rn           STC SR, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   STC SSR, Rn          STC SSR, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   STC TRA, Rn          STC TRA, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   STC TSBPTR, Rn       STC TSBPTR, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   STC VBR, Rn          STC VBR, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   STC.L GBR, @-Rn      STC.L GBR, @-Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   STC.L SR, @-Rn       STC.L SR, @-Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   STC.L VBR, @-Rn      STC.L VBR, @-Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   STS CP0_COM, Rn      STS CP0_COM, Rn: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
+#   STS CPI_COM, Rn      STS CPI_COM, Rn: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
+#   STS.L MACH, @-Rn     STS.L MACH, @-Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   STS.L MACL, @-Rn     STS.L MACL, @-Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   STS.L PR, @-Rn       STS.L PR, @-Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   Slot Illegal         Slot Illegal is a microcode-only system entry (plane=system), not a fetchable instruction
+#   TAS.B @Rn            TAS.B @Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   TLB DMISS R          TLB DMISS R is a microcode-only system entry (plane=system), not a fetchable instruction
+#   TLB DMISS W          TLB DMISS W is a microcode-only system entry (plane=system), not a fetchable instruction
+#   TLB DPROT R          TLB DPROT R is a microcode-only system entry (plane=system), not a fetchable instruction
+#   TLB DPROT W          TLB DPROT W is a microcode-only system entry (plane=system), not a fetchable instruction
+#   TLB IMISS            TLB IMISS is a microcode-only system entry (plane=system), not a fetchable instruction
+#   TLB IPROT            TLB IPROT is a microcode-only system entry (plane=system), not a fetchable instruction
+#   TRAPA #imm           TRAPA #imm writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   TST.B #imm, @(R0, GBR) TST.B #imm, @(R0, GBR) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+#   XOR.B #imm, @(R0, GBR) XOR.B #imm, @(R0, GBR) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)

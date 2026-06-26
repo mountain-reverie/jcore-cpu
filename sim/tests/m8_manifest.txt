@@ -3,30 +3,36 @@
 
 ## D-side axis (m8_dside.S)
 1    CAS.L Rm, Rn, @R0    General
-2    MOV.B @(disp, Rm), R0 General
-3    MOV.B @Rm+, Rn       General
-4    MOV.B @Rm, Rn        General
-5    MOV.B R0, @(disp, Rn) General
-6    MOV.B Rm, @Rn        General
-7    MOV.B Rm,@-Rn        General
-8    MOV.L @(disp, Rm), Rn General
-9    MOV.L @Rm+, Rn       General
-10   MOV.L @Rm, Rn        General
-11   MOV.L Rm, @(disp, Rn) General
-12   MOV.L Rm, @Rn        General
-13   MOV.L Rm,@-Rn        General
-14   MOV.W @(disp, Rm), R0 General
-15   MOV.W @Rm+, Rn       General
-16   MOV.W @Rm, Rn        General
-17   MOV.W R0, @(disp, Rn) General
-18   MOV.W Rm, @Rn        General
-19   MOV.W Rm,@-Rn        General
-20   STC.L GBR, @-Rn      General
-21   STS.L MACH, @-Rn     General
-22   STS.L MACL, @-Rn     General
-23   STS.L PR, @-Rn       General
-24   TAS.B @Rn            General
-# 24 emitted; skipped:
+2    LDC.L @Rm+, GBR      PrivMem
+3    LDS.L @Rm+, MACH     General
+4    LDS.L @Rm+, MACL     General
+5    LDS.L @Rm+, PR       PrivMem
+6    MAC.L @Rm+, @Rn+     General
+7    MAC.W @Rm+, @Rn+     General
+8    MOV.B @(disp, Rm), R0 General
+9    MOV.B @Rm+, Rn       General
+10   MOV.B @Rm, Rn        General
+11   MOV.B R0, @(disp, Rn) General
+12   MOV.B Rm, @Rn        General
+13   MOV.B Rm,@-Rn        General
+14   MOV.L @(disp, Rm), Rn General
+15   MOV.L @Rm+, Rn       General
+16   MOV.L @Rm, Rn        General
+17   MOV.L Rm, @(disp, Rn) General
+18   MOV.L Rm, @Rn        General
+19   MOV.L Rm,@-Rn        General
+20   MOV.W @(disp, Rm), R0 General
+21   MOV.W @Rm+, Rn       General
+22   MOV.W @Rm, Rn        General
+23   MOV.W R0, @(disp, Rn) General
+24   MOV.W Rm, @Rn        General
+25   MOV.W Rm,@-Rn        General
+26   STC.L GBR, @-Rn      General
+27   STS.L MACH, @-Rn     General
+28   STS.L MACL, @-Rn     General
+29   STS.L PR, @-Rn       General
+30   TAS.B @Rn            General
+# 30 emitted; skipped:
 #   ADD #imm, Rn         ADD #imm, Rn has no D-side memory access
 #   ADD Rm, Rn           ADD Rm, Rn has no D-side memory access
 #   ADDC Rm, Rn          ADDC Rm, Rn has no D-side memory access
@@ -83,21 +89,15 @@
 #   LDC Rm, SSR          LDC Rm, SSR has no D-side memory access
 #   LDC Rm, VBR          LDC Rm, VBR has no D-side memory access
 #   LDC, Rm, GBR         LDC, Rm, GBR has no D-side memory access
-#   LDC.L @Rm+, GBR      LDC.L @Rm+, GBR: control-register memory load leaves snapshot register undefined across a cold-TLB fault (co-sim U-write hang, not a decodable Result)
-#   LDC.L @Rm+, SR       LDC.L @Rm+, SR: control-register memory load leaves snapshot register undefined across a cold-TLB fault (co-sim U-write hang, not a decodable Result)
-#   LDC.L @Rm+, VBR      LDC.L @Rm+, VBR: control-register memory load leaves snapshot register undefined across a cold-TLB fault (co-sim U-write hang, not a decodable Result)
+#   LDC.L @Rm+, SR       LDC.L @Rm+, SR: mode-unsafe (SR/VBR govern execution/vectoring); the @Rm+ base auto-modify path is already covered by the GBR/MACH/MACL/PR siblings, so no precise-exception coverage is lost
+#   LDC.L @Rm+, VBR      LDC.L @Rm+, VBR: mode-unsafe (SR/VBR govern execution/vectoring); the @Rm+ base auto-modify path is already covered by the GBR/MACH/MACL/PR siblings, so no precise-exception coverage is lost
 #   LDS Rm, CP0_COM      LDS Rm, CP0_COM has no D-side memory access
 #   LDS Rm, CPI_COM      LDS Rm, CPI_COM has no D-side memory access
 #   LDS Rm, MACH         LDS Rm, MACH has no D-side memory access
 #   LDS Rm, MACL         LDS Rm, MACL has no D-side memory access
 #   LDS Rm, PR           LDS Rm, PR has no D-side memory access
-#   LDS.L @Rm+, MACH     LDS.L @Rm+, MACH: control-register memory load leaves snapshot register undefined across a cold-TLB fault (co-sim U-write hang, not a decodable Result)
-#   LDS.L @Rm+, MACL     LDS.L @Rm+, MACL: control-register memory load leaves snapshot register undefined across a cold-TLB fault (co-sim U-write hang, not a decodable Result)
-#   LDS.L @Rm+, PR       LDS.L @Rm+, PR: control-register memory load leaves snapshot register undefined across a cold-TLB fault (co-sim U-write hang, not a decodable Result)
 #   LDTLB                LDTLB is Bespoke (dedicated guard)
 #   LDTLB.R              LDTLB.R is Bespoke (dedicated guard)
-#   MAC.L @Rm+, @Rn+     MAC.L @Rm+, @Rn+: effective address not modelled: dual memory-pointer instruction (only one base register is seeded)
-#   MAC.W @Rm+, @Rn+     MAC.W @Rm+, @Rn+: effective address not modelled: dual memory-pointer instruction (only one base register is seeded)
 #   MOV #imm, Rn         MOV #imm, Rn has no D-side memory access
 #   MOV Rm, Rn           MOV Rm, Rn has no D-side memory access
 #   MOV.B @(R0, Rm), Rn  MOV.B @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)

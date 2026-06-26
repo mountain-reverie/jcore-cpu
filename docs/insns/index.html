@@ -129,6 +129,30 @@
   .dynatable-record-count {
     color: #808080;
   }
+
+  a.collide-icon {
+    display: inline-block;
+    color: #fff;
+    background: #d9534f;
+    font-weight: bold;
+    text-decoration: none;
+    border-radius: 3px;
+    padding: 0 6px;
+    margin-right: 6px;
+    line-height: 1.4;
+    cursor: pointer;
+  }
+  a.collide-icon:hover {
+    background: #c9302c;
+  }
+  a.collide-link {
+    color: #0366d6;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  a.collide-link:hover {
+    text-decoration: underline;
+  }
 </style>
 </head>
 <body>
@@ -317,16 +341,46 @@
     event.preventDefault();
   }
 
-  function filter_to(format) {
-    var esc = format.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    var s = document.getElementById('search');
-    s.value = esc;
-    if (dynatable) { dynatable.process(); }
-    $(s).trigger('change');
+  // query is a regular-expression string matched against the record fields by
+  // the 'search' query function. Clear the family/group filters so the target
+  // (which may belong to a different family/group) is not hidden, then refilter.
+  function filter_to(query) {
+    $('#family').val('*');
+    $('#group').val('*');
+    $('#search').val(query);
+    if (dynatable && dynatable.settings && dynatable.settings.dataset) {
+      dynatable.settings.dataset.queries['family'] = '*';
+      dynatable.settings.dataset.queries['group'] = '*';
+      dynatable.settings.dataset.queries['search'] = query;
+      dynatable.process();
+    }
   }
+
+  // Rows are rendered dynamically by dynatable, so bind the collide affordances
+  // through delegation on the table. (Inline onclick can't safely carry a format
+  // string that contains quotes/tabs.)
+  $(function () {
+    $('#instructions')
+      .on('click', '.collide-icon', function (e) {
+        e.preventDefault();
+        // Show the whole shared-encoding group via the opcode code (regex-safe).
+        filter_to($(this).attr('data-code'));
+      })
+      .on('click', '.collide-link', function (e) {
+        e.preventDefault();
+        // Match the exact mnemonic, tolerant of its internal whitespace (tabs).
+        var f = $(this).attr('data-format');
+        filter_to(f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+'));
+      });
+  });
 
   function on_mouse_click(rowIndex, event) {
     if (event.defaultPrevented === true)
+      return;
+
+    // Clicks on a collide icon/link filter the table; don't also toggle the row.
+    if (event.target && event.target.closest &&
+        event.target.closest('.collide-icon, .collide-link'))
       return;
 
     var eh = document.getElementById('hex' + rowIndex);
@@ -527,17 +581,20 @@
     }
 
     var collidesRow = '';
+    var collideIcon = '';
     if (record.collides && record.collides.length) {
+      collideIcon = '<a href="#" class="collide-icon" title="Shares its 16-bit encoding with another instruction — click to show the group" data-code="' + record.code + '">!</a> ';
       var links = record.collides.map(function (f) {
-        return '<a href="#" onclick="filter_to(' + JSON.stringify(f) + '); return false;">' +
-               f.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</a>';
+        var disp = f.replace(/\t/g, ' ').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        var attr = f.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+        return '<a href="#" class="collide-link" data-format="' + attr + '">' + disp + '</a>';
       }).join(', ');
-      collidesRow = '<tr class="collapse" id="collides' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);"><td colspan=' + colspan + '><i><b>Shares encoding with</b></i><br/>' + links + '</td></tr>';
+      collidesRow = '<tr class="collapse" id="collides' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);"><td colspan=' + colspan + '><i><b>Shares encoding with:</b></i> ' + links + '</td></tr>';
     }
 
     return group_start + '<tr class="top" id="line0.' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);">' +
       '<td class="compat">' + compat[0] + '</td><td class="compat">' + compat[1] + '</td><td class="compat">' + compat[2] + '</td>' +
-      '<td rowspan=4>' + record.format + '</td>' +
+      '<td rowspan=4>' + collideIcon + record.format + '</td>' +
       '<td rowspan=4>' + record.abstract + '</td>' +
       '<td rowspan=4><pre>' + record.code + '</pre></td>' +
       '<td rowspan=4>' + record.T + '</td>' +

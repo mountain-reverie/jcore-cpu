@@ -244,3 +244,46 @@ func TestEmitImageGeneral(t *testing.T) {
 		}
 	}
 }
+
+// TestEmitIFetchGeneral covers the instruction-FETCH axis: a General non-memory
+// instruction plants [instr ; jmp @r12 ; nop] into the translated code page and
+// snapshots {r0,r8,T,MACH,MACL}. It also asserts the emitter never produces the
+// invalid displacement-store form `mov.w Rm,@(disp,Rn)` (the old template bug --
+// only `mov.w R0,@(disp,Rn)` is legal), and that out-of-scope instructions are
+// skipped with a manifest reason (memory, PrivMem, coprocessor, system plane).
+func TestEmitIFetchGeneral(t *testing.T) {
+	s, err := spec.LoadProfile("../../spec", "../../spec/sh4")
+	if err != nil {
+		t.Fatalf("load spec: %v", err)
+	}
+
+	// ADD Rm,Rn: General non-memory -> emitted, snapshot 20 bytes, jmp stub.
+	c := Classify(find(t, s, "ADD Rm, Rn"))
+	block, _, err := emitCase(c, 1, IFetch)
+	if err != nil {
+		t.Fatalf("ADD Rm,Rn should emit on I-fetch: %v", err)
+	}
+	for _, want := range []string{"_m8_case_1:", "jmp     @r5", "0x4C2B", "mov     #20, r4", "0x00100000"} {
+		if !strings.Contains(block, want) {
+			t.Errorf("I-fetch ADD block missing %q:\n%s", want, block)
+		}
+	}
+	// No invalid mov.w displacement store of a general register.
+	for _, lineBad := range strings.Split(block, "\n") {
+		l := strings.TrimSpace(lineBad)
+		if strings.HasPrefix(l, "mov.w") && strings.Contains(l, "@(") && !strings.Contains(l, "r0,") && !strings.Contains(l, "R0,") {
+			// allow `mov.w c..._instrw, r6` (a load); reject a STORE `mov.w rN,@(disp,...)`.
+			if strings.Contains(l, ",@(") {
+				t.Errorf("invalid mov.w displacement store of a non-R0 register: %q", l)
+			}
+		}
+	}
+
+	// Out-of-scope instructions are skipped (errSkip) with a reason.
+	for _, name := range []string{"MOV.L @Rm+, Rn", "LDC Rm, SR", "BGND"} {
+		c := Classify(find(t, s, name))
+		if _, _, err := emitCase(c, 2, IFetch); !IsSkip(err) {
+			t.Errorf("%s should be skipped on I-fetch axis, got err=%v", name, err)
+		}
+	}
+}

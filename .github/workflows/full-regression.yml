@@ -145,7 +145,7 @@ jobs:
           # Regenerate the M8 fault-coverage test images from the spec.
           make -C decode m8gen
           # Generator-diff gate: fail if committed images are out of sync.
-          if ! git diff --quiet -- sim/tests/m8_dside.S sim/tests/m8_manifest.txt; then
+          if ! git diff --quiet -- sim/tests/m8_dside.S sim/tests/m8_ifetch.S sim/tests/m8_manifest.txt; then
             echo "FAIL: committed m8 images out of sync with spec — run 'make -C decode m8gen' and commit"
             git diff --stat -- sim/tests/m8_*.S sim/tests/m8_manifest.txt
             exit 1
@@ -167,12 +167,12 @@ jobs:
             || { echo "FAIL: build is not MMU-on (stale cpu_tb.vhh?)"; exit 1; }
 
           fail=0
-          run_guard() {  # <name> <sim_top-or-default> [stop-time]
-            local t="$1" top="${2:-}" stoptime="${3:-80us}"
+          run_guard() {  # <name> <sim_top-or-default> [stop-time] [wall-timeout-s]
+            local t="$1" top="${2:-}" stoptime="${3:-80us}" wall="${4:-120}"
             rm -f tests/$t.img tests/$t.o tests/$t.elf
             make CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 -C tests $t.img >/dev/null 2>&1
             local out
-            out="$(SIM_TOP="$top" timeout 120 ./cpu_ctb --stop-time="$stoptime" \
+            out="$(SIM_TOP="$top" timeout "$wall" ./cpu_ctb --stop-time="$stoptime" \
                    -i tests/$t.img --ieee-asserts=disable 2>&1 || true)"
             if echo "$out" | grep -qi 'Test Passed'; then
               echo "  PASS  $t${top:+ [$top]}"
@@ -196,7 +196,13 @@ jobs:
           run_guard m8_dside "" 200us
           # M8 MAC-arithmetic guard (short, 80us is sufficient).
           run_guard m8_macarith
-          # m8_ifetch (I-fetch fault transparency) is deferred: icache coherence unvalidated.
+          # M8 I-fetch fault-transparency sweep. 72 General non-memory cases are
+          # EMITTED but only the first 30 are DISPATCHED (IFetchDispatchCap): the
+          # co-sim hangs beyond a ~38-case cumulative-fetch ceiling (a co-sim
+          # limit, not a CPU defect -- every case is precise standalone and 1..38
+          # pass in sequence). 30 cases fit well under that; 12ms stop-time covers
+          # them (Test Passed ends the sim early). Generous wall timeout (240s).
+          run_guard m8_ifetch "" 12ms 240
 
           [ "$fail" = 0 ] || { echo "==> functional guards FAILED" >&2; exit 1; }
-          echo "==> all 28 priv-arch + MMU functional guards PASSED"
+          echo "==> all 29 priv-arch + MMU functional guards PASSED"

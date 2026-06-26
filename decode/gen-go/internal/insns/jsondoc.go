@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 )
+
+func intToNum(i int) any { return json.Number(strconv.Itoa(i)) }
 
 type Row struct {
 	keys []string

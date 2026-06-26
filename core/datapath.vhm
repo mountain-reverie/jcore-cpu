@@ -335,13 +335,25 @@ begin
 	--     faulting slot0 read -- i.e. IN the fault shadow. tlb_squash must also
 	--     gate this z-write, else the base double-increments after RTE
 	--     re-executes both slots.
-	--     NOTE -- MAC.L/W @Rm+,@Rn+ fault-on-the-SECOND-operand (@Rn+) is NOT
-	--     covered and is a KNOWN DEFERRED limitation: the first-operand Rm
-	--     increment has ALREADY committed before the second access faults, so it
-	--     is neither in the squash shadow nor captured by the single-base restore
-	--     (restore_fire holds only one base, tlb_fault_zreg=ma_numz) -> the MAC
-	--     re-executes and double-increments that first base on restart. Only
-	--     fault-on-the-first-operand MAC is precise.
+	--     NOTE -- MAC.L/W @Rm+,@Rn+ is IMPRECISE across a D-side TLB fault and is
+	--     a KNOWN DEFERRED limitation, but NOT for the base register: M8 task-6c
+	--     measured (cpu_ctb, MMU-on, GHW) that BOTH bases Rm,Rn are restored
+	--     single-incremented on EITHER operand fault (the mem_autoinc1 restore,
+	--     1d5064a, covers each). The defect is the MULTIPLY-ACCUMULATE itself:
+	--     the MACH:MACL accumulate (mult.vhd, wr_mach/wr_macl via code.mach_en)
+	--     is re-applied on every fault-restart of the instruction and is neither
+	--     squashed nor rolled back. Measured for operand 0xA11C0001^2 = product P:
+	--       0 faults (warm)         -> 1*P (correct)
+	--       fault on either operand -> 2*P
+	--       both operands cold      -> 3*P
+	--     i.e. one extra accumulate per faulting operand read, on EITHER position
+	--     (the earlier "only fault-on-first-operand is precise / second double-
+	--     increments the base" wording was WRONG -- the bases are precise; the
+	--     accumulator over-accumulates). Fixing this needs the multiply unit to
+	--     hold/squash its accumulate in the fault shadow and replay it once on the
+	--     final restart (multi-pass MAC restore, deferred). The M8 harness case
+	--     (m8_dside IDs for MAC.L/W) reports this cleanly as a snapshot mismatch
+	--     (Result=<id>), not a hang.
 	--     The ONLY legitimate shadow z-writes are the exception-entry
 	--     system-register saves SPC(21)/SSR(22) -- regfile "10xxx" -- which are
 	--     exempted so RTE still restores the correct SR/PC. The precise

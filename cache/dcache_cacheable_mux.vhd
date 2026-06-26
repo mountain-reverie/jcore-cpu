@@ -37,7 +37,7 @@ architecture arch of dcache_cacheable_mux is
   -- snoop tie-offs
   signal snp_o       : dcache_snoop_io_t;
 begin
-  cacheable <= is_cacheable(cpu_o.a);
+  cacheable <= is_cacheable_mmu(cpu_o.a, a_mmu.at, a_mmu.c);
 
   -- CPU-side fan to the cache: only present the access when cacheable, else hold
   -- the cache idle (en=0).

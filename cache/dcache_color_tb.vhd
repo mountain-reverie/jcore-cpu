@@ -96,6 +96,15 @@ begin
     cpu_o <= NULL_DATA_O; tick;
     assert ddr_mem(widx(x"A0000040")) = x"DEADBEEF"
       report "BYPASS FAIL: uncached write did not reach memory" severity failure;
+    -- C-bit override: a TRANSLATED (at='1') write to a cacheable region (P0) but
+    -- with PTE C='0' must bypass straight to memory, NOT be cached/held dirty.
+    a_mmu <= (pa_tag => std_logic_vector(to_unsigned(9, 15)), at => '1', c => '0');
+    cpu_o <= (en=>'1', a=>x"00012000", rd=>'0', wr=>'1', we=>"1111", d=>x"FEEDFACE");
+    loop tick; exit when cpu_i.ack = '1'; end loop;
+    cpu_o <= NULL_DATA_O; a_mmu <= MMU_CACHE_I_RESET; tick;
+    assert ddr_mem(widx(x"00012000")) = x"FEEDFACE"
+      report "C-BIT FAIL: translated C=0 write was cached, did not reach memory"
+      severity failure;
     report "dcache_color_tb: all tests passed" severity note;
     done <= true; wait;
   end process;

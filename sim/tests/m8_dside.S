@@ -472,8 +472,121 @@ c5_cmp:    .long 0x80000000 + _m8_cmp
 c5_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_6:                       ! MAC.L @Rm+, @Rn+  (MAC dual-base, D-side)
+_m8_case_6:                       ! MAC.L @Rm+, @Rn+  (MAC dual-base, D-side; 3 fault positions)
         sts.l   pr, @-r15
+        ! ===== position: fault on operand 1 only (Rm page cold, Rn page pre-warmed) =====
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   c6_seedva, r0     ! page A (Rm)
+        mov.l   c6_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c6_seedvb, r0     ! page B (Rn)
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c6_flush, r3
+        jsr     @r3
+        nop
+        mov.l   c6_seedvb, r0          ! pre-warm page B (Rn): only operand 1 (Rm) faults
+        mov.l   @r0, r1
+        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
+        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
+        mov     #0, r9
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c6_seedva, r0     ! Rm base
+        mov.l   c6_seedvb, r8     ! Rn base
+        .word   0x080F                ! instruction under test
+        mov.l   c6_snapa, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- control leg (warm TLB) ----
+        mov.l   c6_seedva, r0
+        mov.l   c6_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c6_seedvb, r0
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov     #0, r9                 ! deterministic accumulator clear (see above)
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c6_seedva, r0
+        mov.l   c6_seedvb, r8
+        .word   0x080F
+        mov.l   c6_snapb, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- compare ----
+        mov     #16, r4
+        mov.l   c6_id, r5
+        mov.l   c6_cmp, r3
+        jsr     @r3
+        nop
+        ! ===== position: fault on operand 2 only (Rm page pre-warmed, Rn page cold) =====
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   c6_seedva, r0     ! page A (Rm)
+        mov.l   c6_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c6_seedvb, r0     ! page B (Rn)
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c6_flush, r3
+        jsr     @r3
+        nop
+        mov.l   c6_seedva, r0          ! pre-warm page A (Rm): only operand 2 (Rn) faults
+        mov.l   @r0, r1
+        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
+        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
+        mov     #0, r9
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c6_seedva, r0     ! Rm base
+        mov.l   c6_seedvb, r8     ! Rn base
+        .word   0x080F                ! instruction under test
+        mov.l   c6_snapa, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- control leg (warm TLB) ----
+        mov.l   c6_seedva, r0
+        mov.l   c6_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c6_seedvb, r0
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov     #0, r9                 ! deterministic accumulator clear (see above)
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c6_seedva, r0
+        mov.l   c6_seedvb, r8
+        .word   0x080F
+        mov.l   c6_snapb, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- compare ----
+        mov     #16, r4
+        mov.l   c6_id, r5
+        mov.l   c6_cmp, r3
+        jsr     @r3
+        nop
+        ! ===== position: both operands cold (both Rm and Rn faults) =====
         ! ---- faulting leg (cold TLB) ----
         mov.l   c6_seedva, r0     ! page A (Rm)
         mov.l   c6_seed, r1
@@ -486,13 +599,7 @@ _m8_case_6:                       ! MAC.L @Rm+, @Rn+  (MAC dual-base, D-side)
         jsr     @r3
         nop
         ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
-        ! microcoded as TEMP1 xor TEMP1 -> MACH,MACL, which yields 'X' in
-        ! simulation when TEMP1 has not yet been written (X xor X = X). Reaching
-        ! the MAC case with TEMP1 still uninitialised would store an undefined
-        ! MACH/MACL into the snapshot -> SRAM bus exception (image hang). On real
-        ! silicon TEMP1 holds a defined value so clrmac is fine; this is purely a
-        ! sim-init artifact. lds r9,MACH/MACL zeroes the accumulator with a
-        ! defined source either way.
+        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
         mov     #0, r9
         lds     r9, mach
         lds     r9, macl
@@ -547,8 +654,121 @@ c6_cmp:    .long 0x80000000 + _m8_cmp
 c6_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
-_m8_case_7:                       ! MAC.W @Rm+, @Rn+  (MAC dual-base, D-side)
+_m8_case_7:                       ! MAC.W @Rm+, @Rn+  (MAC dual-base, D-side; 3 fault positions)
         sts.l   pr, @-r15
+        ! ===== position: fault on operand 1 only (Rm page cold, Rn page pre-warmed) =====
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   c7_seedva, r0     ! page A (Rm)
+        mov.l   c7_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c7_seedvb, r0     ! page B (Rn)
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c7_flush, r3
+        jsr     @r3
+        nop
+        mov.l   c7_seedvb, r0          ! pre-warm page B (Rn): only operand 1 (Rm) faults
+        mov.l   @r0, r1
+        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
+        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
+        mov     #0, r9
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c7_seedva, r0     ! Rm base
+        mov.l   c7_seedvb, r8     ! Rn base
+        .word   0x480F                ! instruction under test
+        mov.l   c7_snapa, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- control leg (warm TLB) ----
+        mov.l   c7_seedva, r0
+        mov.l   c7_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c7_seedvb, r0
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov     #0, r9                 ! deterministic accumulator clear (see above)
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c7_seedva, r0
+        mov.l   c7_seedvb, r8
+        .word   0x480F
+        mov.l   c7_snapb, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- compare ----
+        mov     #16, r4
+        mov.l   c7_id, r5
+        mov.l   c7_cmp, r3
+        jsr     @r3
+        nop
+        ! ===== position: fault on operand 2 only (Rm page pre-warmed, Rn page cold) =====
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   c7_seedva, r0     ! page A (Rm)
+        mov.l   c7_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c7_seedvb, r0     ! page B (Rn)
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c7_flush, r3
+        jsr     @r3
+        nop
+        mov.l   c7_seedva, r0          ! pre-warm page A (Rm): only operand 2 (Rn) faults
+        mov.l   @r0, r1
+        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
+        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
+        mov     #0, r9
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c7_seedva, r0     ! Rm base
+        mov.l   c7_seedvb, r8     ! Rn base
+        .word   0x480F                ! instruction under test
+        mov.l   c7_snapa, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- control leg (warm TLB) ----
+        mov.l   c7_seedva, r0
+        mov.l   c7_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c7_seedvb, r0
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov     #0, r9                 ! deterministic accumulator clear (see above)
+        lds     r9, mach
+        lds     r9, macl
+        mov.l   c7_seedva, r0
+        mov.l   c7_seedvb, r8
+        .word   0x480F
+        mov.l   c7_snapb, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- compare ----
+        mov     #16, r4
+        mov.l   c7_id, r5
+        mov.l   c7_cmp, r3
+        jsr     @r3
+        nop
+        ! ===== position: both operands cold (both Rm and Rn faults) =====
         ! ---- faulting leg (cold TLB) ----
         mov.l   c7_seedva, r0     ! page A (Rm)
         mov.l   c7_seed, r1
@@ -561,13 +781,7 @@ _m8_case_7:                       ! MAC.W @Rm+, @Rn+  (MAC dual-base, D-side)
         jsr     @r3
         nop
         ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
-        ! microcoded as TEMP1 xor TEMP1 -> MACH,MACL, which yields 'X' in
-        ! simulation when TEMP1 has not yet been written (X xor X = X). Reaching
-        ! the MAC case with TEMP1 still uninitialised would store an undefined
-        ! MACH/MACL into the snapshot -> SRAM bus exception (image hang). On real
-        ! silicon TEMP1 holds a defined value so clrmac is fine; this is purely a
-        ! sim-init artifact. lds r9,MACH/MACL zeroes the accumulator with a
-        ! defined source either way.
+        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
         mov     #0, r9
         lds     r9, mach
         lds     r9, macl

@@ -340,20 +340,24 @@ begin
 	--     faulting slot0 read -- i.e. IN the fault shadow. tlb_squash must also
 	--     gate this z-write, else the base double-increments after RTE
 	--     re-executes both slots.
-	--     NOTE -- MAC.L/W @Rm+,@Rn+ is now PRECISE across a D-side TLB fault.
-	--     BOTH bases Rm,Rn were already precise (mem_autoinc1 restore, 1d5064a,
-	--     single-increments each on EITHER operand fault). The remaining defect
-	--     was the MULTIPLY-ACCUMULATE: the MACH:MACL accumulate (mult.vhd,
-	--     wr_mach/wr_macl via code.mach_en) re-applied on every fault-restart and
-	--     was neither squashed nor rolled back. Measured for 0xA11C0001^2 = P:
-	--       0 faults (warm) -> 1*P; one operand cold -> 2*P; both cold -> 3*P,
-	--     i.e. one extra accumulate per faulting operand read. FIX (M8 4th class):
-	--     tlb_squash is exported as tlb_squash_o and feeds mult's acc_squash; the
-	--     mult latches it for the in-flight MAC sequence (the pulse drops ~1 cycle
-	--     before the MACL1/MACL2 commit) so the faulting pass commits NOTHING and
-	--     the clean restart accumulates exactly once. The m8_dside MAC.L/W cases
-	--     (IDs 6,7) now pass; MAC arithmetic on a clean op is unaffected (the
-	--     squash never arms without a fault).
+	--     NOTE -- MAC.L/W @Rm+,@Rn+ is now PRECISE across a D-side TLB fault at
+	--     EVERY fault position. BOTH bases Rm,Rn are precise (mem_autoinc1
+	--     restore, 1d5064a, single-increments each on EITHER operand fault). The
+	--     remaining defect was the MULTIPLY-ACCUMULATE: the MACH:MACL accumulate
+	--     (mult.vhd, wr_mach/wr_macl via code.mach_en) re-applied on every
+	--     fault-restart and was neither squashed nor rolled back. Measured for
+	--     0xA11C0001^2 = P, pre-fix: 0 faults (warm) -> 1*P; one operand cold ->
+	--     2*P; both cold -> 3*P, i.e. one extra accumulate per faulting operand
+	--     read. FIX (M8 4th class): tlb_squash is exported as tlb_squash_o and
+	--     feeds mult's acc_squash; the mult latches it for the in-flight MAC
+	--     sequence (the pulse drops ~1 cycle before the MACL1/MACL2 commit) so the
+	--     faulting pass commits NOTHING and the clean restart accumulates exactly
+	--     once -> 1*P at every position. REGRESSION-LOCKED: the m8_dside MAC.L/W
+	--     cases now run all three fault positions (operand-1-only, operand-2-only,
+	--     both-cold) as separate precise self-checks, and m8_macseq proves a clean
+	--     MAC after a faulting MAC accumulates exactly once (acc_sq re-samples at
+	--     dispatch; the squash does not linger). MAC arithmetic on a clean op is
+	--     unaffected -- the squash never arms without a fault (m8_macarith).
 	--     The ONLY legitimate shadow z-writes are the exception-entry
 	--     system-register saves SPC(21)/SSR(22) -- regfile "10xxx" -- which are
 	--     exempted so RTE still restores the correct SR/PC. The precise

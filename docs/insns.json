@@ -5124,8 +5124,8 @@
       "J2.latency": 1,
       "J2.issue": 2,
       "J1": true,
-      "J1.issue": 2,
-      "J1.latency": 1,
+      "J1.issue": 34,
+      "J1.latency": 34,
       "J4": true,
       "J4.issue": 1,
       "J4.latency": 1
@@ -5169,8 +5169,8 @@
       "J2.latency": 1,
       "J2.issue": 2,
       "J1": true,
-      "J1.issue": 2,
-      "J1.latency": 1,
+      "J1.issue": 34,
+      "J1.latency": 34,
       "J4": true,
       "J4.issue": 1,
       "J4.latency": 1

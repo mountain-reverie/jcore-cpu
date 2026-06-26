@@ -80,11 +80,18 @@ VHDS += ../cache/dcache_ccl.vhd
 VHDS += ../cache/dcache.vhd
 VHDS += ../cache/dcache_adapter.vhd
 VHDS += ../cache/dcache_cacheable_mux.vhd
+VHDS += ../cache/icache_ram.vhd
+VHDS += ../cache/icache_ccl.vhd
+VHDS += ../cache/icache_mcl.vhd
+VHDS += ../cache/icache.vhd
+VHDS += ../cache/icache_adapter.vhd
+VHDS += ../cache/icache_cacheable_mux.vhd
+VHDS += ../cache/icache_cacheable_mux_tb.vhd
 VHDS += ../cache/is_cacheable_tb.vhd
 VHDS += ../cache/dcache_color_tb.vhd
 #UNISIM_VHDS := unisims/unisim_VCOMP.vhd unisims/unisim_VPKG.vhd $(wildcard unisims/primitive/*.vhd)
 
-VHDL_TOPS := cpu_tb cpu_pure_tb tlb_match_tb seg_decode_tb is_cacheable_tb dcache_color_tb cpu_cache_tb
+VHDL_TOPS := cpu_tb cpu_pure_tb tlb_match_tb seg_decode_tb is_cacheable_tb dcache_color_tb icache_cacheable_mux_tb cpu_cache_tb
 #VHDL_LIBS := unisim work
 VHDL_LIBS := work
 

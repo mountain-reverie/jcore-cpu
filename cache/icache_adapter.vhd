@@ -13,6 +13,7 @@ entity icache_adapter is
     ctrl : in cache_ctrl_t;
     ibus_o : in  cpu_instruction_o_t;
     ibus_i : out cpu_instruction_i_t;
+    a_mmu  : in  mmu_cache_i_t := MMU_CACHE_I_RESET;
 
     dbus_o : out cpu_data_o_t;
     dbus_ddrburst : out std_logic;
@@ -57,7 +58,7 @@ begin
   -- icache - cpu side connection
   icache_a.a   <= ibus_o.a(27 downto 1) & "0";
   icache_a.en  <= ibus_o.en;
-  icache_a.mmu <= MMU_CACHE_I_RESET;
+  icache_a.mmu <= a_mmu;
   ibus_i.ack  <= icache_y.ack;
   ibus_i.d    <= icache_y.d;
 

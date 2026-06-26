@@ -175,7 +175,9 @@
         <option>SH4</option>
         <option>SH4A</option>
         <option>DSP</option>
-        <option>J-Core</option>
+        <option>J1</option>
+        <option>J2</option>
+        <option>J4</option>
       </select>
     </div>
     <div id="insns-group">Instructions group :
@@ -268,12 +270,12 @@
     </thead>
     <thead class="header">
       <th colspan=7></th>
+      <th class='family' data-dynatable-column="J1.issue">J1</th>
       <th class='family' data-dynatable-column="J2.issue">J2</th>
-      <th class='family'></th>
-      <th class='family'></th>
+      <th class='family' data-dynatable-column="J4.issue">J4</th>
+      <th class='family' data-dynatable-column="J1.latency">J1</th>
       <th class='family' data-dynatable-column="J2.latency">J2</th>
-      <th class='family'></th>
-      <th class='family'></th>
+      <th class='family' data-dynatable-column="J4.latency">J4</th>
       <script type="text/javascript">
         if (local_storage) {
           document.write("<th></th>");
@@ -462,7 +464,9 @@
       record.SH4 ? 'SH4' : '-',
       record.SH4A ? 'SH4A' : '-',
       record.DSP ? 'DSP' : '-',
-      record.J2 ? 'J2' : '-'
+      record.J1 ? 'J1' : '-',
+      record.J2 ? 'J2' : '-',
+      record.J4 ? 'J4' : '-'
     ];
     var issue = [
       record.SH1 ? record["SH1.issue"] : '-',
@@ -474,7 +478,9 @@
       record.SH4 ? record["SH4.issue"] : '-',
       record.SH4A ? record["SH4A.issue"] : '-',
       record.DSP ? record["DSP.issue"] : '-',
-      record.J2 ? record["J2.issue"] : '-'
+      record.J1 ? record["J1.issue"] : '-',
+      record.J2 ? record["J2.issue"] : '-',
+      record.J4 ? record["J4.issue"] : '-'
     ];
     var latency = [
       record.SH1 ? record["SH1.latency"] : '-',
@@ -486,7 +492,9 @@
       record.SH4 ? record["SH4.latency"] : '-',
       record.SH4A ? record["SH4A.latency"] : '-',
       record.DSP ? record["DSP.latency"] : '-',
-      record.J2 ? record["J2.latency"] : '-'
+      record.J1 ? record["J1.latency"] : '-',
+      record.J2 ? record["J2.latency"] : '-',
+      record.J4 ? record["J4.latency"] : '-'
     ];
     var group_start = '';
 
@@ -544,9 +552,9 @@
       '<td>' + issue[6] + '</td><td>' + issue[7] + '</td><td>' + issue[8] + '</td>' +
       '<td>' + latency[6] + '</td><td>' + latency[7] + '</td><td>' + latency[8] + '</td>' +
       '</tr><tr id="line3.' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);">' +
-      '<td class="compat">' + compat[9] + '</td><td class="compat">' + '</td><td class="compat"></td>' +
-      '<td>' + issue[9] + '</td><td>' + '</td><td></td>' +
-      '<td>' + latency[9] + '</td><td>' + '</td><td></td>' +
+      '<td class="compat">' + compat[9] + '</td><td class="compat">' + compat[10] + '</td><td class="compat">' + compat[11] + '</td>' +
+      '<td>' + issue[9] + '</td><td>' + issue[10] + '</td><td>' + issue[11] + '</td>' +
+      '<td>' + latency[9] + '</td><td>' + latency[10] + '</td><td>' + latency[11] + '</td>' +
       '</tr>' + hexCode +
       '<tr class="collapse" id="description' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);"><td colspan=' + colspan + '><i><b>Description</b></i><br/><pre>' + record.description + '</pre></td></tr>' +
       '<tr class="collapse" id="operation' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);"><td colspan=' + colspan + '><i><b>Operation</b></i><pre class="code">' + record.operation + '</pre></td></tr>' +
@@ -563,7 +571,6 @@
         .bind('dynatable:init', function (e, dynatable) {
           dynatable.queries.functions['family'] = function (record, queryValue) {
             if (queryValue === '*') return true;
-            if (queryValue === 'J-Core') return record.J2;
             return record[queryValue] === true;
           };
           dynatable.queries.functions['group'] = function (record, queryValue) {

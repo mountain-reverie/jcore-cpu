@@ -1,0 +1,10 @@
+{
+  "instructions": [
+    {
+      "group": "Data Transfer Instructions",
+      "SH2": true,
+      "format": "mov\tRm,Rn",
+      "code": "0110nnnnmmmm0011"
+    }
+  ]
+}

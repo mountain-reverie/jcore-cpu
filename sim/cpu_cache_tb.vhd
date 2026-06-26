@@ -107,6 +107,10 @@ architecture behaviour of cpu_cache_tb is
   signal cpu_db_lock : std_logic;
   signal cpu_mmu     : cpu_mmu_o_t;
   signal cpu_a_mmu   : mmu_cache_i_t;
+  signal cpu_i_mmu          : mmu_cache_i_t;
+  signal instr_mem_o        : cpu_data_o_t;
+  signal instr_mem_i        : cpu_data_i_t := (d => (others => '0'), ack => '0');
+  signal instr_mem_ddrburst : std_logic;
   signal cache_ctrl_s : work.data_bus_pack.cache_ctrl_t := (en => '1', inv => '0');
 
 begin
@@ -138,9 +142,6 @@ begin
   data_slaves_i(DEV_NONE) <= loopback_bus(data_slaves_o(DEV_NONE));
   data_slaves_i(DEV_SPI) <= loopback_bus(data_slaves_o(DEV_SPI));
 
-  instruction_buses(master_i => instr_master_i, master_o => instr_master_o,
-                    selected => decode_instr_address(instr_master_o.a),
-                    slaves_i => instr_slaves_i, slaves_o => instr_slaves_o);
 #if CONFIG_RING_BUS == 1
   m : rbus_data_master port map (
     clk => clk,
@@ -188,14 +189,29 @@ begin
   pre_mi.ack <= instrd_slaves_i(DEV_SRAM).ack;
   pre_mi.d <= instrd_slaves_i(DEV_SRAM).d;
   instrd_slaves_o(DEV_SRAM) <= to_data_o(pre_mo);
-#else
-  -- Splice all slave instruction buses to data bus equivalents because C side of
-  -- the simulator uses the data bus signals.
-  splice_instr_data_bus(instr_slaves_o(DEV_SRAM), instr_slaves_i(DEV_SRAM),
-                        instrd_slaves_o(DEV_SRAM), instrd_slaves_i(DEV_SRAM));
-#endif
   splice_instr_data_bus(instr_slaves_o(DEV_DDR), instr_slaves_i(DEV_DDR),
                         instrd_slaves_o(DEV_DDR), instrd_slaves_i(DEV_DDR));
+#else
+  -- icache_cacheable_mux memory side (data-typed) -> instruction memory devices.
+  -- Mirrors how the C model services data SRAM (same ram.img); ignores ddrburst.
+  process(instr_mem_o, instrd_slaves_i)
+    variable dev : instr_bus_device_t;
+  begin
+    if instr_mem_o.en = '1' then
+      dev := decode_instr_address(instr_mem_o.a(31 downto 1));
+    else
+      dev := DEV_SRAM;
+    end if;
+    instr_mem_i <= instrd_slaves_i(dev);
+    for d in instr_bus_device_t'left to instr_bus_device_t'right loop
+      if (d = dev) and (instr_mem_o.en = '1') then
+        instrd_slaves_o(d) <= mask_data_o(instr_mem_o, '1');
+      else
+        instrd_slaves_o(d) <= mask_data_o(instr_mem_o, '0');
+      end if;
+    end loop;
+  end process;
+#endif
 
   cpu1: configuration work.cpu_sim
 #if CONFIG_PRIV_ARCH
@@ -230,6 +246,22 @@ begin
       mem_ddrburst => open,
       mem_i     => data_master_i,
       mem_ack_r => data_master_i.ack);
+
+  cpu_i_mmu <= (pa_tag => cpu_mmu.i_pa_tag, at => cpu_mmu.i_at, c => cpu_mmu.i_c);
+
+  u_imux : entity work.icache_cacheable_mux
+    port map (
+      clk125       => clk,
+      clk200       => clk,
+      rst          => rst,
+      ctrl         => cache_ctrl_s,
+      ibus_o       => instr_master_o,
+      a_mmu        => cpu_i_mmu,
+      ibus_i       => instr_master_i,
+      mem_o        => instr_mem_o,
+      mem_ddrburst => instr_mem_ddrburst,
+      mem_i        => instr_mem_i,
+      mem_ack_r    => instr_mem_i.ack);
 
   -- FIXME: Old CPU interface wrapper
   event_i.en  <= '0'       when event_req_i = "111" else '1';

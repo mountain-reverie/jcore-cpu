@@ -46,10 +46,7 @@ func (t *Table) For(in spec.Instr) Timing {
 			return ov
 		}
 	}
-	lat := len(in.Slots)
-	if lat < 1 {
-		lat = 1
-	}
+	lat := 1
 	issue := 1
 	if u := unitOf(in); u != "" && t.Units != nil {
 		if c, ok := t.Units[u]; ok && c > 0 {

@@ -188,7 +188,7 @@
 #   XOR.B #imm, @(R0, GBR) XOR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
 #   XTRACT Rm, Rn        XTRACT Rm, Rn has no D-side memory access
 
-## I-fetch axis (m8_ifetch.S)
+## I-fetch axis (m8_ifetch_N.S)
 1    ADD #imm, Rn         General
 2    ADD Rm, Rn           General
 3    ADDC Rm, Rn          General

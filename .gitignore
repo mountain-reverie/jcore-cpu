@@ -42,6 +42,7 @@ docs/superpowers
 
 # Git worktrees
 .worktrees/
+.superpowers/
 
 # synth/ build artifacts (netlists, GHDL work dirs)
 build/

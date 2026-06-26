@@ -192,10 +192,13 @@ jobs:
           done
           # VIPT page-coloring runs the CPU through the live D-cache (cpu_cache_tb).
           run_guard mmucolor cpu_cache_tb
-          # M8 D-side fault-transparency sweep (30 cases; needs 200us to complete).
+          # M8 D-side fault-transparency sweep (34 cases; needs 200us to complete).
           run_guard m8_dside "" 200us
           # M8 MAC-arithmetic guard (short, 80us is sufficient).
           run_guard m8_macarith
+          # M8 fault-then-clean-MAC regression guard (cited by core/datapath.vhm
+          # acc_squash; short, default 80us is sufficient).
+          run_guard m8_macseq
           # M8 I-fetch fault-transparency sweep. All 72 General non-memory cases
           # are EMITTED and DISPATCHED, partitioned into 3 sub-images of 24 cases
           # each. Each sub-image is a SEPARATE sim run (CPU reset), keeping every
@@ -207,4 +210,4 @@ jobs:
           run_guard m8_ifetch_2 "" 12ms 240
 
           [ "$fail" = 0 ] || { echo "==> functional guards FAILED" >&2; exit 1; }
-          echo "==> all 29 priv-arch + MMU functional guards PASSED"
+          echo "==> all 30 priv-arch + MMU functional guards PASSED"

@@ -1195,7 +1195,10 @@ _m8_case_{{.ID}}:                       ! {{.Name}}  (General non-memory, I-fetc
         mov     #0, r9                  ! deterministic MAC/T seed (identical both legs)
         lds     r9, mach
         lds     r9, macl
-        clrt
+        stc     sr, r1                  ! seed SR.{Q,M,S,T}=0 -> controlled-equal inputs per leg
+        mov.l   c{{.ID}}_srclr, r2      !   (DIV1 reads incoming Q/M; mode bits MD/RB/BL/IMASK preserved)
+        and     r2, r1
+        ldc     r1, sr
         mov.l   c{{.ID}}_in0, r0        ! seed instruction inputs
         mov.l   c{{.ID}}_in8, r8
         mov.l   c{{.ID}}_ireta, r12     ! in-page return target (P1 alias)
@@ -1220,7 +1223,10 @@ c{{.ID}}_ireta_l:
         mov     #0, r9
         lds     r9, mach
         lds     r9, macl
-        clrt
+        stc     sr, r1                  ! seed SR.{Q,M,S,T}=0 -> controlled-equal inputs per leg
+        mov.l   c{{.ID}}_srclr, r2      !   (DIV1 reads incoming Q/M; mode bits MD/RB/BL/IMASK preserved)
+        and     r2, r1
+        ldc     r1, sr
         mov.l   c{{.ID}}_in0, r0
         mov.l   c{{.ID}}_in8, r8
         mov.l   c{{.ID}}_iretb, r12
@@ -1261,6 +1267,7 @@ c{{.ID}}_iretb:  .long 0x80000000 + c{{.ID}}_iretb_l
 c{{.ID}}_in0:    .long 0x00000011
 c{{.ID}}_in8:    .long 0x00000022
 c{{.ID}}_srmsk:  .long 0x00000303        ! SR.{M(9),Q(8),S(1),T(0)} -- arch result bits
+c{{.ID}}_srclr:  .long 0xFFFFFCFC        ! mask clearing SR.{M,Q,S,T}, preserving MD/RB/BL/IMASK
 c{{.ID}}_snapa:  .long SNAP_A
 c{{.ID}}_snapb:  .long SNAP_B
 c{{.ID}}_id:     .long {{.ID}}

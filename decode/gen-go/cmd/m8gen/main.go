@@ -4,7 +4,7 @@
 // (instructions sorted by Name, so IDs do not churn between runs), and writes:
 //
 //	m8_dside.S     -- D-side load/store fault cases (EmitImage DSide)
-//	m8_ifetch.S    -- I-fetch fault cases (EmitImage IFetch)
+//	m8_ifetch_N.S  -- I-fetch fault cases, split into 3 sub-images (EmitImage IFetch)
 //	m8_manifest.txt -- ID -> instruction Name -> bucket/axis/skip-reason map
 //
 // All outputs go to -o (typically ../../sim/tests). The .S files #include
@@ -148,7 +148,7 @@ func buildManifest(classes []faultgen.Class, skip map[int]bool) string {
 		file string
 	}{
 		{faultgen.DSide, "D-side", "m8_dside.S"},
-		{faultgen.IFetch, "I-fetch", "m8_ifetch.S"},
+		{faultgen.IFetch, "I-fetch", "m8_ifetch_N.S"},
 	} {
 		fmt.Fprintf(&b, "\n## %s axis (%s)\n", ax.name, ax.file)
 		entries := faultgen.ImageManifest(classes, ax.axis)

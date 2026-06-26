@@ -82,8 +82,8 @@ func Sync(d *Doc, vds []VariantData) (*Report, error) {
 	for _, p := range pending {
 		r := newRow(p.in, p.vd.Variant.Group)
 		for _, vd := range vds {
-			if vd.Variant.Name == p.vd.Variant.Name {
-				setCols(r, vd, p.in)
+			if in, ok := vd.Set.ByKey[p.key]; ok {
+				setCols(r, vd, in)
 			} else {
 				setColsFalse(r, vd.Variant.Name)
 			}

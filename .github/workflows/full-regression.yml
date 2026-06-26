@@ -145,7 +145,7 @@ jobs:
           # Regenerate the M8 fault-coverage test images from the spec.
           make -C decode m8gen
           # Generator-diff gate: fail if committed images are out of sync.
-          if ! git diff --quiet -- sim/tests/m8_dside.S sim/tests/m8_ifetch.S sim/tests/m8_manifest.txt; then
+          if ! git diff --quiet -- sim/tests/m8_dside.S sim/tests/m8_ifetch_0.S sim/tests/m8_ifetch_1.S sim/tests/m8_ifetch_2.S sim/tests/m8_manifest.txt; then
             echo "FAIL: committed m8 images out of sync with spec — run 'make -C decode m8gen' and commit"
             git diff --stat -- sim/tests/m8_*.S sim/tests/m8_manifest.txt
             exit 1
@@ -196,13 +196,15 @@ jobs:
           run_guard m8_dside "" 200us
           # M8 MAC-arithmetic guard (short, 80us is sufficient).
           run_guard m8_macarith
-          # M8 I-fetch fault-transparency sweep. 72 General non-memory cases are
-          # EMITTED but only the first 30 are DISPATCHED (IFetchDispatchCap): the
-          # co-sim hangs beyond a ~38-case cumulative-fetch ceiling (a co-sim
-          # limit, not a CPU defect -- every case is precise standalone and 1..38
-          # pass in sequence). 30 cases fit well under that; 12ms stop-time covers
-          # them (Test Passed ends the sim early). Generous wall timeout (240s).
-          run_guard m8_ifetch "" 12ms 240
+          # M8 I-fetch fault-transparency sweep. All 72 General non-memory cases
+          # are EMITTED and DISPATCHED, partitioned into 3 sub-images of 24 cases
+          # each. Each sub-image is a SEPARATE sim run (CPU reset), keeping every
+          # run under the co-sim ~38-case cumulative-fetch ceiling (a co-sim limit,
+          # not a CPU defect -- every case is precise). 12ms stop-time covers each
+          # (Test Passed ends the sim early). Generous wall timeout (240s).
+          run_guard m8_ifetch_0 "" 12ms 240
+          run_guard m8_ifetch_1 "" 12ms 240
+          run_guard m8_ifetch_2 "" 12ms 240
 
           [ "$fail" = 0 ] || { echo "==> functional guards FAILED" >&2; exit 1; }
           echo "==> all 29 priv-arch + MMU functional guards PASSED"

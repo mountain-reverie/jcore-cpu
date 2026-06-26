@@ -69,7 +69,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "emit dside:", err)
 		os.Exit(1)
 	}
-	ifetch, err := faultgen.EmitImage(classes, faultgen.IFetch)
+	// The I-fetch axis is partitioned into sub-images (m8_ifetch_0.S ..
+	// m8_ifetch_N.S) so each runs as a SEPARATE sim (CPU reset) under the co-sim
+	// cumulative-fetch ceiling; together they execute ALL emitted I-fetch cases.
+	ifetchImgs, err := faultgen.EmitIFetchImages(classes)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "emit ifetch:", err)
 		os.Exit(1)
@@ -80,16 +83,21 @@ func main() {
 		fmt.Fprintln(os.Stderr, "mkdir:", err)
 		os.Exit(1)
 	}
-	for name, content := range map[string]string{
+	outputs := map[string]string{
 		"m8_dside.S":      dside,
-		"m8_ifetch.S":     ifetch,
 		"m8_manifest.txt": manifest,
-	} {
+	}
+	for i, img := range ifetchImgs {
+		outputs[fmt.Sprintf("m8_ifetch_%d.S", i)] = img
+	}
+	for name, content := range outputs {
 		if err := os.WriteFile(filepath.Join(*outDir, name), []byte(content), 0o644); err != nil {
 			fmt.Fprintln(os.Stderr, "write", name, ":", err)
 			os.Exit(1)
 		}
 	}
+	// Remove the obsolete single-image m8_ifetch.S if a prior run left it.
+	_ = os.Remove(filepath.Join(*outDir, "m8_ifetch.S"))
 	fmt.Fprintf(os.Stderr, "m8gen: %d instructions classified -> %s\n", len(classes), *outDir)
 }
 

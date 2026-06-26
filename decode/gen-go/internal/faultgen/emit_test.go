@@ -83,7 +83,7 @@ func TestEmitCaseStoreProbe(t *testing.T) {
 	if !IsSkip(ierr) {
 		t.Fatalf("indexed @(R0,Rn) store must be skipped, got err=%v block=%q", ierr, iblock)
 	}
-	if !strings.Contains(iblock, "not probeable") || !strings.Contains(iblock, "R0") {
+	if !strings.Contains(iblock, "not modelled") || !strings.Contains(iblock, "R0") {
 		t.Errorf("indexed store skip lacks a clear manifest reason: %q", iblock)
 	}
 	if idisp != "" {

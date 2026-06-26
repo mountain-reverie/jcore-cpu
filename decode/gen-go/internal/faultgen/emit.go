@@ -182,6 +182,10 @@ type ctrlAccess struct {
 	ok    bool
 }
 
+// exceptionCritical lists control registers the exception-delivery mechanism
+// depends on; the fault harness cannot clobber them across a fault.
+var exceptionCritical = map[string]bool{"SR": true, "VBR": true, "SSR": true, "SPC": true}
+
 func ctrlFor(reg string) ctrlAccess {
 	switch reg {
 	case "PR":
@@ -240,9 +244,52 @@ func emitCase(c Class, id int, axis Axis) (block string, dispatch string, err er
 	}
 }
 
+// unmodelledBase reports whether the memory operand's effective address cannot
+// be modelled by the emitter's fixed base->r0 / other->r8 register substitution.
+// Two cases leak the access to an unmapped address (bus-exception hang):
+//   - indexed @(R0,...): the implicit R0 index aliases the modelled base reg
+//     (also forced to r0), so EA = R0 + base = 2*VA -- off the mapped page;
+//   - GBR-/PC-relative @(disp,GBR)/@(disp,PC): the base is never seeded.
+//
+// Both legs would fault identically, but the fault is a *bus* error on an
+// unbacked address, not the cold-TLB DMISS the harness intends -- so skip.
+func unmodelledBase(name string) (reason string, bad bool) {
+	at := strings.IndexByte(name, '@')
+	if at < 0 {
+		return "", false
+	}
+	mem := name[at:]
+	switch {
+	case strings.Count(name, "@") > 1:
+		return "effective address not modelled: dual memory-pointer instruction (only one base register is seeded)", true
+	case strings.Contains(mem, "@(R0,"):
+		return "effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)", true
+	case strings.Contains(mem, "GBR)"):
+		return "effective address not modelled: GBR-relative base is not seeded by the fixed register choice", true
+	case strings.Contains(mem, "PC)"):
+		return "effective address not modelled: PC-relative base is not seeded by the fixed register choice", true
+	}
+	return "", false
+}
+
 func emitDSide(c Class, id int) (string, string, error) {
 	if c.Mem == NoMem || !c.DFaults {
 		return fmt.Sprintf("! case %d skipped: %s has no D-side memory access\n", id, c.Instr.Name),
+			"", errSkip
+	}
+	if reason, bad := unmodelledBase(c.Instr.Name); bad {
+		return fmt.Sprintf("! case %d skipped: %s: %s\n", id, c.Instr.Name, reason),
+			"", errSkip
+	}
+	// Control-register memory LOADS (LDC.L/LDS.L @Rm+) leave the snapshotted
+	// register undefined (sim 'U') across a cold-TLB fault, so the snapshot
+	// store bus-faults (an SRAM U-write hang) instead of producing a decodable
+	// Result. That is a harness limitation (U is not a value the oracle can
+	// compare), distinct from the general @-Rn defect this image targets --
+	// skip them on the D-side axis. (Their STC.L/STS.L store duals are fine.)
+	if strings.HasPrefix(c.Instr.Name, "LDC.L") || strings.HasPrefix(c.Instr.Name, "LDS.L") {
+		return fmt.Sprintf("! case %d skipped: %s: control-register memory load leaves snapshot register undefined across a cold-TLB fault (co-sim U-write hang, not a decodable Result)\n",
+				id, c.Instr.Name),
 			"", errSkip
 	}
 	word, err := encodeWord(c)
@@ -282,6 +329,15 @@ func emitDSide(c Class, id int) (string, string, error) {
 
 	tmpl := tmplGeneralD
 	if c.Bucket == PrivMem {
+		// The PrivMem template zeroes DestCtrl per leg as a benign baseline.
+		// That is fatal for the registers the exception-delivery mechanism
+		// itself uses: zeroing VBR/SR/SSR/SPC means the cold-TLB fault vectors
+		// to garbage instead of the handler (a hang), so skip those here.
+		if exceptionCritical[c.DestCtrl] {
+			return fmt.Sprintf("! case %d skipped: %s writes exception-critical control reg %q (cannot be clobbered across a fault)\n",
+					id, c.Instr.Name, c.DestCtrl),
+				"", errSkip
+		}
 		ca := ctrlFor(c.DestCtrl)
 		if !ca.ok {
 			return fmt.Sprintf("! case %d skipped: %s writes control reg %q (mode-unsafe / not representable)\n",
@@ -394,6 +450,59 @@ func EmitImage(classes []Class, axis Axis) (string, error) {
 	b.WriteString(dispatch.String())
 	b.WriteString("#endif\n")
 	return b.String(), nil
+}
+
+// ManifestEntry records one instruction's place in an axis image. ID is the
+// 1-based emitted case ID *within that axis* -- the exact number EmitImage
+// assigns and the value the co-sim reports as Result=<ID>. ID is 0 and Emitted
+// false for instructions the emitter skipped (SkipReason holds the human text).
+type ManifestEntry struct {
+	ID         int
+	Name       string
+	Bucket     Bucket
+	Emitted    bool
+	SkipReason string
+}
+
+// ImageManifest mirrors EmitImage's case-numbering loop so an external manifest
+// can map a co-sim Result=<ID> back to its instruction. It MUST stay in lockstep
+// with EmitImage (same iteration order, same id := n+1 / n++ accounting).
+func ImageManifest(classes []Class, axis Axis) []ManifestEntry {
+	var out []ManifestEntry
+	n := 0
+	for _, c := range classes {
+		id := n + 1
+		block, _, err := emitCase(c, id, axis)
+		if err != nil { // IsSkip or a hard error: not emitted into the image
+			out = append(out, ManifestEntry{
+				Name:       c.Instr.Name,
+				Bucket:     c.Bucket,
+				SkipReason: skipReason(block, err),
+			})
+			continue
+		}
+		out = append(out, ManifestEntry{ID: id, Name: c.Instr.Name, Bucket: c.Bucket, Emitted: true})
+		n++
+	}
+	return out
+}
+
+// skipReason extracts a one-line reason from an emitCase skip block ("! case N
+// skipped: <reason>\n") or falls back to a hard error string.
+func skipReason(block string, err error) string {
+	s := strings.TrimSpace(block)
+	s = strings.TrimPrefix(s, "!")
+	s = strings.TrimSpace(s)
+	if i := strings.Index(s, "skipped: "); i >= 0 {
+		return strings.TrimSpace(s[i+len("skipped: "):])
+	}
+	if s != "" {
+		return s
+	}
+	if err != nil {
+		return err.Error()
+	}
+	return "skipped"
 }
 
 func axisName(a Axis) string {

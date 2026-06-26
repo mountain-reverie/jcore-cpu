@@ -22,7 +22,7 @@ GENERATED := \
     decode_table_rom.vhd \
     sh2instr.c
 
-.PHONY: generate generate-j4 clean diff insns insns-check
+.PHONY: generate generate-j4 m8gen clean diff insns insns-check
 
 generate:
 	go -C $(GEN_DIR) run ./cmd/cpugen -w $(ROM_WIDTH) -o ..
@@ -35,6 +35,12 @@ insns:
 
 insns-check:
 	go -C $(GEN_DIR) run ./cmd/cpugen insns -check -json ../../docs/insns.json
+
+# m8gen: regenerate the M8 batched fault-test images + manifest into sim/tests.
+# A different generator than the decoder: classifies every instruction and
+# emits self-checking fault-transparency cases (see gen-go/internal/faultgen).
+m8gen:
+	go -C $(GEN_DIR) run ./cmd/m8gen -overlay spec/sh4 -o ../../sim/tests
 
 clean:
 	rm -f $(GENERATED)

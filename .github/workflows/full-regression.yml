@@ -142,6 +142,14 @@ jobs:
           set -euo pipefail
           # J4 overlay decoder (PRIV_ARCH + MMU instructions).
           make -C decode generate-j4
+          # Regenerate the M8 fault-coverage test images from the spec.
+          make -C decode m8gen
+          # Generator-diff gate: fail if committed images are out of sync.
+          if ! git diff --quiet -- sim/tests/m8_dside.S sim/tests/m8_manifest.txt; then
+            echo "FAIL: committed m8 images out of sync with spec — run 'make -C decode m8gen' and commit"
+            git diff --stat -- sim/tests/m8_*.S sim/tests/m8_manifest.txt
+            exit 1
+          fi
           # The dcache CCL/MCL cores are .vhm templates; preprocess to .vhd via
           # jcore-soc's v2p so cpu_cache_tb (mmucolor) elaborates on a clean CI
           # checkout (same as sim/cache_sim.sh / synth).
@@ -159,12 +167,12 @@ jobs:
             || { echo "FAIL: build is not MMU-on (stale cpu_tb.vhh?)"; exit 1; }
 
           fail=0
-          run_guard() {  # <name> <sim_top-or-default>
-            local t="$1" top="${2:-}"
+          run_guard() {  # <name> <sim_top-or-default> [stop-time]
+            local t="$1" top="${2:-}" stoptime="${3:-80us}"
             rm -f tests/$t.img tests/$t.o tests/$t.elf
             make CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 -C tests $t.img >/dev/null 2>&1
             local out
-            out="$(SIM_TOP="$top" timeout 120 ./cpu_ctb --stop-time=80us \
+            out="$(SIM_TOP="$top" timeout 120 ./cpu_ctb --stop-time="$stoptime" \
                    -i tests/$t.img --ieee-asserts=disable 2>&1 || true)"
             if echo "$out" | grep -qi 'Test Passed'; then
               echo "  PASS  $t${top:+ [$top]}"
@@ -184,6 +192,11 @@ jobs:
           done
           # VIPT page-coloring runs the CPU through the live D-cache (cpu_cache_tb).
           run_guard mmucolor cpu_cache_tb
+          # M8 D-side fault-transparency sweep (30 cases; needs 200us to complete).
+          run_guard m8_dside "" 200us
+          # M8 MAC-arithmetic guard (short, 80us is sufficient).
+          run_guard m8_macarith
+          # m8_ifetch (I-fetch fault transparency) is deferred: icache coherence unvalidated.
 
           [ "$fail" = 0 ] || { echo "==> functional guards FAILED" >&2; exit 1; }
-          echo "==> all 26 priv-arch + MMU functional guards PASSED"
+          echo "==> all 28 priv-arch + MMU functional guards PASSED"

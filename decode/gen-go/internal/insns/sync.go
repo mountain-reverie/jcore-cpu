@@ -181,7 +181,7 @@ func newRow(in spec.Instr, group string) *Row {
 		r.Set(arch+".issue", intToNum(0))
 		r.Set(arch+".latency", intToNum(0))
 	}
-	r.Set("format", in.Format)
+	r.Set("format", in.Name)
 	r.Set("abstract", in.Operation)
 	r.Set("code", normOpcode(in.Opcode))
 	return r

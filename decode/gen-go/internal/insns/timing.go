@@ -29,18 +29,13 @@ func LoadTable(path string) (*Table, error) {
 	return &t, nil
 }
 
-// normOpcode strips spaces and replaces variable bits (non-0/1 chars) with '0'.
+// normOpcode strips spaces and preserves variable-bit letters for code field + override keys.
 func normOpcode(s string) string {
 	out := make([]byte, 0, len(s))
 	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c == ' ' {
-			continue
+		if s[i] != ' ' {
+			out = append(out, s[i])
 		}
-		if c != '0' && c != '1' {
-			c = '0'
-		}
-		out = append(out, c)
 	}
 	return string(out)
 }

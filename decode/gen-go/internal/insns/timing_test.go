@@ -7,11 +7,14 @@ import (
 	"github.com/j-core/jcore-cpu/decode/gen-go/internal/spec"
 )
 
-func TestTimingBaseIsSlotCount(t *testing.T) {
+func TestTimingBaseIsFlat(t *testing.T) {
+	// Base heuristic is flat 1/1 regardless of slot count.
+	// Slot count is microarchitectural detail; J2 timing tables use overrides
+	// to encode the handful of multi-cycle instructions.
 	tab := &Table{}
 	in := spec.Instr{Opcode: "0110nnnnmmmm0011", Slots: []spec.Slot{{}, {}}}
-	if got := tab.For(in); got.Issue != 1 || got.Latency != 2 {
-		t.Fatalf("base 2-slot: got %+v want issue1 latency2", got)
+	if got := tab.For(in); got.Issue != 1 || got.Latency != 1 {
+		t.Fatalf("base 2-slot: got %+v want issue1 latency1", got)
 	}
 }
 

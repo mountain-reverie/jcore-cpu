@@ -254,6 +254,15 @@ jobs:
           make -C decode diff
           echo "==> Step 4b: J4 overlay elaboration PASSED"
 
+      - name: insns.json is in sync with the spec
+        working-directory: jcore-cpu
+        run: |
+          if ! make -C decode insns-check; then
+            echo "::error::docs/insns.json is out of date with the instruction spec." >&2
+            echo "Fix: run 'make -C decode insns' and commit docs/insns.json." >&2
+            exit 1
+          fi
+
   cache-sim:
     name: dcache scoreboard (${{ matrix.mode }})
     runs-on: ubuntu-24.04

@@ -1,22 +1,26 @@
-! mmuldtlbr.S -- M4 guard for LDTLB.R (fused Load-TLB-and-Return, 0x0068).
+! mmuldtlbr.S -- guard for LDTLB.RN (fused Load-TLB-and-No-delay-slot-Return, 0x0068).
 !
 ! Proves the two halves of the fused instruction in a SINGLE observable event:
-!   (1) INSTALL: LDTLB.R latches {PTEH, PTEL, ASIDR} into a TLB entry.
-!   (2) RETURN : LDTLB.R restores PC<-SPC, SR<-SSR and branches (delayed),
-!                exactly like RTE.
+!   (1) INSTALL: LDTLB.RN latches {PTEH, PTEL, ASIDR} into a TLB entry.
+!   (2) RETURN : LDTLB.RN restores PC<-SPC, SR<-SSR (NO delay slot --
+!                the instruction immediately after LDTLB.RN must NOT execute).
 ! The DMISS_R handler does NOT touch AT and does NOT set SPC by hand: it relies
-! on the hardware-captured SPC (= faulting load PC) and on LDTLB.R installing
+! on the hardware-captured SPC (= faulting load PC) and on LDTLB.RN installing
 ! the mapping so the RE-EXECUTED load hits the fresh TLB entry, reads a known
-! sentinel, and falls through to the PASS writer. If LDTLB.R failed to install,
+! sentinel, and falls through to the PASS writer. If LDTLB.RN failed to install,
 ! the re-executed load would fault again (infinite miss loop -> timeout). If it
 ! failed to return, execution would fall through the handler -> spin -> timeout.
 ! Only a correct fused install+return reaches _pass.
 !
+! r9 is the fail-code register (set to 2 before the faulting load; the post-
+! LDTLB.RN slot sets it to 1 if it executes). The guard after the sentinel
+! check asserts r9==2: if r9==1 the delay slot ran -> decoder is still delayed.
+!
 ! Contrast with mmurte.S (return only, AT disabled in handler): here AT stays ON
 ! across the return, so the re-executed access is genuinely re-translated.
 !
-! RED before M4: .word 0x0068 decodes as an illegal/undefined op -> no install,
-! no return -> miss loop or fall-through -> timeout (no "Test Passed").
+! RED before change: 0x0068 is a delayed branch, so the slot (mov #1,r9)
+! executes -> r9==1 -> the no-delay-slot guard trips -> "Test failed. Result=1".
 !
 ! VBR = _v_load - 0x420 so the DMISS_R vector (VBR+0x420) hits _v_load.
 
@@ -82,10 +86,14 @@ ENTRY(start)
         mov.l   c_sentinel_va, r2
         mov.l   @r2, r3                 ! FAULTS -> _v_load (DMISS_R); on re-exec reads SENTINEL
 
-        ! ---- Returned here by LDTLB.R with AT still on. Verify install worked. ----
+        ! ---- Returned here by LDTLB.RN with AT still on. Verify install worked. ----
         mov.l   c_sentinel_val, r4
         cmp/eq  r3, r4
         bf      _fail                   ! r3 != SENTINEL -> install/return wrong (r9=2)
+        ! ---- No-delay-slot guard: r9 must still be 2 (slot must NOT have run). ----
+        mov     #1, r4
+        cmp/eq  r9, r4
+        bt      _fail                   ! r9==1 -> post-LDTLB.RN slot executed -> delay slot present (RED)
 
 ENTRY(_pass)
         mov.l   pr_test_result, r0
@@ -137,9 +145,9 @@ _v_load:                                ! = VBR + 0x420
         .word   0x406E                  ! LDC r0, PTEL
         mov     #0, r0
         .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0068                  ! LDTLB.R  -- install + return atomically
-        nop                             ! delay slot of LDTLB.R
-        ! If LDTLB.R failed to return, execution falls through to here -> spin
+        .word   0x0068                  ! LDTLB.RN -- install + return (NO delay slot)
+        mov     #1, r9                  ! MUST NOT execute: LDTLB.RN has no delay slot
+        ! If LDTLB.RN failed to return, execution falls through to here -> spin
         ! WITHOUT writing a result (RED = timeout).
 _h_fail_spin:
         bra     _h_fail_spin

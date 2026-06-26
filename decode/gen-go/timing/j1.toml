@@ -1,0 +1,62 @@
+# J1 timing model — MODELED ESTIMATES, not sim-measured.
+# Derived from J2 front-end (branches, system ops, RMW) which is identical on J1,
+# then overridden for J1-specific microarchitecture:
+#   - Sequential multiplier: ~34 cycles (issue=34, latency=34)
+#   - Iterative 1-bit shifter: cost proportional to shift amount
+# 1-bit shifts (shll/shlr/shal/shar/rotl/rotr/rotcl/rotcr) remain at base 1/1.
+
+[units]
+mult = 34         # mac.*, mul.l, dmul*.l → issue 34, latency 34 (sequential multiplier)
+
+[overrides]
+# Branches (delay slot → latency 2)
+"1010dddddddddddd" = { issue = 1, latency = 2 }   # bra label
+"1011dddddddddddd" = { issue = 1, latency = 2 }   # bsr label
+"0000mmmm00000011" = { issue = 1, latency = 2 }   # bsrf Rm
+"0000mmmm00100011" = { issue = 1, latency = 2 }   # braf Rm
+"0100mmmm00001011" = { issue = 1, latency = 2 }   # jsr @Rm
+"0100mmmm00101011" = { issue = 1, latency = 2 }   # jmp @Rm
+"0000000000001011" = { issue = 1, latency = 2 }   # rts
+
+# System instructions
+"0000000000101011" = { issue = 1, latency = 4 }   # rte
+"0000000000011011" = { issue = 1, latency = 3 }   # sleep
+"11000011iiiiiiii" = { issue = 2, latency = 8 }   # trapa #imm
+
+# Load/store control registers
+"0100nnnn00000011" = { issue = 1, latency = 2 }   # stc SR,Rn
+"0100nnnn00010011" = { issue = 1, latency = 2 }   # stc GBR,Rn
+"0100nnnn00100011" = { issue = 1, latency = 2 }   # stc VBR,Rn
+"0100mmmm00000111" = { issue = 1, latency = 3 }   # ldc.l @Rm+,SR
+"0100mmmm00010111" = { issue = 1, latency = 3 }   # ldc.l @Rm+,GBR
+"0100mmmm00100111" = { issue = 1, latency = 3 }   # ldc.l @Rm+,VBR
+
+# TAS.B (read-modify-write bus cycle)
+"0100nnnn00011011" = { issue = 2, latency = 4 }   # tas.b @Rn
+
+# XTRACT (J2 custom instruction)
+"0010nnnnmmmm1101" = { issue = 1, latency = 4 }   # xtract Rm,Rn
+
+# MULS.W / MULU.W (issue=2 from mult unit but latency=1, not 2)
+"0010nnnnmmmm1110" = { issue = 2, latency = 1 }   # mulu.w Rm,Rn
+"0010nnnnmmmm1111" = { issue = 2, latency = 1 }   # muls.w Rm,Rn
+
+# Byte RMW to GBR: TST.B, AND.B, OR.B, XOR.B
+"11001100iiiiiiii" = { issue = 2, latency = 3 }   # tst.b #imm,@(R0,GBR)
+"11001101iiiiiiii" = { issue = 2, latency = 3 }   # and.b #imm,@(R0,GBR)
+"11001110iiiiiiii" = { issue = 2, latency = 3 }   # xor.b #imm,@(R0,GBR)
+"11001111iiiiiiii" = { issue = 2, latency = 3 }   # or.b  #imm,@(R0,GBR)
+
+# Coprocessor STS
+"0000nnnn01011010" = { issue = 1, latency = 2 }   # sts CPI_COM,Rn
+"0100nnnn11001000" = { issue = 1, latency = 2 }   # sts CP0_COM,Rn
+
+# Multi-bit shifts (J1 iterative 1-bit shifter — cost = shift amount)
+"0100nnnn00001000" = { issue = 2,  latency = 2  }   # shll2  Rn
+"0100nnnn00011000" = { issue = 8,  latency = 8  }   # shll8  Rn
+"0100nnnn00101000" = { issue = 16, latency = 16 }   # shll16 Rn
+"0100nnnn00001001" = { issue = 2,  latency = 2  }   # shlr2  Rn
+"0100nnnn00011001" = { issue = 8,  latency = 8  }   # shlr8  Rn
+"0100nnnn00101001" = { issue = 16, latency = 16 }   # shlr16 Rn
+"0100nnnnmmmm1100" = { issue = 32, latency = 32 }   # shad Rm,Rn (dynamic; worst-case 32)
+"0100nnnnmmmm1101" = { issue = 32, latency = 32 }   # shld Rm,Rn (dynamic; worst-case 32)

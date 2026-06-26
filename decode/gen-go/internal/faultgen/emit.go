@@ -459,8 +459,19 @@ func render(t *template.Template, d caseData) (string, string, error) {
 // bucket/axis: the runtime include, every emittable case routine, the
 // `_m8_run_all` table-walk dispatcher, and a manifest comment listing skips.
 func EmitImage(classes []Class, axis Axis) (string, error) {
+	return EmitImageSkip(classes, axis, nil)
+}
+
+// EmitImageSkip is EmitImage with a set of emitted case IDs to exclude from the
+// `_m8_run_all` dispatch (for failure enumeration: a flagged case is still
+// emitted, keeping all IDs stable, but its _m8_cmp call is never reached so the
+// image continues past it to reveal the next failure). skip keys are the
+// per-axis emitted IDs (== co-sim Result=<ID>). A nil/empty skip is identical
+// to EmitImage and preserves byte-for-byte determinism.
+func EmitImageSkip(classes []Class, axis Axis, skip map[int]bool) (string, error) {
 	var blocks, dispatch, manifest strings.Builder
-	n := 0
+	n := 0       // stable emitted-case ID counter (unaffected by skip)
+	dcount := 0  // number of cases actually in the dispatch table
 	for _, c := range classes {
 		id := n + 1
 		block, disp, err := emitCase(c, id, axis)
@@ -473,8 +484,15 @@ func EmitImage(classes []Class, axis Axis) (string, error) {
 		}
 		blocks.WriteString(block)
 		blocks.WriteString("\n")
-		dispatch.WriteString(disp)
 		n++
+		if skip[id] {
+			// Emitted (label/ID preserved) but excluded from dispatch so the
+			// batch runs past this known failure.
+			fmt.Fprintf(&manifest, "! case %d skipped-for-enumeration: %s (emitted, excluded from _m8_run_all)\n", id, c.Instr.Name)
+			continue
+		}
+		dispatch.WriteString(disp)
+		dcount++
 	}
 
 	var b strings.Builder
@@ -514,7 +532,7 @@ func EmitImage(classes []Class, axis Axis) (string, error) {
 	b.WriteString("        rts\n")
 	b.WriteString("        nop\n")
 	b.WriteString("        .align 2\n")
-	fmt.Fprintf(&b, "m8_count:  .long %d\n", n)
+	fmt.Fprintf(&b, "m8_count:  .long %d\n", dcount)
 	b.WriteString("m8_tab_p:  .long 0x80000000 + m8_tab\n")
 	b.WriteString("m8_tab:\n")
 	b.WriteString(dispatch.String())

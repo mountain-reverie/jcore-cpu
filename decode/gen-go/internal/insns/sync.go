@@ -94,7 +94,49 @@ func Sync(d *Doc, vds []VariantData) (*Report, error) {
 	}
 
 	rep.Matched = len(matched)
+	annotateCollides(d)
 	return rep, nil
+}
+
+func annotateCollides(d *Doc) {
+	byKey := map[Key][]*Row{}
+	for _, r := range d.Rows {
+		if cv, ok := r.Get("code"); ok {
+			if code, ok := cv.(string); ok {
+				if k, ok := KeyOf(code); ok {
+					byKey[k] = append(byKey[k], r)
+				}
+			}
+		}
+	}
+	for _, r := range d.Rows {
+		cv, _ := r.Get("code")
+		code, _ := cv.(string)
+		k, ok := KeyOf(code)
+		if !ok {
+			continue
+		}
+		var others []string
+		for _, o := range byKey[k] {
+			if o == r {
+				continue
+			}
+			if f, ok := o.Get("format"); ok {
+				if fs, ok := f.(string); ok {
+					others = append(others, fs)
+				}
+			}
+		}
+		if len(others) == 0 {
+			continue
+		}
+		sort.Strings(others)
+		anys := make([]any, len(others))
+		for i, s := range others {
+			anys[i] = s
+		}
+		r.Set("collides", anys)
+	}
 }
 
 func pickRow(cands []*Row, in spec.Instr) (*Row, error) {

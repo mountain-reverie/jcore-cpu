@@ -60,6 +60,12 @@ package mult_pkg is
     wr_macl : std_logic;
     in1     : std_logic_vector(31 downto 0);
     in2     : std_logic_vector(31 downto 0);
+    -- Squash the MAC accumulate-commit (mach/macl latch) on a faulting
+    -- MAC @Rm+,@Rn+ pass: driven by the datapath tlb_squash export
+    -- (MMU_ARCH-gated, '0' on J1/J2). The FSM still sequences/drains busy;
+    -- only the register write is suppressed so the clean restart accumulates
+    -- exactly once. See core/datapath.vhm tlb_squash.
+    acc_squash : std_logic;
   end record;
 
   type mult_o_t is record
@@ -84,6 +90,9 @@ package mult_pkg is
     mach, macl : std_logic_vector(31 downto 0);
     shift : std_logic;
     abh : std_logic_vector(46 downto 0);
+    -- latched accumulate-squash: the external tlb_squash pulse drops ~1 cycle
+    -- before the MACL1/MACL2 commit, so hold it for the in-flight MAC sequence.
+    acc_sq : std_logic;
   end record;
 
   constant MULT_RESET : mult_reg_t := (state      => NOP,
@@ -95,7 +104,8 @@ package mult_pkg is
                                        mach       => (others => '0'),
                                        macl       => (others => '0'),
                                        shift => '0',
-                                       abh => (others => '0')
+                                       abh => (others => '0'),
+                                       acc_sq => '0'
                                        );
 
   component mult is

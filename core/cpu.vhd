@@ -33,6 +33,7 @@ architecture stru of cpu is
    signal slot, if_stall : std_logic;
    signal mac_i : mult_i_t;
    signal mac_o : mult_o_t;
+   signal dp_tlb_squash : std_logic;  -- datapath tlb_squash, gates MAC accumulate on faulting pass
    signal reg : reg_ctrl_t;
    signal func : func_ctrl_t;
    signal mem : mem_ctrl_t;
@@ -107,6 +108,7 @@ begin
    u_mult : mult port map (clk => clk, rst => rst, slot => slot, a => mac_i, y => mac_o);
       mac_i.wr_m1 <= mac.com1; mac_i.command <= mac.com2;
       mac_i.wr_mach <= mac.wrmach; mac_i.wr_macl <= mac.wrmacl;
+      mac_i.acc_squash <= dp_tlb_squash;
 
    u_datapath : datapath generic map (PRIV_ARCH => PRIV_ARCH, MMU_ARCH => MMU_ARCH) port map (clk => clk, rst => rst, slot => slot,
       debug => debug, enter_debug => enter_debug,
@@ -126,6 +128,7 @@ begin
       priv_o => priv_o,
       mmu_regs_o => dp_mmu_regs,
       sr_o       => dp_sr,
+      tlb_squash_o => dp_tlb_squash,
       tlb_exc_pend => tlb_exc_pend,
       tlb_fault_va => tlb_fault_va,
       tlb_exc_expevt => tlb_exc_expevt);

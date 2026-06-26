@@ -111,35 +111,40 @@
     mask_int = "YES"
     pc = "INC"
 
-# ---- LDTLB.R: fused Load-TLB-and-Return (hardware-spec.md §3.2) ----
-# Equivalent to LDTLB immediately followed by RTE, but atomic: latch
-# {PTEH, PTEL, ASIDR} into a TLB entry AND restore PC<-SPC, SR<-SSR and take
-# the delayed branch. The three return slots are identical to RTE (see
-# spec/sh4/exceptions.toml); slot 0 additionally pulses the TLB write port
-# (tlb_wr) so the install commits in the same atomic sequence as the return.
-# Both LDTLB (0x0038, install only) and LDTLB.R (0x0068) are required.
+# ---- LDTLB.RN: fused Load-TLB-and-Return, NO delay slot (SH-2A-style) ----
+# Equivalent to LDTLB immediately followed by a non-delayed return: latch
+# {PTEH, PTEL, ASIDR} into a TLB entry AND restore SR<-SSR, PC<-SPC and redirect
+# WITHOUT executing a delay slot. Slot 0 installs the entry and restores SR (so
+# MD/privilege is correct at the target before it dispatches); slot 1 sets
+# PC<-SPC; slots 2-3 issue the fetch at the target and dispatch it using the
+# same non-delayed redirect tail as exception entry / Break / Reset CPU.
+# Opcode 0x0068 (formerly the delayed LDTLB.R; replaced — no prior user).
 [[instr]]
-  name = "LDTLB.R"
+  name = "LDTLB.RN"
   privileged = true
   format = "0"
   opcode = "0000 0000 0110 1000"
-  operation = "PTEH/PTEL/ASIDR -> TLB; SR<-SSR, PC<-SPC (delayed branch)"
+  operation = "PTEH/PTEL/ASIDR -> TLB; SR<-SSR, PC<-SPC (no delay slot)"
 
   [[instr.slots]]
     tlb_wr = "YES"
-    pc = "INC"
     ybus = "SSR"
     zbus_sel = "Y"
     sr = "Z"
-  [[instr.slots]]
     pc = "HOLD"
+  [[instr.slots]]
     ybus = "SPC"
-    zbus_sel = "Y"
     zbus = "PC"
-  [[instr.slots]]
+    zbus_sel = "Y"
     pc = "HOLD"
-    delay_jmp = "SET"
+  [[instr.slots]]
     if_addy = "ZBUS"
+    if_issue = "YES"
+    pc = "HOLD"
+  [[instr.slots]]
+    dispatch = "YES"
+    if_issue = "YES"
+    pc = "INC"
 
 # ---- Break / Reset CPU: bit-11 pin (J4+MMU_ARCH overlay only) ----
 # The base spec uses don't-care bit 11 (---- -010 / ---- -011). That is correct

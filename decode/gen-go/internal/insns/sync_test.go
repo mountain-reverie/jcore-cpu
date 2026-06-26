@@ -14,7 +14,7 @@ func TestSyncPatchesAndAppends(t *testing.T) {
 		t.Fatal(err)
 	}
 	mov := spec.Instr{Name: "MOV", Opcode: "0110nnnnmmmm0011", Slots: []spec.Slot{{}}}
-	ldtlbr := spec.Instr{Name: "LDTLB.R", Opcode: "0000000001101000", Format: "ldtlb.r", Slots: []spec.Slot{{}}}
+	ldtlbr := spec.Instr{Name: "LDTLB.RN", Opcode: "0000000001101000", Format: "ldtlb.rn", Slots: []spec.Slot{{}}}
 	j2 := &InstrSet{ByKey: map[Key]spec.Instr{}}
 	for _, in := range []spec.Instr{mov} {
 		k, _ := KeyOf(in.Opcode)
@@ -80,7 +80,7 @@ func TestSyncIdempotent(t *testing.T) {
 	d, _ := Load(filepath.Join("testdata", "expected.json"))
 	before, _ := d.Bytes()
 	mov := spec.Instr{Name: "MOV", Opcode: "0110nnnnmmmm0011", Slots: []spec.Slot{{}}}
-	ldtlbr := spec.Instr{Name: "LDTLB.R", Opcode: "0000000001101000", Format: "ldtlb.r", Slots: []spec.Slot{{}}}
+	ldtlbr := spec.Instr{Name: "LDTLB.RN", Opcode: "0000000001101000", Format: "ldtlb.rn", Slots: []spec.Slot{{}}}
 	mk := func(list ...spec.Instr) *InstrSet {
 		s := &InstrSet{ByKey: map[Key]spec.Instr{}}
 		for _, in := range list {

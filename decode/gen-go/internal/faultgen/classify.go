@@ -69,7 +69,7 @@ var (
 
 func isBespoke(in spec.Instr) bool {
 	switch in.Name {
-	case "RTE", "LDTLB", "LDTLB.R", "SLEEP", "TRAPA":
+	case "RTE", "LDTLB", "LDTLB.RN", "SLEEP", "TRAPA":
 		return true
 	}
 	for _, pfx := range branchPrefixes {

@@ -128,14 +128,14 @@ architecture stru of mult is
 
     if    slot = '1' and a.wr_mach = '1' then                                              this.mach := a.in1;
     elsif slot = '1' and (a.command = DMULSL or a.command = DMULUL) then                   this.mach := x"00000000";
-    elsif this.state = MACWS1 and sat = '1' then                                           this.mach := this.mach or x"00000001";
-    elsif code.mach_en = '1' then                                                          this.mach := acc(63 downto 32);
+    elsif this.state = MACWS1 and sat = '1' and a.acc_squash = '0' and this.acc_sq = '0' then this.mach := this.mach or x"00000001";
+    elsif code.mach_en = '1' and a.acc_squash = '0' and this.acc_sq = '0' then              this.mach := acc(63 downto 32);
     end if;
 
     if    slot = '1' and a.wr_macl = '1' then                                              this.macl := a.in2;
     elsif slot = '1' and a.command /= NOP and a.command /= MACL and a.command /= MACW then this.macl := x"00000000";
-    elsif code.macl_en = '1' then                                                          this.macl := acc(31 downto 0);
-    end if;   
+    elsif code.macl_en = '1' and a.acc_squash = '0' and this.acc_sq = '0' then              this.macl := acc(31 downto 0);
+    end if;
 
   --  delayed versions of the control signals to delay for p23 pipeline register
     this.state := code.state;
@@ -151,6 +151,17 @@ architecture stru of mult is
       elsif a.command = MACW then -- override start state, MACWS and MACW set different busy and mach_en values
         if a.s = '1' then this.result_op := SATURATE32; this.state := MACWS; end if;
       end if;
+    end if;
+
+  -- accumulate-squash latch. The datapath tlb_squash pulse (D-side fault ->
+  -- handler entry SR.RB='1') overlaps the START of the faulting MAC sequence
+  -- but deasserts ~1 cycle before the MACL1/MACL2 commit, so a bare gate on
+  -- a.acc_squash misses the commit. Hold it for the whole in-flight MAC:
+  -- re-sample at each fresh dispatch (so a later CLEAN MAC is never suppressed),
+  -- then arm if the squash pulse arrives mid-sequence. A faulting pass commits
+  -- nothing; the clean restart accumulates exactly once.
+    if code.busy = '0' and slot = '1' then this.acc_sq := a.acc_squash;
+    elsif a.acc_squash = '1' then          this.acc_sq := '1';
     end if;
   end process;
 

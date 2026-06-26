@@ -315,6 +315,14 @@
     event.preventDefault();
   }
 
+  function filter_to(format) {
+    var esc = format.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    var s = document.getElementById('search');
+    s.value = esc;
+    if (dynatable) { dynatable.process(); }
+    $(s).trigger('change');
+  }
+
   function on_mouse_click(rowIndex, event) {
     if (event.defaultPrevented === true)
       return;
@@ -322,6 +330,7 @@
     var eh = document.getElementById('hex' + rowIndex);
     var ed = document.getElementById('description' + rowIndex);
     var eo = document.getElementById('operation' + rowIndex);
+    var ec = document.getElementById('collides' + rowIndex);
     var s = window.getSelection();
 
     if (!s.isCollapsed)
@@ -331,24 +340,27 @@
       if (eh) eh.style.display = 'none';
       ed.style.display = 'none';
       eo.style.display = 'none';
+      if (ec) ec.style.display = 'none';
       cur_opened = null;
     }
     else {
       if (eh) eh.style.display = 'table-row';
       ed.style.display = 'table-row';
       eo.style.display = 'table-row';
+      if (ec) ec.style.display = 'table-row';
 
       if (cur_opened != null) {
         if (cur_opened[0]) cur_opened[0].style.display = 'none';
         cur_opened[1].style.display = 'none';
         cur_opened[2].style.display = 'none';
+        if (cur_opened[3]) cur_opened[3].style.display = 'none';
       }
-      cur_opened = [eh, ed, eo];
+      cur_opened = [eh, ed, eo, ec];
     }
   }
 
   function on_mouse_over(rowIndex) {
-    var h, d, o;
+    var h, d, o, c;
 
     document.getElementById('line0.' + rowIndex).style.backgroundColor = "#F0F0F0";
     document.getElementById('line1.' + rowIndex).style.backgroundColor = "#F0F0F0";
@@ -363,10 +375,13 @@
 
     o = document.getElementById('operation' + rowIndex);
     if (o) o.style.backgroundColor = "#F0F0F0";
+
+    c = document.getElementById('collides' + rowIndex);
+    if (c) c.style.backgroundColor = "#F0F0F0";
   }
 
   function on_mouse_out(rowIndex) {
-    var h, d, o;
+    var h, d, o, c;
 
     document.getElementById('line0.' + rowIndex).style.backgroundColor = "";
     document.getElementById('line1.' + rowIndex).style.backgroundColor = "";
@@ -381,6 +396,9 @@
 
     o = document.getElementById('operation' + rowIndex);
     if (o) o.style.backgroundColor = "";
+
+    c = document.getElementById('collides' + rowIndex);
+    if (c) c.style.backgroundColor = "";
   }
 
   function extract_4c(code) {
@@ -500,6 +518,15 @@
       hexCode = '';
     }
 
+    var collidesRow = '';
+    if (record.collides && record.collides.length) {
+      var links = record.collides.map(function (f) {
+        return '<a href="#" onclick="filter_to(' + JSON.stringify(f) + '); return false;">' +
+               f.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</a>';
+      }).join(', ');
+      collidesRow = '<tr class="collapse" id="collides' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);"><td colspan=' + colspan + '><i><b>Shares encoding with</b></i><br/>' + links + '</td></tr>';
+    }
+
     return group_start + '<tr class="top" id="line0.' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);">' +
       '<td class="compat">' + compat[0] + '</td><td class="compat">' + compat[1] + '</td><td class="compat">' + compat[2] + '</td>' +
       '<td rowspan=4>' + record.format + '</td>' +
@@ -522,7 +549,8 @@
       '<td>' + latency[9] + '</td><td>' + '</td><td></td>' +
       '</tr>' + hexCode +
       '<tr class="collapse" id="description' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);"><td colspan=' + colspan + '><i><b>Description</b></i><br/><pre>' + record.description + '</pre></td></tr>' +
-      '<tr class="collapse" id="operation' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);"><td colspan=' + colspan + '><i><b>Operation</b></i><pre class="code">' + record.operation + '</pre></td></tr>';
+      '<tr class="collapse" id="operation' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);"><td colspan=' + colspan + '><i><b>Operation</b></i><pre class="code">' + record.operation + '</pre></td></tr>' +
+      collidesRow;
   }
 
   var last_query = "";

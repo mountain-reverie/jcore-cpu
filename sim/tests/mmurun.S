@@ -12,7 +12,7 @@
 !   STC TSBPTR,r0 =0x0043   STC PTEH,r2 =0x0253   STC ASIDR,r2 =0x0273
 !   STC PTEH,r5   =0x0553   STC TSBPTR,r6=0x0643
 !   LDC r0,ASIDR  =0x407E   LDC r0,PTEL =0x406E    LDC r3,PTEL =0x436E
-!   LDC r0,VBR    =0x402E   LDTLB.R     =0x0068
+!   LDC r0,VBR    =0x402E   LDTLB.RN     =0x0068
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -215,7 +215,7 @@ _h_common:
         add     #1, r5
         mov.l   r5, @r4
         .word   0x436E                  ! LDC r3, PTEL
-        .word   0x0068                  ! LDTLB.R  (install + return atomically)
+        .word   0x0068                  ! LDTLB.RN  (install + return atomically)
         nop                             ! delay slot
 
         ! ---- Slow path: call the C walker. ----
@@ -231,7 +231,7 @@ _h_slow:
         bt      _h_realfault            ! r0==0 -> walker fault
         lds.l   @r15+, pr
         .word   0x406E                  ! LDC r0, PTEL
-        .word   0x0068                  ! LDTLB.R
+        .word   0x0068                  ! LDTLB.RN
         nop
 
 _h_realfault:

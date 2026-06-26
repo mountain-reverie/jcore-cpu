@@ -62,7 +62,7 @@
 ! case 5 skipped: LDS Rm, MACL has no D-side memory access
 ! case 5 skipped: LDS Rm, PR has no D-side memory access
 ! case 8 skipped: LDTLB is Bespoke (dedicated guard)
-! case 8 skipped: LDTLB.R is Bespoke (dedicated guard)
+! case 8 skipped: LDTLB.RN is Bespoke (dedicated guard)
 ! case 10 skipped: MOV #imm, Rn has no D-side memory access
 ! case 10 skipped: MOV Rm, Rn has no D-side memory access
 ! case 10 skipped: MOV.B @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)

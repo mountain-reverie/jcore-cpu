@@ -1,13 +1,13 @@
 ! mmustr2.S -- back-to-back store-fault repro (M6 6th defect).
 !
 ! mmustres.S proves a SINGLE resumed store writes. This isolates the case the
-! task describes: a resumed store (DMISS_W -> LDTLB.R) whose VERY NEXT access is
+! task describes: a resumed store (DMISS_W -> LDTLB.RN) whose VERY NEXT access is
 ! ITSELF a DMISS_W. The first store's write must NOT be collateral-damaged by
 ! the second access's fault.
 !
 ! Flow (AT on, identity maps; code page pre-mapped):
 !   - store SVAL1 to unmapped identity page 1 -> DMISS_W.
-!     Handler installs identity PTE for the faulting VA, LDTLB.R resumes.
+!     Handler installs identity PTE for the faulting VA, LDTLB.RN resumes.
 !     The resumed store re-executes and WRITES SVAL1; the immediately
 !     following instruction is ...
 !   - store SVAL2 to unmapped identity page 2 -> a second DMISS_W (back-to-back).
@@ -141,7 +141,7 @@ p_test_result: .long TEST_RESULT_ADDRESS
 
         ! ---- VA-driven DMISS_W handler at VBR+0x440 ----
         ! Reads faulting VPN from PTEH, installs identity PTE = (page | 0xE8),
-        ! LDTLB.R to resume. Bank-1 scratch; AT stays on.
+        ! LDTLB.RN to resume. Bank-1 scratch; AT stays on.
         .balign 4
         .space 0x440, 0
         .balign 4
@@ -156,7 +156,7 @@ _v_store:                               ! = VBR + 0x440
         .word   0x406E                  ! LDC r0, PTEL
         mov     #0, r0
         .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0068                  ! LDTLB.R -- install + return atomically
+        .word   0x0068                  ! LDTLB.RN -- install + return atomically
         nop                             ! delay slot
 _h_fail_spin:
         bra     _h_fail_spin

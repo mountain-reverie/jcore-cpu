@@ -2,7 +2,7 @@
 !
 ! A single straight-line `mov.l @Rn+, Rm` whose operand lives in a translated
 ! page takes a cold DMISS_R. The §4.2 handler installs the mapping and returns
-! (LDTLB.R) so the load RE-EXECUTES. Architecturally the post-increment must
+! (LDTLB.RN) so the load RE-EXECUTES. Architecturally the post-increment must
 ! occur EXACTLY ONCE: Rn == VA+4, Rm == seed.
 !
 ! Defect: the precise-exception squash (tlb_squash, 441a25a) gates only we_wb,
@@ -20,7 +20,7 @@
 !   STC TSBPTR,r0 =0x0043   STC PTEH,r2 =0x0253   STC ASIDR,r2 =0x0273
 !   STC PTEH,r5   =0x0553   STC TSBPTR,r6=0x0643
 !   LDC r0,ASIDR  =0x407E   LDC r0,PTEL =0x406E    LDC r3,PTEL =0x436E
-!   LDC r0,VBR    =0x402E   LDTLB.R     =0x0068
+!   LDC r0,VBR    =0x402E   LDTLB.RN     =0x0068
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -194,7 +194,7 @@ _h_common:
         bf      _h_slow
         mov.l   @r0, r3                 ! TTE Data (PTEL image)
         .word   0x436E                  ! LDC r3, PTEL
-        .word   0x0068                  ! LDTLB.R  (install + return atomically)
+        .word   0x0068                  ! LDTLB.RN  (install + return atomically)
         nop                             ! delay slot
 
         ! ---- Slow path: call the C walker. ----
@@ -210,7 +210,7 @@ _h_slow:
         bt      _h_realfault            ! r0==0 -> walker fault
         lds.l   @r15+, pr
         .word   0x406E                  ! LDC r0, PTEL
-        .word   0x0068                  ! LDTLB.R
+        .word   0x0068                  ! LDTLB.RN
         nop
 
 _h_realfault:

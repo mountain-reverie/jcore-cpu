@@ -42,7 +42,7 @@
 ! case 29 skipped: LDS.L @Rm+, MACL accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 ! case 29 skipped: LDS.L @Rm+, PR accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 ! case 29 skipped: LDTLB is Bespoke (dedicated guard)
-! case 29 skipped: LDTLB.R is Bespoke (dedicated guard)
+! case 29 skipped: LDTLB.RN is Bespoke (dedicated guard)
 ! case 29 skipped: MAC.L @Rm+, @Rn+ accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 ! case 29 skipped: MAC.W @Rm+, @Rn+ accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 ! case 31 skipped: MOV.B @(R0, Rm), Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)

@@ -1,0 +1,14 @@
+{
+  "instructions": [
+    {
+      "group": "System Control Instructions",
+      "format": "lds Rm,CPI_COM",
+      "code": "0100mmmm01011010"
+    },
+    {
+      "group": "Floating-Point Control Instructions",
+      "format": "lds Rm,FPUL",
+      "code": "0100mmmm01011010"
+    }
+  ]
+}

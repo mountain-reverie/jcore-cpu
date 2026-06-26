@@ -6,6 +6,21 @@ import (
 	"github.com/j-core/jcore-cpu/decode/gen-go/internal/opcode"
 )
 
+// NormAsm returns s lowercased with all whitespace removed.
+func NormAsm(s string) string {
+	var b strings.Builder
+	for _, c := range s {
+		if c == ' ' || c == '\t' || c == '\n' {
+			continue
+		}
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		b.WriteRune(c)
+	}
+	return b.String()
+}
+
 type Key struct{ Match, Mask uint16 }
 
 func KeyOf(pattern string) (Key, bool) {

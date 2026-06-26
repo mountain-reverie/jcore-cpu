@@ -102,3 +102,63 @@ func TestSyncIdempotent(t *testing.T) {
 		t.Fatalf("not idempotent:\n%s\n!=\n%s", before, after)
 	}
 }
+
+func TestSyncAppendedRowMarksAllVariants(t *testing.T) {
+	// Create an empty doc (no rows)
+	d := &Doc{Rows: []*Row{}}
+
+	// Create an opcode that neither variant has seen in the doc
+	op := spec.Instr{Name: "SHARED_OP", Opcode: "0000000001101000", Format: "shared.op", Slots: []spec.Slot{{}}}
+
+	// Create J2 and J4 variants, both with the same opcode
+	mk := func(list ...spec.Instr) *InstrSet {
+		s := &InstrSet{ByKey: map[Key]spec.Instr{}}
+		for _, in := range list {
+			k, _ := KeyOf(in.Opcode)
+			s.ByKey[k] = in
+			s.Order = append(s.Order, in)
+		}
+		return s
+	}
+
+	j2 := mk(op)
+	j4 := mk(op)
+
+	// Sync with both variants
+	rep, err := Sync(d, []VariantData{
+		{Variant{Name: "J2", Group: "Test"}, j2, &Table{}},
+		{Variant{Name: "J4", Group: "Test"}, j4, &Table{}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify 1 row was appended
+	if len(d.Rows) != 1 {
+		t.Fatalf("expected 1 row appended, got %d", len(d.Rows))
+	}
+	if len(rep.Appended) != 1 {
+		t.Fatalf("expected 1 appended, got %v", rep.Appended)
+	}
+
+	// Verify both variants are marked true on the appended row
+	r := d.Rows[0]
+	j2v, _ := r.Get("J2")
+	if j2v != true {
+		t.Fatalf("J2 should be true on appended row, got %v", j2v)
+	}
+	j4v, _ := r.Get("J4")
+	if j4v != true {
+		t.Fatalf("J4 should be true on appended row, got %v", j4v)
+	}
+
+	// Verify timing fields are present for both
+	j2issue, _ := r.Get("J2.issue")
+	if j2issue == nil {
+		t.Fatal("J2.issue should be present")
+	}
+	j4issue, _ := r.Get("J4.issue")
+	if j4issue == nil {
+		t.Fatal("J4.issue should be present")
+	}
+}

@@ -10,7 +10,7 @@ import (
 func NormAsm(s string) string {
 	var b strings.Builder
 	for _, c := range s {
-		if c == ' ' || c == '\t' || c == '\n' {
+		if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
 			continue
 		}
 		if c >= 'A' && c <= 'Z' {

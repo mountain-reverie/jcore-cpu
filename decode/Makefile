@@ -22,13 +22,19 @@ GENERATED := \
     decode_table_rom.vhd \
     sh2instr.c
 
-.PHONY: generate generate-j4 clean diff
+.PHONY: generate generate-j4 clean diff insns insns-check
 
 generate:
 	go -C $(GEN_DIR) run ./cmd/cpugen -w $(ROM_WIDTH) -o ..
 
 generate-j4:
 	go -C $(GEN_DIR) run ./cmd/cpugen -w $(ROM_WIDTH) -overlay spec/sh4 -o ..
+
+insns:
+	go -C $(GEN_DIR) run ./cmd/cpugen insns -json ../../docs/insns.json
+
+insns-check:
+	go -C $(GEN_DIR) run ./cmd/cpugen insns -check -json ../../docs/insns.json
 
 clean:
 	rm -f $(GENERATED)

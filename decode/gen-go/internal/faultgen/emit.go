@@ -321,6 +321,20 @@ func emitDSide(c Class, id int) (string, string, error) {
 	if strings.HasPrefix(c.Instr.Name, "LDC.L") || strings.HasPrefix(c.Instr.Name, "LDS.L") {
 		return emitCtrlLoadD(c, id)
 	}
+	// CAS.L Rm,Rn,@R0 (SH-2A compare-and-swap) addresses memory through an
+	// IMPLICIT R0 pointer -- there is no @Rm/@Rn operand for addrFieldChar to
+	// see, so encodeWord leaves the pointer unsubstituted and forces the 'm'
+	// field to regBase. Because regBase IS r0 (== the implicit R0 pointer) and
+	// BaseInit seeds r0 with the workload VA, the modelled base and the hardware
+	// pointer are the SAME register BY CONSTRUCTION -- intentional, not an
+	// accidental coincidence. Assert that invariant: if regBase ever moves off
+	// r0 the implicit pointer would diverge from the seeded base and the probe
+	// would be vacuous, so skip honestly rather than mis-model.
+	if strings.HasPrefix(c.Instr.Name, "CAS.") && regBase != 0 {
+		return fmt.Sprintf("! case %d skipped: %s: implicit-R0 pointer requires regBase==r0 (currently r%d)\n",
+				id, c.Instr.Name, regBase),
+			"", errSkip
+	}
 	word, err := encodeWord(c)
 	if err != nil {
 		return "", "", err
@@ -357,7 +371,14 @@ func emitDSide(c Class, id int) (string, string, error) {
 	}
 
 	tmpl := tmplGeneralD
-	if c.Bucket == PrivMem {
+	// A privileged STORE that merely READS a control register as the stored
+	// datum (DestCtrl=="") -- STC.L SR,@-Rn and STC.L VBR,@-Rn -- changes NO
+	// machine state: storing SR/VBR to memory leaves the mode/vector base intact.
+	// The only precise-exception risk is the @-Rn base pre-decrement, already
+	// covered identically by the General store template (cf. STC.L GBR,@-Rn,
+	// which passes). So only route through the benign-init PrivMem template the
+	// instructions that actually WRITE a control register (DestCtrl != "").
+	if c.Bucket == PrivMem && c.DestCtrl != "" {
 		// The PrivMem template zeroes DestCtrl per leg as a benign baseline.
 		// That is fatal for the registers the exception-delivery mechanism
 		// itself uses: zeroing VBR/SR/SSR/SPC means the cold-TLB fault vectors
@@ -475,6 +496,8 @@ func emitModePreservingCtrlLoadD(c Class, id int, store string) (string, string,
 type macPos struct {
 	Comment string
 	Prewarm string
+	Tag     string // position discriminator ("1","2","3") for distinct labels
+	RID     int    // per-position reported _m8_cmp ID = 1000*pos + case ID
 }
 
 // macData drives tmplMacD: one _m8_case routine that runs THREE precise-exception
@@ -494,7 +517,9 @@ type macData struct {
 // both-cold) so the MAC accumulator is proven precise regardless of which
 // operand read faults -- not just the original both-cold bug. Single-position
 // faults are set up by pre-warming the OTHER operand's page in the faulting leg
-// after the flush. Each position snapshots {r0, r8, MACH, MACL} for both legs.
+// after the flush. Each position reports a DISTINCT _m8_cmp ID (1000*pos + case
+// ID) so a CI Result=<ID> names the faulting operand position (1=op1-only,
+// 2=op2-only, 3=both-cold). Each position snapshots {r0, r8, MACH, MACL}.
 // The accumulator is cleared via lds r9,MACH/MACL (NOT clrmac -- clrmac is
 // microcoded as TEMP1 xor TEMP1, which is 'X' in sim until TEMP1 is first
 // written) so the accumulator start is identical across legs.
@@ -513,14 +538,20 @@ func emitMacD(c Class, id int) (string, string, error) {
 			{
 				Comment: "fault on operand 1 only (Rm page cold, Rn page pre-warmed)",
 				Prewarm: fmt.Sprintf("        mov.l   c%d_seedvb, r0          ! pre-warm page B (Rn): only operand 1 (Rm) faults\n        mov.l   @r0, r1\n", id),
+				Tag:     "1",
+				RID:     1000 + id,
 			},
 			{
 				Comment: "fault on operand 2 only (Rm page pre-warmed, Rn page cold)",
 				Prewarm: fmt.Sprintf("        mov.l   c%d_seedva, r0          ! pre-warm page A (Rm): only operand 2 (Rn) faults\n        mov.l   @r0, r1\n", id),
+				Tag:     "2",
+				RID:     2000 + id,
 			},
 			{
 				Comment: "both operands cold (both Rm and Rn faults)",
 				Prewarm: "",
+				Tag:     "3",
+				RID:     3000 + id,
 			},
 		},
 	}
@@ -1104,9 +1135,10 @@ _m8_case_{{.ID}}:                       ! {{.Name}}  (MAC dual-base, D-side; 3 f
         mov.l   r1, @(8,r2)
         sts     macl, r1
         mov.l   r1, @(12,r2)
-        ! ---- compare ----
+        ! ---- compare (per-position ID = 1000*pos + case ID; localises which
+        !      operand position faulted in a CI Result=<ID>) ----
         mov     #16, r4
-        mov.l   c{{$.ID}}_id, r5
+        mov.l   c{{$.ID}}_id{{.Tag}}, r5
         mov.l   c{{$.ID}}_cmp, r3
         jsr     @r3
         nop
@@ -1119,8 +1151,8 @@ c{{.ID}}_seedvb: .long {{.SeedVB}}
 c{{.ID}}_seed:   .long 0xA11C0001
 c{{.ID}}_snapa:  .long SNAP_A
 c{{.ID}}_snapb:  .long SNAP_B
-c{{.ID}}_id:     .long {{.ID}}
-c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
+{{range .Positions}}c{{$.ID}}_id{{.Tag}}: .long {{.RID}}
+{{end}}c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
 c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
 `
 

@@ -122,6 +122,11 @@ func TestEmitCaseMacDualBase(t *testing.T) {
 		"both operands cold",
 		"pre-warm page B (Rn): only operand 1 (Rm) faults",
 		"pre-warm page A (Rm): only operand 2 (Rn) faults",
+		// Per-position reported IDs (1000*pos + case ID) so a CI Result=<ID>
+		// localises which operand position faulted.
+		"c5_id1: .long 1005",
+		"c5_id2: .long 2005",
+		"c5_id3: .long 3005",
 	} {
 		if !strings.Contains(block, want) {
 			t.Errorf("MAC block missing %q:\n%s", want, block)

@@ -109,7 +109,8 @@ package mult_pkg is
                                        );
 
   component mult is
-
+    generic (
+      MMU_ARCH : boolean := false);
     port (
     clk : in std_logic;
     rst : in std_logic;

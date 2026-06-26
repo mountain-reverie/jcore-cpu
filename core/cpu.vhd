@@ -105,7 +105,7 @@ begin
       mask_int => mask_int,
       tlb_exc_en   => tlb_exc_en,
       tlb_exc_kind => tlb_exc_kind);
-   u_mult : mult port map (clk => clk, rst => rst, slot => slot, a => mac_i, y => mac_o);
+   u_mult : mult generic map (MMU_ARCH => MMU_ARCH) port map (clk => clk, rst => rst, slot => slot, a => mac_i, y => mac_o);
       mac_i.wr_m1 <= mac.com1; mac_i.command <= mac.com2;
       mac_i.wr_mach <= mac.wrmach; mac_i.wr_macl <= mac.wrmacl;
       mac_i.acc_squash <= dp_tlb_squash;

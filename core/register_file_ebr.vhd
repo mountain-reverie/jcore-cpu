@@ -82,6 +82,11 @@ begin
   -- observable. When addr_r0 selects a non-zero (bank-1 R0) index under RB=1,
   -- read the committed value straight from ram_a (with last_wr overlay), exactly
   -- like dout_a/dout_b; forwarding still overlays in-flight EX/WB writes.
+  -- NOTE: this arch keeps the `generate` split because its binding (ECP5 j1)
+  -- folds it cleanly here. The two_bank arch (ECP5 j2) instead uses a
+  -- const-foldable `r0_addr <= addr_r0 when BANKED else ZERO_ADDR` form because
+  -- synth_ecp5/abc9 did NOT fold this `generate` for j2 (+418 LUT4; see
+  -- register_file_two_bank.vhd). Prefer that foldable form if a binding regresses.
   banked_r0: if BANKED generate
     dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes)
                 when to_reg_index(addr_r0) = 0

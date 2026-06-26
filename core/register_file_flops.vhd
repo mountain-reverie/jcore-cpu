@@ -22,6 +22,12 @@ begin
   dout_b <= read_with_forwarding(addr_rb, bank(to_reg_index(addr_rb)), wb_pipe, ex_pipes);
   -- Bank-aware R0 read: bank holds the remapped R0 (writes use the remapped
   -- index), so reading bank(addr_r0) follows SR.RB.
+  -- NOTE: this arch keeps the `generate` split because its bindings (ASIC, via
+  -- cpu_asic.vhd) fold it cleanly on the generic yosys backend. The two_bank
+  -- arch (ECP5 j2 binding) instead uses a const-foldable `r0_addr <= addr_r0
+  -- when BANKED else ZERO_ADDR` form because synth_ecp5/abc9 does NOT fold this
+  -- `generate` (it left +418 LUT4; see register_file_two_bank.vhd). If flops is
+  -- ever bound for a synth_ecp5 target, switch it to that foldable form too.
   banked_r0: if BANKED generate
     dout_0 <= read_with_forwarding(addr_r0, bank(to_reg_index(addr_r0)), wb_pipe, ex_pipes);
   end generate banked_r0;

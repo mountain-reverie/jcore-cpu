@@ -36,7 +36,8 @@ descriptions, and its design goal:
 - **[J4 — SH-4 Privileged Core](j4.md)** — targets the SH-4 **user-space** ABI for
   best performance-per-watt / per-area (kernel-space SH-4 compat is a non-goal).
   Adds privilege (`SR.MD/RB/BL`), an MMU with a 32-entry hardware TLB, banked
-  registers, and register-model exceptions, gated by the `PRIV_ARCH`/`MMU_ARCH`
+  registers, and SH-4 register-model exceptions (`SPC`/`SSR`, replacing J2's SH-2
+  stack model — see [j4.md](j4.md) → *Exception model*), gated by the `PRIV_ARCH`/`MMU_ARCH`
   generics (bare `cpu_j4` is byte-identical to J2).
 
 This document covers the cross-cutting concerns shared by all three (configuration
@@ -143,7 +144,7 @@ current realization. Full detail is in [j4.md](j4.md).
 
 | SH-4 feature | Seam | Status |
 |---|---|---|
-| **Privilege / `SR.MD/RB/BL`, exceptions** | `spec/sh4/{mmu,exceptions}.toml` overlay + `if PRIV_ARCH` logic in `core/datapath.vhm` / `decode/decode_core.vhm` | **Implemented & tested** (register-model exceptions, `EXPEVT/INTEVT/TRA` on `priv_o`). Gated by `PRIV_ARCH`; J2 unchanged. |
+| **Privilege / `SR.MD/RB/BL`, exceptions** | `spec/sh4/{mmu,exceptions}.toml` overlay + `if PRIV_ARCH` logic in `core/datapath.vhm` / `decode/decode_core.vhm` | **Implemented & tested** (SH-4 register-model exceptions overriding the SH-2 stack model, `EXPEVT/INTEVT/TRA` on `priv_o`). Gated by `PRIV_ARCH`; J2 unchanged. |
 | **Banked registers (R0–R7)** | `register_file(two_bank)` with `BANKED ⇐ PRIV_ARCH`; `bank_remap` in datapath; `bank.toml` moves | **Implemented & tested** (`banktest`, `STC Rm_BANK`). `.L` multi-slot variants deferred (microcode-ROM budget). |
 | **MMU / TLB** | `core/tlb.vhd` instantiated under `core/cpu.vhd` `g_mmu : if MMU_ARCH generate`; MMU CSRs + `mmu_o` PA tags | **Implemented, tested & synthesizable** (32-entry CAM, j4c ASIC `+9k` cells). Gated by `MMU_ARCH`. |
 | **L2 cache** | new hierarchy entity composed around the existing `cache/` I/D caches; bound in the J4 SoC config | **Future** — not yet implemented; new files only when added. |

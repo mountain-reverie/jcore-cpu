@@ -91,6 +91,98 @@ func TestEmitCaseStoreProbe(t *testing.T) {
 	}
 }
 
+// TestEmitCaseMacDualBase asserts MAC.L @Rm+,@Rn+ is emitted (not skipped) and
+// seeds + snapshots BOTH base registers (r0,r8) plus MACH/MACL across two
+// distinct mapped pages, so fault-on-the-second-operand is observable.
+func TestEmitCaseMacDualBase(t *testing.T) {
+	s, err := spec.LoadProfile("../../spec", "../../spec/sh4")
+	if err != nil {
+		t.Fatalf("load spec: %v", err)
+	}
+	c := Classify(find(t, s, "MAC.L @Rm+, @Rn+"))
+	block, dispatch, err := EmitCase(c, 5)
+	if err != nil {
+		t.Fatalf("MAC must be emitted, got: %v\n%s", err, block)
+	}
+	for _, want := range []string{
+		"_m8_case_5:",
+		".word   0x080F", // MAC.L with m->r0,n->r8
+		"c5_seedva: .long 0x00100000",
+		"c5_seedvb: .long 0x00101000", // second mapped page (distinct fault)
+		"clrmac",
+		"sts     mach, r1",
+		"sts     macl, r1",
+		"mov     #16, r4", // 16-byte snapshot = r0,r8,MACH,MACL
+	} {
+		if !strings.Contains(block, want) {
+			t.Errorf("MAC block missing %q:\n%s", want, block)
+		}
+	}
+	// Both bases must be snapshotted (r0 AND r8), not just one.
+	if strings.Count(block, "mov.l   r8, @(4,r2)") != 2 {
+		t.Errorf("MAC must snapshot the second base r8 in both legs:\n%s", block)
+	}
+	if !strings.Contains(dispatch, "_m8_case_5") {
+		t.Errorf("dispatch missing case-5 reference: %q", dispatch)
+	}
+}
+
+// TestEmitCaseCtrlLoad asserts a control-register post-increment load is emitted
+// (not the old 'U'-hang skip) and that it benign-INITs the dest ctrl reg and
+// RESTOREs it -- i.e. the oracle is not vacuous and machine state is preserved.
+func TestEmitCaseCtrlLoad(t *testing.T) {
+	s, err := spec.LoadProfile("../../spec", "../../spec/sh4")
+	if err != nil {
+		t.Fatalf("load spec: %v", err)
+	}
+
+	// LDC.L @Rm+, GBR -> emitted, benign-init + read-back + restore via gbr.
+	c := Classify(find(t, s, "LDC.L @Rm+, GBR"))
+	block, _, err := EmitCase(c, 6)
+	if err != nil {
+		t.Fatalf("LDC.L @Rm+,GBR must be emitted, got: %v\n%s", err, block)
+	}
+	for _, want := range []string{
+		"_m8_case_6:",
+		"ldc     r1, gbr", // benign-init AND restore use ldc r1,gbr
+		"stc     gbr, r1", // read-back for snapshot/baseline
+		"c6_ctlsv:",       // baseline save slot (restore target)
+	} {
+		if !strings.Contains(block, want) {
+			t.Errorf("ctrl-load block missing %q:\n%s", want, block)
+		}
+	}
+	// init+restore: ldc r1,gbr must appear at least twice (baseline-init + per
+	// leg) and the baseline must be reloaded for restore.
+	if strings.Count(block, "ldc     r1, gbr") < 3 {
+		t.Errorf("ctrl-load not init+restore (expected >=3 ldc r1,gbr):\n%s", block)
+	}
+
+	// LDS.L @Rm+, MACH -> emitted (classifier marks it General, but the emitter
+	// routes control-loads by name so the ctrl reg is still snapshotted).
+	cm := Classify(find(t, s, "LDS.L @Rm+, MACH"))
+	mblock, _, merr := EmitCase(cm, 7)
+	if merr != nil {
+		t.Fatalf("LDS.L @Rm+,MACH must be emitted, got: %v\n%s", merr, mblock)
+	}
+	if !strings.Contains(mblock, "lds     r1, mach") || !strings.Contains(mblock, "sts     mach, r1") {
+		t.Errorf("MACH ctrl-load missing benign-init/read-back:\n%s", mblock)
+	}
+
+	// LDC.L @Rm+, SR -> still skipped, with the precise mode-unsafe reason.
+	cs := Classify(find(t, s, "LDC.L @Rm+, SR"))
+	sblock, sdisp, serr := EmitCase(cs, 8)
+	if !IsSkip(serr) {
+		t.Fatalf("LDC.L @Rm+,SR must stay skipped, got err=%v", serr)
+	}
+	if !strings.Contains(sblock, "mode-unsafe") || !strings.Contains(sblock, "covered by the GBR/MACH/MACL/PR siblings") {
+		t.Errorf("SR skip lacks the precise mode-unsafe reason: %q", sblock)
+	}
+	if sdisp != "" {
+		t.Errorf("skipped SR load must not emit a dispatch entry: %q", sdisp)
+	}
+}
+
 // TestEmitImageGeneral assembles a small image and checks the scaffolding.
 func TestEmitImageGeneral(t *testing.T) {
 	s, err := spec.LoadProfile("../../spec", "../../spec/sh4")

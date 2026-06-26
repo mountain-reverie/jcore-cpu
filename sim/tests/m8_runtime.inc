@@ -107,8 +107,11 @@ kmain:
         mov.l   k_pgd0, r1             ! 0x80002401
         mov.l   r1, @r0
 
-        ! ---- Build the one PTE (PTEL image: backing PA | 0x3F1). ----
+        ! ---- Build the PTEs (PTEL image: backing PA | 0x3F1). Two adjacent
+        ! identity pages: 0x100 (workload) and 0x101 (MAC dual-base second
+        ! operand, so the two @Rm+/@Rn+ accesses fault on DISTINCT cold pages). ----
         mov.l   k_pteA, r0 ; mov.l v_pteA, r1 ; mov.l r1, @r0
+        mov.l   k_pteB, r0 ; mov.l v_pteB, r1 ; mov.l r1, @r0
 
         ! ---- Zero the 16-entry TSB (64 words). ----
         mov.l   k_tsb,  r0
@@ -145,6 +148,8 @@ k_pgd:     .long 0x80002000
 k_pgd0:    .long 0x80002401
 k_pteA:    .long 0x80002800
 v_pteA:    .long 0x001003F1    ! identity PTE: PA(==VA) | flags 0x3F1
+k_pteB:    .long 0x80002804    ! pte_tab[0x101] (= 0x80002400 + 0x101*4)
+v_pteB:    .long 0x101003F1    ! identity PTE for VA 0x00101000
 k_tsb:     .long 0x80002C00
 k_vbr:     .long 0x80000000 + _vbase
 k_tsbbr_a: .long 0xFF000014

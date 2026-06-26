@@ -216,6 +216,7 @@ type caseData struct {
 	Word     string // e.g. "0x6806"
 	Name     string
 	BaseInit string // VA loaded into the base reg before the run
+	SeedVB   string // second base VA (MAC dual-pointer: Rn page); "" otherwise
 	Probe    string // address probed for the written word (Write only)
 	IsWrite  bool
 	CtrlSave string // formatted store insn (ctrl -> r1)
@@ -277,20 +278,24 @@ func emitDSide(c Class, id int) (string, string, error) {
 		return fmt.Sprintf("! case %d skipped: %s has no D-side memory access\n", id, c.Instr.Name),
 			"", errSkip
 	}
+	// MAC.L/MAC.W @Rm+,@Rn+ are dual-pointer post-increments -- the highest-
+	// value precise-exception targets (fault-on-second-operand with the first
+	// base already auto-incremented). They need BOTH bases seeded+snapshotted,
+	// so they bypass unmodelledBase's single-base rejection.
+	if strings.HasPrefix(c.Instr.Name, "MAC.") {
+		return emitMacD(c, id)
+	}
 	if reason, bad := unmodelledBase(c.Instr.Name); bad {
 		return fmt.Sprintf("! case %d skipped: %s: %s\n", id, c.Instr.Name, reason),
 			"", errSkip
 	}
-	// Control-register memory LOADS (LDC.L/LDS.L @Rm+) leave the snapshotted
-	// register undefined (sim 'U') across a cold-TLB fault, so the snapshot
-	// store bus-faults (an SRAM U-write hang) instead of producing a decodable
-	// Result. That is a harness limitation (U is not a value the oracle can
-	// compare), distinct from the general @-Rn defect this image targets --
-	// skip them on the D-side axis. (Their STC.L/STS.L store duals are fine.)
+	// Control-register memory LOADS (LDC.L/LDS.L @Rm+,ctrl): the auto-modify
+	// base GPR is the real precise-exception risk; the control reg is only the
+	// data payload. The 'U'-hang (co-sim snapshotting an uninitialised ctrl reg)
+	// is resolved by benign-initialising the dest ctrl reg before the case and
+	// restoring it after -- see tmplPrivMemD. SR/VBR stay skipped (mode-unsafe).
 	if strings.HasPrefix(c.Instr.Name, "LDC.L") || strings.HasPrefix(c.Instr.Name, "LDS.L") {
-		return fmt.Sprintf("! case %d skipped: %s: control-register memory load leaves snapshot register undefined across a cold-TLB fault (co-sim U-write hang, not a decodable Result)\n",
-				id, c.Instr.Name),
-			"", errSkip
+		return emitCtrlLoadD(c, id)
 	}
 	word, err := encodeWord(c)
 	if err != nil {
@@ -350,6 +355,71 @@ func emitDSide(c Class, id int) (string, string, error) {
 	}
 
 	return render(tmpl, d)
+}
+
+// ctrlLoadDest returns the destination control register of an LDC.L/LDS.L
+// post-increment load, parsed from the instruction name ("LDC.L @Rm+, GBR" ->
+// "GBR").
+func ctrlLoadDest(name string) string {
+	i := strings.LastIndex(name, ",")
+	if i < 0 {
+		return ""
+	}
+	return strings.TrimSpace(name[i+1:])
+}
+
+// emitCtrlLoadD emits a control-register post-increment load (LDC.L/LDS.L
+// @Rm+,ctrl). The dest ctrl reg is benign-initialised before the run (so the
+// co-sim never snapshots 'U'), read back via the matching STC/STS for the
+// snapshot, and restored to its baseline after the case. The snapshot captures
+// {base GPR, ctrl value}; both legs are byte-identical save cold-vs-warm TLB.
+func emitCtrlLoadD(c Class, id int) (string, string, error) {
+	reg := ctrlLoadDest(c.Instr.Name)
+	if exceptionCritical[reg] {
+		return fmt.Sprintf("! case %d skipped: %s: mode-unsafe (SR/VBR govern execution/vectoring); the @Rm+ base auto-modify path is already covered by the GBR/MACH/MACL/PR siblings, so no precise-exception coverage is lost\n",
+				id, c.Instr.Name),
+			"", errSkip
+	}
+	ca := ctrlFor(reg)
+	if !ca.ok {
+		return fmt.Sprintf("! case %d skipped: %s: control reg %q not representable for snapshot/restore\n",
+				id, c.Instr.Name, reg),
+			"", errSkip
+	}
+	word, err := encodeWord(c)
+	if err != nil {
+		return "", "", err
+	}
+	d := caseData{
+		ID:       id,
+		Word:     fmt.Sprintf("0x%04X", word),
+		Name:     c.Instr.Name,
+		CtrlSave: fmt.Sprintf(ca.store, "r1"),
+		CtrlLoad: fmt.Sprintf(ca.load, "r1"),
+	}
+	return render(tmplPrivMemD, d)
+}
+
+// emitMacD emits a MAC.L/MAC.W @Rm+,@Rn+ dual-pointer case. Rm->r0 seeded at
+// page A (workloadVA), Rn->r8 seeded at page B (workloadVA+0x1000, a second
+// mapped page added to the runtime) so the two operands fault on DISTINCT cold
+// pages -- exercising fault-on-the-second-operand with the first base already
+// auto-incremented. Snapshots {r0, r8, MACH, MACL}; MAC is cleared (clrmac)
+// each leg so the accumulator start is identical. Both legs differ only in
+// cold-vs-warm TLB.
+func emitMacD(c Class, id int) (string, string, error) {
+	word, err := encodeWord(c)
+	if err != nil {
+		return "", "", err
+	}
+	d := caseData{
+		ID:       id,
+		Word:     fmt.Sprintf("0x%04X", word),
+		Name:     c.Instr.Name,
+		BaseInit: fmt.Sprintf("0x%08X", workloadVA),        // page A (Rm)
+		SeedVB:   fmt.Sprintf("0x%08X", workloadVA+0x1000), // page B (Rn)
+	}
+	return render(tmplMacD, d)
 }
 
 func emitIFetch(c Class, id int) (string, string, error) {
@@ -519,6 +589,7 @@ func axisName(a Axis) string {
 var (
 	tmplGeneralD = template.Must(template.New("genD").Parse(generalDText))
 	tmplPrivMemD = template.Must(template.New("privD").Parse(privMemDText))
+	tmplMacD     = template.Must(template.New("macD").Parse(macDText))
 	tmplIFetch   = template.Must(template.New("ifetch").Parse(iFetchText))
 )
 
@@ -591,7 +662,9 @@ c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
 const privMemDText = `        .balign 4
 _m8_case_{{.ID}}:                       ! {{.Name}}  (PrivMem, D-side)
         sts.l   pr, @-r15
-        {{.CtrlSave}}            ! save original ctrl
+        mov     #0, r1
+        {{.CtrlLoad}}            ! benign-init ctrl (never read 'U' on save)
+        {{.CtrlSave}}            ! save baseline ctrl -> r1
         mov.l   c{{.ID}}_ctlsv, r2
         mov.l   r1, @r2
         ! ---- faulting leg (cold TLB) ----
@@ -644,6 +717,74 @@ c{{.ID}}_va:     .long 0x00100000
 c{{.ID}}_seedva: .long 0x00100000
 c{{.ID}}_seed:   .long 0xA11C0001
 c{{.ID}}_ctlsv:  .long 0x80003200
+c{{.ID}}_snapa:  .long SNAP_A
+c{{.ID}}_snapb:  .long SNAP_B
+c{{.ID}}_id:     .long {{.ID}}
+c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
+c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
+`
+
+// MAC dual-base D-side: seed+snapshot BOTH bases (r0=Rm page A, r8=Rn page B,
+// two distinct mapped pages so the second operand faults cold after the first
+// base has auto-incremented) plus MACH+MACL. clrmac per leg fixes the
+// accumulator start. Snapshot {r0, r8, MACH, MACL} = 16 bytes.
+const macDText = `        .balign 4
+_m8_case_{{.ID}}:                       ! {{.Name}}  (MAC dual-base, D-side)
+        sts.l   pr, @-r15
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   c{{.ID}}_seedva, r0     ! page A (Rm)
+        mov.l   c{{.ID}}_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c{{.ID}}_seedvb, r0     ! page B (Rn)
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c{{.ID}}_flush, r3
+        jsr     @r3
+        nop
+        clrmac
+        mov.l   c{{.ID}}_seedva, r0     ! Rm base
+        mov.l   c{{.ID}}_seedvb, r8     ! Rn base
+        .word   {{.Word}}                ! instruction under test
+        mov.l   c{{.ID}}_snapa, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- control leg (warm TLB) ----
+        mov.l   c{{.ID}}_seedva, r0
+        mov.l   c{{.ID}}_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   c{{.ID}}_seedvb, r0
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        clrmac
+        mov.l   c{{.ID}}_seedva, r0
+        mov.l   c{{.ID}}_seedvb, r8
+        .word   {{.Word}}
+        mov.l   c{{.ID}}_snapb, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        sts     mach, r1
+        mov.l   r1, @(8,r2)
+        sts     macl, r1
+        mov.l   r1, @(12,r2)
+        ! ---- compare ----
+        mov     #16, r4
+        mov.l   c{{.ID}}_id, r5
+        mov.l   c{{.ID}}_cmp, r3
+        jsr     @r3
+        nop
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+c{{.ID}}_seedva: .long {{.BaseInit}}
+c{{.ID}}_seedvb: .long {{.SeedVB}}
+c{{.ID}}_seed:   .long 0xA11C0001
 c{{.ID}}_snapa:  .long SNAP_A
 c{{.ID}}_snapb:  .long SNAP_B
 c{{.ID}}_id:     .long {{.ID}}

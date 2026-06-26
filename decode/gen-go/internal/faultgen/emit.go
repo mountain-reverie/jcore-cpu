@@ -400,27 +400,68 @@ func emitCtrlLoadD(c Class, id int) (string, string, error) {
 	return render(tmplPrivMemD, d)
 }
 
+// macPos is one fault-position variant of a MAC dual-base case. Prewarm holds
+// the (possibly empty) asm that, in the faulting leg AFTER the cold-TLB flush,
+// touches one operand's page to re-install its TLB entry -- so only the OTHER
+// operand faults. An empty Prewarm leaves both pages cold (both operands fault).
+type macPos struct {
+	Comment string
+	Prewarm string
+}
+
+// macData drives tmplMacD: one _m8_case routine that runs THREE precise-exception
+// self-checks back to back -- fault on operand 1 only, operand 2 only, and both
+// cold -- so the acc_squash fix is regression-locked at every fault position.
+type macData struct {
+	ID            int
+	Word, Name    string
+	SeedVA, SeedVB string
+	Positions     []macPos
+}
+
 // emitMacD emits a MAC.L/MAC.W @Rm+,@Rn+ dual-pointer case. Rm->r0 seeded at
 // page A (workloadVA), Rn->r8 seeded at page B (workloadVA+0x1000, a second
-// mapped page added to the runtime) so the two operands fault on DISTINCT cold
-// pages -- exercising fault-on-the-second-operand with the first base already
-// auto-incremented. Snapshots {r0, r8, MACH, MACL}; the accumulator is cleared
-// via lds r9,MACH/MACL (NOT clrmac -- clrmac is microcoded as TEMP1 xor TEMP1,
-// which is 'X' in sim until TEMP1 is first written) each leg so the accumulator
-// start is identical. Both legs differ only in cold-vs-warm TLB.
+// mapped page added to the runtime) so the two operands can fault on DISTINCT
+// cold pages. The routine runs THREE positions (fault-op1-only, fault-op2-only,
+// both-cold) so the MAC accumulator is proven precise regardless of which
+// operand read faults -- not just the original both-cold bug. Single-position
+// faults are set up by pre-warming the OTHER operand's page in the faulting leg
+// after the flush. Each position snapshots {r0, r8, MACH, MACL} for both legs.
+// The accumulator is cleared via lds r9,MACH/MACL (NOT clrmac -- clrmac is
+// microcoded as TEMP1 xor TEMP1, which is 'X' in sim until TEMP1 is first
+// written) so the accumulator start is identical across legs.
 func emitMacD(c Class, id int) (string, string, error) {
 	word, err := encodeWord(c)
 	if err != nil {
 		return "", "", err
 	}
-	d := caseData{
-		ID:       id,
-		Word:     fmt.Sprintf("0x%04X", word),
-		Name:     c.Instr.Name,
-		BaseInit: fmt.Sprintf("0x%08X", workloadVA),        // page A (Rm)
-		SeedVB:   fmt.Sprintf("0x%08X", workloadVA+0x1000), // page B (Rn)
+	d := macData{
+		ID:     id,
+		Word:   fmt.Sprintf("0x%04X", word),
+		Name:   c.Instr.Name,
+		SeedVA: fmt.Sprintf("0x%08X", workloadVA),        // page A (Rm)
+		SeedVB: fmt.Sprintf("0x%08X", workloadVA+0x1000), // page B (Rn)
+		Positions: []macPos{
+			{
+				Comment: "fault on operand 1 only (Rm page cold, Rn page pre-warmed)",
+				Prewarm: fmt.Sprintf("        mov.l   c%d_seedvb, r0          ! pre-warm page B (Rn): only operand 1 (Rm) faults\n        mov.l   @r0, r1\n", id),
+			},
+			{
+				Comment: "fault on operand 2 only (Rm page pre-warmed, Rn page cold)",
+				Prewarm: fmt.Sprintf("        mov.l   c%d_seedva, r0          ! pre-warm page A (Rm): only operand 2 (Rn) faults\n        mov.l   @r0, r1\n", id),
+			},
+			{
+				Comment: "both operands cold (both Rm and Rn faults)",
+				Prewarm: "",
+			},
+		},
 	}
-	return render(tmplMacD, d)
+	var b strings.Builder
+	if err := tmplMacD.Execute(&b, d); err != nil {
+		return "", "", err
+	}
+	dispatch := fmt.Sprintf("        .long   0x80000000 + _m8_case_%d\n", id)
+	return b.String(), dispatch, nil
 }
 
 func emitIFetch(c Class, id int) (string, string, error) {
@@ -744,38 +785,36 @@ c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
 `
 
 // MAC dual-base D-side: seed+snapshot BOTH bases (r0=Rm page A, r8=Rn page B,
-// two distinct mapped pages so the second operand faults cold after the first
-// base has auto-incremented) plus MACH+MACL. lds r9,MACH/MACL per leg fixes the
-// accumulator start deterministically. Snapshot {r0, r8, MACH, MACL} = 16 bytes.
+// two distinct mapped pages) plus MACH+MACL, across THREE fault positions
+// (operand-1-only, operand-2-only, both-cold). Single-position faults pre-warm
+// the OTHER operand's page in the faulting leg after the flush. lds r9,MACH/MACL
+// per leg fixes the accumulator start deterministically. Each position snapshots
+// {r0, r8, MACH, MACL} = 16 bytes and compares -- all three are now precise
+// (acc_squash fix), so the per-operand-position behavior is regression-locked.
 const macDText = `        .balign 4
-_m8_case_{{.ID}}:                       ! {{.Name}}  (MAC dual-base, D-side)
+_m8_case_{{.ID}}:                       ! {{.Name}}  (MAC dual-base, D-side; 3 fault positions)
         sts.l   pr, @-r15
+{{range .Positions}}        ! ===== position: {{.Comment}} =====
         ! ---- faulting leg (cold TLB) ----
-        mov.l   c{{.ID}}_seedva, r0     ! page A (Rm)
-        mov.l   c{{.ID}}_seed, r1
+        mov.l   c{{$.ID}}_seedva, r0     ! page A (Rm)
+        mov.l   c{{$.ID}}_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
-        mov.l   c{{.ID}}_seedvb, r0     ! page B (Rn)
+        mov.l   c{{$.ID}}_seedvb, r0     ! page B (Rn)
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
-        mov.l   c{{.ID}}_flush, r3
+        mov.l   c{{$.ID}}_flush, r3
         jsr     @r3
         nop
-        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
-        ! microcoded as TEMP1 xor TEMP1 -> MACH,MACL, which yields 'X' in
-        ! simulation when TEMP1 has not yet been written (X xor X = X). Reaching
-        ! the MAC case with TEMP1 still uninitialised would store an undefined
-        ! MACH/MACL into the snapshot -> SRAM bus exception (image hang). On real
-        ! silicon TEMP1 holds a defined value so clrmac is fine; this is purely a
-        ! sim-init artifact. lds r9,MACH/MACL zeroes the accumulator with a
-        ! defined source either way.
+{{.Prewarm}}        ! Clear MACH/MACL deterministically via lds (NOT clrmac): clrmac is
+        ! microcoded as TEMP1 xor TEMP1 -> 'X' in sim until TEMP1 is written.
         mov     #0, r9
         lds     r9, mach
         lds     r9, macl
-        mov.l   c{{.ID}}_seedva, r0     ! Rm base
-        mov.l   c{{.ID}}_seedvb, r8     ! Rn base
-        .word   {{.Word}}                ! instruction under test
-        mov.l   c{{.ID}}_snapa, r2
+        mov.l   c{{$.ID}}_seedva, r0     ! Rm base
+        mov.l   c{{$.ID}}_seedvb, r8     ! Rn base
+        .word   {{$.Word}}                ! instruction under test
+        mov.l   c{{$.ID}}_snapa, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
         sts     mach, r1
@@ -783,20 +822,20 @@ _m8_case_{{.ID}}:                       ! {{.Name}}  (MAC dual-base, D-side)
         sts     macl, r1
         mov.l   r1, @(12,r2)
         ! ---- control leg (warm TLB) ----
-        mov.l   c{{.ID}}_seedva, r0
-        mov.l   c{{.ID}}_seed, r1
+        mov.l   c{{$.ID}}_seedva, r0
+        mov.l   c{{$.ID}}_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
-        mov.l   c{{.ID}}_seedvb, r0
+        mov.l   c{{$.ID}}_seedvb, r0
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov     #0, r9                 ! deterministic accumulator clear (see above)
         lds     r9, mach
         lds     r9, macl
-        mov.l   c{{.ID}}_seedva, r0
-        mov.l   c{{.ID}}_seedvb, r8
-        .word   {{.Word}}
-        mov.l   c{{.ID}}_snapb, r2
+        mov.l   c{{$.ID}}_seedva, r0
+        mov.l   c{{$.ID}}_seedvb, r8
+        .word   {{$.Word}}
+        mov.l   c{{$.ID}}_snapb, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
         sts     mach, r1
@@ -805,15 +844,15 @@ _m8_case_{{.ID}}:                       ! {{.Name}}  (MAC dual-base, D-side)
         mov.l   r1, @(12,r2)
         ! ---- compare ----
         mov     #16, r4
-        mov.l   c{{.ID}}_id, r5
-        mov.l   c{{.ID}}_cmp, r3
+        mov.l   c{{$.ID}}_id, r5
+        mov.l   c{{$.ID}}_cmp, r3
         jsr     @r3
         nop
-        lds.l   @r15+, pr
+{{end}}        lds.l   @r15+, pr
         rts
         nop
         .align 2
-c{{.ID}}_seedva: .long {{.BaseInit}}
+c{{.ID}}_seedva: .long {{.SeedVA}}
 c{{.ID}}_seedvb: .long {{.SeedVB}}
 c{{.ID}}_seed:   .long 0xA11C0001
 c{{.ID}}_snapa:  .long SNAP_A

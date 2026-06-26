@@ -114,14 +114,20 @@ func TestEmitCaseMacDualBase(t *testing.T) {
 		"sts     mach, r1",
 		"sts     macl, r1",
 		"mov     #16, r4", // 16-byte snapshot = r0,r8,MACH,MACL
+		// Per-operand-position coverage: fault on op1 only, op2 only, both cold.
+		"fault on operand 1 only",
+		"fault on operand 2 only",
+		"both operands cold",
+		"pre-warm page B (Rn): only operand 1 (Rm) faults",
+		"pre-warm page A (Rm): only operand 2 (Rn) faults",
 	} {
 		if !strings.Contains(block, want) {
 			t.Errorf("MAC block missing %q:\n%s", want, block)
 		}
 	}
-	// Both bases must be snapshotted (r0 AND r8), not just one.
-	if strings.Count(block, "mov.l   r8, @(4,r2)") != 2 {
-		t.Errorf("MAC must snapshot the second base r8 in both legs:\n%s", block)
+	// Three positions x two legs each => r8 snapshotted six times.
+	if strings.Count(block, "mov.l   r8, @(4,r2)") != 6 {
+		t.Errorf("MAC must snapshot the second base r8 in both legs of all 3 positions:\n%s", block)
 	}
 	if !strings.Contains(dispatch, "_m8_case_5") {
 		t.Errorf("dispatch missing case-5 reference: %q", dispatch)

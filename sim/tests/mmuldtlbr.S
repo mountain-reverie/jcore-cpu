@@ -80,7 +80,7 @@ ENTRY(start)
         mov.l   r1, @r0
 
         ! ---- Take a DMISS_R: load from VA in page 1 (unmapped). ----
-        ! After the handler's LDTLB.R installs page 1 and returns, THIS load
+        ! After the handler's LDTLB.RN installs page 1 and returns, THIS load
         ! re-executes against the fresh entry and reads SENTINEL into r3.
         mov     #2, r9                  ! sentinel: if we fall through, fail code 2
         mov.l   c_sentinel_va, r2

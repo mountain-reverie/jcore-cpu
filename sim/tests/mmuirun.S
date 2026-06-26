@@ -3,7 +3,7 @@
 ! lives in P1 (untranslated). One P0 CODE page (VA 0x00100000, identity-backed
 ! at PA 0x00100000, PTE flags 0x3F1 incl. EXEC) holds a small workload that is
 ! COPIED there (AT off) before AT is enabled. With AT on, jmp to VA 0x00100000
-! -> cold IMISS (VBR+0x400) -> walker installs I-PTE -> LDTLB.R re-fetches the
+! -> cold IMISS (VBR+0x400) -> walker installs I-PTE -> LDTLB.RN re-fetches the
 ! faulting instruction -> workload runs (writes ran_flag) -> jmp back to P1.
 ! PASS proves execution RESUMED inside the translated page (ran_flag written by
 ! an instruction fetched through translation) and walker_calls==1.
@@ -12,7 +12,7 @@
 !   STC TSBPTR,r0 =0x0043   STC PTEH,r2 =0x0253   STC ASIDR,r2 =0x0273
 !   STC PTEH,r5   =0x0553   STC TSBPTR,r6=0x0643
 !   LDC r0,ASIDR  =0x407E   LDC r0,PTEL =0x406E    LDC r3,PTEL =0x436E
-!   LDC r0,VBR    =0x402E   LDTLB.R     =0x0068
+!   LDC r0,VBR    =0x402E   LDTLB.RN     =0x0068
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -145,7 +145,7 @@ ENTRY(_after_ifetch)
         ! re-pointing its control block at ran_flag2 / sentinel2 /
         ! _after_ifetch2, then flush the TLB (TI|AT) leaving the TSB warm and
         ! re-jump into the page. The second IMISS must hit the §4.1 asm hot path
-        ! (PTEH/ASIDR match against the warm TSB) -> tsb_hits++ and LDTLB.R, with
+        ! (PTEH/ASIDR match against the warm TSB) -> tsb_hits++ and LDTLB.RN, with
         ! NO second walker call.
         mov.l   k_ranf2, r0 ; mov #0, r1 ; mov.l r1, @r0        ! ran_flag2 = 0
         mov.l   k_ctl0, r0
@@ -339,7 +339,7 @@ _h_common:
         add     #1, r5
         mov.l   r5, @r4
         .word   0x436E                  ! LDC r3, PTEL
-        .word   0x0068                  ! LDTLB.R  (install + return atomically)
+        .word   0x0068                  ! LDTLB.RN  (install + return atomically)
         nop                             ! delay slot
 
         ! ---- Slow path: call the C walker. ----
@@ -355,7 +355,7 @@ _h_slow:
         bt      _h_realfault            ! r0==0 -> walker fault
         lds.l   @r15+, pr
         .word   0x406E                  ! LDC r0, PTEL
-        .word   0x0068                  ! LDTLB.R
+        .word   0x0068                  ! LDTLB.RN
         nop
 
 _h_realfault:

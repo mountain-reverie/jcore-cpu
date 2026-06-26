@@ -374,7 +374,7 @@
 #     stable ma_pc access-launch shadow) and SR (tlb_exc_sr) on the first fault
 #     cycle, like TEA/PTEH. These D-side entries source SPC from TLBPC
 #     (xbus=TLBPC, alu_y=4, SUB -> SPC = faulting instruction PC) and SSR from
-#     TLBSR (ybus=TLBSR), so the resolved access RE-EXECUTES after LDTLB.R/RTE.
+#     TLBSR (ybus=TLBSR), so the resolved access RE-EXECUTES after LDTLB.RN/RTE.
 #     Without this a faulting STORE returns past itself and the write is lost
 #     (a faulting load is masked: its dest reg was already written).
 # TEA and PTEH[31:12] are written as a datapath hardware side-effect when the

@@ -118,7 +118,7 @@
 # MD/privilege is correct at the target before it dispatches); slot 1 sets
 # PC<-SPC; slots 2-3 issue the fetch at the target and dispatch it using the
 # same non-delayed redirect tail as exception entry / Break / Reset CPU.
-# Opcode 0x0068 (formerly the delayed LDTLB.R; replaced — no prior user).
+# Opcode 0x0068 (formerly the delayed-branch variant; replaced — no prior user).
 [[instr]]
   name = "LDTLB.RN"
   privileged = true

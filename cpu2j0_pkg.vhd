@@ -44,12 +44,14 @@ package cpu2j0_pack is
    type cpu_mmu_o_t is record
       i_pa_tag : std_logic_vector(14 downto 0);  -- PA[27:13], 15 b (matches CACHE_PA_TAG_WIDTH)
       i_at     : std_logic;
+      i_c      : std_logic;                       -- I-side PTE C-bit
       d_pa_tag : std_logic_vector(14 downto 0);
       d_at     : std_logic;
+      d_c      : std_logic;                       -- D-side PTE C-bit
    end record;
    constant NULL_MMU_O : cpu_mmu_o_t :=
-     (i_pa_tag => (others => '0'), i_at => '0',
-      d_pa_tag => (others => '0'), d_at => '0');
+     (i_pa_tag => (others => '0'), i_at => '0', i_c => '0',
+      d_pa_tag => (others => '0'), d_at => '0', d_c => '0');
 
    -- SH-4 exception-cause export (J4). All zero on a non-PRIV_ARCH build; the
    -- PM3-SoC companion maps these as P4 MMIO. Left open on non-J4 boards.

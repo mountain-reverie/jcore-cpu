@@ -73,6 +73,8 @@ architecture stru of cpu is
    signal d_at_translated : std_logic;
    signal tlb_i_pa        : std_logic_vector(14 downto 0);
    signal tlb_d_pa        : std_logic_vector(14 downto 0);
+   signal tlb_i_c         : std_logic;
+   signal tlb_d_c         : std_logic;
    -- TLB exception detection outputs (fed to decode and datapath).
    signal tlb_exc_en   : std_logic;
    signal tlb_exc_kind : tlb_exc_kind_t;
@@ -222,11 +224,13 @@ begin
         clk      => clk,
         i_va     => i_va_32,
         i_pa_tag => tlb_i_pa,
+        i_c      => tlb_i_c,
         i_hit    => tlb_i_hit,
         i_prot   => tlb_i_prot,
         d_va     => d_va_32,
         d_we     => sig_db_o.wr,
         d_pa_tag => tlb_d_pa,
+        d_c      => tlb_d_c,
         d_hit    => tlb_d_hit,
         d_prot   => tlb_d_prot,
         asid     => dp_mmu_regs.asidr(15 downto 0),
@@ -240,8 +244,10 @@ begin
 
     mmu_o.i_pa_tag <= tlb_i_pa;
     mmu_o.i_at     <= i_at_translated;
+    mmu_o.i_c      <= tlb_i_c;
     mmu_o.d_pa_tag <= tlb_d_pa;
     mmu_o.d_at     <= d_at_translated;
+    mmu_o.d_c      <= tlb_d_c;
 
     -- TLB exception detection: priority I-side > D-side; miss > prot.
     -- tlb_exc_en is combinatorial (no register); it is sampled by decode_core

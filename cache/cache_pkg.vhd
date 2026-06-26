@@ -30,8 +30,9 @@ constant CACHE_PA_TAG_WIDTH      : natural := CACHE_TAG_WIDTH;  -- PA[27:13], 15
 type mmu_cache_i_t is record
   pa_tag : std_logic_vector(CACHE_PA_TAG_WIDTH-1 downto 0);
   at     : std_logic;
+  c      : std_logic;   -- PTE C-bit (cacheable); meaningful only when at='1'
 end record;
-constant MMU_CACHE_I_RESET : mmu_cache_i_t := (pa_tag => (others => '0'), at => '0');
+constant MMU_CACHE_I_RESET : mmu_cache_i_t := (pa_tag => (others => '0'), at => '0', c => '0');
 constant CACHE_INDEX_MSB         : natural := CACHE_LINE_WIDTH_BITS+CACHE_INDEX_BITS-1;
 constant CACHE_LINE_WIDTH        : natural := 2**CACHE_LINE_WIDTH_BITS;
 constant CACHE_LINE_MEM_WORDS    : natural := 2**(CACHE_LINE_WIDTH_BITS-CACHE_MEM_WIDTH_BITS);

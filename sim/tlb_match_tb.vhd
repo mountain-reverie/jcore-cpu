@@ -9,11 +9,13 @@ architecture sim of tlb_match_tb is
   signal clk      : std_logic := '0';
   signal i_va     : std_logic_vector(31 downto 0) := (others => '0');
   signal i_pa_tag : std_logic_vector(14 downto 0);
+  signal i_c      : std_logic;
   signal i_hit    : std_logic;
   signal i_prot   : std_logic;
   signal d_va     : std_logic_vector(31 downto 0) := (others => '0');
   signal d_we     : std_logic := '0';
   signal d_pa_tag : std_logic_vector(14 downto 0);
+  signal d_c      : std_logic;
   signal d_hit    : std_logic;
   signal d_prot   : std_logic;
   signal asid     : std_logic_vector(15 downto 0) := x"0001";
@@ -61,8 +63,8 @@ begin
   uut: entity work.tlb
     port map (
       clk      => clk,
-      i_va     => i_va, i_pa_tag => i_pa_tag, i_hit => i_hit, i_prot => i_prot,
-      d_va     => d_va, d_we => d_we, d_pa_tag => d_pa_tag, d_hit => d_hit, d_prot => d_prot,
+      i_va     => i_va, i_pa_tag => i_pa_tag, i_c => i_c, i_hit => i_hit, i_prot => i_prot,
+      d_va     => d_va, d_we => d_we, d_pa_tag => d_pa_tag, d_c => d_c, d_hit => d_hit, d_prot => d_prot,
       asid     => asid, md => md, at => at,
       tlb_wr   => tlb_wr, pteh_vpn => pteh_vpn, ptel => ptel, asidr => asidr,
       ti       => ti
@@ -92,6 +94,16 @@ begin
     -- pa_tag = ppn1(27 downto 13) = PA[27:13] = 15 bits (28-bit cache region)
     assert i_pa_tag = ppn1(27 downto 13)
       report "T1: wrong PA tag" severity failure;
+    assert i_c = '1'
+      report "T1: i_c should reflect installed C=1 bit" severity failure;
+
+    -- ---- Test 1b: C-bit export tracks PTEL[3] (install C=0) ----
+    install(tlb_wr, pteh_vpn, ptel, asidr, clk,
+            x"00005", ppn1, x"0001", "11100000");  -- c=bit3=0
+    i_va <= x"00005000";  asid <= x"0001";
+    wait for 1 ns;
+    assert i_hit = '1' report "T1b: miss on installed C=0 entry" severity failure;
+    assert i_c = '0' report "T1b: i_c should be 0 for C=0 entry" severity failure;
 
     -- ---- Test 2: VPN bit flip → miss ----
     i_va <= x"00002000";

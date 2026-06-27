@@ -7,7 +7,7 @@ OUTPUT_ARCH(sh)
 
 MEMORY
 {
-	ram    : o = 0x00000000, l = 0x14000
+	ram    : o = 0x00000000, l = 0x200000
 	stack  : o = 0x00007d00, l = 0x0300
 }
 

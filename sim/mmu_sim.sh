@@ -6,7 +6,7 @@
 # LDTLB.R, ...) live in the J4 OVERLAY decoder. A plain `make -C decode generate`
 # (base decoder) build silently OMITS every MMU instruction -> LDTLB decodes to
 # nothing -> the TLB never installs -> every MMU guard fails or hangs (and
-# mmucolor "passes" vacuously). The cosim MUST be built after
+# coverage-style guards can "pass" vacuously). The cosim MUST be built after
 # `make -C decode generate-j4`. This script does that, builds, runs, and then
 # RESTORES the committed base decoder on exit (committed tables must stay base;
 # committing J4-overlay tables is a known Fmax regression -- see
@@ -78,9 +78,11 @@ if [ $# -ge 1 ]; then
   # Single guard. Default the top + stop-time for the known cache/long guards.
   name="$1"; top="${2:-}"; stop="${3:-}"
   case "$name" in
-    mmucolor)   top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmuicolor)  top="${top:-cpu_cache_tb}"; stop="${stop:-400us}" ;;
     mmudcbit)   top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
+    mmureloc)   top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
+    mmurelocif) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
+    mmurelocbp) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     m8_dside)   stop="${stop:-200us}" ;;
     m8_ifetch_*) stop="${stop:-12ms}" ;;
   esac
@@ -94,9 +96,11 @@ else
     run_guard "$t"
   done
   echo "== cache guards (cpu_cache_tb) =="
-  run_guard mmucolor  cpu_cache_tb 200us
-  run_guard mmuicolor cpu_cache_tb 400us
-  run_guard mmudcbit  cpu_cache_tb 200us
+  run_guard mmuicolor  cpu_cache_tb 400us
+  run_guard mmudcbit   cpu_cache_tb 200us
+  run_guard mmureloc   cpu_cache_tb 200us
+  run_guard mmurelocif cpu_cache_tb 200us
+  run_guard mmurelocbp cpu_cache_tb 200us
   echo "== M8 fault-coverage sweep =="
   run_guard m8_dside    "" 200us
   run_guard m8_macarith

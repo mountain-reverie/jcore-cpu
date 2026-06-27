@@ -46,6 +46,7 @@ begin
     for k in 0 to 31 loop
       entry := ram(k);
       if entry.valid = '1'
+         and entry.stale = '0'  -- STALE (PTEL[1]) = software soft-invalidate
          and entry.vpn = i_va(31 downto 12)
          and (entry.global = '1' or entry.asid_tag = asid) then
         hit_found := '1';
@@ -77,6 +78,7 @@ begin
     for k in 0 to 31 loop
       entry := ram(k);
       if entry.valid = '1'
+         and entry.stale = '0'  -- STALE (PTEL[1]) = software soft-invalidate
          and entry.vpn = d_va(31 downto 12)
          and (entry.global = '1' or entry.asid_tag = asid) then
         hit_found := '1';

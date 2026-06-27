@@ -151,7 +151,6 @@ _v_store:                               ! = VBR + 0x440
         mov     #0, r0
         .word   0x407E                  ! LDC r0, ASIDR
         .word   0x0068                  ! LDTLB.RN -- install + return atomically
-        nop                             ! delay slot
 _h_fail_spin:
         bra     _h_fail_spin
         nop

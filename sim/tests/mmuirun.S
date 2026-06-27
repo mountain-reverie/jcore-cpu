@@ -340,7 +340,6 @@ _h_common:
         mov.l   r5, @r4
         .word   0x436E                  ! LDC r3, PTEL
         .word   0x0068                  ! LDTLB.RN  (install + return atomically)
-        nop                             ! delay slot
 
         ! ---- Slow path: call the C walker. ----
 _h_slow:
@@ -356,7 +355,6 @@ _h_slow:
         lds.l   @r15+, pr
         .word   0x406E                  ! LDC r0, PTEL
         .word   0x0068                  ! LDTLB.RN
-        nop
 
 _h_realfault:
         lds.l   @r15+, pr

@@ -192,6 +192,10 @@ jobs:
           done
           # VIPT page-coloring runs the CPU through the live D-cache (cpu_cache_tb).
           run_guard mmucolor cpu_cache_tb
+          # I-side cacheability: instruction fetches run through the live I-cache
+          # (cpu_cache_tb); proves a C=0 translated page bypasses the icache (fresh
+          # self-modified code) vs a C=1 page caches (stale). 400us to complete.
+          run_guard mmuicolor cpu_cache_tb "" 400us
           # M8 D-side fault-transparency sweep (34 cases; needs 200us to complete).
           run_guard m8_dside "" 200us
           # M8 MAC-arithmetic guard (short, 80us is sufficient).
@@ -210,4 +214,4 @@ jobs:
           run_guard m8_ifetch_2 "" 12ms 240
 
           [ "$fail" = 0 ] || { echo "==> functional guards FAILED" >&2; exit 1; }
-          echo "==> all 30 priv-arch + MMU functional guards PASSED"
+          echo "==> all 31 priv-arch + MMU functional guards PASSED"

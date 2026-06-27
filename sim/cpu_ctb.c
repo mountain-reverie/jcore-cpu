@@ -278,6 +278,18 @@ struct mem_map if_bus_stack_map = {
   },
 };
 
+/* P2 (0xA00xxxxx) uncached alias of the image (mmap_ptr1): an AT-on uncached
+   store mutates the same backing RAM the icache fetches from. Enables the
+   I-cache staleness guard (mmuicolor.S). offset = addr - 0xA0000000. */
+struct mem_map mem_bus_p2_map = {
+  .range = {
+    .start = 0xA0000000,
+    .end   = 0xA0000000,   /* set to 0xA0000000 + image size at runtime */
+    .read_fn  = mmap_read,
+    .write_fn = mmap_write,
+  },
+};
+
 int dump_stack(struct mem_bus *bus, struct mem_range *range, uint32_t addr,
                int num_bytes, uint32_t val,
                uint32_t *ack_delay, uint32_t *drop_ack_delay) {
@@ -850,6 +862,8 @@ int main(int argc, char **argv) {
   mem_bus_map.range.end = sb.st_size;
   if_bus_map.ptr = mmap_ptr1;
   if_bus_map.range.end = sb.st_size;
+  mem_bus_p2_map.ptr = mmap_ptr1;
+  mem_bus_p2_map.range.end = 0xA0000000 + sb.st_size;
   mem_bus_stack_map.ptr = mmap_ptr2;
   mem_bus_stack_map.range.start = sb.st_size;
   if_bus_stack_map.ptr = mmap_ptr2;
@@ -857,6 +871,7 @@ int main(int argc, char **argv) {
   printf("mapped file %s to memory [0x%08X-0x%08X)\n",
          img_file_name, mem_bus_map.range.start, mem_bus_map.range.end);
   mem_bus_range_add(&sram_bus, &mem_bus_map.range);
+  mem_bus_range_add(&sram_bus, &mem_bus_p2_map.range);
   mem_bus_range_add(&if_bus, &if_bus_map.range);
 
   mem_bus_range_add(&sram_bus, &mem_bus_stack_map.range);

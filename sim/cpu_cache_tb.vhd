@@ -249,6 +249,10 @@ begin
 
   cpu_i_mmu <= (pa_tag => cpu_mmu.i_pa_tag, at => cpu_mmu.i_at, c => cpu_mmu.i_c);
 
+  -- NOTE: u_imux's memory side (instr_mem_o/instr_mem_i) is wired to the
+  -- instruction memory only in the CONFIG_PREFETCHER=0 (#else) router above.
+  -- If the prefetcher path is ever revived, u_imux must be wired there too
+  -- (or #if-guarded), else instruction fetch stalls with no ack.
   u_imux : entity work.icache_cacheable_mux
     port map (
       clk125       => clk,

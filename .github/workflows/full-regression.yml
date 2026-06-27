@@ -196,6 +196,9 @@ jobs:
           # (cpu_cache_tb); proves a C=0 translated page bypasses the icache (fresh
           # self-modified code) vs a C=1 page caches (stale). 400us to complete.
           run_guard mmuicolor cpu_cache_tb 400us
+          # D-side: a translated C=1 page caches a data read (stale after a P2
+          # self-modify) vs a C=0 page bypasses (fresh). 200us to complete.
+          run_guard mmudcbit cpu_cache_tb 200us
           # M8 D-side fault-transparency sweep (34 cases; needs 200us to complete).
           run_guard m8_dside "" 200us
           # M8 MAC-arithmetic guard (short, 80us is sufficient).
@@ -214,4 +217,4 @@ jobs:
           run_guard m8_ifetch_2 "" 12ms 240
 
           [ "$fail" = 0 ] || { echo "==> functional guards FAILED" >&2; exit 1; }
-          echo "==> all 31 priv-arch + MMU functional guards PASSED"
+          echo "==> all 32 priv-arch + MMU functional guards PASSED"

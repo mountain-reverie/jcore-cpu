@@ -80,6 +80,7 @@ if [ $# -ge 1 ]; then
   case "$name" in
     mmucolor)   top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmuicolor)  top="${top:-cpu_cache_tb}"; stop="${stop:-400us}" ;;
+    mmudcbit)   top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     m8_dside)   stop="${stop:-200us}" ;;
     m8_ifetch_*) stop="${stop:-12ms}" ;;
   esac
@@ -95,6 +96,7 @@ else
   echo "== cache guards (cpu_cache_tb) =="
   run_guard mmucolor  cpu_cache_tb 200us
   run_guard mmuicolor cpu_cache_tb 400us
+  run_guard mmudcbit  cpu_cache_tb 200us
   echo "== M8 fault-coverage sweep =="
   run_guard m8_dside    "" 200us
   run_guard m8_macarith

@@ -101,13 +101,13 @@ jobs:
 
   # Assembly functional guards: the priv-arch + MMU exception tests in
   # sim/tests/*.S. These need BOTH the SH cross-toolchain (sh2-elf-gcc, to build
-  # the test .img) AND -- for mmucolor -- the jcore-soc cache/memory_tech_lib
+  # the test .img) AND -- for the cpu_cache_tb guards -- the jcore-soc cache/memory_tech_lib
   # deps. pr-quick has neither, so the guards run here (heavy-toolchain
   # container + mountain-reverie/jcore-soc). This job DOES run per-PR (it is the
   # MMU CI gate); only the heavy 8-step regression.sh job above is PR-gated off. Without this job, none of the
   # exception-path work (per-access-type vectors, EXPEVT persistence, RTE return
   # from a TLB exception, D-store fault detection + write suppression, IMISS TEA
-  # capture, SR-state-on-entry, VIPT page-coloring) is exercised in CI.
+  # capture, SR-state-on-entry, PIPT address relocation) is exercised in CI.
   functional-guards:
     name: priv-arch + MMU functional guards
     runs-on: ubuntu-24.04
@@ -151,13 +151,13 @@ jobs:
             exit 1
           fi
           # The dcache CCL/MCL cores are .vhm templates; preprocess to .vhd via
-          # jcore-soc's v2p so cpu_cache_tb (mmucolor) elaborates on a clean CI
+          # jcore-soc's v2p so cpu_cache_tb elaborates on a clean CI
           # checkout (same as sim/cache_sim.sh / synth).
           for f in cache/dcache_ccl cache/dcache_mcl; do
             LD_LIBRARY_PATH='' perl "$JCORE_SOC/tools/v2p" < "$f.vhm" > "$f.vhd"
           done
           # One MMU-on build provides BOTH cpu_tb (the 16 cpu_ctb guards) and
-          # cpu_cache_tb (mmucolor, selected at run time via SIM_TOP).
+          # cpu_cache_tb (cache-side guards, selected at run time via SIM_TOP).
           cd sim
           rm -f work-obj93.cf cpu_tb.vhh cpu_ctb
           make TOOLS_DIR="$TOOLS_DIR" JCORE_SOC="$JCORE_SOC" \
@@ -190,8 +190,6 @@ jobs:
                    mmurun mmuirun mmuainc mmuainc2; do
             run_guard "$t"
           done
-          # VIPT page-coloring runs the CPU through the live D-cache (cpu_cache_tb).
-          run_guard mmucolor cpu_cache_tb
           # I-side cacheability: instruction fetches run through the live I-cache
           # (cpu_cache_tb); proves a C=0 translated page bypasses the icache (fresh
           # self-modified code) vs a C=1 page caches (stale). 400us to complete.
@@ -199,6 +197,12 @@ jobs:
           # D-side: a translated C=1 page caches a data read (stale after a P2
           # self-modify) vs a C=0 page bypasses (fresh). 200us to complete.
           run_guard mmudcbit cpu_cache_tb 200us
+          # PIPT address relocation (cpu_cache_tb): a non-identity map (VPN 0x4 ->
+          # PPN 0x6) must read/write/fetch the PPN's physical page, not the VA's.
+          # D-store/load, I-fetch, and the C=0 uncacheable bypass.
+          run_guard mmureloc   cpu_cache_tb 200us
+          run_guard mmurelocif cpu_cache_tb 200us
+          run_guard mmurelocbp cpu_cache_tb 200us
           # M8 D-side fault-transparency sweep (34 cases; needs 200us to complete).
           run_guard m8_dside "" 200us
           # M8 MAC-arithmetic guard (short, 80us is sufficient).
@@ -217,4 +221,4 @@ jobs:
           run_guard m8_ifetch_2 "" 12ms 240
 
           [ "$fail" = 0 ] || { echo "==> functional guards FAILED" >&2; exit 1; }
-          echo "==> all 32 priv-arch + MMU functional guards PASSED"
+          echo "==> all 36 priv-arch + MMU functional guards PASSED"

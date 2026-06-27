@@ -70,7 +70,7 @@ kmain:
         mov.l   k_pgd0, r1             ! 0x80002401
         mov.l   r1, @r0
 
-        ! ---- Build the four PTEs (PTEL images: backing PA | 0x3F1). ----
+        ! ---- Build the four PTEs (PTEL images: backing PA | 0x0F1). ----
         mov.l   k_pteA, r0 ; mov.l v_pteA, r1 ; mov.l r1, @r0
         mov.l   k_pteB, r0 ; mov.l v_pteB, r1 ; mov.l r1, @r0
         mov.l   k_pteC, r0 ; mov.l v_pteC, r1 ; mov.l r1, @r0
@@ -141,10 +141,10 @@ k_pteA:    .long 0x80002800
 k_pteB:    .long 0x80002804
 k_pteC:    .long 0x80002808
 k_pteD:    .long 0x8000280C
-v_pteA:    .long 0x001003F1    ! identity PTE: PA(==VA) | flags 0x3F1
-v_pteB:    .long 0x001013F1
-v_pteC:    .long 0x001023F1
-v_pteD:    .long 0x001033F1
+v_pteA:    .long 0x001000F1    ! identity PTE: PA(==VA) | flags 0x0F1 (W|X|U|D|V; bits[11:8]=0 → pm=0)
+v_pteB:    .long 0x001010F1
+v_pteC:    .long 0x001020F1
+v_pteD:    .long 0x001030F1
 k_tsb:     .long 0x80002C00
 k_bkA:     .long 0x00100000    ! identity backing == workload VA (seed direct, AT off)
 k_bkB:     .long 0x00101000

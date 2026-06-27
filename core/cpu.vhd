@@ -75,6 +75,8 @@ architecture stru of cpu is
    signal tlb_d_pa        : std_logic_vector(14 downto 0);
    signal tlb_i_pa12      : std_logic;
    signal tlb_d_pa12      : std_logic;
+   signal tlb_i_page_mask : std_logic_vector(3 downto 0);
+   signal tlb_d_page_mask : std_logic_vector(3 downto 0);
    signal tlb_i_c         : std_logic;
    signal tlb_d_c         : std_logic;
    -- TLB exception detection outputs (fed to decode and datapath).
@@ -161,7 +163,9 @@ begin
 
   g_dstore_squash : if MMU_ARCH generate
     process(sig_db_o, d_store_faulting, d_at_translated, tlb_d_hit,
-            tlb_d_pa, tlb_d_pa12)
+            tlb_d_pa, tlb_d_pa12, tlb_d_page_mask)
+      variable offm   : std_logic_vector(15 downto 0);
+      variable ppn_lo : std_logic_vector(15 downto 0);
     begin
       db_o <= sig_db_o;
       if d_store_faulting = '1' then
@@ -174,14 +178,12 @@ begin
       if sig_db_o.a(31 downto 29) = "100" then
         db_o.a(31 downto 29) <= "000";
       elsif d_at_translated = '1' and tlb_d_hit = '1' then
-        -- P0/P3 translated HIT: relocate VA->PA (PIPT; docs/architecture/tlb.md
-        -- §1,§3). PA[27:13]=pa_tag,
-        -- PA[12]=ppn(12); keep VA[11:0] (page offset); zero PA[31:28] (28-bit
-        -- region). On a TLB miss the VA is kept (faulting access -> behaviour
-        -- byte-identical to the non-relocating base; precise-exception guards).
+        -- Variable-page relocation (docs/architecture/tlb.md). Per PA bit 12+p:
+        -- VA (in-page offset) if p < 2*pm, else PPN (frame). PA[11:0]=VA, [31:28]=0.
+        offm   := page_offset_mask(tlb_d_page_mask);
+        ppn_lo := tlb_d_pa & tlb_d_pa12;   -- PPN[27:12]: bit15=PPN[27] .. bit0=PPN[12]
         db_o.a(31 downto 28) <= "0000";
-        db_o.a(27 downto 13) <= tlb_d_pa;
-        db_o.a(12)           <= tlb_d_pa12;
+        db_o.a(27 downto 12) <= (ppn_lo and not offm) or (sig_db_o.a(27 downto 12) and offm);
       end if;
     end process;
   end generate g_dstore_squash;
@@ -194,17 +196,18 @@ begin
     -- inst_o.a is PA[31:1] (indices preserved 31..1, not reindexed), so P1 is
     -- a(31 downto 29)="100". Fold AFTER i_va_32 has sampled sig_inst_o.a, so
     -- seg_decode still sees the true P1 VA.
-    process(sig_inst_o, i_at_translated, tlb_i_hit, tlb_i_pa, tlb_i_pa12)
+    process(sig_inst_o, i_at_translated, tlb_i_hit, tlb_i_pa, tlb_i_pa12, tlb_i_page_mask)
+      variable offm   : std_logic_vector(15 downto 0);
+      variable ppn_lo : std_logic_vector(15 downto 0);
     begin
       inst_o <= sig_inst_o;
       if sig_inst_o.a(31 downto 29) = "100" then
         inst_o.a(31 downto 29) <= "000";
       elsif i_at_translated = '1' and tlb_i_hit = '1' then
-        -- P0/P3 translated I-fetch HIT: relocate VA->PA (PIPT). inst_o.a is
-        -- PA[31:1]. On an I-side TLB miss the VA is kept (access will fault).
+        offm   := page_offset_mask(tlb_i_page_mask);
+        ppn_lo := tlb_i_pa & tlb_i_pa12;
         inst_o.a(31 downto 28) <= "0000";
-        inst_o.a(27 downto 13) <= tlb_i_pa;
-        inst_o.a(12)           <= tlb_i_pa12;
+        inst_o.a(27 downto 12) <= (ppn_lo and not offm) or (sig_inst_o.a(27 downto 12) and offm);
       end if;
     end process;
   end generate g_inst_p1_fold;
@@ -241,16 +244,18 @@ begin
       port map (
         clk      => clk,
         i_va     => i_va_32,
-        i_pa_tag => tlb_i_pa,
-        i_pa12   => tlb_i_pa12,
-        i_c      => tlb_i_c,
+        i_pa_tag    => tlb_i_pa,
+        i_pa12      => tlb_i_pa12,
+        i_page_mask => tlb_i_page_mask,
+        i_c         => tlb_i_c,
         i_hit    => tlb_i_hit,
         i_prot   => tlb_i_prot,
         d_va     => d_va_32,
         d_we     => sig_db_o.wr,
-        d_pa_tag => tlb_d_pa,
-        d_pa12   => tlb_d_pa12,
-        d_c      => tlb_d_c,
+        d_pa_tag    => tlb_d_pa,
+        d_pa12      => tlb_d_pa12,
+        d_page_mask => tlb_d_page_mask,
+        d_c         => tlb_d_c,
         d_hit    => tlb_d_hit,
         d_prot   => tlb_d_prot,
         asid     => dp_mmu_regs.asidr(15 downto 0),

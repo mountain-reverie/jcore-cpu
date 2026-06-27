@@ -86,7 +86,7 @@ kmain:
         mov.l   k_pgd0, r1            ! 0x80002401
         mov.l   r1, @r0
 
-        ! ---- Build the one PTE (PTEL image: backing PA | 0x3F1). ----
+        ! ---- Build the one PTE (PTEL image: backing PA | 0x0F1). ----
         mov.l   k_pteA, r0 ; mov.l v_pteA, r1 ; mov.l r1, @r0
 
         ! ---- Zero the 16-entry TSB (64 words). ----
@@ -153,7 +153,7 @@ p_rbclear: .long 0xDFFFFFFF
 k_pgd:     .long 0x80002000
 k_pgd0:    .long 0x80002401
 k_pteA:    .long 0x80002800
-v_pteA:    .long 0x001003F1    ! identity PTE: PA(==VA) | flags 0x3F1
+v_pteA:    .long 0x001000F1    ! identity PTE: PA(==VA) | flags 0x0F1 (W,X,U,D,V; bits[11:8]=0 → pm=0)
 k_tsb:     .long 0x80002C00
 k_bkA:     .long 0x00100000    ! identity backing == workload VA (seed direct, AT off)
 v_seedA:   .long 0xA11C0001

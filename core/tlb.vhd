@@ -33,19 +33,21 @@ entity tlb is
     clk      : in  std_logic;
     -- I-side (instruction fetch) lookup: VA in, translation + status out.
     i_va     : in  std_logic_vector(31 downto 0);
-    i_pa_tag : out std_logic_vector(14 downto 0);  -- PA[27:13] of the hit entry
-    i_pa12   : out std_logic;                       -- PA[12] (PIPT relocation)
-    i_c      : out std_logic;                       -- cacheable (PTE.C)
-    i_hit    : out std_logic;                       -- usable match found
-    i_prot   : out std_logic;                       -- hit but permission violated
+    i_pa_tag    : out std_logic_vector(14 downto 0);  -- PA[27:13] of the hit entry
+    i_pa12      : out std_logic;                       -- PA[12] (PIPT relocation)
+    i_page_mask : out std_logic_vector(3 downto 0);   -- PageMask of the hit entry
+    i_c         : out std_logic;                       -- cacheable (PTE.C)
+    i_hit       : out std_logic;                       -- usable match found
+    i_prot      : out std_logic;                       -- hit but permission violated
     -- D-side (load/store) lookup; d_we=1 marks the access a store (W check).
     d_va     : in  std_logic_vector(31 downto 0);
     d_we     : in  std_logic;
-    d_pa_tag : out std_logic_vector(14 downto 0);
-    d_pa12   : out std_logic;
-    d_c      : out std_logic;
-    d_hit    : out std_logic;
-    d_prot   : out std_logic;
+    d_pa_tag    : out std_logic_vector(14 downto 0);
+    d_pa12      : out std_logic;
+    d_page_mask : out std_logic_vector(3 downto 0);
+    d_c         : out std_logic;
+    d_hit       : out std_logic;
+    d_prot      : out std_logic;
     -- Current context + mode for the lookup.
     asid     : in  std_logic_vector(15 downto 0);   -- live ASIDR (lookup tag)
     md       : in  std_logic;                       -- SR.MD (1=privileged)
@@ -71,34 +73,38 @@ begin
   -- Note: on a multi-hit the last (highest-index) match wins; software must not
   -- install duplicate VPN+ASID entries.
   process(ram, i_va, asid, md)
-    variable entry     : tlb_entry_t;
-    variable hit_found : std_logic;
-    variable hit_pa    : std_logic_vector(14 downto 0);
-    variable hit_pa12  : std_logic;
-    variable hit_c     : std_logic;
-    variable prot      : std_logic;
+    variable entry         : tlb_entry_t;
+    variable hit_found     : std_logic;
+    variable hit_pa        : std_logic_vector(14 downto 0);
+    variable hit_pa12      : std_logic;
+    variable hit_page_mask : std_logic_vector(3 downto 0);
+    variable hit_c         : std_logic;
+    variable prot          : std_logic;
   begin
-    hit_found := '0'; hit_pa := (others => '0'); hit_pa12 := '0'; hit_c := '0'; prot := '0';
+    hit_found := '0'; hit_pa := (others => '0'); hit_pa12 := '0';
+    hit_page_mask := (others => '0'); hit_c := '0'; prot := '0';
     for k in 0 to 31 loop
       entry := ram(k);
       if entry.valid = '1'
          and entry.stale = '0'  -- STALE (PTEL[1]) = SW soft-invalidate/revocation (mmustale)
-         and entry.vpn = i_va(31 downto 12)
+         and ((entry.vpn xor i_va(31 downto 12)) and vpn_compare_mask(entry.page_mask)) = (entry.vpn'range => '0')
          and (entry.global = '1' or entry.asid_tag = asid) then  -- ASID isolation (mmuasid)
-        hit_found := '1';
-        hit_pa    := entry.ppn(27 downto 13);  -- PA[27:13] = 15-bit relocation tag
-        hit_pa12  := entry.ppn(12);            -- PA[12] (PIPT relocation, mmurelocif)
-        hit_c     := entry.c;
+        hit_found     := '1';
+        hit_pa        := entry.ppn(27 downto 13);  -- PA[27:13] = 15-bit relocation tag
+        hit_pa12      := entry.ppn(12);            -- PA[12] (PIPT relocation, mmurelocif)
+        hit_page_mask := entry.page_mask;
+        hit_c         := entry.c;
         if entry.x = '0' or (entry.u = '0' and md = '0') then  -- X / user-on-super (mmufault)
           prot := '1';
         end if;
       end if;
     end loop;
-    i_hit    <= hit_found;
-    i_pa_tag <= hit_pa;
-    i_pa12   <= hit_pa12;
-    i_c      <= hit_c;
-    i_prot   <= prot and hit_found;  -- prot only meaningful on a hit
+    i_hit       <= hit_found;
+    i_pa_tag    <= hit_pa;
+    i_pa12      <= hit_pa12;
+    i_page_mask <= hit_page_mask;
+    i_c         <= hit_c;
+    i_prot      <= prot and hit_found;  -- prot only meaningful on a hit
   end process;
 
   -- Combinational D-lookup (load/store). Same isolation predicate as the I-side.
@@ -108,34 +114,38 @@ begin
   -- bypass). There is no separate read bit (readability = U for user, else
   -- kernel). See docs/architecture/tlb.md §3; guard mmufault (DPROT_R/DPROT_W).
   process(ram, d_va, d_we, asid, md)
-    variable entry     : tlb_entry_t;
-    variable hit_found : std_logic;
-    variable hit_pa    : std_logic_vector(14 downto 0);
-    variable hit_pa12  : std_logic;
-    variable hit_c     : std_logic;
-    variable prot      : std_logic;
+    variable entry         : tlb_entry_t;
+    variable hit_found     : std_logic;
+    variable hit_pa        : std_logic_vector(14 downto 0);
+    variable hit_pa12      : std_logic;
+    variable hit_page_mask : std_logic_vector(3 downto 0);
+    variable hit_c         : std_logic;
+    variable prot          : std_logic;
   begin
-    hit_found := '0'; hit_pa := (others => '0'); hit_pa12 := '0'; hit_c := '0'; prot := '0';
+    hit_found := '0'; hit_pa := (others => '0'); hit_pa12 := '0';
+    hit_page_mask := (others => '0'); hit_c := '0'; prot := '0';
     for k in 0 to 31 loop
       entry := ram(k);
       if entry.valid = '1'
          and entry.stale = '0'  -- STALE (PTEL[1]) = software soft-invalidate
-         and entry.vpn = d_va(31 downto 12)
+         and ((entry.vpn xor d_va(31 downto 12)) and vpn_compare_mask(entry.page_mask)) = (entry.vpn'range => '0')
          and (entry.global = '1' or entry.asid_tag = asid) then
-        hit_found := '1';
-        hit_pa    := entry.ppn(27 downto 13);
-        hit_pa12  := entry.ppn(12);            -- PA[12] (PIPT relocation)
-        hit_c     := entry.c;
+        hit_found     := '1';
+        hit_pa        := entry.ppn(27 downto 13);
+        hit_pa12      := entry.ppn(12);            -- PA[12] (PIPT relocation)
+        hit_page_mask := entry.page_mask;
+        hit_c         := entry.c;
         if (entry.u = '0' and md = '0') or (d_we = '1' and entry.w = '0') then
           prot := '1';
         end if;
       end if;
     end loop;
-    d_hit    <= hit_found;
-    d_pa_tag <= hit_pa;
-    d_pa12   <= hit_pa12;
-    d_c      <= hit_c;
-    d_prot   <= prot and hit_found;
+    d_hit       <= hit_found;
+    d_pa_tag    <= hit_pa;
+    d_pa12      <= hit_pa12;
+    d_page_mask <= hit_page_mask;
+    d_c         <= hit_c;
+    d_prot      <= prot and hit_found;
   end process;
 
   -- Clocked install (LDTLB) + MMUCR.TI flush. TI clears VALID (and the NRU
@@ -181,7 +191,7 @@ begin
         ram(idx).used      <= '1';
         ram(idx).vpn       <= pteh_vpn;
         ram(idx).asid_tag  <= asidr;
-        ram(idx).page_mask <= (others => '0');
+        ram(idx).page_mask <= ptel(11 downto 8);
         ram(idx).ppn       <= ptel(31 downto 10);
         ram(idx).w         <= ptel(7);
         ram(idx).x         <= ptel(6);

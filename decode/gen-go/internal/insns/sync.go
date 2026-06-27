@@ -42,6 +42,16 @@ func Sync(d *Doc, vds []VariantData) (*Report, error) {
 	}
 	var pending []pend
 
+	// Reset every variant column on existing rows to false; the match loop below
+	// re-marks only the rows an actual instruction maps to. This clears stale
+	// flags when an instruction stops matching a row — e.g. NOTT, after J4's
+	// LDTLB.RN is surfaced as its own row instead of folding into NOTT.
+	for _, r := range d.Rows {
+		for _, vd := range vds {
+			setColsFalse(r, vd.Variant.Name)
+		}
+	}
+
 	for _, vd := range vds {
 		for _, in := range vd.Set.Order {
 			k, _ := KeyOf(in.Opcode)
@@ -57,17 +67,19 @@ func Sync(d *Doc, vds []VariantData) (*Report, error) {
 			if err != nil {
 				return nil, err
 			}
+			if row == nil {
+				// The lone candidate row is a DIFFERENT instruction that merely
+				// shares this encoding (e.g. J4 LDTLB.RN over SH-2A NOTT at 0x0068).
+				// Append it as a distinct row so it is surfaced, and let
+				// annotateCollides link the two by shared encoding.
+				if !seenKey[k] {
+					seenKey[k] = true
+					pending = append(pending, pend{in, vd, k})
+				}
+				continue
+			}
 			setCols(row, vd, vd.Set.ByKey[k])
 			matched[row] = true
-		}
-	}
-
-	// Any variant column not set on a row defaults to false/0:
-	for _, r := range d.Rows {
-		for _, vd := range vds {
-			if _, ok := r.Get(vd.Variant.Name); !ok {
-				setColsFalse(r, vd.Variant.Name)
-			}
 		}
 	}
 
@@ -139,9 +151,28 @@ func annotateCollides(d *Doc) {
 	}
 }
 
+// pickRow chooses the doc row that a J-core spec instruction belongs to, or
+// returns (nil, nil) to signal "no match — append as a distinct row".
+//
+// Single candidate: a match only if its opcode mnemonic agrees with the spec
+// instruction's. A lone SH-reference row whose mnemonic differs means the J-core
+// op merely REUSES the encoding for a different instruction (collision) and must
+// be surfaced separately, not folded in. (Bucket A/B notation differences — e.g.
+// the "ldtbl" typo, or MMU regs over DSP control regs — share the mnemonic and
+// stay folded.)
+//
+// Multiple candidates: the encoding is shared within the SH dataset itself; pick
+// by full mnemonic identity to choose WHICH same-key row is ours. That is a
+// distinct question from the single-candidate match-vs-append decision, so it
+// uses full NormAsm equality rather than mnemonic-only.
 func pickRow(cands []*Row, in spec.Instr) (*Row, error) {
 	if len(cands) == 1 {
-		return cands[0], nil
+		f, _ := cands[0].Get("format")
+		fs, _ := f.(string)
+		if mnemonicOf(fs) == mnemonicOf(in.Name) {
+			return cands[0], nil
+		}
+		return nil, nil
 	}
 	want := NormAsm(in.Name)
 	var hit *Row

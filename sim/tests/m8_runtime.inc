@@ -157,7 +157,7 @@ k_pgd0:    .long 0x80002401
 k_pteA:    .long 0x80002800
 v_pteA:    .long 0x001003F1    ! identity PTE: PA(==VA) | flags 0x3F1
 k_pteB:    .long 0x80002804    ! pte_tab[0x101] (= 0x80002400 + 0x101*4)
-v_pteB:    .long 0x101003F1    ! identity PTE for VA 0x00101000
+v_pteB:    .long 0x001013F1    ! identity PTE for VA 0x00101000 (PA in PTEL[31:10])
 k_tsb:     .long 0x80002C00
 k_vbr:     .long 0x80000000 + _vbase
 k_tsbbr_a: .long 0xFF000014

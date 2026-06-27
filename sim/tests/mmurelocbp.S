@@ -31,7 +31,7 @@ ENTRY(start)
         mov     #0, r0
         .word   0x407E
         .word   0x0038
-        ! VPN 0x4 (VA 0x4000) -> PPN 0x6 (PA 0x6000), C=1
+        ! VPN 0x4 (VA 0x4000) -> PPN 0x6 (PA 0x6000), C=0 (uncacheable bypass)
         mov.l   p_pteh_x, r0           ! 0x00004000
         .word   0x405E
         mov.l   p_ptel_y, r0           ! PA 0x6000 | 0xE0 = 0x000060E0 (C=0, bypass)

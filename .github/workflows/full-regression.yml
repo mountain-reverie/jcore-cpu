@@ -195,7 +195,7 @@ jobs:
           # I-side cacheability: instruction fetches run through the live I-cache
           # (cpu_cache_tb); proves a C=0 translated page bypasses the icache (fresh
           # self-modified code) vs a C=1 page caches (stale). 400us to complete.
-          run_guard mmuicolor cpu_cache_tb "" 400us
+          run_guard mmuicolor cpu_cache_tb 400us
           # M8 D-side fault-transparency sweep (34 cases; needs 200us to complete).
           run_guard m8_dside "" 200us
           # M8 MAC-arithmetic guard (short, 80us is sufficient).

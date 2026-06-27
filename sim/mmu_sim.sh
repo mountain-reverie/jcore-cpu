@@ -92,7 +92,7 @@ else
   for t in exctest trapatest pm3vec pm3guard privmode banktest excguard \
            rteredir mmureg mmuguard mmuxlate mmurte mmustore mmuimiss \
            mmusr mmufault mmuldtlbr mmutsb mmuidx mmustres mmustr2 \
-           mmustale mmurun mmuirun mmuainc mmuainc2; do
+           mmustale mmuasid mmurun mmuirun mmuainc mmuainc2; do
     run_guard "$t"
   done
   echo "== cache guards (cpu_cache_tb) =="

@@ -174,7 +174,8 @@ begin
       if sig_db_o.a(31 downto 29) = "100" then
         db_o.a(31 downto 29) <= "000";
       elsif d_at_translated = '1' and tlb_d_hit = '1' then
-        -- P0/P3 translated HIT: relocate VA->PA (PIPT). PA[27:13]=pa_tag,
+        -- P0/P3 translated HIT: relocate VA->PA (PIPT; docs/architecture/tlb.md
+        -- §1,§3). PA[27:13]=pa_tag,
         -- PA[12]=ppn(12); keep VA[11:0] (page offset); zero PA[31:28] (28-bit
         -- region). On a TLB miss the VA is kept (faulting access -> behaviour
         -- byte-identical to the non-relocating base; precise-exception guards).

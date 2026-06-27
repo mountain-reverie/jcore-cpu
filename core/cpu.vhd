@@ -193,11 +193,17 @@ begin
     -- inst_o.a is PA[31:1] (indices preserved 31..1, not reindexed), so P1 is
     -- a(31 downto 29)="100". Fold AFTER i_va_32 has sampled sig_inst_o.a, so
     -- seg_decode still sees the true P1 VA.
-    process(sig_inst_o)
+    process(sig_inst_o, i_at_translated, tlb_i_hit, tlb_i_pa, tlb_i_pa12)
     begin
       inst_o <= sig_inst_o;
       if sig_inst_o.a(31 downto 29) = "100" then
         inst_o.a(31 downto 29) <= "000";
+      elsif i_at_translated = '1' and tlb_i_hit = '1' then
+        -- P0/P3 translated I-fetch HIT: relocate VA->PA (PIPT). inst_o.a is
+        -- PA[31:1]. On an I-side TLB miss the VA is kept (access will fault).
+        inst_o.a(31 downto 28) <= "0000";
+        inst_o.a(27 downto 13) <= tlb_i_pa;
+        inst_o.a(12)           <= tlb_i_pa12;
       end if;
     end process;
   end generate g_inst_p1_fold;

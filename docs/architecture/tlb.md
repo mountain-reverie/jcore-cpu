@@ -260,7 +260,70 @@ the design repository's `docs/mmu/security-review.md`.
 
 ---
 
-## 10. Glossary
+## 10. Historical references & prior art
+
+The J4 TLB is a deliberately conservative design that re-uses decades-old,
+well-understood mechanisms. The lineage of each major choice:
+
+**Software-loaded / software-managed TLBs.** J4 has no hardware page-table
+walker: a miss traps to software that installs the entry. This is the
+software-refilled TLB tradition pioneered by RISC architectures.
+- **MIPS** R2000/R3000/R4000 — the canonical software-refilled TLB (hardware
+  raises a refill exception; software walks the tables and issues `TLBWR`).
+  [MIPS architecture (Wikipedia)](https://en.wikipedia.org/wiki/MIPS_architecture)
+- **DEC Alpha** — TLB fill in PALcode (privileged firmware), another fully
+  software-managed model. [DEC Alpha (Wikipedia)](https://en.wikipedia.org/wiki/DEC_Alpha)
+- Nagle, Uhlig, Stanley, Sechrest, Mudge & Brown, *"Design Tradeoffs for
+  Software-Managed TLBs,"* ISCA 1993 — the classic performance analysis of the
+  approach J4 follows.
+  [ACM DL](https://dl.acm.org/doi/10.1145/165123.165128)
+- General background:
+  [Translation lookaside buffer (Wikipedia)](https://en.wikipedia.org/wiki/Translation_lookaside_buffer)
+
+**Context registers / ASID tagging.** `ASIDR` is a per-context register that
+hardware reads on every translation, independent of how TLB entries are
+programmed — so a context switch is a single register write, not a TLB flush.
+- **SPARC v9 / UltraSPARC** `PRIMARY_CONTEXT` & `SECONDARY_CONTEXT` (sun4u,
+  ASI `0x21`, 1995) — the direct model for `ASIDR`.
+  [SPARC (Wikipedia)](https://en.wikipedia.org/wiki/SPARC)
+
+**SuperH / SH-4 lineage.** The privileged architecture J4 implements (MD mode,
+banked registers, the SPC/SSR exception model, `MMUCR`/`PTEH`/`PTEL`, a
+software-assisted TLB) is the SH-4 compatibility target, built on the open
+J-core SH-2 clean-room core.
+- [SuperH (Wikipedia)](https://en.wikipedia.org/wiki/SuperH)
+- [J-core open processor project](https://j-core.org/)
+
+**Cache indexing (VIPT → PIPT).** J4's L1 caches are now physically indexed and
+tagged, removing the virtual-synonym hazards (and page-colouring requirement) of
+a virtually-indexed cache.
+- [CPU cache — indexing/tagging (Wikipedia)](https://en.wikipedia.org/wiki/CPU_cache#Address_translation)
+
+**Page-split / multi-word instruction faults.** The rule that an instruction
+fetch fault must report the instruction's *first-word* PC (so a multi-word unit
+restarts cleanly) follows the **Intel 386** (1985), which validated page-split
+instructions against the instruction's start address.
+- [Intel 80386 (Wikipedia)](https://en.wikipedia.org/wiki/I386)
+
+**Isolation-attack history** (full analysis and applicability in
+`docs/mmu/security-review.md`):
+- Transient-execution class — neutralized by J4's in-order, non-speculative
+  design. [Transient execution CPU vulnerability (Wikipedia)](https://en.wikipedia.org/wiki/Transient_execution_CPU_vulnerability)
+- **TLBleed** — Gras et al., USENIX Security 2018 (TLB side channel).
+  [paper](https://www.usenix.org/conference/usenixsecurity18/presentation/gras) ·
+  [project](https://www.vusec.net/projects/tlbleed/)
+- **AnC ("ASLR⊕Cache")** — Gras et al., NDSS 2017 (hardware-page-walker cache
+  attack; does not apply to a software walker).
+  [project](https://www.vusec.net/projects/anc/)
+- **Controlled-channel attacks** — Xu, Cui & Peinado, IEEE S&P 2015
+  (page-fault-sequence oracle).
+- **Rowhammer** — Kim et al., ISCA 2014 (DRAM disturbance; the one physical
+  threat the core's properties do not mitigate).
+  [Row hammer (Wikipedia)](https://en.wikipedia.org/wiki/Row_hammer)
+
+---
+
+## 11. Glossary
 
 | Term | Meaning |
 |---|---|

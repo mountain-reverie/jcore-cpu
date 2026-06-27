@@ -257,3 +257,42 @@ the design repository's `docs/mmu/security-review.md`.
   exception-vector encodings.
 - `docs/mmu/{design,hardware,linux}-spec.md` and `docs/mmu/security-review.md`
   (design repository) — the full architectural specification and security review.
+
+---
+
+## 10. Glossary
+
+| Term | Meaning |
+|---|---|
+| **AT** | Address-translation enable, `MMUCR` bit 0. When `0`, all accesses are physical (no TLB); when `1`, P0/P3 accesses are translated. |
+| **ASID** | Address Space Identifier — the 12-bit per-context tag that distinguishes one tenant's address space from another. |
+| **ASID_TAG** | The 16-bit value actually stored in a TLB entry and compared on lookup: the 12-bit ASID plus a 4-bit generation discriminator, kernel-encoded. |
+| **ASIDR** | The privileged register holding the **current** context's `ASID_TAG`. Written on every context switch; it is both the lookup tag and the tag stamped onto installed entries. |
+| **C (cacheable)** | PTE bit selecting whether a page is accessed through the L1 cache (`C=1`) or via uncached bypass to memory (`C=0`). |
+| **CAM** | Content-Addressable Memory — the parallel-match structure the 32-entry TLB is built from. |
+| **D (dirty)** | PTE bit marking a page as written. Loaded into the entry but not enforced by hardware in the reference build. |
+| **DMISS_R / DMISS_W** | Data TLB miss on a load / store (vectors `0x060` / `0x080`). |
+| **DPROT_R / DPROT_W** | Data protection violation on a load / store of a mapped page (vector `0x0C0`). |
+| **EXPEVT** | Exception-event (cause) register; privileged-read. Holds the code identifying which exception was taken. |
+| **G (global)** | PTE bit making an entry match regardless of `ASID_TAG`. For kernel-shared pages only. |
+| **IMISS / IPROT** | Instruction-fetch TLB miss (`0x040`) / protection violation (`0x0A0`). |
+| **LDTLB** | The TLB-install instruction (`0x0038`): latches `{ASIDR, PTEH.VPN, PTEL}` into an NRU-chosen entry. |
+| **LDTLB.RN** | Fused *load-TLB-and-return* (`0x0068`): an atomic `LDTLB`+`RTE` with **no** delay slot, used by the miss handler to install and resume in one step. |
+| **MD** | `SR.MD`, the mode bit: `1` = privileged (kernel), `0` = user. Gates the `U` permission check and access to privileged registers/instructions. |
+| **MMUCR** | MMU Control Register (P4 MMIO `0xFF00_0010`): `AT` (bit 0) enables translation, `TI` (bit 2) flushes the TLB. |
+| **NRU** | Not-Recently-Used — the TLB's replacement policy for choosing which entry `LDTLB` overwrites. |
+| **P0–P4** | The SH-4 virtual segments: P0 (`0x0…`) user+kernel translated; P1 (`0x8…`) kernel cached physical window; P2 (`0xA…`) kernel uncached physical window; P3 (`0xC…`) kernel translated; P4 (`0xE…/0xF…`) privileged control/MMIO. |
+| **PA / VA** | Physical address / Virtual address. |
+| **PIPT** | Physically-Indexed, Physically-Tagged cache: the cache is indexed and tagged with the physical address (after TLB relocation), so no page-colouring is needed. |
+| **PPN / VPN** | Physical / Virtual Page Number — the page-aligned high bits of a PA / VA. |
+| **PTE** | Page Table Entry — the software description of a mapping; its fields are loaded into a TLB entry via `PTEH`/`PTEL`. |
+| **PTEH / PTEL** | Privileged registers staging a TLB install: PTEH carries the VPN, PTEL the PPN plus permission/attribute flags. |
+| **STALE** | PTE bit (`PTEL[1]`) marking an entry soft-invalidated/revoked. **Hardware-enforced:** a `STALE=1` entry never hits. |
+| **SR** | Status Register; holds `MD` (mode), `RB` (register-bank select), `BL` (exception block), and the interrupt mask. |
+| **TCB** | Trusted Computing Base — here, the privileged kernel that owns the page tables, ASID allocation, and the miss handler. |
+| **TEA** | TLB Exception Address register; privileged-read. Holds the faulting virtual address. |
+| **TI** | TLB Invalidate — `MMUCR` bit 2; writing it clears `VALID` on every entry (full flush). |
+| **TLB-desync** | A stale TLB entry that outlives the mapping it describes (page freed/reassigned/permission-downgraded without invalidation) — the dominant cross-tenant risk of a software-loaded TLB. |
+| **TSB** | Translation Storage Buffer — an in-memory hash table of recent translations the software miss handler consults before a full page-table walk. |
+| **U / W / X** | Per-page permission bits: User-accessible / Writable / eXecutable. |
+| **V (valid)** | PTE bit marking a TLB entry as occupied/usable. |

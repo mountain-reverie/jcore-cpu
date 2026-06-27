@@ -160,7 +160,8 @@ begin
                       else '0';
 
   g_dstore_squash : if MMU_ARCH generate
-    process(sig_db_o, d_store_faulting, d_at_translated, tlb_d_pa, tlb_d_pa12)
+    process(sig_db_o, d_store_faulting, d_at_translated, tlb_d_hit,
+            tlb_d_pa, tlb_d_pa12)
     begin
       db_o <= sig_db_o;
       if d_store_faulting = '1' then
@@ -172,9 +173,12 @@ begin
       -- the sim result MMIO at 0xBCDE0010 and must pass through unmasked).
       if sig_db_o.a(31 downto 29) = "100" then
         db_o.a(31 downto 29) <= "000";
-      elsif d_at_translated = '1' then
-        -- P0/P3 translated: relocate VA->PA (PIPT). PA[27:13]=pa_tag, PA[12]=
-        -- ppn[12]; keep VA[11:0] (page offset); zero PA[31:28] (28-bit region).
+      elsif d_at_translated = '1' and tlb_d_hit = '1' then
+        -- P0/P3 translated HIT: relocate VA->PA (PIPT). PA[27:13]=pa_tag,
+        -- PA[12]=ppn[12]; keep VA[11:0] (page offset); zero PA[31:28] (28-bit
+        -- region). On a TLB miss/fault the VA is kept (tlb_d_pa is invalid and
+        -- the access is faulting anyway) so faulting-access behaviour is
+        -- byte-identical to the non-relocating base (m8 fault oracle).
         db_o.a(31 downto 28) <= "0000";
         db_o.a(27 downto 13) <= tlb_d_pa;
         db_o.a(12)           <= tlb_d_pa12;
@@ -190,13 +194,14 @@ begin
     -- inst_o.a is PA[31:1] (indices preserved 31..1, not reindexed), so P1 is
     -- a(31 downto 29)="100". Fold AFTER i_va_32 has sampled sig_inst_o.a, so
     -- seg_decode still sees the true P1 VA.
-    process(sig_inst_o, i_at_translated, tlb_i_pa, tlb_i_pa12)
+    process(sig_inst_o, i_at_translated, tlb_i_hit, tlb_i_pa, tlb_i_pa12)
     begin
       inst_o <= sig_inst_o;
       if sig_inst_o.a(31 downto 29) = "100" then
         inst_o.a(31 downto 29) <= "000";
-      elsif i_at_translated = '1' then
-        -- P0/P3 translated I-fetch: relocate VA->PA (PIPT). inst_o.a is PA[31:1].
+      elsif i_at_translated = '1' and tlb_i_hit = '1' then
+        -- P0/P3 translated I-fetch HIT: relocate VA->PA (PIPT). inst_o.a is
+        -- PA[31:1]. On an I-side TLB miss the VA is kept (access will fault).
         inst_o.a(31 downto 28) <= "0000";
         inst_o.a(27 downto 13) <= tlb_i_pa;
         inst_o.a(12)           <= tlb_i_pa12;

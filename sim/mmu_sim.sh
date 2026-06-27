@@ -85,6 +85,7 @@ if [ $# -ge 1 ]; then
     mmupage1m)   top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmupagemix)  top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmupagemix2) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
+    mmupagewalk) top="${top:-cpu_cache_tb}"; stop="${stop:-300us}" ;;
     mmureloc)   top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmurelocif) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmurelocbp) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
@@ -111,6 +112,7 @@ else
   run_guard mmupage1m   cpu_cache_tb 200us
   run_guard mmupagemix  cpu_cache_tb 200us
   run_guard mmupagemix2 cpu_cache_tb 200us
+  run_guard mmupagewalk cpu_cache_tb 300us
   echo "== M8 fault-coverage sweep =="
   run_guard m8_dside    "" 200us
   run_guard m8_macarith

@@ -80,6 +80,7 @@ if [ $# -ge 1 ]; then
   case "$name" in
     mmuicolor)  top="${top:-cpu_cache_tb}"; stop="${stop:-400us}" ;;
     mmudcbit)   top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
+    mmupage16k) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmureloc)   top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmurelocif) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmurelocbp) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;

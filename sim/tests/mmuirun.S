@@ -1,7 +1,7 @@
 ! mmuirun.S -- M7: run instructions from a TRANSLATED page through the
 ! runnable §4.2 handler. Kernel (code/handler/walker/PGD/PTE/TSB/counters)
 ! lives in P1 (untranslated). One P0 CODE page (VA 0x00100000, identity-backed
-! at PA 0x00100000, PTE flags 0x3F1 incl. EXEC) holds a small workload that is
+! at PA 0x00100000, PTE flags 0x0F1 incl. EXEC; bits[11:8]=0 → pm=0) holds a small workload that is
 ! COPIED there (AT off) before AT is enabled. With AT on, jmp to VA 0x00100000
 ! -> cold IMISS (VBR+0x400) -> walker installs I-PTE -> LDTLB.RN re-fetches the
 ! faulting instruction -> workload runs (writes ran_flag) -> jmp back to P1.
@@ -67,7 +67,7 @@ kmain:
         mov.l   k_pgd0, r1             ! 0x80002401
         mov.l   r1, @r0
 
-        ! ---- Build the one code PTE (PTEL image: PA | 0x3F1 incl. EXEC). ----
+        ! ---- Build the one code PTE (PTEL image: PA | 0x0F1 incl. EXEC). ----
         mov.l   k_pte, r0 ; mov.l v_pte, r1 ; mov.l r1, @r0
 
         ! ---- Build the data PTE for the mixed-leg load page (VA 0x00102000). ----
@@ -254,9 +254,9 @@ p_rbclear: .long 0xDFFFFFFF
 k_pgd:     .long 0x80002000
 k_pgd0:    .long 0x80002401
 k_pte:     .long 0x80002800           ! PTE table[idx(0x00100000)=0x100] = 0x80002400+0x400
-v_pte:     .long 0x001003F1           ! identity PTE: PA(==VA) | flags 0x3F1 (incl EXEC)
+v_pte:     .long 0x001000F1           ! identity PTE: PA(==VA) | flags 0x0F1 (incl EXEC; bits[11:8]=0 → pm=0)
 k_pteData: .long 0x80002808           ! PTE table[idx(0x00102000)=0x102] = 0x80002400+0x408
-v_pteData: .long 0x001023F1           ! identity PTE for data page (same flags as code)
+v_pteData: .long 0x001020F1           ! identity PTE for data page (same flags; bits[11:8]=0 → pm=0)
 k_bkData:  .long 0x00102000           ! identity backing == data VA (seed direct, AT off)
 v_seedData:.long 0xDA7A0003           ! seed for the mixed-leg translated load
 va_data:   .long 0x00102000           ! mixed-leg load VA (translated when AT on)

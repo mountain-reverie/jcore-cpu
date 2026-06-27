@@ -271,6 +271,13 @@ function logic_update_sr(
 
 function is_zero(a : std_logic_vector) return std_logic;
 
+-- PageMask helpers (MMU_ARCH variable page sizes, docs/architecture/tlb.md).
+-- page_offset_mask: bit p = '1' iff PA bit 12+p is within the page offset (use VA).
+--   pm: 0=4KB(0 extra bits) 1=16KB(2) 2=64KB(4) ... 8=256MB(16) 9+=1GB(18, capped).
+function page_offset_mask(pm : std_logic_vector(3 downto 0)) return std_logic_vector;
+-- vpn_compare_mask: 20-bit mask over VPN (bit p = VA bit 12+p). '1'=compared, '0'=in-page.
+function vpn_compare_mask(pm : std_logic_vector(3 downto 0)) return std_logic_vector;
+
 function bshifter(a,b : std_logic_vector; c : std_logic; ops : shiftfunc_t) return std_logic_vector;
 function manip(x, y : std_logic_vector(31 downto 0); func : alumanip_t)
   return std_logic_vector;
@@ -322,6 +329,37 @@ function is_zero(a : std_logic_vector) return std_logic is
 begin
   return not or_reduce(a);
 end;
+
+function page_offset_mask(pm : std_logic_vector(3 downto 0)) return std_logic_vector is
+  variable n : integer range 0 to 16;
+  variable m : std_logic_vector(15 downto 0) := (others => '0');
+begin
+  case pm is
+    when "0000" => n := 0;   when "0001" => n := 2;   when "0010" => n := 4;
+    when "0011" => n := 6;   when "0100" => n := 8;   when "0101" => n := 10;
+    when "0110" => n := 12;  when "0111" => n := 14;  when others => n := 16;
+  end case;
+  for p in 0 to 15 loop
+    if p < n then m(p) := '1'; end if;  -- bit 12+p is in-page offset -> use VA
+  end loop;
+  return m;
+end function;
+
+function vpn_compare_mask(pm : std_logic_vector(3 downto 0)) return std_logic_vector is
+  variable n : integer range 0 to 20;
+  variable m : std_logic_vector(19 downto 0) := (others => '1');
+begin
+  case pm is
+    when "0000" => n := 0;   when "0001" => n := 2;   when "0010" => n := 4;
+    when "0011" => n := 6;   when "0100" => n := 8;   when "0101" => n := 10;
+    when "0110" => n := 12;  when "0111" => n := 14;  when "1000" => n := 16;
+    when "1001" => n := 18;  when others => n := 20;
+  end case;
+  for p in 0 to 19 loop
+    if p < n then m(p) := '0'; end if;  -- in-page VPN bit -> ignore
+  end loop;
+  return m;
+end function;
 
 -- xor every bit in vector a by bit b
 function xor_all(a : std_logic_vector; b : std_logic) return std_logic_vector is

@@ -33,14 +33,14 @@
 ! After the LAST case returns, `kmain` writes 0 -> "Test Passed".
 !
 ! Fixed workload page: VA 0x00100000 (page index 0x100), identity PTE
-! 0x001003F1 (V/R/W/X + flags), so VA==PA and stores/loads are simple.
+! 0x001000F1 (V/R/W/X + flags; bits[11:8]=0 → pm=0), so VA==PA and stores/loads are simple.
 !
 ! Scratch / fixed addresses:
 !   SNAP_A           0x80003000   (P1, untranslated)
 !   SNAP_B           0x80003100   (P1, untranslated)
 !   ctlsv            0x80003200   (PrivMem D-side control-reg baseline save slot)
 !   PGD              0x80002000 -> PTE table base 0x80002400 (PGD[0]=0x80002401)
-!   PTE for 0x00100  0x80002800   (= pte_tab[0x100])  value 0x001003F1
+!   PTE for 0x00100  0x80002800   (= pte_tab[0x100])  value 0x001000F1
 !   TSB (16 entries) 0x80002C00
 !   stack            0x80002F00
 !   MMUCR            0xFF000010  (flush: |TI keep AT -> write 0x5)
@@ -115,7 +115,7 @@ kmain:
         mov.l   k_pgd0, r1             ! 0x80002401
         mov.l   r1, @r0
 
-        ! ---- Build the PTEs (PTEL image: backing PA | 0x3F1). Two adjacent
+        ! ---- Build the PTEs (PTEL image: backing PA | 0x0F1). Two adjacent
         ! identity pages: 0x100 (workload) and 0x101 (MAC dual-base second
         ! operand, so the two @Rm+/@Rn+ accesses fault on DISTINCT cold pages). ----
         mov.l   k_pteA, r0 ; mov.l v_pteA, r1 ; mov.l r1, @r0
@@ -155,9 +155,9 @@ p_rbclear: .long 0xDFFFFFFF
 k_pgd:     .long 0x80002000
 k_pgd0:    .long 0x80002401
 k_pteA:    .long 0x80002800
-v_pteA:    .long 0x001003F1    ! identity PTE: PA(==VA) | flags 0x3F1
+v_pteA:    .long 0x001000F1    ! identity PTE: PA(==VA) | flags 0x0F1 (W,X,U,D,V; bits[11:8]=0 → pm=0)
 k_pteB:    .long 0x80002804    ! pte_tab[0x101] (= 0x80002400 + 0x101*4)
-v_pteB:    .long 0x001013F1    ! identity PTE for VA 0x00101000 (PA in PTEL[31:10])
+v_pteB:    .long 0x001010F1    ! identity PTE for VA 0x00101000 (PA in PTEL[31:10])
 k_tsb:     .long 0x80002C00
 k_vbr:     .long 0x80000000 + _vbase
 k_tsbbr_a: .long 0xFF000014

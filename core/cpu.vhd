@@ -73,6 +73,8 @@ architecture stru of cpu is
    signal d_at_translated : std_logic;
    signal tlb_i_pa        : std_logic_vector(14 downto 0);
    signal tlb_d_pa        : std_logic_vector(14 downto 0);
+   signal tlb_i_pa12      : std_logic;
+   signal tlb_d_pa12      : std_logic;
    signal tlb_i_c         : std_logic;
    signal tlb_d_c         : std_logic;
    -- TLB exception detection outputs (fed to decode and datapath).
@@ -158,7 +160,7 @@ begin
                       else '0';
 
   g_dstore_squash : if MMU_ARCH generate
-    process(sig_db_o, d_store_faulting)
+    process(sig_db_o, d_store_faulting, d_at_translated, tlb_d_pa, tlb_d_pa12)
     begin
       db_o <= sig_db_o;
       if d_store_faulting = '1' then
@@ -170,6 +172,12 @@ begin
       -- the sim result MMIO at 0xBCDE0010 and must pass through unmasked).
       if sig_db_o.a(31 downto 29) = "100" then
         db_o.a(31 downto 29) <= "000";
+      elsif d_at_translated = '1' then
+        -- P0/P3 translated: relocate VA->PA (PIPT). PA[27:13]=pa_tag, PA[12]=
+        -- ppn[12]; keep VA[11:0] (page offset); zero PA[31:28] (28-bit region).
+        db_o.a(31 downto 28) <= "0000";
+        db_o.a(27 downto 13) <= tlb_d_pa;
+        db_o.a(12)           <= tlb_d_pa12;
       end if;
     end process;
   end generate g_dstore_squash;
@@ -182,11 +190,16 @@ begin
     -- inst_o.a is PA[31:1] (indices preserved 31..1, not reindexed), so P1 is
     -- a(31 downto 29)="100". Fold AFTER i_va_32 has sampled sig_inst_o.a, so
     -- seg_decode still sees the true P1 VA.
-    process(sig_inst_o)
+    process(sig_inst_o, i_at_translated, tlb_i_pa, tlb_i_pa12)
     begin
       inst_o <= sig_inst_o;
       if sig_inst_o.a(31 downto 29) = "100" then
         inst_o.a(31 downto 29) <= "000";
+      elsif i_at_translated = '1' then
+        -- P0/P3 translated I-fetch: relocate VA->PA (PIPT). inst_o.a is PA[31:1].
+        inst_o.a(31 downto 28) <= "0000";
+        inst_o.a(27 downto 13) <= tlb_i_pa;
+        inst_o.a(12)           <= tlb_i_pa12;
       end if;
     end process;
   end generate g_inst_p1_fold;
@@ -224,12 +237,14 @@ begin
         clk      => clk,
         i_va     => i_va_32,
         i_pa_tag => tlb_i_pa,
+        i_pa12   => tlb_i_pa12,
         i_c      => tlb_i_c,
         i_hit    => tlb_i_hit,
         i_prot   => tlb_i_prot,
         d_va     => d_va_32,
         d_we     => sig_db_o.wr,
         d_pa_tag => tlb_d_pa,
+        d_pa12   => tlb_d_pa12,
         d_c      => tlb_d_c,
         d_hit    => tlb_d_hit,
         d_prot   => tlb_d_prot,

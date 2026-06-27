@@ -80,9 +80,11 @@ if [ $# -ge 1 ]; then
   case "$name" in
     mmuicolor)  top="${top:-cpu_cache_tb}"; stop="${stop:-400us}" ;;
     mmudcbit)   top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
-    mmupage16k) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
-    mmupage64k) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
-    mmupage1m)  top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
+    mmupage16k)  top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
+    mmupage64k)  top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
+    mmupage1m)   top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
+    mmupagemix)  top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
+    mmupagemix2) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmureloc)   top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmurelocif) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmurelocbp) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
@@ -104,9 +106,11 @@ else
   run_guard mmureloc   cpu_cache_tb 200us
   run_guard mmurelocif cpu_cache_tb 200us
   run_guard mmurelocbp cpu_cache_tb 200us
-  run_guard mmupage16k cpu_cache_tb 200us
-  run_guard mmupage64k cpu_cache_tb 200us
-  run_guard mmupage1m  cpu_cache_tb 200us
+  run_guard mmupage16k  cpu_cache_tb 200us
+  run_guard mmupage64k  cpu_cache_tb 200us
+  run_guard mmupage1m   cpu_cache_tb 200us
+  run_guard mmupagemix  cpu_cache_tb 200us
+  run_guard mmupagemix2 cpu_cache_tb 200us
   echo "== M8 fault-coverage sweep =="
   run_guard m8_dside    "" 200us
   run_guard m8_macarith

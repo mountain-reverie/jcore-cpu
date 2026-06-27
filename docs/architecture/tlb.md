@@ -23,7 +23,10 @@ hardware block view and synthesis cost see [j4.md](j4.md); the RTL is
   important design fact: *translation correctness, permission setup, and
   invalidation are entirely software's responsibility* — the hardware only
   matches, enforces the installed permissions, and relocates.
-- **Fixed 4 KB pages** (the reference J32 build).
+- **4 KB base; variable up to 1 GB via the per-entry PageMask field at `PTEL[11:8]`.**
+  pm=0 gives 4 KB (the common case), pm=1 gives 16 KB, pm=2 gives 64 KB, pm=3
+  gives 1 MB, and so on in powers of four up to 1 GB.  The comparison is a masked
+  VPN check; the relocation offset width scales with pm.
 - **Parallel I-side and D-side lookup**, combinational, every cycle an access is
   presented. A hit costs no extra cycles; a miss faults.
 - **Physically-indexed caches (PIPT).** On a hit the virtual address is relocated
@@ -47,7 +50,8 @@ The fields, and what each means to software:
 
 | Field | Source | Meaning (software view) |
 |---|---|---|
-| `VPN` | `PTEH[31:12]` | Virtual page number tag. Captured by hardware on a miss at 4 KB granularity. |
+| `VPN` | `PTEH[31:12]` | Virtual page number tag. Captured by hardware on a miss at 4 KB granularity. The match compares only the bits unmasked by `PageMask`; the masked (sub-page) bits are preserved for PA relocation. |
+| `PageMask` | `PTEL[11:8]` | Per-entry page size selector. `0`=4 KB, `1`=16 KB, `2`=64 KB, `3`=1 MB, … up to 1 GB. Controls how many low VPN bits are masked out of the compare and passed through as the PA offset. |
 | `ASID_TAG` | `ASIDR[15:0]` | The owning context tag (12-bit ASID + 4-bit generation, kernel-encoded). An entry is private to this tag unless `GLOBAL`. |
 | `PPN` | `PTEL[31:10]` | Physical page number. `PA = PPN << 10` (low bits from the virtual offset). |
 | `V` (valid) | `PTEL[0]` | Entry occupied. Cleared by reset and by the `MMUCR.TI` flush. |
@@ -77,8 +81,13 @@ implements W^X by never setting both on the same page.
 On every access (with `AT=1` and a translated segment) the TLB evaluates, per side:
 
 ```
-hit  = VALID ∧ (STALE = 0) ∧ (VPN = VA[31:12]) ∧ (GLOBAL ∨ ASID_TAG = ASIDR)
+hit  = VALID ∧ (STALE = 0) ∧ ((VPN & ~PageMask) = (VA[31:12] & ~PageMask)) ∧ (GLOBAL ∨ ASID_TAG = ASIDR)
 ```
+
+The VPN compare is **masked by the entry's `PageMask`**: bits within the page are
+zeroed before comparison, so a single entry covers the entire large page.  On a
+hit, the relocation offset is `VA[11+2*pm:0]` (the unmasked sub-page bits), so the
+correct physical byte within the large page is addressed.
 
 Only on a **hit** is the permission predicate evaluated. A violation raises the
 access-type protection exception and **suppresses the memory effect** (a faulting
@@ -244,6 +253,18 @@ the design repository's `docs/mmu/security-review.md`.
 | Privileged-register / instruction trap | `mmureg`, `mmuguard`, `privmode` |
 | SR / bank state on exception entry | `mmusr` |
 | Precise-exception fault transparency (MAC, auto-inc, …) | `m8_*` family |
+| Variable page size (PageMask) | `mmupage4k`, `mmupage16k`, `mmupage64k`, `mmupage1m`, `mmupagemix`, `mmupagemix2`, `mmupagewalk` |
+
+> **Multi-hit with variable page sizes — documented limitation.**  The TLB's
+> multi-hit resolution is **last-(highest-index)-slot-wins**: if two entries both
+> match a VA (e.g. a 4 KB entry whose VPN falls inside a live 1 MB hugepage),
+> whichever slot has the higher index wins the combinational priority and supplies
+> the PA.  There is **no hardware multi-hit detection or fault** — the result is
+> deterministic but architecturally incorrect.  Software must not install
+> overlapping entries; in particular, splitting or remapping a hugepage requires
+> first invalidating (STALE or TI flush) the existing large-page entry before
+> installing the smaller replacements.  This invariant is more important now that
+> page sizes can span several orders of magnitude.
 
 ---
 

@@ -203,6 +203,14 @@ jobs:
           run_guard mmureloc   cpu_cache_tb 200us
           run_guard mmurelocif cpu_cache_tb 200us
           run_guard mmurelocbp cpu_cache_tb 200us
+          # Variable page size guards: 4 KB control (pm=0, two distinct frames),
+          # 16 KB / 64 KB / 1 MB single-size, and mixed-install-order pairs.
+          run_guard mmupage4k   cpu_cache_tb 200us
+          run_guard mmupage16k  cpu_cache_tb 200us
+          run_guard mmupage64k  cpu_cache_tb 200us
+          run_guard mmupage1m   cpu_cache_tb 200us
+          run_guard mmupagemix  cpu_cache_tb 200us
+          run_guard mmupagemix2 cpu_cache_tb 200us
           # Realistic DMISS_W handler: fault on a store to an unmapped 16 KB
           # page, handler installs PTEL with pm=1 and RTEs to re-execute the
           # store through the new mapping. 300us stop-time for handler latency.
@@ -225,4 +233,4 @@ jobs:
           run_guard m8_ifetch_2 "" 12ms 240
 
           [ "$fail" = 0 ] || { echo "==> functional guards FAILED" >&2; exit 1; }
-          echo "==> all 38 priv-arch + MMU functional guards PASSED"
+          echo "==> all 45 priv-arch + MMU functional guards PASSED"

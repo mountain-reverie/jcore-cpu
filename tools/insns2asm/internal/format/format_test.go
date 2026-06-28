@@ -35,3 +35,14 @@ func TestParseR0Indexed(t *testing.T) {
 		t.Errorf("operands %#v", p.Operands)
 	}
 }
+
+func TestParseSpaceSeparatedFormat(t *testing.T) {
+	// SH-2A bit insns use multiple spaces instead of a tab.
+	p := Parse("bclr       #imm3,Rn")
+	if p.Mnemonic != "bclr" {
+		t.Errorf("mnemonic = %q, want bclr", p.Mnemonic)
+	}
+	if !reflect.DeepEqual(p.Operands, []string{"#imm3", "Rn"}) {
+		t.Errorf("operands = %#v, want [#imm3 Rn]", p.Operands)
+	}
+}

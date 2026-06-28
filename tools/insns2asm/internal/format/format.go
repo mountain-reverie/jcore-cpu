@@ -11,14 +11,14 @@ type Parsed struct {
 	Operands []string
 }
 
-// Parse splits format on the first tab, then the operand list on top-level commas.
+// Parse splits format on the first whitespace (tab or space), then the operand list on top-level commas.
 func Parse(formatStr string) Parsed {
-	tab := strings.IndexByte(formatStr, '\t')
-	if tab < 0 {
+	i := strings.IndexAny(formatStr, " \t")
+	if i < 0 {
 		return Parsed{Mnemonic: strings.TrimSpace(formatStr)}
 	}
-	mnem := strings.TrimSpace(formatStr[:tab])
-	rest := formatStr[tab+1:]
+	mnem := strings.TrimSpace(formatStr[:i])
+	rest := strings.TrimLeft(formatStr[i:], " \t")
 	return Parsed{Mnemonic: mnem, Operands: splitTopLevel(rest)}
 }
 

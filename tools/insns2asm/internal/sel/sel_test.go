@@ -63,11 +63,21 @@ func TestIs1aSimpleAcceptsRegisterOnlyMemory(t *testing.T) {
 func TestIs1aSimpleRejectsFixedMemAndTwoWord(t *testing.T) {
 	for _, r := range []loader.RawInsn{
 		{Group: "Data Transfer Instructions", Format: "movi20\t#imm20,Rn", Code: "0000nnnniiii0000 iiiiiiiiiiiiiiii", SH2A: true},
-		{Group: "Data Transfer Instructions", Format: "movml.l\tRm,@-R15", Code: "0100mmmm11110001", SH2A: true},
-		{Group: "Data Transfer Instructions", Format: "cas.l\tRm,Rn,@R0", Code: "0010nnnnmmmm0011", SH4A: true},
 	} {
 		if Is1aSimple(build(t, r)) {
 			t.Errorf("should be deferred to 1b, not 1a: %s", r.Format)
+		}
+	}
+}
+
+func TestIs1aSimpleAcceptsFixedRegMem(t *testing.T) {
+	for _, r := range []loader.RawInsn{
+		{Group: "Data Transfer Instructions", Format: "movml.l\tRm,@-R15", Code: "0100mmmm11110001", SH2A: true},
+		{Group: "Data Transfer Instructions", Format: "movml.l\t@R15+,Rn", Code: "0100nnnn11110101", SH2A: true},
+		{Group: "Data Transfer Instructions", Format: "cas.l\tRm,Rn,@R0", Code: "0010nnnnmmmm0011", SH4A: true},
+	} {
+		if !Is1aSimple(build(t, r)) {
+			t.Errorf("fixed-reg mem should now be supported: %s", r.Format)
 		}
 	}
 }

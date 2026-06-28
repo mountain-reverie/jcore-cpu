@@ -38,10 +38,35 @@ func sizeLetter(scale int) string {
 }
 
 // boundField is one encoding field that an operand binds to a variable.
+// varName, when non-empty, overrides the LetterVar(letter) name (used for
+// fixed-register memory operands that have no encoding field letter).
 type boundField struct {
-	letter byte
-	fields []encoding.Field // all encoding fields for this letter, in word order (MSB word first)
-	class  string           // TableGen operand class name (e.g. GPR, bdisp12)
+	letter  byte
+	varName string           // synthetic var name override (non-empty for fixed-mem)
+	fields  []encoding.Field // empty for fixed-reg memory (constrained, no encoding)
+	class   string           // TableGen operand class name (e.g. GPR, bdisp12)
+}
+
+// bfVar returns the TableGen variable name for a bound field.
+func bfVar(bf boundField) string {
+	if bf.varName != "" {
+		return bf.varName
+	}
+	return LetterVar(bf.letter)
+}
+
+// fixedMemClass returns the constrained operand class for a fixed-register
+// memory operand (@R0 → MemR0Fixed, @-R15 → MemDecR15, @R15+ → MemIncR15).
+func fixedMemClass(o operand.Operand) string {
+	switch o.Class {
+	case operand.MemReg:
+		return "MemR0Fixed"
+	case operand.MemPreDec:
+		return "MemDecR15"
+	case operand.MemPostInc:
+		return "MemIncR15"
+	}
+	return "MemFixed"
 }
 
 // EmitInstrInfo renders generated operand-class defs followed by one
@@ -81,13 +106,16 @@ func EmitInstrInfo(insns []ir.Insn) string {
 		fmt.Fprintf(&b, "  let Size = %d;\n", 2*len(in.Words))
 		fmt.Fprintf(&b, "  let DecoderNamespace = \"SH\";\n")
 
-		// operand bit variables
+		// operand bit variables (skip fixed-mem: no encoding field)
 		for _, bf := range bfs {
+			if len(bf.fields) == 0 {
+				continue
+			}
 			total := 0
 			for _, f := range bf.fields {
 				total += f.Width
 			}
-			fmt.Fprintf(&b, "  bits<%d> %s;\n", total, LetterVar(bf.letter))
+			fmt.Fprintf(&b, "  bits<%d> %s;\n", total, bfVar(bf))
 		}
 
 		// fixed bits
@@ -101,8 +129,11 @@ func EmitInstrInfo(insns []ir.Insn) string {
 				fmt.Fprintf(&b, "  let Inst{%d} = %d;\n", pos, bit.Val)
 			}
 		}
-		// operand field bindings (high..low LLVM bit numbers)
+		// operand field bindings (high..low LLVM bit numbers); skip fixed-mem
 		for _, bf := range bfs {
+			if len(bf.fields) == 0 {
+				continue
+			}
 			total := 0
 			for _, f := range bf.fields {
 				total += f.Width
@@ -116,9 +147,9 @@ func EmitInstrInfo(insns []ir.Insn) string {
 				varLo := cursor - f.Width + 1
 				cursor -= f.Width
 				if single {
-					fmt.Fprintf(&b, "  let Inst{%d-%d} = %s;\n", instHi, instLo, LetterVar(bf.letter))
+					fmt.Fprintf(&b, "  let Inst{%d-%d} = %s;\n", instHi, instLo, bfVar(bf))
 				} else {
-					fmt.Fprintf(&b, "  let Inst{%d-%d} = %s{%d-%d};\n", instHi, instLo, LetterVar(bf.letter), varHi, varLo)
+					fmt.Fprintf(&b, "  let Inst{%d-%d} = %s{%d-%d};\n", instHi, instLo, bfVar(bf), varHi, varLo)
 				}
 			}
 		}
@@ -170,6 +201,15 @@ func boundFields(in ir.Insn) []boundField {
 				scale := ScaleOf(in.Mnemonic)
 				class := fmt.Sprintf("pcdisp_%s8", sizeLetter(scale))
 				out = append(out, boundField{letter: o.Letter, fields: fs, class: class})
+			}
+		case operand.MemReg, operand.MemPostInc, operand.MemPreDec:
+			if o.Fixed != "" {
+				// Fixed-register memory: constrained class, no encoding field.
+				out = append(out, boundField{varName: "fm", class: fixedMemClass(o)})
+			} else if o.Letter != 0 {
+				if fs := fieldsFor(in, o.Letter); len(fs) > 0 {
+					out = append(out, boundField{letter: o.Letter, fields: fs, class: operandClassName(o)})
+				}
 			}
 		default:
 			if o.Letter == 0 {
@@ -240,7 +280,7 @@ func dispClass(o operand.Operand) string {
 // `def NAME : Operand<i32>;` (i.e. not a builtin or hand-written register class).
 func isGeneratedClass(name string) bool {
 	switch name {
-	case "GPR", "BankReg", "SHImm", "MemDec", "MemR0Idx":
+	case "GPR", "BankReg", "SHImm", "MemDec", "MemR0Idx", "MemR0Fixed", "MemDecR15", "MemIncR15":
 		return false
 	}
 	// Scaled-displacement operand classes are hand-written in SHOperands.td
@@ -256,7 +296,7 @@ func isGeneratedClass(name string) bool {
 func inOperandList(bfs []boundField) string {
 	parts := make([]string, len(bfs))
 	for i, bf := range bfs {
-		parts[i] = fmt.Sprintf("%s:$%s", bf.class, LetterVar(bf.letter))
+		parts[i] = fmt.Sprintf("%s:$%s", bf.class, bfVar(bf))
 	}
 	return strings.Join(parts, ", ")
 }
@@ -321,17 +361,17 @@ func asmOperand(o operand.Operand) string {
 		return "${" + LetterVar(o.Letter) + "}"
 	case operand.MemReg:
 		if o.Fixed != "" {
-			return "@" + strings.ToLower(o.Fixed)
+			return "${fm}"
 		}
 		return "@${" + LetterVar(o.Letter) + "}"
 	case operand.MemPostInc:
 		if o.Fixed != "" {
-			return "@" + strings.ToLower(o.Fixed) + "+"
+			return "${fm}"
 		}
 		return "@${" + LetterVar(o.Letter) + "}+"
 	case operand.MemPreDec:
 		if o.Fixed != "" {
-			return "@-" + strings.ToLower(o.Fixed)
+			return "${fm}"
 		}
 		return "${" + LetterVar(o.Letter) + "}"
 	case operand.MemDisp:

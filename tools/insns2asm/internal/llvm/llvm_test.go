@@ -212,17 +212,17 @@ func TestEmitImmUsesSHImm(t *testing.T) {
 }
 
 func TestEmitFixedRegMemoryOperands(t *testing.T) {
-	// movml.l Rm,@-R15 : MemPreDec with Fixed=R15 -> "@-r15", not "@-$<nul>"
+	// movml.l Rm,@-R15 : MemPreDec with Fixed=R15 -> constrained MemDecR15 operand
 	insns := build(t, loader.RawInsn{
 		Group: "Data Transfer Instructions", Format: "movml.l\tRm,@-R15",
 		Code: "0100mmmm11110001", SH2A: true,
 	})
 	out := EmitInstrInfo(insns)
-	if !strings.Contains(out, `@-r15`) {
-		t.Errorf("expected @-r15 literal:\n%s", out)
+	if !strings.Contains(out, "MemDecR15:$fm") {
+		t.Errorf("expected MemDecR15 constrained operand:\n%s", out)
 	}
-	if strings.Contains(out, "$\x00") || strings.Contains(out, "@-$;") {
-		t.Errorf("malformed fixed-reg AsmString:\n%s", out)
+	if strings.Contains(out, "@-r15") {
+		t.Errorf("@-r15 literal must not appear (PrintMethod owns decoration):\n%s", out)
 	}
 }
 
@@ -247,13 +247,28 @@ func TestEmitVariableBaseMemoryOperands(t *testing.T) {
 	if !strings.Contains(EmitInstrInfo(idx), "MemR0Idx:$rm") {
 		t.Errorf("indexed should use MemR0Idx operand:\n%s", EmitInstrInfo(idx))
 	}
-	// fixed @-R15 stays literal text
+	// fixed @-R15 uses constrained operand class (PrintMethod owns decoration)
 	fx := build(t, loader.RawInsn{
 		Group: "Data Transfer Instructions", Format: "movml.l\tRm,@-R15",
 		Code: "0100mmmm11110001", SH2A: true,
 	})
-	if !strings.Contains(EmitInstrInfo(fx), "@-r15") {
-		t.Errorf("fixed @-R15 stays literal:\n%s", EmitInstrInfo(fx))
+	if !strings.Contains(EmitInstrInfo(fx), "MemDecR15:$fm") {
+		t.Errorf("fixed @-R15 should use MemDecR15 constrained operand:\n%s", EmitInstrInfo(fx))
+	}
+}
+
+func TestEmitConstrainedFixedRegMem(t *testing.T) {
+	// movml.l Rm,@-R15 -> MemDecR15 operand, no @-r15 literal, no field bound for it
+	out := EmitInstrInfo(build(t, loader.RawInsn{Group: "Data Transfer Instructions",
+		Format: "movml.l\tRm,@-R15", Code: "0100mmmm11110001", SH2A: true}))
+	if !strings.Contains(out, "MemDecR15:$") {
+		t.Errorf("expected MemDecR15 operand:\n%s", out)
+	}
+	// cas.l Rm,Rn,@R0 -> MemR0Fixed
+	c := EmitInstrInfo(build(t, loader.RawInsn{Group: "Data Transfer Instructions",
+		Format: "cas.l\tRm,Rn,@R0", Code: "0010nnnnmmmm0011", SH4A: true}))
+	if !strings.Contains(c, "MemR0Fixed:$") {
+		t.Errorf("expected MemR0Fixed operand:\n%s", c)
 	}
 }
 

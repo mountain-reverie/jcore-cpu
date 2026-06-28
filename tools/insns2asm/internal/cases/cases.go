@@ -9,7 +9,6 @@ import (
 
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/encoding"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/ir"
-	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/llvm"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/operand"
 )
 
@@ -75,24 +74,50 @@ func SynthesizeAll(insns []ir.Insn) []Case {
 	return out
 }
 
-// renderAsm fills the emitter's AsmString template (${vars}) with concrete values.
+// renderAsm builds mnemonic + space + comma-joined surface(operand).
 func renderAsm(in ir.Insn, vals map[byte]int) string {
-	s := strings.Replace(llvm.AsmString(in), "\t", " ", 1)
-	for _, o := range in.Operands {
-		if o.Letter == 0 {
-			continue
-		}
-		v := vals[o.Letter]
-		var rep string
-		switch o.Class {
-		case operand.Imm:
-			rep = fmt.Sprintf("#%d", int8(v))
-		default:
-			rep = fmt.Sprintf("r%d", v)
-		}
-		s = strings.ReplaceAll(s, "${"+llvm.LetterVar(o.Letter)+"}", rep)
+	if len(in.Operands) == 0 {
+		return in.Mnemonic
 	}
-	return s
+	parts := make([]string, len(in.Operands))
+	for i, o := range in.Operands {
+		parts[i] = surface(o, vals[o.Letter])
+	}
+	return in.Mnemonic + " " + strings.Join(parts, ", ")
+}
+
+// surface renders one operand's assembly text as the SH AsmParser accepts it.
+// Kept in sync (by convention) with the C++ InstPrinter PrintMethods; the
+// objdump leg of the 3-way oracle validates the agreement.
+func surface(o operand.Operand, val int) string {
+	switch o.Class {
+	case operand.R0Fixed:
+		return "r0"
+	case operand.GPR:
+		return fmt.Sprintf("r%d", val)
+	case operand.Imm:
+		return fmt.Sprintf("#%d", int8(val))
+	case operand.MemReg:
+		if o.Fixed != "" {
+			return "@" + strings.ToLower(o.Fixed)
+		}
+		return fmt.Sprintf("@r%d", val)
+	case operand.MemPostInc:
+		if o.Fixed != "" {
+			return "@" + strings.ToLower(o.Fixed) + "+"
+		}
+		return fmt.Sprintf("@r%d+", val)
+	case operand.MemPreDec:
+		if o.Fixed != "" {
+			return "@-" + strings.ToLower(o.Fixed)
+		}
+		return fmt.Sprintf("@-r%d", val)
+	case operand.MemR0:
+		return fmt.Sprintf("@(r0,r%d)", val)
+	case operand.MemR0GBR:
+		return "@(r0,gbr)"
+	}
+	return o.Token
 }
 
 // renderHex computes the big-endian bytes for one word with fields filled.

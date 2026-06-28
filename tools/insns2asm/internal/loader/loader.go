@@ -1,11 +1,13 @@
 // Package loader reads jcore docs/insns.json into RawInsn records,
-// excluding the DSP family and non-Phase-1 instruction groups.
+// excluding the DSP family and non-emitted instruction groups.
 package loader
 
 import (
 	"encoding/json"
 	"io"
 	"strings"
+
+	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/format"
 )
 
 // RawInsn is one instruction as it appears in insns.json (Phase-1 subset).
@@ -30,37 +32,69 @@ type RawInsn struct {
 	Collides []string `json:"collides"`
 }
 
-var phase1Groups = map[string]bool{
-	"Data Transfer Instructions":       true,
+var emittedGroups = map[string]bool{
+	"Data Transfer Instructions":        true,
 	"Arithmetic Operation Instructions": true,
-	"Logic Operation Instructions":     true,
-	"Shift Instructions":               true,
-	"Bit Manipulation Instructions":    true,
+	"Logic Operation Instructions":      true,
+	"Shift Instructions":                true,
+	"Bit Manipulation Instructions":     true,
+	"Branch Instructions":               true,
+	"System Control Instructions":       true,
 }
 
-// IsPhase1Group reports whether group is in the Phase-1 GP-integer core.
-func IsPhase1Group(group string) bool {
-	return phase1Groups[group]
+// IsEmittedGroup reports whether group is emitted (Phase-1 GP-integer core plus
+// Phase-2a Branch + System Control).
+func IsEmittedGroup(group string) bool {
+	return emittedGroups[group]
 }
 
-// Load decodes insns.json, keeping only Phase-1 groups (DSP excluded since
-// no DSP group is a Phase-1 group).
-func Load(r io.Reader) ([]RawInsn, error) {
+var dspCoprocOperands = map[string]bool{
+	"A0": true, "X0": true, "X1": true, "Y0": true, "Y1": true,
+	"RS": true, "RE": true, "MOD": true, "DSR": true,
+	"CP0_COM": true, "CP0_Rm": true, "CP0_Rn": true,
+	"CPI_COM": true, "CPI_Rm": true, "CPI_Rn": true,
+	"Dx": true, "Dy": true, "Dz": true, "Da": true, "Dg": true, "Ds": true,
+	"Se": true, "Sf": true, "Sx": true, "Sy": true,
+}
+
+// isDSPCoprocOperand reports whether a token names a DSP or coprocessor register.
+func isDSPCoprocOperand(token string) bool {
+	return dspCoprocOperands[token]
+}
+
+// Load decodes insns.json, keeping only emitted groups. Instructions in an
+// emitted group whose operands reference a DSP/coproc register are excluded;
+// the returned int is the count of such operand-excluded instructions.
+func Load(r io.Reader) ([]RawInsn, int, error) {
 	var doc struct {
 		Instructions []RawInsn `json:"instructions"`
 	}
 	if err := json.NewDecoder(r).Decode(&doc); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var out []RawInsn
+	dropped := 0
 	for _, in := range doc.Instructions {
 		if strings.HasPrefix(in.Group, "DSP") {
 			continue
 		}
-		if !IsPhase1Group(in.Group) {
+		if !IsEmittedGroup(in.Group) {
+			continue
+		}
+		if hasDSPCoprocOperand(in.Format) {
+			dropped++
 			continue
 		}
 		out = append(out, in)
 	}
-	return out, nil
+	return out, dropped, nil
+}
+
+func hasDSPCoprocOperand(formatStr string) bool {
+	for _, tok := range format.Parse(formatStr).Operands {
+		if isDSPCoprocOperand(tok) {
+			return true
+		}
+	}
+	return false
 }

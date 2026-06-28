@@ -39,3 +39,13 @@ func TestIs1aSimpleRejectsDispAndTwoWord(t *testing.T) {
 		}
 	}
 }
+
+func TestIs1aSimpleRejectsNonGPIntegerGroup(t *testing.T) {
+	// jmp @Rm: simple operand (MemReg), single-word, but Branch group -> excluded.
+	in := build(t, loader.RawInsn{
+		Group: "Branch Instructions", Format: "jmp\t@Rm", Code: "0100mmmm00101011", SH1: true,
+	})
+	if Is1aSimple(in) {
+		t.Error("jmp @Rm is Branch group, must not be 1a-simple")
+	}
+}

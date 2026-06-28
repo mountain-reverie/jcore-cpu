@@ -17,10 +17,21 @@ var oneASimpleClasses = map[operand.Class]bool{
 	operand.MemR0GBR:   true,
 }
 
+var gpIntegerGroups = map[string]bool{
+	"Data Transfer Instructions":        true,
+	"Arithmetic Operation Instructions": true,
+	"Logic Operation Instructions":      true,
+	"Shift Instructions":                true,
+	"Bit Manipulation Instructions":     true,
+}
+
 // Is1aSimple reports whether an instruction is in the Phase-2b-1a subset:
 // a single-word GP-integer instruction with only register / immediate /
 // plain-indirect / indexed operands (no displacement, no two-word).
 func Is1aSimple(in ir.Insn) bool {
+	if !gpIntegerGroups[in.Group] {
+		return false
+	}
 	if len(in.Words) != 1 {
 		return false
 	}

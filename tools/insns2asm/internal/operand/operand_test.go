@@ -115,3 +115,15 @@ func TestClassifyMemDispCarriesBaseLetter(t *testing.T) {
 		t.Errorf("@(disp12,Rm) => %+v", o)
 	}
 }
+
+func TestClassifyImm3AndMMURegs(t *testing.T) {
+	if o, _ := Classify("#imm3"); o.Class != Imm || o.Letter != 'i' {
+		t.Errorf("#imm3 => %+v", o)
+	}
+	for _, tok := range []string{"PTEH", "PTEL", "ASIDR", "TSBPTR"} {
+		o, err := Classify(tok)
+		if err != nil || o.Class != FixedReg || o.Fixed != tok {
+			t.Errorf("%s => %+v err=%v", tok, o, err)
+		}
+	}
+}

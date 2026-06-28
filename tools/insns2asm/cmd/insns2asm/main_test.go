@@ -88,3 +88,25 @@ func TestRunOnlyFilter(t *testing.T) {
 		t.Errorf("ADD should be filtered out by -only mov:\n%s", out.String())
 	}
 }
+
+func TestRunClassSimpleFilter(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "insns.json")
+	data := `{"instructions":[
+	  {"group":"Data Transfer Instructions","format":"mov\tRm,Rn","code":"0110nnnnmmmm0011","SH1":true},
+	  {"group":"Data Transfer Instructions","format":"mov.l\t@(disp,Rm),Rn","code":"0101nnnnmmmmdddd","SH1":true}
+	]}`
+	if err := os.WriteFile(p, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := run([]string{"-in", p, "-emit", "llvm", "-class", "simple"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(out.Bytes(), []byte("def MOV_GPR_GPR")) {
+		t.Errorf("mov should be emitted:\n%s", out.String())
+	}
+	if bytes.Contains(out.Bytes(), []byte("MemDisp")) {
+		t.Errorf("disp insn should be filtered out:\n%s", out.String())
+	}
+}

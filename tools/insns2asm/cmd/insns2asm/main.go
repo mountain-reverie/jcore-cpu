@@ -15,6 +15,7 @@ import (
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/llvm"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/loader"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/oracle"
+	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/sel"
 )
 
 func main() {
@@ -30,6 +31,7 @@ func run(args []string, stdout io.Writer) error {
 	emit := fs.String("emit", "check", "what to emit: gas|llvm|check")
 	out := fs.String("out", "", "output file (default stdout)")
 	only := fs.String("only", "", "emit only instructions whose mnemonic contains this substring")
+	class := fs.String("class", "", "instruction class filter: simple")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -55,6 +57,16 @@ func run(args []string, stdout io.Writer) error {
 		filtered := insns[:0:0]
 		for _, in := range insns {
 			if strings.Contains(in.Mnemonic, *only) {
+				filtered = append(filtered, in)
+			}
+		}
+		insns = filtered
+	}
+
+	if *class == "simple" {
+		filtered := insns[:0:0]
+		for _, in := range insns {
+			if sel.Is1aSimple(in) {
 				filtered = append(filtered, in)
 			}
 		}

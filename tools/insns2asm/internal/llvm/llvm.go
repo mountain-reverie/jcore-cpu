@@ -158,7 +158,7 @@ func operandClassName(o operand.Operand) string {
 	case operand.BankReg:
 		return "BankReg"
 	case operand.Imm:
-		return "i32imm"
+		return "SHImm"
 	case operand.BranchDisp:
 		return dispClass(o)
 	case operand.MemTBRDisp:
@@ -170,7 +170,7 @@ func operandClassName(o operand.Operand) string {
 	case operand.MemR0GBR:
 		return "GPR"
 	}
-	return "i32imm"
+	return "SHImm"
 }
 
 func dispClass(o operand.Operand) string {
@@ -190,7 +190,7 @@ func dispClass(o operand.Operand) string {
 // `def NAME : Operand<i32>;` (i.e. not a builtin or hand-written register class).
 func isGeneratedClass(name string) bool {
 	switch name {
-	case "GPR", "BankReg", "i32imm":
+	case "GPR", "BankReg", "SHImm":
 		return false
 	}
 	return true

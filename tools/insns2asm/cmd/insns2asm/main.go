@@ -29,6 +29,7 @@ func run(args []string, stdout io.Writer) error {
 	in := fs.String("in", "docs/insns.json", "path to insns.json")
 	emit := fs.String("emit", "check", "what to emit: gas|llvm|check")
 	out := fs.String("out", "", "output file (default stdout)")
+	only := fs.String("only", "", "emit only instructions whose mnemonic contains this substring")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -48,6 +49,16 @@ func run(args []string, stdout io.Writer) error {
 	insns, err := ir.Build(raw)
 	if err != nil {
 		return err
+	}
+
+	if *only != "" {
+		filtered := insns[:0:0]
+		for _, in := range insns {
+			if strings.Contains(in.Mnemonic, *only) {
+				filtered = append(filtered, in)
+			}
+		}
+		insns = filtered
 	}
 
 	w := stdout

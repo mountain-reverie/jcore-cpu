@@ -55,6 +55,8 @@ func EmitInstrInfo(insns []ir.Insn) string {
 		fmt.Fprintf(&b, "  let Namespace = \"SH\";\n")
 		width := 16 * len(in.Words)
 		fmt.Fprintf(&b, "  bits<%d> Inst;\n", width)
+		fmt.Fprintf(&b, "  let Size = %d;\n", 2*len(in.Words))
+		fmt.Fprintf(&b, "  let DecoderNamespace = \"SH\";\n")
 
 		// operand bit variables
 		for _, bf := range bfs {

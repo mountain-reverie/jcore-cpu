@@ -171,3 +171,28 @@ func TestEmitFixedRegAsLiteral(t *testing.T) {
 		t.Errorf("fixed reg must not appear as operand:\n%s", out)
 	}
 }
+
+func TestEmitSizeAndDecoderNamespace(t *testing.T) {
+	insns := build(t, loader.RawInsn{
+		Group: "Data Transfer Instructions", Format: "mov\tRm,Rn",
+		Code: "0110nnnnmmmm0011", J2: true,
+	})
+	out := EmitInstrInfo(insns)
+	if !strings.Contains(out, "let Size = 2;") {
+		t.Errorf("missing Size for single-word insn:\n%s", out)
+	}
+	if !strings.Contains(out, `let DecoderNamespace = "SH";`) {
+		t.Errorf("missing DecoderNamespace:\n%s", out)
+	}
+}
+
+func TestEmitSizeTwoWord(t *testing.T) {
+	insns := build(t, loader.RawInsn{
+		Group: "Data Transfer Instructions", Format: "movi20\t#imm20,Rn",
+		Code: "0000nnnniiii0000 iiiiiiiiiiiiiiii", SH2A: true,
+	})
+	out := EmitInstrInfo(insns)
+	if !strings.Contains(out, "let Size = 4;") {
+		t.Errorf("missing Size=4 for two-word insn:\n%s", out)
+	}
+}

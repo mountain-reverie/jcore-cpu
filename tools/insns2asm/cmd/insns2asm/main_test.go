@@ -66,3 +66,25 @@ func TestRunExcludesDSPCoproc(t *testing.T) {
 		t.Errorf("expected 1 kept insn (ldc Rm,SR), got:\n%s", out.String())
 	}
 }
+
+func TestRunOnlyFilter(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "insns.json")
+	data := `{"instructions":[
+	  {"group":"Data Transfer Instructions","format":"mov\tRm,Rn","code":"0110nnnnmmmm0011","J2":true},
+	  {"group":"Data Transfer Instructions","format":"add\tRm,Rn","code":"0011nnnnmmmm1100","J2":true}
+	]}`
+	if err := os.WriteFile(p, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := run([]string{"-in", p, "-emit", "llvm", "-only", "mov"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(out.Bytes(), []byte("def MOV_")) {
+		t.Errorf("expected MOV def:\n%s", out.String())
+	}
+	if bytes.Contains(out.Bytes(), []byte("def ADD_")) {
+		t.Errorf("ADD should be filtered out by -only mov:\n%s", out.String())
+	}
+}

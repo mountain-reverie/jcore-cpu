@@ -47,6 +47,26 @@ func TestClassifyR0Fixed(t *testing.T) {
 	}
 }
 
+func TestClassifyMemRegFixedR0(t *testing.T) {
+	o, err := Classify("@R0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.Class != MemReg || o.Fixed != "R0" || o.Letter != 0 {
+		t.Errorf("@R0 => %+v", o)
+	}
+}
+
+func TestClassifyMemR0GBR(t *testing.T) {
+	o, err := Classify("@(R0,GBR)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.Class != MemR0GBR {
+		t.Errorf("@(R0,GBR) => %+v", o)
+	}
+}
+
 func TestClassifyUnknownErrors(t *testing.T) {
 	if _, err := Classify("FRn"); err == nil {
 		t.Error("FRn should be unmapped in phase 1")

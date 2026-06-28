@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
+	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/format"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/gas"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/ir"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/llvm"
@@ -65,7 +67,12 @@ func run(args []string, stdout io.Writer) error {
 	case "check":
 		rawMap := map[string]string{}
 		for _, r := range raw {
-			rawMap[r.Format] = normalizeCode(r.Code)
+			p := format.Parse(r.Format)
+			key := p.Mnemonic
+			if len(p.Operands) > 0 {
+				key += "\t" + strings.Join(p.Operands, ",")
+			}
+			rawMap[key] = normalizeCode(r.Code)
 		}
 		if errs := oracle.CheckAll(insns, rawMap); len(errs) > 0 {
 			return errors.Join(errs...)

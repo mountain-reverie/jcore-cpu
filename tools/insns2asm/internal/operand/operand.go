@@ -18,6 +18,7 @@ const (
 	MemR0
 	MemPC
 	MemGBR
+	MemR0GBR
 	FixedReg
 	R0Fixed
 )
@@ -44,6 +45,8 @@ func (c Class) String() string {
 		return "MemPC"
 	case MemGBR:
 		return "MemGBR"
+	case MemR0GBR:
+		return "MemR0GBR"
 	case FixedReg:
 		return "FixedReg"
 	case R0Fixed:
@@ -85,8 +88,10 @@ var table = map[string]entry{
 	"@(disp,Rn)":    {class: MemDisp, letter: 'd'},
 	"@(disp12,Rm)":  {class: MemDisp, letter: 'd'},
 	"@(disp12,Rn)":  {class: MemDisp, letter: 'd'},
+	"@R0":            {class: MemReg, fixed: "R0"},
 	"@(R0,Rm)":      {class: MemR0, letter: 'm'},
 	"@(R0,Rn)":      {class: MemR0, letter: 'n'},
+	"@(R0,GBR)":     {class: MemR0GBR},
 	"@(disp,PC)":    {class: MemPC, letter: 'd'},
 	"@(disp,GBR)":   {class: MemGBR, letter: 'd'},
 	"GBR":           {class: FixedReg, fixed: "GBR"},

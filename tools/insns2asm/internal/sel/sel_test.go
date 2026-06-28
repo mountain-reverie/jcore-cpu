@@ -53,7 +53,6 @@ func TestIs1aSimpleAcceptsRegisterOnlyMemory(t *testing.T) {
 	for _, r := range []loader.RawInsn{
 		{Group: "Data Transfer Instructions", Format: "mov.l\tRm,@-Rn", Code: "0010nnnnmmmm0110", SH1: true},
 		{Group: "Data Transfer Instructions", Format: "mov.l\t@(R0,Rm),Rn", Code: "0000nnnnmmmm1110", SH1: true},
-		{Group: "Data Transfer Instructions", Format: "movml.l\tRm,@-R15", Code: "0100mmmm11110001", SH2A: true},
 		{Group: "Bit Manipulation Instructions", Format: "and.b\t#imm,@(R0,GBR)", Code: "11001101iiiiiiii", SH1: true},
 	} {
 		if !Is1aSimple(build(t, r)) {
@@ -66,6 +65,8 @@ func TestIs1aSimpleRejectsPredecIndexedFixedMem(t *testing.T) {
 	for _, r := range []loader.RawInsn{
 		{Group: "Data Transfer Instructions", Format: "mov.l\t@(disp,Rm),Rn", Code: "0101nnnnmmmmdddd", SH1: true},
 		{Group: "Data Transfer Instructions", Format: "movi20\t#imm20,Rn", Code: "0000nnnniiii0000 iiiiiiiiiiiiiiii", SH2A: true},
+		{Group: "Data Transfer Instructions", Format: "movml.l\tRm,@-R15", Code: "0100mmmm11110001", SH2A: true},
+		{Group: "Data Transfer Instructions", Format: "cas.l\tRm,Rn,@R0", Code: "0010nnnnmmmm0011", SH4A: true},
 	} {
 		if Is1aSimple(build(t, r)) {
 			t.Errorf("should be deferred to 1b, not 1a: %s", r.Format)

@@ -21,6 +21,9 @@ const (
 	MemR0GBR
 	FixedReg
 	R0Fixed
+	BranchDisp
+	BankReg
+	MemTBRDisp
 )
 
 func (c Class) String() string {
@@ -51,22 +54,31 @@ func (c Class) String() string {
 		return "FixedReg"
 	case R0Fixed:
 		return "R0Fixed"
+	case BranchDisp:
+		return "BranchDisp"
+	case BankReg:
+		return "BankReg"
+	case MemTBRDisp:
+		return "MemTBRDisp"
 	}
 	return "??"
 }
 
 // Operand is a classified operand token.
 type Operand struct {
-	Token  string
-	Class  Class
-	Letter byte   // encoding field letter, 0 if none
-	Fixed  string // fixed register name when Class is FixedReg/R0Fixed
+	Token      string
+	Class      Class
+	Letter     byte   // primary encoding field letter, 0 if none
+	BaseLetter byte   // base-register field letter for compound mem-disp, else 0
+	Fixed      string // fixed register name when Class is FixedReg/R0Fixed
+	Width      int    // bit width of the primary field (set by ir.Build)
 }
 
 type entry struct {
-	class  Class
-	letter byte
-	fixed  string
+	class      Class
+	letter     byte
+	baseLetter byte
+	fixed      string
 }
 
 // table maps the exact Phase-1 token vocabulary. Anything else is an error.
@@ -84,10 +96,19 @@ var table = map[string]entry{
 	"@-Rm":          {class: MemPreDec, letter: 'm'},
 	"@-Rn":          {class: MemPreDec, letter: 'n'},
 	"@-R15":         {class: MemPreDec, fixed: "R15"},
-	"@(disp,Rm)":    {class: MemDisp, letter: 'd'},
-	"@(disp,Rn)":    {class: MemDisp, letter: 'd'},
-	"@(disp12,Rm)":  {class: MemDisp, letter: 'd'},
-	"@(disp12,Rn)":  {class: MemDisp, letter: 'd'},
+	"@(disp,Rm)":    {class: MemDisp, letter: 'd', baseLetter: 'm'},
+	"@(disp,Rn)":    {class: MemDisp, letter: 'd', baseLetter: 'n'},
+	"@(disp12,Rm)":  {class: MemDisp, letter: 'd', baseLetter: 'm'},
+	"@(disp12,Rn)":  {class: MemDisp, letter: 'd', baseLetter: 'n'},
+	"label":         {class: BranchDisp, letter: 'd'},
+	"@@(disp8,TBR)": {class: MemTBRDisp, letter: 'd'},
+	"Rm_BANK":       {class: BankReg, letter: 'm'},
+	"Rn_BANK":       {class: BankReg, letter: 'n'},
+	"SSR":           {class: FixedReg, fixed: "SSR"},
+	"SPC":           {class: FixedReg, fixed: "SPC"},
+	"DBR":           {class: FixedReg, fixed: "DBR"},
+	"SGR":           {class: FixedReg, fixed: "SGR"},
+	"TBR":           {class: FixedReg, fixed: "TBR"},
 	"@R0":            {class: MemReg, fixed: "R0"},
 	"@(R0,Rm)":      {class: MemR0, letter: 'm'},
 	"@(R0,Rn)":      {class: MemR0, letter: 'n'},
@@ -109,5 +130,5 @@ func Classify(token string) (Operand, error) {
 	if !ok {
 		return Operand{}, fmt.Errorf("unmapped operand token %q", token)
 	}
-	return Operand{Token: token, Class: e.class, Letter: e.letter, Fixed: e.fixed}, nil
+	return Operand{Token: token, Class: e.class, Letter: e.letter, BaseLetter: e.baseLetter, Fixed: e.fixed}, nil
 }

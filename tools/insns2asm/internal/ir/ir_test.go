@@ -39,3 +39,22 @@ func TestBuildUnmappedOperandErrors(t *testing.T) {
 		t.Error("want error for unmapped FRm operand")
 	}
 }
+
+func TestBuildPopulatesOperandWidth(t *testing.T) {
+	raw := []loader.RawInsn{{
+		Group: "Data Transfer Instructions", Format: "mov\t#imm,Rn",
+		Code: "1110nnnniiiiiiii", SH1: true,
+	}}
+	got, err := Build(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := got[0]
+	// operands: #imm (i, 8 bits), Rn (n, 4 bits)
+	if in.Operands[0].Width != 8 {
+		t.Errorf("#imm width = %d, want 8", in.Operands[0].Width)
+	}
+	if in.Operands[1].Width != 4 {
+		t.Errorf("Rn width = %d, want 4", in.Operands[1].Width)
+	}
+}

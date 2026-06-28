@@ -51,6 +51,14 @@ func Build(raw []loader.RawInsn) ([]Insn, error) {
 			if err != nil {
 				return nil, fmt.Errorf("%q: %w", r.Format, err)
 			}
+			if o.Letter != 0 {
+				for _, f := range encoding.ParseFields(words) {
+					if f.Letter == o.Letter {
+						o.Width = f.Width
+						break
+					}
+				}
+			}
 			ops = append(ops, o)
 		}
 		out = append(out, Insn{

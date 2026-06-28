@@ -243,6 +243,13 @@ func isGeneratedClass(name string) bool {
 	case "GPR", "BankReg", "SHImm", "MemDec", "MemR0Idx":
 		return false
 	}
+	// Scaled-displacement operand classes are hand-written in SHOperands.td
+	// (with ParserMethod/EncoderMethod/DecoderMethod), not auto Operand<i32> stubs.
+	if strings.HasPrefix(name, "memdisp_") ||
+		strings.HasPrefix(name, "gbrdisp_") ||
+		strings.HasPrefix(name, "pcdisp_") {
+		return false
+	}
 	return true
 }
 

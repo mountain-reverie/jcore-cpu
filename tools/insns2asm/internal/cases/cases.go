@@ -9,6 +9,7 @@ import (
 
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/encoding"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/ir"
+	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/llvm"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/operand"
 )
 
@@ -29,6 +30,11 @@ func regLetters(in ir.Insn) []byte {
 			if o.Letter != 0 {
 				ls = append(ls, o.Letter)
 			}
+		case operand.MemDisp:
+			// For MemDisp, add the base register letter only (disp letter is handled separately)
+			if o.BaseLetter != 0 {
+				ls = append(ls, o.BaseLetter)
+			}
 		}
 	}
 	return ls
@@ -43,14 +49,57 @@ func immLetter(in ir.Insn) (byte, bool) {
 	return 0, false
 }
 
+// dispLetters returns displacement field letters with their max field width.
+func dispLetters(in ir.Insn) map[byte]int {
+	result := make(map[byte]int)
+	for _, o := range in.Operands {
+		switch o.Class {
+		case operand.MemDisp, operand.MemPC, operand.MemGBR:
+			if o.Letter != 0 {
+				result[o.Letter] = o.Width
+			}
+		}
+	}
+	return result
+}
+
+// dispBoundariesFor returns boundary values for a displacement field of the given width.
+func dispBoundariesFor(width int) []int {
+	max := (1 << uint(width)) - 1 // 2^width - 1
+	if width <= 4 {
+		// For small fields, include 0, 1, 2, and max
+		return []int{0, 1, 2, max}
+	}
+	// For larger fields, include 0, some mid-range values, and max
+	return []int{0, 0x7f, 0x80, max}
+}
+
 // Synthesize builds the operand-value sweep for one instruction.
 func Synthesize(in ir.Insn) []Case {
 	regs := regLetters(in)
 	immL, hasImm := immLetter(in)
+	disps := dispLetters(in)
+
+	// Compute the number of sweep iterations
 	n := 16
-	if len(regs) == 0 && !hasImm {
+	if len(regs) == 0 && !hasImm && len(disps) == 0 {
 		n = 1 // no operands: one fixed case
 	}
+
+	// Compute the max number of boundary values across all displacement fields
+	maxDispBoundaries := 0
+	for _, width := range disps {
+		boundaries := dispBoundariesFor(width)
+		if len(boundaries) > maxDispBoundaries {
+			maxDispBoundaries = len(boundaries)
+		}
+	}
+
+	// If we have displacement fields, use the max number of boundaries
+	if len(disps) > 0 && maxDispBoundaries > n {
+		n = maxDispBoundaries
+	}
+
 	var out []Case
 	for k := 0; k < n; k++ {
 		vals := map[byte]int{}
@@ -59,6 +108,10 @@ func Synthesize(in ir.Insn) []Case {
 		}
 		if hasImm {
 			vals[immL] = immBoundaries[k%len(immBoundaries)]
+		}
+		for dispL, width := range disps {
+			boundaries := dispBoundariesFor(width)
+			vals[dispL] = boundaries[k%len(boundaries)]
 		}
 		out = append(out, Case{Asm: renderAsm(in, vals), Hex: renderHex(in, vals)})
 	}
@@ -81,9 +134,31 @@ func renderAsm(in ir.Insn, vals map[byte]int) string {
 	}
 	parts := make([]string, len(in.Operands))
 	for i, o := range in.Operands {
-		parts[i] = surface(o, vals[o.Letter])
+		parts[i] = surfaceWithMnemonic(in.Mnemonic, o, vals)
 	}
 	return in.Mnemonic + " " + strings.Join(parts, ", ")
+}
+
+// surfaceWithMnemonic renders one operand's assembly text, with access to the
+// instruction mnemonic for scale-aware displacement rendering.
+func surfaceWithMnemonic(mnemonic string, o operand.Operand, vals map[byte]int) string {
+	switch o.Class {
+	case operand.MemDisp:
+		baseval := vals[o.BaseLetter]
+		scale := llvm.ScaleOf(mnemonic)
+		byteDisp := vals[o.Letter] * scale
+		return fmt.Sprintf("@(%d,r%d)", byteDisp, baseval)
+	case operand.MemPC:
+		scale := llvm.ScaleOf(mnemonic)
+		byteDisp := vals[o.Letter] * scale
+		return fmt.Sprintf("@(%d,pc)", byteDisp)
+	case operand.MemGBR:
+		scale := llvm.ScaleOf(mnemonic)
+		byteDisp := vals[o.Letter] * scale
+		return fmt.Sprintf("@(%d,gbr)", byteDisp)
+	default:
+		return surface(o, vals[o.Letter])
+	}
 }
 
 // surface renders one operand's assembly text as the SH AsmParser accepts it.

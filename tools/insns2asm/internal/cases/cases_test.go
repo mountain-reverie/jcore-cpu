@@ -105,14 +105,47 @@ func TestSynthesizeMemDispWithScale(t *testing.T) {
 	// Code: disp stored in bits 3-0 of word 0, Rm in bits 7-4, Rn in bits 11-8
 	cs := Synthesize(build(t, loader.RawInsn{
 		Group: "Data Transfer Instructions", Format: "mov.l\t@(disp,Rm),Rn",
-		Code: "0101nnnnmmmmmmmm", SH1: true, // simplified 4-bit disp for testing
+		Code: "0101nnnnmmmmdddd", SH1: true,
 	}))
+	if len(cs) == 0 {
+		t.Fatalf("no cases generated")
+	}
 	// Check that displacement is multiplied by scale (4 for .l)
-	// For field value 2, byte disp should be 2*4=8
+	// For 4-bit field, boundaries are 0, 1, 2, 15
+	// With scale 4: should be 0, 4, 8, 60
+	found0 := false
+	found4 := false
+	found8 := false
+	found60 := false
 	for _, c := range cs {
 		if !strings.Contains(c.Asm, "@(") || !strings.Contains(c.Asm, ")") {
 			t.Fatalf("bad disp surface: %q", c.Asm)
 		}
+		// Check for specific scaled values
+		if strings.Contains(c.Asm, "@(0,r") {
+			found0 = true
+		}
+		if strings.Contains(c.Asm, "@(4,r") {
+			found4 = true
+		}
+		if strings.Contains(c.Asm, "@(8,r") {
+			found8 = true
+		}
+		if strings.Contains(c.Asm, "@(60,r") {
+			found60 = true
+		}
+	}
+	if !found0 {
+		t.Errorf("did not find @(0,r...) — field value 0 not scaled correctly")
+	}
+	if !found4 {
+		t.Errorf("did not find @(4,r...) — field value 1 not scaled by 4")
+	}
+	if !found8 {
+		t.Errorf("did not find @(8,r...) — field value 2 not scaled by 4")
+	}
+	if !found60 {
+		t.Errorf("did not find @(60,r...) — field value 15 not scaled by 4")
 	}
 }
 
@@ -181,36 +214,39 @@ func TestSynthesizeDispScaleMultiplication(t *testing.T) {
 }
 
 func TestSynthesizeDispMemDispWithBaseRegAndDisp(t *testing.T) {
-	// mov.b @(disp,Rm),R0 with 4-bit disp field, scale 1
-	// Code: 10000100mmmmddd (simplified for testing)
+	// mov.l @(disp,Rm),Rn with 4-bit disp field, scale 4
 	cs := Synthesize(build(t, loader.RawInsn{
-		Group: "Data Transfer Instructions", Format: "mov.b\t@(disp,Rm),R0",
-		Code: "10000100mmmmddd1", SH1: true,
+		Group: "Data Transfer Instructions", Format: "mov.l\t@(disp,Rm),Rn",
+		Code: "0101nnnnmmmmdddd", SH1: true,
 	}))
 
 	if len(cs) == 0 {
 		t.Fatalf("no cases generated")
 	}
 
-	// Check that we get both register and displacement variations
-	seenRegs := map[int]bool{}
+	// Parse each synthesized case to extract base register and displacement
+	seenBase := map[int]bool{}
 	seenDisps := map[int]bool{}
 
-	for _, c := range cs {
-		// Parse @(disp,rm)
-		if !strings.Contains(c.Asm, "@(") {
-			t.Fatalf("bad format: %q", c.Asm)
+	for k, c := range cs {
+		// surface form: "mov.l @(<d>,r<base>), r<dst>"
+		var d, base, dst int
+		if n, _ := fmt.Sscanf(c.Asm, "mov.l @(%d,r%d), r%d", &d, &base, &dst); n != 3 {
+			t.Fatalf("case %d: unparseable asm: %q", k, c.Asm)
 		}
-		// Extract the numeric values (this is a simplified check)
-		seenRegs[0] = true // would need more parsing for real test
-		seenDisps[0] = true
+		// For mov.l, scale is 4, so displacement must be multiple of 4
+		if d%4 != 0 {
+			t.Errorf("case %d: disp %d not a multiple of scale 4: %q", k, d, c.Asm)
+		}
+		seenBase[base] = true
+		seenDisps[d] = true
 	}
 
-	if len(seenRegs) == 0 {
-		t.Errorf("no register variations found")
+	if len(seenBase) < 2 {
+		t.Errorf("base register did not vary across cases: %v", seenBase)
 	}
-	if len(seenDisps) == 0 {
-		t.Errorf("no displacement variations found")
+	if len(seenDisps) < 2 {
+		t.Errorf("displacement did not vary across cases: %v", seenDisps)
 	}
 }
 

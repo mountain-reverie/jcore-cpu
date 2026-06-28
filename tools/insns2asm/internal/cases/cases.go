@@ -75,7 +75,7 @@ func SynthesizeAll(insns []ir.Insn) []Case {
 	return out
 }
 
-// renderAsm fills the emitter's AsmString template ($vars) with concrete values.
+// renderAsm fills the emitter's AsmString template (${vars}) with concrete values.
 func renderAsm(in ir.Insn, vals map[byte]int) string {
 	s := strings.Replace(llvm.AsmString(in), "\t", " ", 1)
 	for _, o := range in.Operands {
@@ -90,7 +90,7 @@ func renderAsm(in ir.Insn, vals map[byte]int) string {
 		default:
 			rep = fmt.Sprintf("r%d", v)
 		}
-		s = strings.ReplaceAll(s, "$"+llvm.LetterVar(o.Letter), rep)
+		s = strings.ReplaceAll(s, "${"+llvm.LetterVar(o.Letter)+"}", rep)
 	}
 	return s
 }

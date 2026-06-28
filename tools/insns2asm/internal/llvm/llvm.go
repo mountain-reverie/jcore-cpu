@@ -261,34 +261,34 @@ func asmOperand(o operand.Operand) string {
 	case operand.R0Fixed:
 		return "r0"
 	case operand.GPR, operand.BankReg, operand.Imm, operand.BranchDisp:
-		return "$" + LetterVar(o.Letter)
+		return "${" + LetterVar(o.Letter) + "}"
 	case operand.MemReg:
 		if o.Fixed != "" {
 			return "@" + strings.ToLower(o.Fixed)
 		}
-		return "@$" + LetterVar(o.Letter)
+		return "@${" + LetterVar(o.Letter) + "}"
 	case operand.MemPostInc:
 		if o.Fixed != "" {
 			return "@" + strings.ToLower(o.Fixed) + "+"
 		}
-		return "@$" + LetterVar(o.Letter) + "+"
+		return "@${" + LetterVar(o.Letter) + "}+"
 	case operand.MemPreDec:
 		if o.Fixed != "" {
 			return "@-" + strings.ToLower(o.Fixed)
 		}
-		return "@-$" + LetterVar(o.Letter)
+		return "@-${" + LetterVar(o.Letter) + "}"
 	case operand.MemDisp:
-		return "@($" + LetterVar(o.Letter) + ", $" + LetterVar(o.BaseLetter) + ")"
+		return "@(${" + LetterVar(o.Letter) + "}, ${" + LetterVar(o.BaseLetter) + "})"
 	case operand.MemR0:
-		return "@(r0, $" + LetterVar(o.Letter) + ")"
+		return "@(r0, ${" + LetterVar(o.Letter) + "})"
 	case operand.MemR0GBR:
 		return "@(r0, gbr)"
 	case operand.MemPC:
-		return "@($" + LetterVar(o.Letter) + ", pc)"
+		return "@(${" + LetterVar(o.Letter) + "}, pc)"
 	case operand.MemGBR:
-		return "@($" + LetterVar(o.Letter) + ", gbr)"
+		return "@(${" + LetterVar(o.Letter) + "}, gbr)"
 	case operand.MemTBRDisp:
-		return "@@($" + LetterVar(o.Letter) + ", tbr)"
+		return "@@(${" + LetterVar(o.Letter) + "}, tbr)"
 	}
 	return o.Token
 }

@@ -210,3 +210,18 @@ func TestEmitImmUsesSHImm(t *testing.T) {
 		t.Errorf("should not emit builtin i32imm:\n%s", out)
 	}
 }
+
+func TestEmitFixedRegMemoryOperands(t *testing.T) {
+	// movml.l Rm,@-R15 : MemPreDec with Fixed=R15 -> "@-r15", not "@-$<nul>"
+	insns := build(t, loader.RawInsn{
+		Group: "Data Transfer Instructions", Format: "movml.l\tRm,@-R15",
+		Code: "0100mmmm11110001", SH2A: true,
+	})
+	out := EmitInstrInfo(insns)
+	if !strings.Contains(out, `@-r15`) {
+		t.Errorf("expected @-r15 literal:\n%s", out)
+	}
+	if strings.Contains(out, "$\x00") || strings.Contains(out, "@-$;") {
+		t.Errorf("malformed fixed-reg AsmString:\n%s", out)
+	}
+}

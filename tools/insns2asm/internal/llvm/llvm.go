@@ -263,10 +263,19 @@ func asmOperand(o operand.Operand) string {
 	case operand.GPR, operand.BankReg, operand.Imm, operand.BranchDisp:
 		return "$" + LetterVar(o.Letter)
 	case operand.MemReg:
+		if o.Fixed != "" {
+			return "@" + strings.ToLower(o.Fixed)
+		}
 		return "@$" + LetterVar(o.Letter)
 	case operand.MemPostInc:
+		if o.Fixed != "" {
+			return "@" + strings.ToLower(o.Fixed) + "+"
+		}
 		return "@$" + LetterVar(o.Letter) + "+"
 	case operand.MemPreDec:
+		if o.Fixed != "" {
+			return "@-" + strings.ToLower(o.Fixed)
+		}
 		return "@-$" + LetterVar(o.Letter)
 	case operand.MemDisp:
 		return "@($" + LetterVar(o.Letter) + ", $" + LetterVar(o.BaseLetter) + ")"

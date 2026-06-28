@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -86,6 +87,26 @@ func TestRunOnlyFilter(t *testing.T) {
 	}
 	if bytes.Contains(out.Bytes(), []byte("def ADD_")) {
 		t.Errorf("ADD should be filtered out by -only mov:\n%s", out.String())
+	}
+}
+
+func TestRunEmitCases(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "insns.json")
+	data := `{"instructions":[{"group":"Data Transfer Instructions","format":"mov\tRm,Rn","code":"0110nnnnmmmm0011","SH1":true}]}`
+	if err := os.WriteFile(p, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := run([]string{"-in", p, "-emit", "cases", "-class", "simple"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Count(strings.TrimSpace(out.String()), "\n") + 1
+	if lines != 16 {
+		t.Errorf("want 16 case lines, got %d:\n%s", lines, out.String())
+	}
+	if !strings.Contains(out.String(), "\t") {
+		t.Errorf("each line should be asm<TAB>hex:\n%s", out.String())
 	}
 }
 

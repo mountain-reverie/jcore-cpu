@@ -64,7 +64,7 @@ func EmitInstrInfo(insns []ir.Insn) string {
 			for _, f := range bf.fields {
 				total += f.Width
 			}
-			fmt.Fprintf(&b, "  bits<%d> %s;\n", total, letterVar(bf.letter))
+			fmt.Fprintf(&b, "  bits<%d> %s;\n", total, LetterVar(bf.letter))
 		}
 
 		// fixed bits
@@ -93,16 +93,16 @@ func EmitInstrInfo(insns []ir.Insn) string {
 				varLo := cursor - f.Width + 1
 				cursor -= f.Width
 				if single {
-					fmt.Fprintf(&b, "  let Inst{%d-%d} = %s;\n", instHi, instLo, letterVar(bf.letter))
+					fmt.Fprintf(&b, "  let Inst{%d-%d} = %s;\n", instHi, instLo, LetterVar(bf.letter))
 				} else {
-					fmt.Fprintf(&b, "  let Inst{%d-%d} = %s{%d-%d};\n", instHi, instLo, letterVar(bf.letter), varHi, varLo)
+					fmt.Fprintf(&b, "  let Inst{%d-%d} = %s{%d-%d};\n", instHi, instLo, LetterVar(bf.letter), varHi, varLo)
 				}
 			}
 		}
 
 		fmt.Fprintf(&b, "  dag OutOperandList = (outs);\n")
 		fmt.Fprintf(&b, "  dag InOperandList = (ins %s);\n", inOperandList(bfs))
-		fmt.Fprintf(&b, "  let AsmString = %q;\n", asmString(in))
+		fmt.Fprintf(&b, "  let AsmString = %q;\n", AsmString(in))
 		fmt.Fprintf(&b, "  let Predicates = [%s];\n", strings.Join(in.Arch.LLVMPredicates(), ", "))
 		fmt.Fprintf(&b, "}\n\n")
 	}
@@ -199,13 +199,13 @@ func isGeneratedClass(name string) bool {
 func inOperandList(bfs []boundField) string {
 	parts := make([]string, len(bfs))
 	for i, bf := range bfs {
-		parts[i] = fmt.Sprintf("%s:$%s", bf.class, letterVar(bf.letter))
+		parts[i] = fmt.Sprintf("%s:$%s", bf.class, LetterVar(bf.letter))
 	}
 	return strings.Join(parts, ", ")
 }
 
-// letterVar maps an encoding field letter to its TableGen operand variable name.
-func letterVar(letter byte) string {
+// LetterVar maps an encoding field letter to its TableGen operand variable name.
+func LetterVar(letter byte) string {
 	switch letter {
 	case 'n':
 		return "rn"
@@ -239,9 +239,9 @@ func defName(in ir.Insn, seen map[string]int) string {
 	return base
 }
 
-// asmString builds the AsmString with $vars for bound operands and lowercased
+// AsmString builds the AsmString with $vars for bound operands and lowercased
 // literals for fixed registers.
-func asmString(in ir.Insn) string {
+func AsmString(in ir.Insn) string {
 	if len(in.Operands) == 0 {
 		return in.Mnemonic
 	}
@@ -261,25 +261,25 @@ func asmOperand(o operand.Operand) string {
 	case operand.R0Fixed:
 		return "r0"
 	case operand.GPR, operand.BankReg, operand.Imm, operand.BranchDisp:
-		return "$" + letterVar(o.Letter)
+		return "$" + LetterVar(o.Letter)
 	case operand.MemReg:
-		return "@$" + letterVar(o.Letter)
+		return "@$" + LetterVar(o.Letter)
 	case operand.MemPostInc:
-		return "@$" + letterVar(o.Letter) + "+"
+		return "@$" + LetterVar(o.Letter) + "+"
 	case operand.MemPreDec:
-		return "@-$" + letterVar(o.Letter)
+		return "@-$" + LetterVar(o.Letter)
 	case operand.MemDisp:
-		return "@($" + letterVar(o.Letter) + ", $" + letterVar(o.BaseLetter) + ")"
+		return "@($" + LetterVar(o.Letter) + ", $" + LetterVar(o.BaseLetter) + ")"
 	case operand.MemR0:
-		return "@(r0, $" + letterVar(o.Letter) + ")"
+		return "@(r0, $" + LetterVar(o.Letter) + ")"
 	case operand.MemR0GBR:
 		return "@(r0, gbr)"
 	case operand.MemPC:
-		return "@($" + letterVar(o.Letter) + ", pc)"
+		return "@($" + LetterVar(o.Letter) + ", pc)"
 	case operand.MemGBR:
-		return "@($" + letterVar(o.Letter) + ", gbr)"
+		return "@($" + LetterVar(o.Letter) + ", gbr)"
 	case operand.MemTBRDisp:
-		return "@@($" + letterVar(o.Letter) + ", tbr)"
+		return "@@($" + LetterVar(o.Letter) + ", tbr)"
 	}
 	return o.Token
 }

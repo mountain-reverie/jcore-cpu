@@ -14,6 +14,29 @@ import (
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/operand"
 )
 
+// ScaleOf returns the displacement scale for a mnemonic's data size.
+func ScaleOf(mnemonic string) int {
+	switch {
+	case mnemonic == "mova" || strings.HasSuffix(mnemonic, ".l"):
+		return 4
+	case strings.HasSuffix(mnemonic, ".w"):
+		return 2
+	case strings.HasSuffix(mnemonic, ".b"):
+		return 1
+	}
+	return 4 // PC long-form default
+}
+
+func sizeLetter(scale int) string {
+	switch scale {
+	case 1:
+		return "b"
+	case 2:
+		return "w"
+	}
+	return "l"
+}
+
 // boundField is one encoding field that an operand binds to a variable.
 type boundField struct {
 	letter byte
@@ -123,7 +146,30 @@ func boundFields(in ir.Insn) []boundField {
 				out = append(out, boundField{letter: o.BaseLetter, fields: fs, class: "GPR"})
 			}
 			if fs := fieldsFor(in, o.Letter); len(fs) > 0 {
-				out = append(out, boundField{letter: o.Letter, fields: fs, class: dispClass(o)})
+				// Compute scale-aware class name for MemDisp
+				scale := ScaleOf(in.Mnemonic)
+				class := fmt.Sprintf("memdisp_%s4", sizeLetter(scale))
+				out = append(out, boundField{letter: o.Letter, fields: fs, class: class})
+			}
+		case operand.MemGBR:
+			if o.Letter == 0 {
+				continue
+			}
+			if fs := fieldsFor(in, o.Letter); len(fs) > 0 {
+				// Compute scale-aware class name for MemGBR
+				scale := ScaleOf(in.Mnemonic)
+				class := fmt.Sprintf("gbrdisp_%s8", sizeLetter(scale))
+				out = append(out, boundField{letter: o.Letter, fields: fs, class: class})
+			}
+		case operand.MemPC:
+			if o.Letter == 0 {
+				continue
+			}
+			if fs := fieldsFor(in, o.Letter); len(fs) > 0 {
+				// Compute scale-aware class name for MemPC
+				scale := ScaleOf(in.Mnemonic)
+				class := fmt.Sprintf("pcdisp_%s8", sizeLetter(scale))
+				out = append(out, boundField{letter: o.Letter, fields: fs, class: class})
 			}
 		default:
 			if o.Letter == 0 {

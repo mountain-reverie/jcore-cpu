@@ -256,3 +256,33 @@ func TestEmitVariableBaseMemoryOperands(t *testing.T) {
 		t.Errorf("fixed @-R15 stays literal:\n%s", EmitInstrInfo(fx))
 	}
 }
+
+func TestScaleOf(t *testing.T) {
+	for m, want := range map[string]int{"mov.b": 1, "mov.w": 2, "mov.l": 4, "mova": 4} {
+		if got := ScaleOf(m); got != want {
+			t.Errorf("ScaleOf(%q)=%d want %d", m, got, want)
+		}
+	}
+}
+
+func TestEmitDispOperandClasses(t *testing.T) {
+	// mov.l @(disp,Rm),Rn -> memdisp_l4 compound (base Rm + disp), dest Rn
+	d := build(t, loader.RawInsn{Group: "Data Transfer Instructions",
+		Format: "mov.l\t@(disp,Rm),Rn", Code: "0101nnnnmmmmdddd", SH1: true})
+	out := EmitInstrInfo(d)
+	if !strings.Contains(out, "memdisp_l4:$") {
+		t.Errorf("expected memdisp_l4 operand:\n%s", out)
+	}
+	// mov.l @(disp,GBR),R0 -> gbrdisp_l8
+	g := build(t, loader.RawInsn{Group: "Data Transfer Instructions",
+		Format: "mov.l\t@(disp,GBR),R0", Code: "11000110dddddddd", SH1: true})
+	if !strings.Contains(EmitInstrInfo(g), "gbrdisp_l8:$") {
+		t.Errorf("expected gbrdisp_l8:\n%s", EmitInstrInfo(g))
+	}
+	// mov.l @(disp,PC),Rn -> pcdisp_l8
+	p := build(t, loader.RawInsn{Group: "Data Transfer Instructions",
+		Format: "mov.l\t@(disp,PC),Rn", Code: "1101nnnndddddddd", SH1: true})
+	if !strings.Contains(EmitInstrInfo(p), "pcdisp_l8:$") {
+		t.Errorf("expected pcdisp_l8:\n%s", EmitInstrInfo(p))
+	}
+}

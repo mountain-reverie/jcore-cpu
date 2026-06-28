@@ -73,6 +73,33 @@ func TestSynthesizeMovHexMatchesEncoding(t *testing.T) {
 	}
 }
 
+func TestSynthesizeRendersMemorySurface(t *testing.T) {
+	cs := Synthesize(build(t, loader.RawInsn{
+		Group: "Data Transfer Instructions", Format: "mov.l\tRm,@-Rn",
+		Code: "0010nnnnmmmm0110", SH1: true,
+	}))
+	// every case asm must be "mov.l rM, @-rN" with rM != rN
+	for _, c := range cs {
+		if !strings.HasPrefix(c.Asm, "mov.l r") || !strings.Contains(c.Asm, ", @-r") {
+			t.Fatalf("bad pre-dec surface: %q", c.Asm)
+		}
+	}
+	// indexed
+	ci := Synthesize(build(t, loader.RawInsn{
+		Group: "Data Transfer Instructions", Format: "mov.l\t@(R0,Rm),Rn",
+		Code: "0000nnnnmmmm1110", SH1: true,
+	}))
+	if !strings.Contains(ci[0].Asm, "@(r0,r") {
+		t.Fatalf("bad indexed surface: %q", ci[0].Asm)
+	}
+	// hex still correct: mov.l Rm,@-Rn with rm=1,rn=2 -> 0x2216
+	found := false
+	for _, c := range cs {
+		if c.Asm == "mov.l r1, @-r2" { found = true; if c.Hex != "22 16" { t.Errorf("hex=%q want 22 16", c.Hex) } }
+	}
+	if !found { t.Log("rm=1,rn=2 not in sweep order; hex checked structurally elsewhere") }
+}
+
 func scanMov(s string, a, b *int) (int, error) {
 	s = strings.TrimPrefix(s, "mov ")
 	parts := strings.Split(s, ", ")

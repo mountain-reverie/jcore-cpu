@@ -38,9 +38,12 @@ func run(args []string, stdout io.Writer) error {
 		return err
 	}
 	defer f.Close()
-	raw, err := loader.Load(f)
+	raw, dropped, err := loader.Load(f)
 	if err != nil {
 		return err
+	}
+	if dropped > 0 {
+		fmt.Fprintf(os.Stderr, "insns2asm: excluded %d DSP/coproc instructions\n", dropped)
 	}
 	insns, err := ir.Build(raw)
 	if err != nil {

@@ -72,3 +72,46 @@ func TestClassifyUnknownErrors(t *testing.T) {
 		t.Error("FRn should be unmapped in phase 1")
 	}
 }
+
+func TestClassifyBranchDisp(t *testing.T) {
+	o, err := Classify("label")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.Class != BranchDisp || o.Letter != 'd' {
+		t.Errorf("label => %+v", o)
+	}
+}
+
+func TestClassifyBankReg(t *testing.T) {
+	o, _ := Classify("Rn_BANK")
+	if o.Class != BankReg || o.Letter != 'n' {
+		t.Errorf("Rn_BANK => %+v", o)
+	}
+}
+
+func TestClassifyTBRDisp(t *testing.T) {
+	o, _ := Classify("@@(disp8,TBR)")
+	if o.Class != MemTBRDisp || o.Letter != 'd' {
+		t.Errorf("@@(disp8,TBR) => %+v", o)
+	}
+}
+
+func TestClassifyControlRegs(t *testing.T) {
+	for tok, name := range map[string]string{"SSR": "SSR", "SPC": "SPC", "DBR": "DBR", "SGR": "SGR", "TBR": "TBR"} {
+		o, err := Classify(tok)
+		if err != nil {
+			t.Fatalf("%s: %v", tok, err)
+		}
+		if o.Class != FixedReg || o.Fixed != name {
+			t.Errorf("%s => %+v", tok, o)
+		}
+	}
+}
+
+func TestClassifyMemDispCarriesBaseLetter(t *testing.T) {
+	o, _ := Classify("@(disp12,Rm)")
+	if o.Class != MemDisp || o.Letter != 'd' || o.BaseLetter != 'm' {
+		t.Errorf("@(disp12,Rm) => %+v", o)
+	}
+}

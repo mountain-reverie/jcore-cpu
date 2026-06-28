@@ -59,7 +59,11 @@ func run(args []string, stdout io.Writer) error {
 
 	switch *emit {
 	case "gas":
-		_, err = io.WriteString(w, gas.EmitDelta(insns))
+		out, err := gas.EmitDelta(insns)
+		if err != nil {
+			return err
+		}
+		_, err = io.WriteString(w, out)
 		return err
 	case "llvm":
 		_, err = io.WriteString(w, llvm.EmitInstrInfo(insns))
@@ -72,7 +76,7 @@ func run(args []string, stdout io.Writer) error {
 			if len(p.Operands) > 0 {
 				key += "\t" + strings.Join(p.Operands, ",")
 			}
-			rawMap[key] = normalizeCode(r.Code)
+			rawMap[key] = r.Code
 		}
 		if errs := oracle.CheckAll(insns, rawMap); len(errs) > 0 {
 			return errors.Join(errs...)
@@ -82,9 +86,4 @@ func run(args []string, stdout io.Writer) error {
 	default:
 		return fmt.Errorf("unknown -emit %q", *emit)
 	}
-}
-
-func normalizeCode(code string) string {
-	// Collapse internal whitespace runs to single spaces to match Reconstruct.
-	return code
 }

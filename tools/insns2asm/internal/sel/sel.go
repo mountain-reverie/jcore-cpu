@@ -14,26 +14,22 @@ var gpIntegerGroups = map[string]bool{
 	"Bit Manipulation Instructions":     true,
 }
 
-// oneACleanOperand reports whether an operand is clean for Phase-2b-1a
-// (literal-text addressing): registers, immediates, bare R0, and variable-base
-// indirect forms only. Fixed-register memory, pre-decrement, and indexed forms
-// are deferred to Phase-2b-1b.
+// oneACleanOperand reports whether an operand class is supported by the current
+// SH MC target (1a register/immediate + 1b-i register-only memory). Scaled
+// displacement (MemDisp/MemPC/MemGBR) and the non-GP classes remain unsupported.
 func oneACleanOperand(o operand.Operand) bool {
 	switch o.Class {
-	case operand.GPR, operand.Imm, operand.R0Fixed:
+	case operand.GPR, operand.Imm, operand.R0Fixed,
+		operand.MemReg, operand.MemPostInc, operand.MemPreDec,
+		operand.MemR0, operand.MemR0GBR:
 		return true
-	case operand.MemReg, operand.MemPostInc:
-		// variable-base only; fixed-register memory (@R0, @R15+) -> 1b
-		return o.Fixed == ""
 	}
-	// MemPreDec, MemR0, MemR0GBR, and everything else -> deferred to 1b
 	return false
 }
 
-// Is1aSimple reports whether an instruction is in the Phase-2b-1a subset:
-// a single-word GP-integer instruction with only register / immediate /
-// plain-indirect / post-increment operands (no displacement, no two-word,
-// no fixed-register memory, no pre-decrement, no indexed).
+// Is1aSimple reports whether an instruction is in the supported subset:
+// a single-word GP-integer instruction with supported single-word GP-integer
+// operands (registers, immediates, register-only memory classes with any Fixed value).
 func Is1aSimple(in ir.Insn) bool {
 	if !gpIntegerGroups[in.Group] {
 		return false

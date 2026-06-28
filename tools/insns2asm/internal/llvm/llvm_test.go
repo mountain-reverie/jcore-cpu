@@ -225,3 +225,34 @@ func TestEmitFixedRegMemoryOperands(t *testing.T) {
 		t.Errorf("malformed fixed-reg AsmString:\n%s", out)
 	}
 }
+
+func TestEmitVariableBaseMemoryOperands(t *testing.T) {
+	// pre-dec @-Rn -> MemDec operand, AsmString ${rn} (no @- literal)
+	pd := build(t, loader.RawInsn{
+		Group: "Data Transfer Instructions", Format: "mov.l\tRm,@-Rn",
+		Code: "0010nnnnmmmm0110", SH1: true,
+	})
+	out := EmitInstrInfo(pd)
+	if !strings.Contains(out, "MemDec:$rn") {
+		t.Errorf("pre-dec should use MemDec operand:\n%s", out)
+	}
+	if strings.Contains(out, "@-") {
+		t.Errorf("@- decoration must move into the operand class, not AsmString:\n%s", out)
+	}
+	// indexed @(R0,Rm) -> MemR0Idx
+	idx := build(t, loader.RawInsn{
+		Group: "Data Transfer Instructions", Format: "mov.l\t@(R0,Rm),Rn",
+		Code: "0000nnnnmmmm1110", SH1: true,
+	})
+	if !strings.Contains(EmitInstrInfo(idx), "MemR0Idx:$rm") {
+		t.Errorf("indexed should use MemR0Idx operand:\n%s", EmitInstrInfo(idx))
+	}
+	// fixed @-R15 stays literal text
+	fx := build(t, loader.RawInsn{
+		Group: "Data Transfer Instructions", Format: "movml.l\tRm,@-R15",
+		Code: "0100mmmm11110001", SH2A: true,
+	})
+	if !strings.Contains(EmitInstrInfo(fx), "@-r15") {
+		t.Errorf("fixed @-R15 stays literal:\n%s", EmitInstrInfo(fx))
+	}
+}

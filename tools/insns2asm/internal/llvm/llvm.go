@@ -153,8 +153,12 @@ func fieldsFor(in ir.Insn, letter byte) []encoding.Field {
 // operandClassName maps an operand to its TableGen operand class name.
 func operandClassName(o operand.Operand) string {
 	switch o.Class {
-	case operand.GPR, operand.MemReg, operand.MemPostInc, operand.MemPreDec, operand.MemR0:
+	case operand.GPR, operand.MemReg, operand.MemPostInc:
 		return "GPR"
+	case operand.MemPreDec:
+		return "MemDec"
+	case operand.MemR0:
+		return "MemR0Idx"
 	case operand.BankReg:
 		return "BankReg"
 	case operand.Imm:
@@ -190,7 +194,7 @@ func dispClass(o operand.Operand) string {
 // `def NAME : Operand<i32>;` (i.e. not a builtin or hand-written register class).
 func isGeneratedClass(name string) bool {
 	switch name {
-	case "GPR", "BankReg", "SHImm":
+	case "GPR", "BankReg", "SHImm", "MemDec", "MemR0Idx":
 		return false
 	}
 	return true
@@ -276,11 +280,11 @@ func asmOperand(o operand.Operand) string {
 		if o.Fixed != "" {
 			return "@-" + strings.ToLower(o.Fixed)
 		}
-		return "@-${" + LetterVar(o.Letter) + "}"
+		return "${" + LetterVar(o.Letter) + "}"
 	case operand.MemDisp:
 		return "@(${" + LetterVar(o.Letter) + "}, ${" + LetterVar(o.BaseLetter) + "})"
 	case operand.MemR0:
-		return "@(r0, ${" + LetterVar(o.Letter) + "})"
+		return "${" + LetterVar(o.Letter) + "}"
 	case operand.MemR0GBR:
 		return "@(r0, gbr)"
 	case operand.MemPC:

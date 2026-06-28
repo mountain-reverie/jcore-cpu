@@ -17,8 +17,8 @@ import (
 // boundField is one encoding field that an operand binds to a variable.
 type boundField struct {
 	letter byte
-	field  encoding.Field
-	class  string // TableGen operand class name (e.g. GPR, bdisp12)
+	fields []encoding.Field // all encoding fields for this letter, in word order (MSB word first)
+	class  string           // TableGen operand class name (e.g. GPR, bdisp12)
 }
 
 // EmitInstrInfo renders generated operand-class defs followed by one
@@ -58,7 +58,11 @@ func EmitInstrInfo(insns []ir.Insn) string {
 
 		// operand bit variables
 		for _, bf := range bfs {
-			fmt.Fprintf(&b, "  bits<%d> %s;\n", bf.field.Width, letterVar(bf.letter))
+			total := 0
+			for _, f := range bf.fields {
+				total += f.Width
+			}
+			fmt.Fprintf(&b, "  bits<%d> %s;\n", total, letterVar(bf.letter))
 		}
 
 		// fixed bits
@@ -74,9 +78,24 @@ func EmitInstrInfo(insns []ir.Insn) string {
 		}
 		// operand field bindings (high..low LLVM bit numbers)
 		for _, bf := range bfs {
-			hi := bitPos(bf.field.Word, 15-bf.field.Hi, len(in.Words))
-			lo := bitPos(bf.field.Word, 15-bf.field.Lo, len(in.Words))
-			fmt.Fprintf(&b, "  let Inst{%d-%d} = %s;\n", hi, lo, letterVar(bf.letter))
+			total := 0
+			for _, f := range bf.fields {
+				total += f.Width
+			}
+			cursor := total - 1
+			single := len(bf.fields) == 1
+			for _, f := range bf.fields {
+				instHi := bitPos(f.Word, 15-f.Hi, len(in.Words))
+				instLo := bitPos(f.Word, 15-f.Lo, len(in.Words))
+				varHi := cursor
+				varLo := cursor - f.Width + 1
+				cursor -= f.Width
+				if single {
+					fmt.Fprintf(&b, "  let Inst{%d-%d} = %s;\n", instHi, instLo, letterVar(bf.letter))
+				} else {
+					fmt.Fprintf(&b, "  let Inst{%d-%d} = %s{%d-%d};\n", instHi, instLo, letterVar(bf.letter), varHi, varLo)
+				}
+			}
 		}
 
 		fmt.Fprintf(&b, "  dag OutOperandList = (outs);\n")
@@ -98,29 +117,35 @@ func boundFields(in ir.Insn) []boundField {
 		case operand.FixedReg, operand.R0Fixed:
 			// no field
 		case operand.MemDisp:
-			if f, ok := fieldFor(in, o.BaseLetter); ok {
-				out = append(out, boundField{letter: o.BaseLetter, field: f, class: "GPR"})
+			if fs := fieldsFor(in, o.BaseLetter); len(fs) > 0 {
+				out = append(out, boundField{letter: o.BaseLetter, fields: fs, class: "GPR"})
 			}
-			if f, ok := fieldFor(in, o.Letter); ok {
-				out = append(out, boundField{letter: o.Letter, field: f, class: dispClass(o)})
+			if fs := fieldsFor(in, o.Letter); len(fs) > 0 {
+				out = append(out, boundField{letter: o.Letter, fields: fs, class: dispClass(o)})
 			}
 		default:
 			if o.Letter == 0 {
 				continue
 			}
-			if f, ok := fieldFor(in, o.Letter); ok {
-				out = append(out, boundField{letter: o.Letter, field: f, class: operandClassName(o)})
+			if fs := fieldsFor(in, o.Letter); len(fs) > 0 {
+				out = append(out, boundField{letter: o.Letter, fields: fs, class: operandClassName(o)})
 			}
 		}
 	}
 	return out
 }
 
-func fieldFor(in ir.Insn, letter byte) (encoding.Field, bool) {
+func fieldsFor(in ir.Insn, letter byte) []encoding.Field {
 	if letter == 0 {
-		return encoding.Field{}, false
+		return nil
 	}
-	return in.FieldFor(letter)
+	var fs []encoding.Field
+	for _, f := range in.Fields {
+		if f.Letter == letter {
+			fs = append(fs, f)
+		}
+	}
+	return fs
 }
 
 // operandClassName maps an operand to its TableGen operand class name.

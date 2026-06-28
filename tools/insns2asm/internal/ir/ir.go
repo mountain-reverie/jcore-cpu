@@ -46,18 +46,20 @@ func Build(raw []loader.RawInsn) ([]Insn, error) {
 		}
 		p := format.Parse(r.Format)
 		ops := make([]operand.Operand, 0, len(p.Operands))
+		fields := encoding.ParseFields(words)
 		for _, tok := range p.Operands {
 			o, err := operand.Classify(tok)
 			if err != nil {
 				return nil, fmt.Errorf("%q: %w", r.Format, err)
 			}
 			if o.Letter != 0 {
-				for _, f := range encoding.ParseFields(words) {
+				w := 0
+				for _, f := range fields {
 					if f.Letter == o.Letter {
-						o.Width = f.Width
-						break
+						w += f.Width
 					}
 				}
+				o.Width = w
 			}
 			ops = append(ops, o)
 		}
@@ -65,7 +67,7 @@ func Build(raw []loader.RawInsn) ([]Insn, error) {
 			Mnemonic: p.Mnemonic,
 			Operands: ops,
 			Words:    words,
-			Fields:   encoding.ParseFields(words),
+			Fields:   fields,
 			Arch: arch.Set{
 				SH1: r.SH1, SH2: r.SH2, SH2E: r.SH2E, SH3: r.SH3, SH3E: r.SH3E,
 				SH4: r.SH4, SH4A: r.SH4A, SH2A: r.SH2A, J1: r.J1, J2: r.J2, J4: r.J4,

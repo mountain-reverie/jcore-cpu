@@ -140,6 +140,23 @@ func TestEmitOperandClassDefs(t *testing.T) {
 	}
 }
 
+func TestEmitBindsSplitFieldImmediate(t *testing.T) {
+	insns := build(t, loader.RawInsn{
+		Group: "Data Transfer Instructions", Format: "movi20\t#imm20,Rn",
+		Code: "0000nnnniiii0000 iiiiiiiiiiiiiiii", SH2A: true,
+	})
+	out := EmitInstrInfo(insns)
+	if !strings.Contains(out, "bits<20> imm;") {
+		t.Errorf("imm should be 20 bits:\n%s", out)
+	}
+	if !strings.Contains(out, "let Inst{23-20} = imm{19-16};") {
+		t.Errorf("missing high-nibble sub-range binding:\n%s", out)
+	}
+	if !strings.Contains(out, "let Inst{15-0} = imm{15-0};") {
+		t.Errorf("missing low-word sub-range binding:\n%s", out)
+	}
+}
+
 func TestEmitFixedRegAsLiteral(t *testing.T) {
 	insns := build(t, loader.RawInsn{
 		Group: "System Control Instructions", Format: "ldc\tRm,SR",

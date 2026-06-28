@@ -58,3 +58,17 @@ func TestBuildPopulatesOperandWidth(t *testing.T) {
 		t.Errorf("Rn width = %d, want 4", in.Operands[1].Width)
 	}
 }
+
+func TestBuildSumsSplitFieldWidth(t *testing.T) {
+	got, err := Build([]loader.RawInsn{{
+		Group: "Data Transfer Instructions", Format: "movi20\t#imm20,Rn",
+		Code: "0000nnnniiii0000 iiiiiiiiiiiiiiii", SH2A: true,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// operand 0 is #imm20: i-field split 4 (word0) + 16 (word1) = 20
+	if got[0].Operands[0].Width != 20 {
+		t.Errorf("imm20 width = %d, want 20", got[0].Operands[0].Width)
+	}
+}

@@ -286,7 +286,7 @@ func asmOperand(o operand.Operand) string {
 	case operand.MemR0:
 		return "${" + LetterVar(o.Letter) + "}"
 	case operand.MemR0GBR:
-		return "@(r0, gbr)"
+		return "@(r0,gbr)"
 	case operand.MemPC:
 		return "@(${" + LetterVar(o.Letter) + "}, pc)"
 	case operand.MemGBR:

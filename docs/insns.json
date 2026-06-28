@@ -3002,7 +3002,7 @@
       "DSP": false,
       "DSP.issue": 0,
       "DSP.latency": 0,
-      "format": "band.b     #imm3,@disp12,Rn",
+      "format": "band.b     #imm3,@(disp12,Rn)",
       "abstract": "(imm of (disp+Rn)) \u0026 T -\u003e T",
       "code": "0011nnnn0iii1001 0100dddddddddddd",
       "T": "result",

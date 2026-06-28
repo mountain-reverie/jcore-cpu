@@ -87,6 +87,7 @@ var table = map[string]entry{
 	"Rm":            {class: GPR, letter: 'm'},
 	"R0":            {class: R0Fixed, fixed: "R0"},
 	"#imm":          {class: Imm, letter: 'i'},
+	"#imm3":         {class: Imm, letter: 'i'},
 	"#imm20":        {class: Imm, letter: 'i'},
 	"@Rm":           {class: MemReg, letter: 'm'},
 	"@Rn":           {class: MemReg, letter: 'n'},
@@ -122,6 +123,10 @@ var table = map[string]entry{
 	"MACL":          {class: FixedReg, fixed: "MACL"},
 	"PR":            {class: FixedReg, fixed: "PR"},
 	"T":             {class: FixedReg, fixed: "T"},
+	"PTEH":          {class: FixedReg, fixed: "PTEH"},
+	"PTEL":          {class: FixedReg, fixed: "PTEL"},
+	"ASIDR":         {class: FixedReg, fixed: "ASIDR"},
+	"TSBPTR":        {class: FixedReg, fixed: "TSBPTR"},
 }
 
 // Classify maps an operand token to its canonical Operand.

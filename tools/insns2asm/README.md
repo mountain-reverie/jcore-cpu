@@ -2,8 +2,13 @@
 
 Generates assembler definitions from `docs/insns.json`.
 
-Phase 1 covers the GP-integer instruction core (Data Transfer, Arithmetic,
-Logic, Shift, Bit Manipulation). The DSP family is excluded.
+Coverage:
+- Phase 1: GP-integer core (Data Transfer, Arithmetic, Logic, Shift, Bit Manipulation).
+- Phase 2a: Branch + System Control, with operand-bit binding in the LLVM output.
+
+The DSP instruction family is excluded. Branch/System-Control instructions whose
+operands reference DSP or coprocessor registers are also excluded; the excluded
+count is reported on stderr.
 
 ## Usage
 
@@ -15,15 +20,14 @@ Logic, Shift, Bit Manipulation). The DSP family is excluded.
 
 - `check` — verifies every instruction's encoding round-trips losslessly.
 - `gas`   — emits only J-core-only instructions as `sh_table` entries to splice
-  into a checked-out upstream `opcodes/sh-opc.h` (parity mode: SH instructions
-  are assumed already present upstream).
-- `llvm`  — emits complete TableGen instruction-encoding records (bootstrap
-  mode) for the LLVM SH MC layer. Register classes and MC C++ glue are written
-  by hand following the RISC-V backend layout.
+  into a checked-out upstream `opcodes/sh-opc.h` (parity mode). Branch and System
+  Control instructions all carry an SH arch flag, so none appears in the delta.
+- `llvm`  — emits TableGen records with operand classes, dag operand lists, and
+  per-field `Inst{}` bindings (bootstrap mode). Register classes and the MC C++
+  glue are written by hand following the RISC-V backend layout (Phase 2b).
 
-## Toolchain round-trip (manual integration)
+## Round-trip against built toolchains
 
-The pure-Go `check` gate proves the IR matches insns.json. End-to-end validation
-against built toolchains (assemble each format, disassemble, compare bytes) is a
-manual integration step performed when wiring the gas delta into binutils and
-the `.td` into the in-tree LLVM SH backend.
+The pure-Go `check` gate proves the IR matches insns.json. Building `llvm-mc` /
+`gas` from the emitted defs and round-tripping bytes is Phase 2b (LLVM MC glue)
+and Phase 2c (binutils delta).

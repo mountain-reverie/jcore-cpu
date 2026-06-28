@@ -47,3 +47,22 @@ func TestRunCheckPasses(t *testing.T) {
 		t.Fatalf("check should pass: %v", err)
 	}
 }
+
+func TestRunExcludesDSPCoproc(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "insns.json")
+	data := `{"instructions":[
+	  {"group":"System Control Instructions","format":"ldc\tRm,SR","code":"0100mmmm00001110","SH1":true},
+	  {"group":"System Control Instructions","format":"lds\tRm,DSR","code":"0100mmmm01101010","DSP":true}
+	]}`
+	if err := os.WriteFile(p, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := run([]string{"-in", p, "-emit", "check"}, &out); err != nil {
+		t.Fatalf("check should pass: %v", err)
+	}
+	if !bytes.Contains(out.Bytes(), []byte("ok: 1 instructions round-trip")) {
+		t.Errorf("expected 1 kept insn (ldc Rm,SR), got:\n%s", out.String())
+	}
+}

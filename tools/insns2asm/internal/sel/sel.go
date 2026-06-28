@@ -26,7 +26,7 @@ var gpIntegerGroups = map[string]bool{
 // (MemR0GBR) is kept — "gbr" is not a GPR, so it is unambiguous.
 func oneACleanOperand(o operand.Operand) bool {
 	switch o.Class {
-	case operand.GPR, operand.Imm, operand.R0Fixed, operand.MemR0, operand.MemR0GBR:
+	case operand.GPR, operand.Imm, operand.R0Fixed, operand.MemR0, operand.MemR0GBR, operand.MemDisp, operand.MemGBR, operand.MemPC:
 		return true
 	case operand.MemReg, operand.MemPostInc, operand.MemPreDec:
 		return o.Fixed == "" // variable base only; fixed @R0/@-R15/@R15+ deferred

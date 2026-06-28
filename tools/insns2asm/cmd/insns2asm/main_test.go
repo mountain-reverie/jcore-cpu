@@ -115,7 +115,8 @@ func TestRunClassSimpleFilter(t *testing.T) {
 	p := filepath.Join(dir, "insns.json")
 	data := `{"instructions":[
 	  {"group":"Data Transfer Instructions","format":"mov\tRm,Rn","code":"0110nnnnmmmm0011","SH1":true},
-	  {"group":"Data Transfer Instructions","format":"mov.l\t@(disp,Rm),Rn","code":"0101nnnnmmmmdddd","SH1":true}
+	  {"group":"Data Transfer Instructions","format":"mov.l\t@(disp,Rm),Rn","code":"0101nnnnmmmmdddd","SH1":true},
+	  {"group":"Data Transfer Instructions","format":"movi20\t#imm20,Rn","code":"0000nnnniiii0000 iiiiiiiiiiiiiiii","SH2A":true}
 	]}`
 	if err := os.WriteFile(p, []byte(data), 0o644); err != nil {
 		t.Fatal(err)
@@ -127,7 +128,10 @@ func TestRunClassSimpleFilter(t *testing.T) {
 	if !bytes.Contains(out.Bytes(), []byte("def MOV_GPR_GPR")) {
 		t.Errorf("mov should be emitted:\n%s", out.String())
 	}
-	if bytes.Contains(out.Bytes(), []byte("MemDisp")) {
-		t.Errorf("disp insn should be filtered out:\n%s", out.String())
+	if !bytes.Contains(out.Bytes(), []byte("memdisp_l4")) {
+		t.Errorf("memdisp_l4 class should be emitted:\n%s", out.String())
+	}
+	if bytes.Contains(out.Bytes(), []byte("MOVI20")) {
+		t.Errorf("two-word movi20 should be filtered out:\n%s", out.String())
 	}
 }

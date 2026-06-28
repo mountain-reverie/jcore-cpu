@@ -17,12 +17,19 @@ var gpIntegerGroups = map[string]bool{
 // oneACleanOperand reports whether an operand class is supported by the current
 // SH MC target (1a register/immediate + 1b-i register-only memory). Scaled
 // displacement (MemDisp/MemPC/MemGBR) and the non-GP classes remain unsupported.
+//
+// Fixed-register memory operands @R0/@-R15/@R15+ (MemReg/MemPreDec/MemPostInc
+// with Fixed != "") are DEFERRED: their literal syntax is textually identical to
+// the variable forms at base register r0/r15 (e.g. "@r0" is both @Rm with rm=r0
+// and cas.l's fixed @R0), which the literal-text scheme cannot disambiguate.
+// They need constrained-register operand classes (a later sub-phase). @(R0,GBR)
+// (MemR0GBR) is kept — "gbr" is not a GPR, so it is unambiguous.
 func oneACleanOperand(o operand.Operand) bool {
 	switch o.Class {
-	case operand.GPR, operand.Imm, operand.R0Fixed,
-		operand.MemReg, operand.MemPostInc, operand.MemPreDec,
-		operand.MemR0, operand.MemR0GBR:
+	case operand.GPR, operand.Imm, operand.R0Fixed, operand.MemR0, operand.MemR0GBR:
 		return true
+	case operand.MemReg, operand.MemPostInc, operand.MemPreDec:
+		return o.Fixed == "" // variable base only; fixed @R0/@-R15/@R15+ deferred
 	}
 	return false
 }

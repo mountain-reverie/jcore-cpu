@@ -92,8 +92,8 @@ func TestEmitBindsRegisterOperands(t *testing.T) {
 	if !strings.Contains(out, "dag OutOperandList = (outs);") {
 		t.Errorf("missing OutOperandList:\n%s", out)
 	}
-	if !strings.Contains(out, `let AsmString = "mov\t$rm, $rn";`) {
-		t.Errorf("AsmString should use $vars:\n%s", out)
+	if !strings.Contains(out, `let AsmString = "mov\t${rm}, ${rn}";`) {
+		t.Errorf("AsmString should use ${vars}:\n%s", out)
 	}
 	if !strings.Contains(out, "let Predicates = [HasJ2];") {
 		t.Errorf("missing predicate:\n%s", out)
@@ -164,7 +164,7 @@ func TestEmitFixedRegAsLiteral(t *testing.T) {
 	})
 	out := EmitInstrInfo(insns)
 	// SR is fixed: literal in AsmString, not an operand, no extra bits
-	if !strings.Contains(out, `let AsmString = "ldc\t$rm, sr";`) {
+	if !strings.Contains(out, `let AsmString = "ldc\t${rm}, sr";`) {
 		t.Errorf("fixed reg should be a lowercase literal:\n%s", out)
 	}
 	if !strings.Contains(out, "dag InOperandList = (ins GPR:$rm);") {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/cases"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/format"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/gas"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/ir"
@@ -94,6 +95,11 @@ func run(args []string, stdout io.Writer) error {
 	case "llvm":
 		_, err = io.WriteString(w, llvm.EmitInstrInfo(insns))
 		return err
+	case "cases":
+		for _, c := range cases.SynthesizeAll(insns) {
+			fmt.Fprintf(w, "%s\t%s\n", c.Asm, c.Hex)
+		}
+		return nil
 	case "check":
 		rawMap := map[string]string{}
 		for _, r := range raw {

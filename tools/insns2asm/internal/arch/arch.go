@@ -25,8 +25,12 @@ func (s Set) GASMask() string {
 		return "arch_sh1_up"
 	case s.SH2:
 		return "arch_sh2_up"
+	case s.SH2E:
+		return "arch_sh2e_up"
 	case s.SH3:
 		return "arch_sh3_up"
+	case s.SH3E:
+		return "arch_sh3e_up"
 	case s.SH2A:
 		return "arch_sh2a_nofpu_up"
 	case s.SH4:
@@ -46,8 +50,18 @@ func (s Set) LLVMPredicates() []string {
 		return []string{"HasSH1"}
 	case s.SH2:
 		return []string{"HasSH2"}
+	case s.SH2E:
+		return []string{"HasSH2E"}
+	case s.SH3:
+		return []string{"HasSH3"}
+	case s.SH3E:
+		return []string{"HasSH3E"}
 	case s.SH2A:
 		return []string{"HasSH2A"}
+	case s.SH4:
+		return []string{"HasSH4"}
+	case s.SH4A:
+		return []string{"HasSH4A"}
 	case s.J2:
 		return []string{"HasJ2"}
 	case s.J1:

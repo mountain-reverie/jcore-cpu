@@ -75,6 +75,15 @@ func argCode(o operand.Operand) (string, error) {
 		return "A_R0", nil
 	case operand.FixedReg:
 		return "A_" + o.Fixed, nil
+	case operand.BranchDisp:
+		if o.Width == 12 {
+			return "A_BDISP12", nil
+		}
+		return "A_BDISP8", nil
+	case operand.BankReg:
+		return "A_REG_B", nil
+	case operand.MemTBRDisp:
+		return "A_DISP_TBR", nil
 	}
 	return "", fmt.Errorf("gas: unhandled operand class %v (token %q)", o.Class, o.Token)
 }

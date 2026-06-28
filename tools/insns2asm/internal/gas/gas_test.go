@@ -6,6 +6,7 @@ import (
 
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/ir"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/loader"
+	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/operand"
 )
 
 func TestEmitDeltaSkipsSHInstructions(t *testing.T) {
@@ -63,5 +64,27 @@ func TestNibblesKnownPattern(t *testing.T) {
 	want := "0x0,REG_N,IMM0_4,0x0"
 	if got != want {
 		t.Errorf("nibbles = %q, want %q", got, want)
+	}
+}
+
+func TestArgCodeBranchAndSystemClasses(t *testing.T) {
+	cases := []struct {
+		o    operand.Operand
+		want string
+	}{
+		{operand.Operand{Class: operand.BranchDisp, Letter: 'd', Width: 12}, "A_BDISP12"},
+		{operand.Operand{Class: operand.BranchDisp, Letter: 'd', Width: 8}, "A_BDISP8"},
+		{operand.Operand{Class: operand.BankReg, Letter: 'n'}, "A_REG_B"},
+		{operand.Operand{Class: operand.MemTBRDisp, Letter: 'd', Width: 8}, "A_DISP_TBR"},
+		{operand.Operand{Class: operand.FixedReg, Fixed: "SSR"}, "A_SSR"},
+	}
+	for _, c := range cases {
+		got, err := argCode(c.o)
+		if err != nil {
+			t.Fatalf("%+v: %v", c.o, err)
+		}
+		if got != c.want {
+			t.Errorf("argCode(%+v) = %q, want %q", c.o, got, c.want)
+		}
 	}
 }

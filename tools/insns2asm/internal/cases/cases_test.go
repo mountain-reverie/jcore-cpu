@@ -358,6 +358,34 @@ func TestRegisterBranchStillSwept(t *testing.T) {
 	}
 }
 
+func TestBankRegSurfacedConcrete(t *testing.T) {
+	insns, err := ir.Build([]loader.RawInsn{
+		{Group: "System Control Instructions", Format: "ldc\tRm,Rn_BANK", Code: "0100mmmm1nnn1110", J2: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs := Synthesize(insns[0])
+	if len(cs) == 0 {
+		t.Fatal("no cases")
+	}
+	for _, c := range cs {
+		if strings.Contains(c.Asm, "_BANK") {
+			t.Errorf("BankReg must surface as concrete rN_bank, got %q", c.Asm)
+		}
+	}
+	// at least one case should mention a banked register
+	found := false
+	for _, c := range cs {
+		if strings.Contains(c.Asm, "_bank") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected a rN_bank surface in cases: %+v", cs)
+	}
+}
+
 func scanMov(s string, a, b *int) (int, error) {
 	s = strings.TrimPrefix(s, "mov ")
 	parts := strings.Split(s, ", ")

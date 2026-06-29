@@ -49,7 +49,7 @@ func regLetters(in ir.Insn) []byte {
 	var ls []byte
 	for _, o := range in.Operands {
 		switch o.Class {
-		case operand.GPR, operand.MemReg, operand.MemPostInc, operand.MemPreDec, operand.MemR0:
+		case operand.GPR, operand.MemReg, operand.MemPostInc, operand.MemPreDec, operand.MemR0, operand.BankReg:
 			if o.Letter != 0 {
 				ls = append(ls, o.Letter)
 			}
@@ -231,6 +231,10 @@ func surface(o operand.Operand, val int) string {
 		return fmt.Sprintf("@(r0,r%d)", val)
 	case operand.MemR0GBR:
 		return "@(r0,gbr)"
+	case operand.BankReg:
+		// Banked GPR field is 3-bit (R0_BANK..R7_BANK); mask so the printed
+		// register matches the 3-bit value renderHex encodes.
+		return fmt.Sprintf("r%d_bank", val&7)
 	}
 	return o.Token
 }

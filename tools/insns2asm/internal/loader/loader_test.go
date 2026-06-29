@@ -47,8 +47,11 @@ func TestIsEmittedGroup(t *testing.T) {
 	if !IsEmittedGroup("Floating-Point Single-Precision Instructions (FPSCR.PR = 0)") {
 		t.Error("single-precision FP group should now be emitted")
 	}
-	if IsEmittedGroup("Floating-Point Double-Precision Instructions (FPSCR.PR = 1)") {
-		t.Error("double-precision FP group must not be emitted")
+	if !IsEmittedGroup("Floating-Point Double-Precision Instructions (FPSCR.PR = 1)") {
+		t.Error("double-precision FP group must now be emitted")
+	}
+	if !IsEmittedGroup("64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)") {
+		t.Error("64-bit FP transfer group must now be emitted")
 	}
 }
 

@@ -416,6 +416,60 @@ func TestFRegSurfacesLowercase(t *testing.T) {
 	}
 }
 
+func TestDRegSurfacesEven(t *testing.T) {
+	insns, err := ir.Build([]loader.RawInsn{
+		{Group: "Floating-Point Double-Precision Instructions (FPSCR.PR = 1)", Format: "fadd\tDRm,DRn", Code: "1111nnn0mmm00000", SH4: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs := Synthesize(insns[0])
+	if len(cs) == 0 {
+		t.Fatal("no cases generated for fadd DRm,DRn")
+	}
+	for _, c := range cs {
+		if !strings.HasPrefix(c.Asm, "fadd dr") {
+			t.Errorf("DReg not surfaced as dr<N>: %q", c.Asm)
+		}
+		// All register numbers must be even
+		var m, n int
+		if nn, _ := fmt.Sscanf(c.Asm, "fadd dr%d, dr%d", &m, &n); nn == 2 {
+			if m%2 != 0 || n%2 != 0 {
+				t.Errorf("DReg register not even: %q (dr%d, dr%d)", c.Asm, m, n)
+			}
+		}
+	}
+}
+
+func TestXRegSurfacesEven(t *testing.T) {
+	insns, err := ir.Build([]loader.RawInsn{
+		{Group: "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)", Format: "fmov\tDRm,XDn", Code: "1111nnn1mmm01100", SH4: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs := Synthesize(insns[0])
+	if len(cs) == 0 {
+		t.Fatal("no cases generated for fmov DRm,XDn")
+	}
+	found := false
+	for _, c := range cs {
+		if strings.Contains(c.Asm, "xd") {
+			found = true
+			// xd register number must be even
+			var m, n int
+			if nn, _ := fmt.Sscanf(c.Asm, "fmov dr%d, xd%d", &m, &n); nn == 2 {
+				if n%2 != 0 {
+					t.Errorf("XReg register not even: %q (xd%d)", c.Asm, n)
+				}
+			}
+		}
+	}
+	if !found {
+		t.Errorf("no xd register found in cases: %+v", cs)
+	}
+}
+
 func scanMov(s string, a, b *int) (int, error) {
 	s = strings.TrimPrefix(s, "mov ")
 	parts := strings.Split(s, ", ")

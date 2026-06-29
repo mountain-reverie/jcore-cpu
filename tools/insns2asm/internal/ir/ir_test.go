@@ -31,13 +31,13 @@ func TestBuildMov(t *testing.T) {
 }
 
 func TestBuildUnmappedOperandErrors(t *testing.T) {
-	// FRm/FRn are now valid FP operand tokens; use a truly unknown token instead.
+	// FRm/FRn/DRm/DRn are now valid FP operand tokens; use a truly unknown token.
 	raw := []loader.RawInsn{{
-		Group: "Data Transfer Instructions", Format: "fmov\tDRm,DRn",
+		Group: "Data Transfer Instructions", Format: "fmov\tFVm,FVn",
 		Code: "1111nnnnmmmm1100", SH4: true,
 	}}
 	if _, err := Build(raw); err == nil {
-		t.Error("want error for unmapped DRm operand")
+		t.Error("want error for unmapped FVm operand")
 	}
 }
 

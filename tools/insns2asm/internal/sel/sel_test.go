@@ -173,6 +173,32 @@ func TestFPSelected(t *testing.T) {
 	}
 }
 
+func TestDoublePrecisionFPSelected(t *testing.T) {
+	accept := []loader.RawInsn{
+		{Group: "Floating-Point Double-Precision Instructions (FPSCR.PR = 1)", Format: "fadd\tDRm,DRn", Code: "1111nnn0mmm00000", SH4: true},
+		{Group: "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)", Format: "fmov.d\t@Rm,DRn", Code: "1111nnn0mmmm1000", SH4: true},
+		{Group: "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)", Format: "fmov\tDRm,XDn", Code: "1111nnn1mmm01100", SH4: true},
+		{Group: "Floating-Point Double-Precision Instructions (FPSCR.PR = 1)", Format: "fcnvsd\tFPUL,DRn", Code: "1111nnn010101101", SH4: true},
+		{Group: "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)", Format: "fsca\tFPUL,DRn", Code: "1111nnn011111101", SH4: true},
+	}
+	for _, raw := range accept {
+		in := build(t, raw)
+		if !Is1aSimple(in) {
+			t.Errorf("should be double-FP-selected: %s", raw.Format)
+		}
+	}
+
+	reject := []loader.RawInsn{
+		{Group: "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)", Format: "fipr\tFRm,FRn", Code: "1111nnnnmmmm1110", SH4: true},
+	}
+	for _, raw := range reject {
+		in := build(t, raw)
+		if Is1aSimple(in) {
+			t.Errorf("should NOT be selected: %s", raw.Format)
+		}
+	}
+}
+
 func TestIs1aSimpleAcceptsDispOperands(t *testing.T) {
 	for _, r := range []loader.RawInsn{
 		{Group: "Data Transfer Instructions", Format: "mov.l\t@(disp,Rm),Rn", Code: "0101nnnnmmmmdddd", SH1: true},

@@ -9,10 +9,12 @@ import (
 var fpGroups = map[string]bool{
 	"32 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 0)": true,
 	"Floating-Point Single-Precision Instructions (FPSCR.PR = 0)":     true,
-	"Floating-Point Control Instructions":                             true,
+	"Floating-Point Control Instructions":                              true,
+	"64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)": true,
+	"Floating-Point Double-Precision Instructions (FPSCR.PR = 1)":     true,
 }
 
-var fpDeferMnemonics = map[string]bool{"fipr": true, "ftrv": true, "fsca": true}
+var fpDeferMnemonics = map[string]bool{"fipr": true, "ftrv": true}
 
 var gpIntegerGroups = map[string]bool{
 	"Data Transfer Instructions":        true,
@@ -103,6 +105,7 @@ func fpSelected(in ir.Insn) bool {
 	for _, o := range in.Operands {
 		switch o.Class {
 		case operand.GPR, operand.Imm, operand.FReg, operand.FR0Fixed,
+			operand.DReg, operand.XReg,
 			operand.MemReg, operand.MemPostInc, operand.MemPreDec, operand.MemR0,
 			operand.MemDisp:
 			// ok

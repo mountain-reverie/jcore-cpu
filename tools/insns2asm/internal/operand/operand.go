@@ -26,6 +26,8 @@ const (
 	MemTBRDisp
 	FReg
 	FR0Fixed
+	DReg
+	XReg
 )
 
 func (c Class) String() string {
@@ -66,6 +68,10 @@ func (c Class) String() string {
 		return "FReg"
 	case FR0Fixed:
 		return "FR0Fixed"
+	case DReg:
+		return "DReg"
+	case XReg:
+		return "XReg"
 	}
 	return "??"
 }
@@ -135,6 +141,10 @@ var table = map[string]entry{
 	"TSBPTR":        {class: FixedReg, fixed: "TSBPTR"},
 	"FRn":           {class: FReg, letter: 'n'},
 	"FRm":           {class: FReg, letter: 'm'},
+	"DRn":           {class: DReg, letter: 'n'},
+	"DRm":           {class: DReg, letter: 'm'},
+	"XDn":           {class: XReg, letter: 'n'},
+	"XDm":           {class: XReg, letter: 'm'},
 	"FR0":           {class: FR0Fixed, fixed: "FR0"},
 	"FPUL":          {class: FixedReg, fixed: "FPUL"},
 	"FPSCR":         {class: FixedReg, fixed: "FPSCR"},

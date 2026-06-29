@@ -47,6 +47,11 @@ func argCode(o operand.Operand) (string, error) {
 	case operand.Imm:
 		return "A_IMM", nil
 	case operand.MemReg:
+		if o.Fixed == "R0" {
+			// Fixed @R0 indirect (e.g. cas.l): a dedicated operand type that
+			// does not bind a register field (A_IND_M/N would overwrite reg_m).
+			return "A_IND_0", nil
+		}
 		if o.Letter == 'n' {
 			return "A_IND_N", nil
 		}

@@ -106,12 +106,12 @@ func EmitInstrInfo(insns []ir.Insn) string {
 		fmt.Fprintf(&b, "  let Size = %d;\n", 2*len(in.Words))
 		fmt.Fprintf(&b, "  let DecoderNamespace = \"SH\";\n")
 
-		// Instructions with a fixed-register memory operand (e.g. @R0, @-R15,
-		// @R15+) cannot be disassembled: the implied register has no encoding
-		// field, so the bytes would decode to the general register form. Mark
-		// them parser-only so they assemble but are excluded from the decoder.
-		if needsAsmParserOnly(in) {
-			fmt.Fprintf(&b, "  let isAsmParserOnly = 1;\n")
+		// Instructions with a fixed-register memory operand (@R0, @-R15, @R15+)
+		// have an implicit register with no encoding field. Use an
+		// instruction-level DecoderMethod that decodes the GPR field(s) and adds
+		// the implicit register, so they round-trip through the disassembler.
+		if dec, ok := fixedMemDecoder(in); ok {
+			fmt.Fprintf(&b, "  let DecoderMethod = %q;\n", dec)
 		}
 
 		// operand bit variables (skip fixed-mem: no encoding field)
@@ -171,20 +171,30 @@ func EmitInstrInfo(insns []ir.Insn) string {
 	return b.String()
 }
 
-// needsAsmParserOnly reports whether an instruction has a memory operand with
-// a fixed (implied) register — @R0, @-R15, @R15+. These have no encoding field
-// for the register, so they are not round-trip disassemblable and must be
-// excluded from the decoder via isAsmParserOnly.
-func needsAsmParserOnly(in ir.Insn) bool {
+// fixedMemDecoder returns the instruction-level disassembler DecoderMethod for
+// an instruction whose memory operand has a fixed (implicit) register — @R0,
+// @-R15, @R15+ — keyed by the constrained operand class. The implicit register
+// has no encoding field, so per-operand decoding cannot locate it; an
+// instruction-level decoder extracts the GPR field(s) and adds the implicit
+// operand. ok is false when the instruction has no fixed-register memory operand.
+func fixedMemDecoder(in ir.Insn) (string, bool) {
 	for _, o := range in.Operands {
 		switch o.Class {
 		case operand.MemReg, operand.MemPostInc, operand.MemPreDec:
-			if o.Fixed != "" {
-				return true
+			if o.Fixed == "" {
+				continue
+			}
+			switch fixedMemClass(o) {
+			case "MemR0Fixed":
+				return "decodeCasFixed", true
+			case "MemDecR15":
+				return "decodeMovMemDecR15", true
+			case "MemIncR15":
+				return "decodeMovMemIncR15", true
 			}
 		}
 	}
-	return false
+	return "", false
 }
 
 // boundFields returns, in operand order, the encoding fields bound by the

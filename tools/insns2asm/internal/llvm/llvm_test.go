@@ -176,16 +176,39 @@ func TestEmitFixedRegAsLiteral(t *testing.T) {
 	}
 }
 
-func TestEmitFixedRegMemIsAsmParserOnly(t *testing.T) {
-	// cas.l Rm,Rn,@R0 has a fixed-register memory operand (@R0): no encoding
-	// field for the register, so it must be marked parser-only.
+func TestEmitFixedRegMemDecoderMethod(t *testing.T) {
+	// cas.l Rm,Rn,@R0 (MemR0Fixed) -> instruction-level decodeCasFixed, no isAsmParserOnly.
 	insns := build(t, loader.RawInsn{
 		Group: "Data Transfer Instructions", Format: "cas.l\tRm, Rn, @R0",
 		Code: "0010nnnnmmmm0011", J2: true,
 	})
 	out := EmitInstrInfo(insns)
-	if !strings.Contains(out, "let isAsmParserOnly = 1;") {
-		t.Errorf("fixed-register memory operand must set isAsmParserOnly:\n%s", out)
+	if !strings.Contains(out, `let DecoderMethod = "decodeCasFixed";`) {
+		t.Errorf("cas.l must get instruction-level decodeCasFixed:\n%s", out)
+	}
+	if strings.Contains(out, "isAsmParserOnly") {
+		t.Errorf("fixed-mem insns must no longer be isAsmParserOnly:\n%s", out)
+	}
+}
+
+func TestEmitFixedMemDecoderShapes(t *testing.T) {
+	cases := []struct {
+		name, format, code, want string
+	}{
+		{"movml-store", "movml.l\tRm,@-R15", "0100mmmm11110001", `let DecoderMethod = "decodeMovMemDecR15";`},
+		{"movmu-store", "movmu.l\tRm,@-R15", "0100mmmm11110000", `let DecoderMethod = "decodeMovMemDecR15";`},
+		{"movml-load", "movml.l\t@R15+,Rn", "0100nnnn11110101", `let DecoderMethod = "decodeMovMemIncR15";`},
+		{"movmu-load", "movmu.l\t@R15+,Rn", "0100nnnn11110100", `let DecoderMethod = "decodeMovMemIncR15";`},
+	}
+	for _, c := range cases {
+		insns := build(t, loader.RawInsn{Group: "Data Transfer Instructions", Format: c.format, Code: c.code, SH2A: true})
+		out := EmitInstrInfo(insns)
+		if !strings.Contains(out, c.want) {
+			t.Errorf("%s: missing %q:\n%s", c.name, c.want, out)
+		}
+		if strings.Contains(out, "isAsmParserOnly") {
+			t.Errorf("%s: must not be isAsmParserOnly:\n%s", c.name, out)
+		}
 	}
 }
 
@@ -199,6 +222,9 @@ func TestEmitVariableRegMemNotAsmParserOnly(t *testing.T) {
 	out := EmitInstrInfo(insns)
 	if strings.Contains(out, "isAsmParserOnly") {
 		t.Errorf("variable register-memory operand must not be parser-only:\n%s", out)
+	}
+	if strings.Contains(out, "DecoderMethod") {
+		t.Errorf("variable register-memory operand must not get a fixed-mem DecoderMethod:\n%s", out)
 	}
 }
 

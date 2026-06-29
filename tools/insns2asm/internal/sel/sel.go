@@ -32,13 +32,13 @@ func oneACleanOperand(o operand.Operand) bool {
 }
 
 // Is1aSimple reports whether an instruction is in the supported subset:
-// a single-word GP-integer instruction with supported single-word GP-integer
+// a single- or two-word GP-integer instruction with supported GP-integer
 // operands (registers, immediates, register-only memory classes with any Fixed value).
 func Is1aSimple(in ir.Insn) bool {
 	if !gpIntegerGroups[in.Group] {
 		return false
 	}
-	if len(in.Words) != 1 {
+	if len(in.Words) > 2 {
 		return false
 	}
 	for _, o := range in.Operands {

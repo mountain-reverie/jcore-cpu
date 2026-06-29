@@ -177,9 +177,13 @@ func boundFields(in ir.Insn) []boundField {
 				out = append(out, boundField{letter: o.BaseLetter, fields: fs, class: "GPR"})
 			}
 			if fs := fieldsFor(in, o.Letter); len(fs) > 0 {
-				// Compute scale-aware class name for MemDisp
+				// Compute width-aware and scale-aware class name for MemDisp
 				scale := ScaleOf(in.Mnemonic)
-				class := fmt.Sprintf("memdisp_%s4", sizeLetter(scale))
+				W := 0
+				for _, f := range fs {
+					W += f.Width
+				}
+				class := fmt.Sprintf("memdisp_%s%d", sizeLetter(scale), W)
 				out = append(out, boundField{letter: o.Letter, fields: fs, class: class})
 			}
 		case operand.MemGBR:

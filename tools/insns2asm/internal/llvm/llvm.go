@@ -315,7 +315,8 @@ func isGeneratedClass(name string) bool {
 	// (with ParserMethod/EncoderMethod/DecoderMethod), not auto Operand<i32> stubs.
 	if strings.HasPrefix(name, "memdisp_") ||
 		strings.HasPrefix(name, "gbrdisp_") ||
-		strings.HasPrefix(name, "pcdisp_") {
+		strings.HasPrefix(name, "pcdisp_") ||
+		strings.HasPrefix(name, "bdisp") {
 		return false
 	}
 	return true

@@ -135,8 +135,12 @@ func TestEmitOperandClassDefs(t *testing.T) {
 		Code: "1010dddddddddddd", SH1: true,
 	})
 	out := EmitInstrInfo(insns)
-	if !strings.Contains(out, "def bdisp12 : Operand<i32>") {
-		t.Errorf("missing generated operand class def:\n%s", out)
+	// bdisp8/bdisp12 are hand-authored in SHOperands.td (with EncoderMethod /
+	// DecoderMethod / ParserMatchClass), so the generator must NOT emit a bare
+	// Operand<i32> stub for them (that would duplicate-def in TableGen), exactly
+	// like the pcdisp_*/memdisp_* displacement classes.
+	if strings.Contains(out, "def bdisp12 : Operand<i32>") {
+		t.Errorf("bdisp12 is hand-authored; generator must not emit a stub def:\n%s", out)
 	}
 }
 

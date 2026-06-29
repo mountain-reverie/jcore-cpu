@@ -93,6 +93,11 @@ func dispBoundariesFor(width int) []int {
 		// For small fields, include 0, 1, 2, and max
 		return []int{0, 1, 2, max}
 	}
+	if width == 12 {
+		// SH-2A two-word forms: start sweep at 16 (> disp4 max 15) so generated asm
+		// text is unambiguous with the 16-bit disp4 forms that share the same syntax.
+		return []int{16, 0x7ff, 0x800, max}
+	}
 	// For larger fields, include 0, some mid-range values, and max
 	return []int{0, 0x7f, 0x80, max}
 }

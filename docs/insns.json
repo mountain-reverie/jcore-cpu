@@ -20837,7 +20837,7 @@
       "DSP.latency": 0,
       "format": "LDTLB.RN",
       "abstract": "PTEH/PTEL/ASIDR -\u003e TLB; SR\u003c-SSR, PC\u003c-SPC (no delay slot)",
-      "code": "0000000001101000",
+      "code": "0000000001111000",
       "J2": false,
       "J2.issue": 0,
       "J2.latency": 0,

@@ -118,12 +118,12 @@
 # MD/privilege is correct at the target before it dispatches); slot 1 sets
 # PC<-SPC; slots 2-3 issue the fetch at the target and dispatch it using the
 # same non-delayed redirect tail as exception entry / Break / Reset CPU.
-# Opcode 0x0068 (formerly the delayed-branch variant; replaced — no prior user).
+# Opcode 0x0078 (0x0068 freed for SH-2A nott; 0x0078 is clean across all SH arches).
 [[instr]]
   name = "LDTLB.RN"
   privileged = true
   format = "0"
-  opcode = "0000 0000 0110 1000"
+  opcode = "0000 0000 0111 1000"
   operation = "PTEH/PTEL/ASIDR -> TLB; SR<-SSR, PC<-SPC (no delay slot)"
 
   [[instr.slots]]

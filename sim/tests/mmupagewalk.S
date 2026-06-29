@@ -22,7 +22,7 @@
 !
 ! J4 overlay opcodes:
 !   LDC r0,PTEH  = 0x405E   LDC r0,PTEL = 0x406E   LDC r0,ASIDR = 0x407E
-!   LDC r0,VBR   = 0x402E   LDTLB       = 0x0038   LDTLB.RN     = 0x0068
+!   LDC r0,VBR   = 0x402E   LDTLB       = 0x0038   LDTLB.RN     = 0x0078
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -173,7 +173,7 @@ _v_store:
         .word   0x406E          ! LDC r0, PTEL
         mov     #0, r0
         .word   0x407E          ! LDC r0, ASIDR
-        .word   0x0068          ! LDTLB.RN: atomic install + return to SPC (no delay slot)
+        .word   0x0078          ! LDTLB.RN: atomic install + return to SPC (no delay slot)
         nop                     ! padding only (never executed; LDTLB.RN has no delay slot) — matches mmurun.S
 #endif
         .org 0x12000

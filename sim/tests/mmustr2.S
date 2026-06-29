@@ -156,7 +156,7 @@ _v_store:                               ! = VBR + 0x440
         .word   0x406E                  ! LDC r0, PTEL
         mov     #0, r0
         .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0068                  ! LDTLB.RN -- install + return atomically
+        .word   0x0078                  ! LDTLB.RN -- install + return atomically
 _h_fail_spin:
         bra     _h_fail_spin
         nop

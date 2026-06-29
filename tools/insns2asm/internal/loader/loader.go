@@ -69,6 +69,17 @@ func isDSPCoprocOperand(token string) bool {
 	return dspCoprocOperands[token]
 }
 
+// isDSPOnly reports whether the instruction's only supported architecture is
+// DSP. Instructions that are DSP AND also a non-DSP arch (e.g. clrs, synco)
+// are kept.
+func isDSPOnly(in RawInsn) bool {
+	if !in.DSP {
+		return false
+	}
+	return !(in.SH1 || in.SH2 || in.SH2E || in.SH3 || in.SH3E ||
+		in.SH4 || in.SH4A || in.SH2A || in.J1 || in.J2 || in.J4)
+}
+
 // Load decodes insns.json, keeping only emitted groups. Instructions in an
 // emitted group whose operands reference a DSP/coproc register are excluded;
 // the returned int is the count of such operand-excluded instructions.
@@ -86,6 +97,10 @@ func Load(r io.Reader) ([]RawInsn, int, error) {
 			continue
 		}
 		if !IsEmittedGroup(in.Group) {
+			continue
+		}
+		if isDSPOnly(in) {
+			dropped++
 			continue
 		}
 		if hasDSPCoprocOperand(in.Format) {

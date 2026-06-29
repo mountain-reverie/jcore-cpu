@@ -35,6 +35,28 @@ func TestLoadKeepsBranchAndSystemDropsDSPOperands(t *testing.T) {
 	}
 }
 
+const dspSample = `{"instructions":[
+  {"group":"System Control Instructions","format":"ldre\t@(disp,PC)","code":"10001110dddddddd","DSP":true},
+  {"group":"System Control Instructions","format":"clrs","code":"0000000001001000","DSP":true,"SH3":true,"SH4":true,"SH4A":true}
+]}`
+
+func TestIsDSPOnly(t *testing.T) {
+	got, dropped, err := Load(strings.NewReader(dspSample))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// ldre is DSP-only (no non-DSP arch) → dropped; clrs has SH3/SH4/SH4A → kept.
+	if len(got) != 1 {
+		t.Fatalf("want 1 kept insn, got %d: %+v", len(got), got)
+	}
+	if got[0].Format != "clrs" {
+		t.Errorf("want clrs kept, got %q", got[0].Format)
+	}
+	if dropped != 1 {
+		t.Errorf("want dropped=1 (ldre), got %d", dropped)
+	}
+}
+
 func TestIsEmittedGroup(t *testing.T) {
 	for _, g := range []string{"Shift Instructions", "Branch Instructions", "System Control Instructions"} {
 		if !IsEmittedGroup(g) {

@@ -41,12 +41,12 @@ func TestIs1aSimpleAcceptsTwoWord(t *testing.T) {
 }
 
 func TestIs1aSimpleRejectsNonGPIntegerGroup(t *testing.T) {
-	// sleep: simple no-operand instruction in "System Control Instructions" (not allowed).
+	// ldtlb: System Control insn not in any allow-list, must be rejected.
 	in := build(t, loader.RawInsn{
-		Group: "System Control Instructions", Format: "sleep", Code: "0000000000011011", SH1: true,
+		Group: "System Control Instructions", Format: "ldtlb", Code: "0000000000111000", SH4: true,
 	})
 	if Is1aSimple(in) {
-		t.Error("sleep is System Control group (not branch-mnemonic-allowed), must not be 1a-simple")
+		t.Error("ldtlb is out-of-scope System Control, must not be 1a-simple")
 	}
 }
 
@@ -94,6 +94,51 @@ func TestIs1aSimpleAcceptsFixedRegMem(t *testing.T) {
 	} {
 		if !Is1aSimple(build(t, r)) {
 			t.Errorf("fixed-reg mem should now be supported: %s", r.Format)
+		}
+	}
+}
+
+func TestSelectsSystemControl(t *testing.T) {
+	accept := []loader.RawInsn{
+		{Group: "System Control Instructions", Format: "nop", Code: "0000000000001001", J2: true},
+		{Group: "System Control Instructions", Format: "trapa\t#imm", Code: "11000011iiiiiiii", J2: true},
+		{Group: "System Control Instructions", Format: "ldc\tRm,SR", Code: "0100mmmm00001110", J2: true},
+		{Group: "System Control Instructions", Format: "stc\tSSR,Rn", Code: "0000nnnn00110010", J2: true},
+		{Group: "System Control Instructions", Format: "ldc.l\t@Rm+,SPC", Code: "0100mmmm01000111", J2: true},
+		{Group: "System Control Instructions", Format: "stc\tGBR,Rn", Code: "0000nnnn00010010", J2: true},
+		{Group: "System Control Instructions", Format: "lds\tRm,PR", Code: "0100mmmm00101010", J2: true},
+		{Group: "System Control Instructions", Format: "ldc\tRm,Rn_BANK", Code: "0100mmmm1nnn1110", J2: true},
+		{Group: "System Control Instructions", Format: "stc\tRm_BANK,Rn", Code: "0000nnnn1mmm0010", J2: true},
+		{Group: "System Control Instructions", Format: "ldc\tRm,TBR", Code: "0100mmmm01001010", SH2A: true},
+		{Group: "System Control Instructions", Format: "pref\t@Rn", Code: "0000nnnn10000011", SH2A: true},
+		{Group: "System Control Instructions", Format: "resbank", Code: "0000000001011011", SH2A: true},
+	}
+	for _, raw := range accept {
+		insns, err := ir.Build([]loader.RawInsn{raw})
+		if err != nil {
+			t.Fatalf("%s: build: %v", raw.Format, err)
+		}
+		if !Is1aSimple(insns[0]) {
+			t.Errorf("should be selected: %s", raw.Format)
+		}
+	}
+}
+
+func TestRejectsOutOfScopeSystemControl(t *testing.T) {
+	reject := []loader.RawInsn{
+		{Group: "System Control Instructions", Format: "ldc\tRm,SGR", Code: "0100mmmm00111010", SH2A: true},
+		{Group: "System Control Instructions", Format: "ldc\tRm,DBR", Code: "0100mmmm11111010", SH2A: true},
+		{Group: "System Control Instructions", Format: "icbi\t@Rn", Code: "0000nnnn11100011", SH2A: true},
+		{Group: "System Control Instructions", Format: "movca.l\tR0,@Rn", Code: "0000nnnn11000011", SH2A: true},
+		{Group: "System Control Instructions", Format: "setrc\tRn", Code: "0100mmmm00010100", SH2A: true},
+	}
+	for _, raw := range reject {
+		insns, err := ir.Build([]loader.RawInsn{raw})
+		if err != nil {
+			t.Fatalf("%s: build: %v", raw.Format, err)
+		}
+		if Is1aSimple(insns[0]) {
+			t.Errorf("should be rejected: %s", raw.Format)
 		}
 	}
 }

@@ -386,6 +386,36 @@ func TestBankRegSurfacedConcrete(t *testing.T) {
 	}
 }
 
+func TestFRegSurfacesLowercase(t *testing.T) {
+	insns, err := ir.Build([]loader.RawInsn{
+		{Group: "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)", Format: "fadd\tFRm,FRn", Code: "1111nnnnmmmm0000", SH4: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs := Synthesize(insns[0])
+	if len(cs) == 0 {
+		t.Fatal("no cases generated for fadd FRm,FRn")
+	}
+	for _, c := range cs {
+		if !strings.HasPrefix(c.Asm, "fadd fr") {
+			t.Errorf("FReg not surfaced as fr<N>: %q", c.Asm)
+		}
+	}
+	// Verify at least one concrete frN register appears (e.g. fr0..fr15)
+	found := false
+	for _, c := range cs {
+		var m, n int
+		if nn, _ := fmt.Sscanf(c.Asm, "fadd fr%d, fr%d", &m, &n); nn == 2 {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("could not parse fr<N>, fr<N> form from cases: %+v", cs)
+	}
+}
+
 func scanMov(s string, a, b *int) (int, error) {
 	s = strings.TrimPrefix(s, "mov ")
 	parts := strings.Split(s, ", ")

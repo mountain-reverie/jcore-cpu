@@ -32,7 +32,7 @@ func EmitDelta(insns []ir.Insn) (string, error) {
 			return "", fmt.Errorf("gas: %s: %w", in.Mnemonic, err)
 		}
 		fmt.Fprintf(&b, "{%q,{%s},{%s},%s},\n",
-			in.Mnemonic, strings.Join(args, ","), nib, in.Arch.GASMask())
+			strings.ToLower(in.Mnemonic), strings.Join(args, ","), nib, in.Arch.GASMask())
 	}
 	return b.String(), nil
 }
@@ -110,7 +110,7 @@ func nibbles(in ir.Insn) (string, error) {
 			val = val<<1 | bit.Val
 		}
 		if allFixed {
-			out[n] = fmt.Sprintf("0x%X", val)
+			out[n] = fmt.Sprintf("HEX_%X", val)
 			continue
 		}
 		// Operand nibble: render the upstream nibble code for its letter.

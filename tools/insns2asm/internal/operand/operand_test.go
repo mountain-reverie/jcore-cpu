@@ -128,6 +128,15 @@ func TestClassifyMemDispCarriesBaseLetter(t *testing.T) {
 	}
 }
 
+func TestClassifyDoubleOperands(t *testing.T) {
+	if o, _ := Classify("DRn"); o.Class != DReg || o.Letter != 'n' {
+		t.Errorf("DRn: %+v", o)
+	}
+	if o, _ := Classify("XDm"); o.Class != XReg || o.Letter != 'm' {
+		t.Errorf("XDm: %+v", o)
+	}
+}
+
 func TestClassifyImm3AndMMURegs(t *testing.T) {
 	if o, _ := Classify("#imm3"); o.Class != Imm || o.Letter != 'i' {
 		t.Errorf("#imm3 => %+v", o)

@@ -41,10 +41,12 @@ var emittedGroups = map[string]bool{
 	"Branch Instructions":               true,
 	"System Control Instructions":       true,
 	// Single-precision FP (FPSCR.SZ=0 / FPSCR.PR=0) and FP control registers.
-	// Double-precision and 64-bit transfer groups are excluded pending their operand classes.
-	"32 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 0)": true,
-	"Floating-Point Single-Precision Instructions (FPSCR.PR = 0)":     true,
-	"Floating-Point Control Instructions":                             true,
+	"32 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 0)":  true,
+	"Floating-Point Single-Precision Instructions (FPSCR.PR = 0)":      true,
+	"Floating-Point Control Instructions":                               true,
+	// Double-precision FP (FPSCR.SZ=1 / FPSCR.PR=1).
+	"64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)":  true,
+	"Floating-Point Double-Precision Instructions (FPSCR.PR = 1)":      true,
 }
 
 // IsEmittedGroup reports whether group is emitted (Phase-1 GP-integer core plus
@@ -58,7 +60,6 @@ func IsEmittedGroup(group string) bool {
 // from the current FP single-precision emission scope.
 var deferredFPOperands = map[string]bool{
 	"FVm": true, "FVn": true, "XMTRX": true,
-	"DRm": true, "DRn": true, "DRn_even": true,
 }
 
 var dspCoprocOperands = map[string]bool{

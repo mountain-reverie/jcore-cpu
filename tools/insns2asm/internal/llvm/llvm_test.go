@@ -172,6 +172,32 @@ func TestEmitFixedRegAsLiteral(t *testing.T) {
 	}
 }
 
+func TestEmitFixedRegMemIsAsmParserOnly(t *testing.T) {
+	// cas.l Rm,Rn,@R0 has a fixed-register memory operand (@R0): no encoding
+	// field for the register, so it must be marked parser-only.
+	insns := build(t, loader.RawInsn{
+		Group: "Data Transfer Instructions", Format: "cas.l\tRm, Rn, @R0",
+		Code: "0010nnnnmmmm0011", J2: true,
+	})
+	out := EmitInstrInfo(insns)
+	if !strings.Contains(out, "let isAsmParserOnly = 1;") {
+		t.Errorf("fixed-register memory operand must set isAsmParserOnly:\n%s", out)
+	}
+}
+
+func TestEmitVariableRegMemNotAsmParserOnly(t *testing.T) {
+	// mov.b @Rm,Rn uses a variable register-memory operand: fully
+	// disassemblable, must NOT be parser-only.
+	insns := build(t, loader.RawInsn{
+		Group: "Data Transfer Instructions", Format: "mov.b\t@Rm,Rn",
+		Code: "0110nnnnmmmm0000", J2: true,
+	})
+	out := EmitInstrInfo(insns)
+	if strings.Contains(out, "isAsmParserOnly") {
+		t.Errorf("variable register-memory operand must not be parser-only:\n%s", out)
+	}
+}
+
 func TestEmitSizeAndDecoderNamespace(t *testing.T) {
 	insns := build(t, loader.RawInsn{
 		Group: "Data Transfer Instructions", Format: "mov\tRm,Rn",

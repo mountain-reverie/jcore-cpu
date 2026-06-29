@@ -131,7 +131,9 @@ func TestRunClassSimpleFilter(t *testing.T) {
 	if !bytes.Contains(out.Bytes(), []byte("memdisp_l4")) {
 		t.Errorf("memdisp_l4 class should be emitted:\n%s", out.String())
 	}
-	if bytes.Contains(out.Bytes(), []byte("MOVI20")) {
-		t.Errorf("two-word movi20 should be filtered out:\n%s", out.String())
+	// Task 1 extended Is1aSimple to accept two-word instructions (len<=2 filter),
+	// so movi20 is now included in the simple class.
+	if !bytes.Contains(out.Bytes(), []byte("MOVI20")) {
+		t.Errorf("two-word movi20 should be emitted (Task 1 allows len<=2 words):\n%s", out.String())
 	}
 }

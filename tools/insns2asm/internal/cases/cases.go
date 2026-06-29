@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/encoding"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/ir"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/llvm"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/operand"
@@ -19,7 +18,31 @@ type Case struct {
 	Hex string // big-endian bytes, space-separated, e.g. "61 23"
 }
 
-var immBoundaries = []int{0x00, 0x7f, 0x80, 0xff}
+// immBoundariesFor returns boundary values for an immediate field of the given width.
+func immBoundariesFor(width int) []int {
+	if width <= 3 {
+		max := (1 << uint(width)) - 1
+		return []int{0, 1, 2, max}
+	}
+	if width <= 8 {
+		return []int{0, 0x7f, 0x80, 0xff}
+	}
+	// wider (e.g. 20-bit movi20): use unsigned field-value boundaries
+	max := (1 << uint(width)) - 1
+	return []int{0, 1, max >> 1, max}
+}
+
+// immFieldWidth returns the total bit-width of the immediate field letter
+// summed across all words.
+func immFieldWidth(in ir.Insn, letter byte) int {
+	total := 0
+	for _, f := range in.Fields {
+		if f.Letter == letter {
+			total += f.Width
+		}
+	}
+	return total
+}
 
 // regLetters returns the operand letters that bind a register field, in order.
 func regLetters(in ir.Insn) []byte {
@@ -107,7 +130,9 @@ func Synthesize(in ir.Insn) []Case {
 			vals[l] = (k + i) % 16
 		}
 		if hasImm {
-			vals[immL] = immBoundaries[k%len(immBoundaries)]
+			immWidth := immFieldWidth(in, immL)
+			boundaries := immBoundariesFor(immWidth)
+			vals[immL] = boundaries[k%len(boundaries)]
 		}
 		for dispL, width := range disps {
 			boundaries := dispBoundariesFor(width)
@@ -171,7 +196,12 @@ func surface(o operand.Operand, val int) string {
 	case operand.GPR:
 		return fmt.Sprintf("r%d", val)
 	case operand.Imm:
-		return fmt.Sprintf("#%d", int8(val))
+		if o.Width <= 8 {
+			return fmt.Sprintf("#%d", int8(val))
+		}
+		// Wide immediate (e.g. movi20 20-bit): print unsigned field value
+		// so the printed number equals the field value encoded in the hex.
+		return fmt.Sprintf("#%d", val)
 	case operand.MemReg:
 		if o.Fixed != "" {
 			return "@" + strings.ToLower(o.Fixed)
@@ -195,32 +225,47 @@ func surface(o operand.Operand, val int) string {
 	return o.Token
 }
 
-// renderHex computes the big-endian bytes for one word with fields filled.
-// For MSB-first word index i (absolute bit position p = 15-i), the field bit
-// offset within the field is shift = p - f.Lo = (15-i) - f.Lo.
+// renderHex computes the big-endian bytes for all words with fields filled.
+// For a multi-word instruction, later words hold the lower-order bits of a
+// field that spans words (e.g. movi20: word0 holds imm[19:16], word1 holds
+// imm[15:0]).  The shift into the full value is:
+//   shift = (15-i) - field.Lo + sum_of_widths_of_fields_in_later_words
 func renderHex(in ir.Insn, vals map[byte]int) string {
-	w := in.Words[0]
-	var v uint16
-	for i := 0; i < 16; i++ {
-		bit := w[i] // index 0 = MSB (bit15)
-		var b uint16
-		if bit.Fixed {
-			b = uint16(bit.Val)
-		} else {
-			f := fieldFor(in, bit.Letter)
-			shift := (15 - i) - f.Lo
-			b = uint16((vals[bit.Letter] >> shift) & 1)
+	var parts []string
+	for wi, w := range in.Words {
+		var v uint16
+		for i := 0; i < 16; i++ {
+			bit := w[i]
+			var b uint16
+			if bit.Fixed {
+				b = uint16(bit.Val)
+			} else {
+				p := 15 - i
+				shift := bitShiftInVal(in, bit.Letter, wi, p)
+				b = uint16((vals[bit.Letter] >> shift) & 1)
+			}
+			v = (v << 1) | b
 		}
-		v = (v << 1) | b
+		parts = append(parts, fmt.Sprintf("%02x %02x", byte(v>>8), byte(v)))
 	}
-	return fmt.Sprintf("%02x %02x", byte(v>>8), byte(v))
+	return strings.Join(parts, " ")
 }
 
-func fieldFor(in ir.Insn, letter byte) encoding.Field {
+// bitShiftInVal returns the right-shift to apply to vals[letter] to extract
+// the bit at word-relative position p = 15-i within wordIdx.
+// Fields in later words hold the lower-order bits of a multi-word field.
+func bitShiftInVal(in ir.Insn, letter byte, wordIdx int, p int) int {
+	var thisLo int
+	laterWidth := 0
 	for _, f := range in.Fields {
-		if f.Letter == letter {
-			return f
+		if f.Letter != letter {
+			continue
+		}
+		if f.Word == wordIdx {
+			thisLo = f.Lo
+		} else if f.Word > wordIdx {
+			laterWidth += f.Width
 		}
 	}
-	return encoding.Field{}
+	return (p - thisLo) + laterWidth
 }

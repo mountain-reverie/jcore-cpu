@@ -41,12 +41,12 @@ func TestIs1aSimpleAcceptsTwoWord(t *testing.T) {
 }
 
 func TestIs1aSimpleRejectsNonGPIntegerGroup(t *testing.T) {
-	// ldtlb: System Control insn not in any allow-list, must be rejected.
+	// setrc: System Control insn not in any allow-list, must be rejected.
 	in := build(t, loader.RawInsn{
-		Group: "System Control Instructions", Format: "ldtlb", Code: "0000000000111000", SH4: true,
+		Group: "System Control Instructions", Format: "setrc\tRn", Code: "0100mmmm00010100", SH2A: true,
 	})
 	if Is1aSimple(in) {
-		t.Error("ldtlb is out-of-scope System Control, must not be 1a-simple")
+		t.Error("setrc is out-of-scope System Control, must not be 1a-simple")
 	}
 }
 
@@ -124,12 +124,35 @@ func TestSelectsSystemControl(t *testing.T) {
 	}
 }
 
+func TestSystemCoverage(t *testing.T) {
+	// SH3/SH4/SH4A no-operand and cache-op system instructions must be selected.
+	accept := []loader.RawInsn{
+		{Group: "System Control Instructions", Format: "clrs", Code: "0000000001001000", SH3: true},
+		{Group: "System Control Instructions", Format: "sets", Code: "0000000001011000", SH3: true},
+		{Group: "System Control Instructions", Format: "synco", Code: "0000000010101011", SH4A: true},
+		{Group: "System Control Instructions", Format: "ldtlb", Code: "0000000000111000", SH4: true},
+		{Group: "System Control Instructions", Format: "icbi\t@Rn", Code: "0000nnnn11100011", SH4A: true},
+		{Group: "System Control Instructions", Format: "ocbi\t@Rn", Code: "0000nnnn10010011", SH4: true},
+		{Group: "System Control Instructions", Format: "ocbp\t@Rn", Code: "0000nnnn10100011", SH4: true},
+		{Group: "System Control Instructions", Format: "ocbwb\t@Rn", Code: "0000nnnn10110011", SH4: true},
+		{Group: "System Control Instructions", Format: "prefi\t@Rn", Code: "0000nnnn11010011", SH4A: true},
+		{Group: "System Control Instructions", Format: "movca.l\tR0,@Rn", Code: "0000nnnn11000011", SH4: true},
+	}
+	for _, raw := range accept {
+		insns, err := ir.Build([]loader.RawInsn{raw})
+		if err != nil {
+			t.Fatalf("%s: build: %v", raw.Format, err)
+		}
+		if !Is1aSimple(insns[0]) {
+			t.Errorf("should be selected: %s", raw.Format)
+		}
+	}
+}
+
 func TestRejectsOutOfScopeSystemControl(t *testing.T) {
 	reject := []loader.RawInsn{
 		{Group: "System Control Instructions", Format: "ldc\tRm,SGR", Code: "0100mmmm00111010", SH2A: true},
 		{Group: "System Control Instructions", Format: "ldc\tRm,DBR", Code: "0100mmmm11111010", SH2A: true},
-		{Group: "System Control Instructions", Format: "icbi\t@Rn", Code: "0000nnnn11100011", SH2A: true},
-		{Group: "System Control Instructions", Format: "movca.l\tR0,@Rn", Code: "0000nnnn11000011", SH2A: true},
 		{Group: "System Control Instructions", Format: "setrc\tRn", Code: "0100mmmm00010100", SH2A: true},
 	}
 	for _, raw := range reject {

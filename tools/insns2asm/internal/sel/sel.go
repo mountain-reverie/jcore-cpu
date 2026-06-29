@@ -28,6 +28,7 @@ var gpIntegerGroups = map[string]bool{
 var systemRegAllow = map[string]bool{
 	"SR": true, "GBR": true, "VBR": true, "SSR": true, "SPC": true,
 	"TBR": true, "MACH": true, "MACL": true, "PR": true,
+	"SGR": true, "DBR": true,
 }
 
 // sysControlMnemonics are System Control insns accepted by mnemonic (no special

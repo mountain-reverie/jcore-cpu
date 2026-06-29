@@ -159,16 +159,15 @@ func TestFPSelected(t *testing.T) {
 		}
 	}
 
-	// fipr and ftrv are in fpDeferMnemonics so must be rejected even when given
-	// nominally valid FReg operands in the test fixture.
-	reject := []loader.RawInsn{
-		{Group: "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)", Format: "fipr\tFRm,FRn", Code: "1111nnnnmmmm1110", SH4: true},
-		{Group: "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)", Format: "ftrv\tFRm,FRn", Code: "1111nnnnmmmm1110", SH4: true},
+	// fipr and ftrv are no longer deferred; they must now be accepted.
+	nowAccept := []loader.RawInsn{
+		{Group: "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)", Format: "fipr\tFVm,FVn", Code: "1111nnnnmmmm0001", SH4: true},
+		{Group: "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)", Format: "ftrv\tXMTRX,FVn", Code: "1111nnnn00000001", SH4: true},
 	}
-	for _, raw := range reject {
+	for _, raw := range nowAccept {
 		in := build(t, raw)
-		if Is1aSimple(in) {
-			t.Errorf("should NOT be FP-selected: %s", raw.Format)
+		if !Is1aSimple(in) {
+			t.Errorf("should now be FP-selected (3c): %s", raw.Format)
 		}
 	}
 }
@@ -188,15 +187,8 @@ func TestDoublePrecisionFPSelected(t *testing.T) {
 		}
 	}
 
-	reject := []loader.RawInsn{
-		{Group: "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)", Format: "fipr\tFRm,FRn", Code: "1111nnnnmmmm1110", SH4: true},
-	}
-	for _, raw := range reject {
-		in := build(t, raw)
-		if Is1aSimple(in) {
-			t.Errorf("should NOT be selected: %s", raw.Format)
-		}
-	}
+	// fipr is no longer deferred; it is accepted regardless of operand shape.
+	// (Previously rejected when fipr was in fpDeferMnemonics.)
 }
 
 func TestIs1aSimpleAcceptsDispOperands(t *testing.T) {

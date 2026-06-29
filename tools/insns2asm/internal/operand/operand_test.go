@@ -137,6 +137,18 @@ func TestClassifyDoubleOperands(t *testing.T) {
 	}
 }
 
+func TestClassifyVectorOperands(t *testing.T) {
+	if o, _ := Classify("FVn"); o.Class != FVReg || o.Letter != 'n' {
+		t.Errorf("FVn: %+v", o)
+	}
+	if o, _ := Classify("FVm"); o.Class != FVReg || o.Letter != 'm' {
+		t.Errorf("FVm: %+v", o)
+	}
+	if o, _ := Classify("XMTRX"); o.Class != FixedReg || o.Fixed != "XMTRX" {
+		t.Errorf("XMTRX: %+v", o)
+	}
+}
+
 func TestClassifyImm3AndMMURegs(t *testing.T) {
 	if o, _ := Classify("#imm3"); o.Class != Imm || o.Letter != 'i' {
 		t.Errorf("#imm3 => %+v", o)

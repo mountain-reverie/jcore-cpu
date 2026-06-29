@@ -28,6 +28,7 @@ const (
 	FR0Fixed
 	DReg
 	XReg
+	FVReg
 )
 
 func (c Class) String() string {
@@ -72,6 +73,8 @@ func (c Class) String() string {
 		return "DReg"
 	case XReg:
 		return "XReg"
+	case FVReg:
+		return "FVReg"
 	}
 	return "??"
 }
@@ -148,6 +151,9 @@ var table = map[string]entry{
 	"FR0":           {class: FR0Fixed, fixed: "FR0"},
 	"FPUL":          {class: FixedReg, fixed: "FPUL"},
 	"FPSCR":         {class: FixedReg, fixed: "FPSCR"},
+	"FVn":           {class: FVReg, letter: 'n'},
+	"FVm":           {class: FVReg, letter: 'm'},
+	"XMTRX":         {class: FixedReg, fixed: "XMTRX"},
 }
 
 // Classify maps an operand token to its canonical Operand.

@@ -41,12 +41,35 @@ func TestIs1aSimpleAcceptsTwoWord(t *testing.T) {
 }
 
 func TestIs1aSimpleRejectsNonGPIntegerGroup(t *testing.T) {
-	// jmp @Rm: simple operand (MemReg), single-word, but Branch group -> excluded.
+	// sleep: simple no-operand instruction in "System Control Instructions" (not allowed).
 	in := build(t, loader.RawInsn{
-		Group: "Branch Instructions", Format: "jmp\t@Rm", Code: "0100mmmm00101011", SH1: true,
+		Group: "System Control Instructions", Format: "sleep", Code: "0000000000011011", SH1: true,
 	})
 	if Is1aSimple(in) {
-		t.Error("jmp @Rm is Branch group, must not be 1a-simple")
+		t.Error("sleep is System Control group (not branch-mnemonic-allowed), must not be 1a-simple")
+	}
+}
+
+func TestSelectsBranchGroup(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  loader.RawInsn
+	}{
+		{"bra", loader.RawInsn{Group: "Branch Instructions", Format: "bra\tlabel", Code: "1010dddddddddddd", J2: true}},
+		{"bt", loader.RawInsn{Group: "Branch Instructions", Format: "bt\tlabel", Code: "10001001dddddddd", J2: true}},
+		{"jmp", loader.RawInsn{Group: "Branch Instructions", Format: "jmp\t@Rm", Code: "0100mmmm00101011", J2: true}},
+		{"braf", loader.RawInsn{Group: "Branch Instructions", Format: "braf\tRm", Code: "0000mmmm00100011", J2: true}},
+		{"rts", loader.RawInsn{Group: "Branch Instructions", Format: "rts", Code: "0000000000001011", J2: true}},
+		{"rte", loader.RawInsn{Group: "System Control Instructions", Format: "rte", Code: "0000000000101011", J2: true}},
+	}
+	for _, c := range cases {
+		insns, err := ir.Build([]loader.RawInsn{c.raw})
+		if err != nil {
+			t.Fatalf("%s: build: %v", c.name, err)
+		}
+		if !Is1aSimple(insns[0]) {
+			t.Errorf("%s should be selected", c.name)
+		}
 	}
 }
 

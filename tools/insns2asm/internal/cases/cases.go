@@ -104,6 +104,11 @@ func dispBoundariesFor(width int) []int {
 
 // Synthesize builds the operand-value sweep for one instruction.
 func Synthesize(in ir.Insn) []Case {
+	for _, o := range in.Operands {
+		if o.Class == operand.BranchDisp {
+			return nil // label operands are not byte-swept; verified via fixup test
+		}
+	}
 	regs := regLetters(in)
 	immL, hasImm := immLetter(in)
 	disps := dispLetters(in)

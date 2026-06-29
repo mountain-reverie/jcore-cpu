@@ -12,7 +12,12 @@ var gpIntegerGroups = map[string]bool{
 	"Logic Operation Instructions":      true,
 	"Shift Instructions":                true,
 	"Bit Manipulation Instructions":     true,
+	"Branch Instructions":               true,
 }
+
+// branchMnemonicAllow are accepted even though they live in a group that is otherwise
+// out of scope (rte is in "System Control Instructions").
+var branchMnemonicAllow = map[string]bool{"rte": true}
 
 // oneACleanOperand reports whether an operand class is supported by the current
 // SH MC target (1a register/immediate + 1b-i register-only memory). Scaled
@@ -27,6 +32,8 @@ func oneACleanOperand(o operand.Operand) bool {
 		return true
 	case operand.MemReg, operand.MemPostInc, operand.MemPreDec:
 		return true
+	case operand.BranchDisp:
+		return true
 	}
 	return false
 }
@@ -35,7 +42,7 @@ func oneACleanOperand(o operand.Operand) bool {
 // a single- or two-word GP-integer instruction with supported GP-integer
 // operands (registers, immediates, register-only memory classes with any Fixed value).
 func Is1aSimple(in ir.Insn) bool {
-	if !gpIntegerGroups[in.Group] {
+	if !gpIntegerGroups[in.Group] && !branchMnemonicAllow[in.Mnemonic] {
 		return false
 	}
 	if len(in.Words) > 2 {

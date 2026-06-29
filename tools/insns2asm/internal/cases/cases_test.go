@@ -333,6 +333,31 @@ func TestDisp12SweepReachesMax(t *testing.T) {
 	}
 }
 
+func TestBranchDispNotSwept(t *testing.T) {
+	insns, err := ir.Build([]loader.RawInsn{
+		{Group: "Branch Instructions", Format: "bra\tlabel", Code: "1010dddddddddddd", J2: true},
+	})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	got := Synthesize(insns[0])
+	if len(got) != 0 {
+		t.Errorf("PC-relative branch must not produce byte-oracle cases, got %d: %+v", len(got), got)
+	}
+}
+
+func TestRegisterBranchStillSwept(t *testing.T) {
+	insns, err := ir.Build([]loader.RawInsn{
+		{Group: "Branch Instructions", Format: "jmp\t@Rm", Code: "0100mmmm00101011", J2: true},
+	})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if len(Synthesize(insns[0])) == 0 {
+		t.Errorf("register-indirect branch jmp @Rm should still be swept")
+	}
+}
+
 func scanMov(s string, a, b *int) (int, error) {
 	s = strings.TrimPrefix(s, "mov ")
 	parts := strings.Split(s, ", ")

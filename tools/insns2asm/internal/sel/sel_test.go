@@ -28,12 +28,14 @@ func TestIs1aSimpleAcceptsRegImmIndirect(t *testing.T) {
 	}
 }
 
-func TestIs1aSimpleRejectsTwoWord(t *testing.T) {
+func TestIs1aSimpleAcceptsTwoWord(t *testing.T) {
 	for _, r := range []loader.RawInsn{
-		{Group: "Data Transfer Instructions", Format: "movi20\t#imm20,Rn", Code: "0000nnnniiii0000 iiiiiiiiiiiiiiii", SH2A: true}, // two-word
+		{Group: "Data Transfer Instructions", Format: "movi20\t#imm20,Rn", Code: "0000nnnniiii0000 iiiiiiiiiiiiiiii", SH2A: true},
+		{Group: "Data Transfer Instructions", Format: "mov.l\t@(disp12,Rm),Rn", Code: "0011nnnnmmmm0001 0110dddddddddddd", SH2A: true},
+		{Group: "Bit Manipulation Instructions", Format: "bclr.b\t#imm3,@(disp12,Rn)", Code: "0011nnnn0iii1001 0000dddddddddddd", SH2A: true},
 	} {
-		if Is1aSimple(build(t, r)) {
-			t.Errorf("should NOT be 1a-simple: %s", r.Format)
+		if !Is1aSimple(build(t, r)) {
+			t.Errorf("two-word should now be supported: %s", r.Format)
 		}
 	}
 }
@@ -60,15 +62,6 @@ func TestIs1aSimpleAcceptsRegisterOnlyMemory(t *testing.T) {
 	}
 }
 
-func TestIs1aSimpleRejectsFixedMemAndTwoWord(t *testing.T) {
-	for _, r := range []loader.RawInsn{
-		{Group: "Data Transfer Instructions", Format: "movi20\t#imm20,Rn", Code: "0000nnnniiii0000 iiiiiiiiiiiiiiii", SH2A: true},
-	} {
-		if Is1aSimple(build(t, r)) {
-			t.Errorf("should be deferred to 1b, not 1a: %s", r.Format)
-		}
-	}
-}
 
 func TestIs1aSimpleAcceptsFixedRegMem(t *testing.T) {
 	for _, r := range []loader.RawInsn{
@@ -94,10 +87,3 @@ func TestIs1aSimpleAcceptsDispOperands(t *testing.T) {
 	}
 }
 
-func TestIs1aSimpleRejectsDisp12TwoWord(t *testing.T) {
-	// disp12 two-word form should stay rejected
-	if Is1aSimple(build(t, loader.RawInsn{Group: "Data Transfer Instructions",
-		Format: "mov.l\t@(disp12,Rm),Rn", Code: "0011nnnnmmmm0001 0110dddddddddddd", SH2A: true})) {
-		t.Error("disp12 two-word should be rejected (1a single-word only)")
-	}
-}

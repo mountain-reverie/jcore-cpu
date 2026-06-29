@@ -301,3 +301,17 @@ func TestEmitDispOperandClasses(t *testing.T) {
 		t.Errorf("expected pcdisp_l8:\n%s", EmitInstrInfo(p))
 	}
 }
+
+func TestEmitMemdisp12WidthAware(t *testing.T) {
+	out := EmitInstrInfo(build(t, loader.RawInsn{Group: "Data Transfer Instructions",
+		Format: "mov.l\t@(disp12,Rm),Rn", Code: "0011nnnnmmmm0001 0110dddddddddddd", SH2A: true}))
+	if !strings.Contains(out, "memdisp_l12:$") {
+		t.Errorf("expected memdisp_l12:\n%s", out)
+	}
+	// the 4-bit form still names memdisp_l4
+	out4 := EmitInstrInfo(build(t, loader.RawInsn{Group: "Data Transfer Instructions",
+		Format: "mov.l\t@(disp,Rm),Rn", Code: "0101nnnnmmmmdddd", SH1: true}))
+	if !strings.Contains(out4, "memdisp_l4:$") {
+		t.Errorf("4-bit form must stay memdisp_l4:\n%s", out4)
+	}
+}

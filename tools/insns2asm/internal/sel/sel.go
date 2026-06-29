@@ -15,9 +15,56 @@ var gpIntegerGroups = map[string]bool{
 	"Branch Instructions":               true,
 }
 
-// branchMnemonicAllow are accepted even though they live in a group that is otherwise
-// out of scope (rte is in "System Control Instructions").
-var branchMnemonicAllow = map[string]bool{"rte": true}
+// systemRegAllow is the set of special registers (FixedReg.Fixed) accepted in
+// System Control scope. Out-of-scope registers (SGR, DBR, PTEH, …) are rejected.
+var systemRegAllow = map[string]bool{
+	"SR": true, "GBR": true, "VBR": true, "SSR": true, "SPC": true,
+	"TBR": true, "MACH": true, "MACL": true, "PR": true,
+}
+
+// sysControlMnemonics are System Control insns accepted by mnemonic (no special
+// register to allow-list, or fixed operand shapes).
+var sysControlMnemonics = map[string]bool{
+	"nop": true, "clrt": true, "sett": true, "clrmac": true, "sleep": true,
+	"rte": true, "bgnd": true, "trapa": true,
+	"ldbank": true, "stbank": true, "pref": true, "resbank": true,
+}
+
+// sysRegMoveMnemonics are the system/banked register transfer mnemonics.
+var sysRegMoveMnemonics = map[string]bool{
+	"ldc": true, "stc": true, "ldc.l": true, "stc.l": true,
+	"lds": true, "sts": true, "lds.l": true, "sts.l": true,
+}
+
+// sysOperandClean reports whether an operand is acceptable in a System Control
+// register-move insn: registers/immediates/memory shapes, banked registers, and
+// only allow-listed special registers.
+func sysOperandClean(o operand.Operand) bool {
+	switch o.Class {
+	case operand.GPR, operand.Imm, operand.R0Fixed, operand.BankReg,
+		operand.MemReg, operand.MemPostInc, operand.MemPreDec:
+		return true
+	case operand.FixedReg:
+		return systemRegAllow[o.Fixed]
+	}
+	return false
+}
+
+// systemControlSelected reports whether a System Control insn is in scope.
+func systemControlSelected(in ir.Insn) bool {
+	if in.Group != "System Control Instructions" {
+		return false
+	}
+	if !sysControlMnemonics[in.Mnemonic] && !sysRegMoveMnemonics[in.Mnemonic] {
+		return false
+	}
+	for _, o := range in.Operands {
+		if !sysOperandClean(o) {
+			return false
+		}
+	}
+	return true
+}
 
 // oneACleanOperand reports whether an operand class is supported by the current
 // SH MC target (1a register/immediate + 1b-i register-only memory). Scaled
@@ -42,16 +89,16 @@ func oneACleanOperand(o operand.Operand) bool {
 // a single- or two-word GP-integer instruction with supported GP-integer
 // operands (registers, immediates, register-only memory classes with any Fixed value).
 func Is1aSimple(in ir.Insn) bool {
-	if !gpIntegerGroups[in.Group] && !branchMnemonicAllow[in.Mnemonic] {
-		return false
-	}
 	if len(in.Words) > 2 {
 		return false
 	}
-	for _, o := range in.Operands {
-		if !oneACleanOperand(o) {
-			return false
+	if gpIntegerGroups[in.Group] {
+		for _, o := range in.Operands {
+			if !oneACleanOperand(o) {
+				return false
+			}
 		}
+		return true
 	}
-	return true
+	return systemControlSelected(in)
 }

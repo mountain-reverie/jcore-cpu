@@ -208,6 +208,10 @@ func boundFields(in ir.Insn) []boundField {
 		switch o.Class {
 		case operand.FixedReg, operand.R0Fixed:
 			// no field
+		case operand.FR0Fixed:
+			// Constrained operand — no encoding field but must appear in InOperandList
+			// so the AsmMatcher uses the isFR0 predicate (not a literal token match).
+			out = append(out, boundField{varName: "fr0", class: "FR0Fixed"})
 		case operand.MemDisp:
 			if fs := fieldsFor(in, o.BaseLetter); len(fs) > 0 {
 				out = append(out, boundField{letter: o.BaseLetter, fields: fs, class: "GPR"})
@@ -322,7 +326,7 @@ func dispClass(o operand.Operand) string {
 // `def NAME : Operand<i32>;` (i.e. not a builtin or hand-written register class).
 func isGeneratedClass(name string) bool {
 	switch name {
-	case "GPR", "BankReg", "FReg", "SHImm", "MemDec", "MemR0Idx", "MemR0Fixed", "MemDecR15", "MemIncR15":
+	case "GPR", "BankReg", "FReg", "SHImm", "MemDec", "MemR0Idx", "MemR0Fixed", "MemDecR15", "MemIncR15", "FR0Fixed":
 		return false
 	}
 	// Scaled-displacement operand classes are hand-written in SHOperands.td
@@ -401,7 +405,7 @@ func asmOperand(o operand.Operand) string {
 	case operand.R0Fixed:
 		return "r0"
 	case operand.FR0Fixed:
-		return "fr0"
+		return "${fr0}"
 	case operand.FReg:
 		return "${" + LetterVar(o.Letter) + "}"
 	case operand.GPR, operand.BankReg, operand.Imm, operand.BranchDisp:

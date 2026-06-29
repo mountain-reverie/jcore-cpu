@@ -130,7 +130,7 @@ func TestSystemCoverage(t *testing.T) {
 		{Group: "System Control Instructions", Format: "clrs", Code: "0000000001001000", SH3: true},
 		{Group: "System Control Instructions", Format: "sets", Code: "0000000001011000", SH3: true},
 		{Group: "System Control Instructions", Format: "synco", Code: "0000000010101011", SH4A: true},
-		{Group: "System Control Instructions", Format: "ldtlb", Code: "0000000000111000", SH4: true},
+		{Group: "System Control Instructions", Format: "ldtbl", Code: "0000000000111000", SH4: true},
 		{Group: "System Control Instructions", Format: "icbi\t@Rn", Code: "0000nnnn11100011", SH4A: true},
 		{Group: "System Control Instructions", Format: "ocbi\t@Rn", Code: "0000nnnn10010011", SH4: true},
 		{Group: "System Control Instructions", Format: "ocbp\t@Rn", Code: "0000nnnn10100011", SH4: true},

@@ -114,6 +114,35 @@ func TestEmitDeltaLowercasesMnemonic(t *testing.T) {
 	}
 }
 
+func TestEmitDeltaMMUForms(t *testing.T) {
+	insns, err := ir.Build([]loader.RawInsn{
+		{Group: "System Control Instructions", Format: "STC PTEH, Rn", Code: "0000nnnn01010011", J2: true},
+		{Group: "System Control Instructions", Format: "STC PTEL, Rn", Code: "0000nnnn01100011", J2: true},
+		{Group: "System Control Instructions", Format: "STC ASIDR, Rn", Code: "0000nnnn01110011", J2: true},
+		{Group: "System Control Instructions", Format: "STC TSBPTR, Rn", Code: "0000nnnn01000011", J2: true},
+		{Group: "System Control Instructions", Format: "LDTLB.RN", Code: "0000000001111000", J2: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := EmitDelta(insns)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		`{"stc",{A_PTEH,A_REG_N,0},{HEX_0,REG_N,HEX_5,HEX_3},arch_j_core},`,
+		`{"stc",{A_PTEL,A_REG_N,0},{HEX_0,REG_N,HEX_6,HEX_3},arch_j_core},`,
+		`{"stc",{A_ASIDR,A_REG_N,0},{HEX_0,REG_N,HEX_7,HEX_3},arch_j_core},`,
+		`{"stc",{A_TSBPTR,A_REG_N,0},{HEX_0,REG_N,HEX_4,HEX_3},arch_j_core},`,
+		`{"ldtlb.rn",{0},{HEX_0,HEX_0,HEX_7,HEX_8},arch_j_core},`,
+	}
+	for _, w := range want {
+		if !strings.Contains(out, w) {
+			t.Errorf("missing emitted line:\n%s\nin:\n%s", w, out)
+		}
+	}
+}
+
 func TestArgCodeBranchAndSystemClasses(t *testing.T) {
 	cases := []struct {
 		o    operand.Operand

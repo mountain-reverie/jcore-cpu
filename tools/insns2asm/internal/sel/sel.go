@@ -36,7 +36,7 @@ var sysControlMnemonics = map[string]bool{
 	"nop": true, "clrt": true, "sett": true, "clrmac": true, "sleep": true,
 	"rte": true, "bgnd": true, "trapa": true,
 	"ldbank": true, "stbank": true, "pref": true, "resbank": true,
-	"clrs": true, "sets": true, "synco": true, "ldtlb": true,
+	"clrs": true, "sets": true, "synco": true, "ldtbl": true,
 	"icbi": true, "ocbi": true, "ocbp": true, "ocbwb": true,
 	"prefi": true, "movca.l": true,
 }

@@ -79,7 +79,7 @@ func TestEmitDeltaLowercaseAndHexMacros(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantCas := `{"cas.l",{A_REG_M,A_REG_N,A_IND_M,0},{HEX_2,REG_N,REG_M,HEX_3},arch_j_core},`
+	wantCas := `{"cas.l",{A_REG_M,A_REG_N,A_IND_0,0},{HEX_2,REG_N,REG_M,HEX_3},arch_j_core},`
 	wantBgnd := `{"bgnd",{0},{HEX_0,HEX_0,HEX_3,HEX_B},arch_j_core},`
 	if !strings.Contains(out, wantCas) {
 		t.Errorf("cas.l line wrong.\n got: %s\nwant substr: %s", out, wantCas)

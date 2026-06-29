@@ -470,6 +470,38 @@ func TestXRegSurfacesEven(t *testing.T) {
 	}
 }
 
+func TestFVRegSurfacesMultipleOfFour(t *testing.T) {
+	insns, err := ir.Build([]loader.RawInsn{
+		{Group: "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)", Format: "fipr\tFVm,FVn", Code: "1111nnnnmmmm0001", SH4: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs := Synthesize(insns[0])
+	if len(cs) == 0 {
+		t.Fatal("no cases generated for fipr FVm,FVn")
+	}
+	validFV := map[string]bool{"fv0": true, "fv4": true, "fv8": true, "fv12": true}
+	for _, c := range cs {
+		if !strings.HasPrefix(c.Asm, "fipr fv") {
+			t.Errorf("FVReg not surfaced as fv<N>: %q", c.Asm)
+			continue
+		}
+		// Parse: "fipr fv<m>, fv<n>"
+		var m, n int
+		if nn, _ := fmt.Sscanf(c.Asm, "fipr fv%d, fv%d", &m, &n); nn == 2 {
+			if !validFV[fmt.Sprintf("fv%d", m)] {
+				t.Errorf("FVm not multiple-of-4: fv%d in %q", m, c.Asm)
+			}
+			if !validFV[fmt.Sprintf("fv%d", n)] {
+				t.Errorf("FVn not multiple-of-4: fv%d in %q", n, c.Asm)
+			}
+		} else {
+			t.Errorf("could not parse fipr fv<m>, fv<n> from %q", c.Asm)
+		}
+	}
+}
+
 func scanMov(s string, a, b *int) (int, error) {
 	s = strings.TrimPrefix(s, "mov ")
 	parts := strings.Split(s, ", ")

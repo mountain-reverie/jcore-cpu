@@ -55,12 +55,9 @@ func IsEmittedGroup(group string) bool {
 	return emittedGroups[group]
 }
 
-// deferredFPOperands are vector/double-precision FP tokens (FV registers, XMTRX,
-// DR registers) deferred to a later phase; instructions using them are excluded
-// from the current FP single-precision emission scope.
-var deferredFPOperands = map[string]bool{
-	"FVm": true, "FVn": true, "XMTRX": true,
-}
+// deferredFPOperands was used to exclude vector/matrix FP tokens in earlier
+// phases; all FP operands are now modelled so this map is empty.
+var deferredFPOperands = map[string]bool{}
 
 var dspCoprocOperands = map[string]bool{
 	"A0": true, "X0": true, "X1": true, "Y0": true, "Y1": true,

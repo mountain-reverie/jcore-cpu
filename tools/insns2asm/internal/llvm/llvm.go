@@ -180,6 +180,8 @@ func EmitInstrInfo(insns []ir.Insn) string {
 func fixedMemDecoder(in ir.Insn) (string, bool) {
 	for _, o := range in.Operands {
 		switch o.Class {
+		case operand.FR0Fixed:
+			return "decodeFmacFR0", true
 		case operand.MemReg, operand.MemPostInc, operand.MemPreDec:
 			if o.Fixed == "" {
 				continue
@@ -297,6 +299,8 @@ func operandClassName(o operand.Operand) string {
 		return "gbrdisp"
 	case operand.MemR0GBR:
 		return "GPR"
+	case operand.FReg:
+		return "FReg"
 	}
 	return "SHImm"
 }
@@ -318,7 +322,7 @@ func dispClass(o operand.Operand) string {
 // `def NAME : Operand<i32>;` (i.e. not a builtin or hand-written register class).
 func isGeneratedClass(name string) bool {
 	switch name {
-	case "GPR", "BankReg", "SHImm", "MemDec", "MemR0Idx", "MemR0Fixed", "MemDecR15", "MemIncR15":
+	case "GPR", "BankReg", "FReg", "SHImm", "MemDec", "MemR0Idx", "MemR0Fixed", "MemDecR15", "MemIncR15":
 		return false
 	}
 	// Scaled-displacement operand classes are hand-written in SHOperands.td
@@ -396,6 +400,10 @@ func asmOperand(o operand.Operand) string {
 		return strings.ToLower(o.Fixed)
 	case operand.R0Fixed:
 		return "r0"
+	case operand.FR0Fixed:
+		return "fr0"
+	case operand.FReg:
+		return "${" + LetterVar(o.Letter) + "}"
 	case operand.GPR, operand.BankReg, operand.Imm, operand.BranchDisp:
 		return "${" + LetterVar(o.Letter) + "}"
 	case operand.MemReg:

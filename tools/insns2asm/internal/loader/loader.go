@@ -40,12 +40,25 @@ var emittedGroups = map[string]bool{
 	"Bit Manipulation Instructions":     true,
 	"Branch Instructions":               true,
 	"System Control Instructions":       true,
+	// Single-precision FP (FPSCR.SZ=0 / FPSCR.PR=0) and FP control registers.
+	// Double-precision and 64-bit transfer groups are excluded pending their operand classes.
+	"32 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 0)": true,
+	"Floating-Point Single-Precision Instructions (FPSCR.PR = 0)":     true,
+	"Floating-Point Control Instructions":                             true,
 }
 
 // IsEmittedGroup reports whether group is emitted (Phase-1 GP-integer core plus
 // Phase-2a Branch + System Control).
 func IsEmittedGroup(group string) bool {
 	return emittedGroups[group]
+}
+
+// deferredFPOperands are vector/double-precision FP tokens (FV registers, XMTRX,
+// DR registers) deferred to a later phase; instructions using them are excluded
+// from the current FP single-precision emission scope.
+var deferredFPOperands = map[string]bool{
+	"FVm": true, "FVn": true, "XMTRX": true,
+	"DRm": true, "DRn": true, "DRn_even": true,
 }
 
 var dspCoprocOperands = map[string]bool{
@@ -85,6 +98,10 @@ func Load(r io.Reader) ([]RawInsn, int, error) {
 			dropped++
 			continue
 		}
+		if hasDeferredFPOperand(in.Format) {
+			dropped++
+			continue
+		}
 		out = append(out, in)
 	}
 	return out, dropped, nil
@@ -93,6 +110,15 @@ func Load(r io.Reader) ([]RawInsn, int, error) {
 func hasDSPCoprocOperand(formatStr string) bool {
 	for _, tok := range format.Parse(formatStr).Operands {
 		if isDSPCoprocOperand(tok) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasDeferredFPOperand(formatStr string) bool {
+	for _, tok := range format.Parse(formatStr).Operands {
+		if deferredFPOperands[tok] {
 			return true
 		}
 	}

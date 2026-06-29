@@ -24,6 +24,8 @@ const (
 	BranchDisp
 	BankReg
 	MemTBRDisp
+	FReg
+	FR0Fixed
 )
 
 func (c Class) String() string {
@@ -60,6 +62,10 @@ func (c Class) String() string {
 		return "BankReg"
 	case MemTBRDisp:
 		return "MemTBRDisp"
+	case FReg:
+		return "FReg"
+	case FR0Fixed:
+		return "FR0Fixed"
 	}
 	return "??"
 }
@@ -127,6 +133,11 @@ var table = map[string]entry{
 	"PTEL":          {class: FixedReg, fixed: "PTEL"},
 	"ASIDR":         {class: FixedReg, fixed: "ASIDR"},
 	"TSBPTR":        {class: FixedReg, fixed: "TSBPTR"},
+	"FRn":           {class: FReg, letter: 'n'},
+	"FRm":           {class: FReg, letter: 'm'},
+	"FR0":           {class: FR0Fixed, fixed: "FR0"},
+	"FPUL":          {class: FixedReg, fixed: "FPUL"},
+	"FPSCR":         {class: FixedReg, fixed: "FPSCR"},
 }
 
 // Classify maps an operand token to its canonical Operand.

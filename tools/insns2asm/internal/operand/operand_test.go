@@ -68,8 +68,20 @@ func TestClassifyMemR0GBR(t *testing.T) {
 }
 
 func TestClassifyUnknownErrors(t *testing.T) {
-	if _, err := Classify("FRn"); err == nil {
-		t.Error("FRn should be unmapped in phase 1")
+	if _, err := Classify("XYZ_UNKNOWN"); err == nil {
+		t.Error("XYZ_UNKNOWN should be unmapped")
+	}
+}
+
+func TestClassifyFPOperands(t *testing.T) {
+	if o, _ := Classify("FRn"); o.Class != FReg || o.Letter != 'n' {
+		t.Errorf("FRn: %+v", o)
+	}
+	if o, _ := Classify("FR0"); o.Class != FR0Fixed || o.Fixed != "FR0" {
+		t.Errorf("FR0: %+v", o)
+	}
+	if o, _ := Classify("FPUL"); o.Class != FixedReg || o.Fixed != "FPUL" {
+		t.Errorf("FPUL: %+v", o)
 	}
 }
 

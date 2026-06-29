@@ -143,6 +143,36 @@ func TestRejectsOutOfScopeSystemControl(t *testing.T) {
 	}
 }
 
+func TestFPSelected(t *testing.T) {
+	accept := []loader.RawInsn{
+		{Group: "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)", Format: "fadd\tFRm,FRn", Code: "1111nnnnmmmm0000", SH4: true},
+		{Group: "32 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 0)", Format: "fmov.s\t@Rm,FRn", Code: "1111nnnnmmmm1000", SH4: true},
+		{Group: "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)", Format: "fmac\tFR0,FRm,FRn", Code: "1111nnnnmmmm1110", SH4: true},
+		{Group: "Floating-Point Control Instructions", Format: "flds\tFRm,FPUL", Code: "1111mmmm00011101", SH4: true},
+		{Group: "Floating-Point Control Instructions", Format: "lds\tRm,FPSCR", Code: "0100mmmm01101010", SH4: true},
+		{Group: "Floating-Point Control Instructions", Format: "frchg", Code: "1111101111111101", SH4: true},
+	}
+	for _, raw := range accept {
+		in := build(t, raw)
+		if !Is1aSimple(in) {
+			t.Errorf("should be FP-selected: %s", raw.Format)
+		}
+	}
+
+	// fipr and ftrv are in fpDeferMnemonics so must be rejected even when given
+	// nominally valid FReg operands in the test fixture.
+	reject := []loader.RawInsn{
+		{Group: "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)", Format: "fipr\tFRm,FRn", Code: "1111nnnnmmmm1110", SH4: true},
+		{Group: "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)", Format: "ftrv\tFRm,FRn", Code: "1111nnnnmmmm1110", SH4: true},
+	}
+	for _, raw := range reject {
+		in := build(t, raw)
+		if Is1aSimple(in) {
+			t.Errorf("should NOT be FP-selected: %s", raw.Format)
+		}
+	}
+}
+
 func TestIs1aSimpleAcceptsDispOperands(t *testing.T) {
 	for _, r := range []loader.RawInsn{
 		{Group: "Data Transfer Instructions", Format: "mov.l\t@(disp,Rm),Rn", Code: "0101nnnnmmmmdddd", SH1: true},

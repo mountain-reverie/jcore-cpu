@@ -44,8 +44,11 @@ func TestIsEmittedGroup(t *testing.T) {
 	if IsEmittedGroup("DSP ALU Logical Operation Instructions") {
 		t.Error("DSP groups never emitted")
 	}
-	if IsEmittedGroup("Floating-Point Single-Precision Instructions (FPSCR.PR = 0)") {
-		t.Error("FP groups not in phase 2a")
+	if !IsEmittedGroup("Floating-Point Single-Precision Instructions (FPSCR.PR = 0)") {
+		t.Error("single-precision FP group should now be emitted")
+	}
+	if IsEmittedGroup("Floating-Point Double-Precision Instructions (FPSCR.PR = 1)") {
+		t.Error("double-precision FP group must not be emitted")
 	}
 }
 

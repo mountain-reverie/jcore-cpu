@@ -6,6 +6,14 @@ import (
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/operand"
 )
 
+var fpGroups = map[string]bool{
+	"32 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 0)": true,
+	"Floating-Point Single-Precision Instructions (FPSCR.PR = 0)":     true,
+	"Floating-Point Control Instructions":                             true,
+}
+
+var fpDeferMnemonics = map[string]bool{"fipr": true, "ftrv": true, "fsca": true}
+
 var gpIntegerGroups = map[string]bool{
 	"Data Transfer Instructions":        true,
 	"Arithmetic Operation Instructions": true,
@@ -85,6 +93,30 @@ func oneACleanOperand(o operand.Operand) bool {
 	return false
 }
 
+// fpSelected reports whether an instruction belongs to the single-precision FP
+// subset supported by the current SH MC target. Double-precision, 64-bit
+// transfer, and multi-vector instructions (fipr/ftrv/fsca) are deferred.
+func fpSelected(in ir.Insn) bool {
+	if !fpGroups[in.Group] || fpDeferMnemonics[in.Mnemonic] {
+		return false
+	}
+	for _, o := range in.Operands {
+		switch o.Class {
+		case operand.GPR, operand.Imm, operand.FReg, operand.FR0Fixed,
+			operand.MemReg, operand.MemPostInc, operand.MemPreDec, operand.MemR0,
+			operand.MemDisp:
+			// ok
+		case operand.FixedReg:
+			if o.Fixed != "FPUL" && o.Fixed != "FPSCR" {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // Is1aSimple reports whether an instruction is in the supported subset:
 // a single- or two-word GP-integer instruction with supported GP-integer
 // operands (registers, immediates, register-only memory classes with any Fixed value).
@@ -98,6 +130,9 @@ func Is1aSimple(in ir.Insn) bool {
 				return false
 			}
 		}
+		return true
+	}
+	if fpSelected(in) {
 		return true
 	}
 	return systemControlSelected(in)

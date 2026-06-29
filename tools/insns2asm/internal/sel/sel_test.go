@@ -151,8 +151,6 @@ func TestSystemCoverage(t *testing.T) {
 
 func TestRejectsOutOfScopeSystemControl(t *testing.T) {
 	reject := []loader.RawInsn{
-		{Group: "System Control Instructions", Format: "ldc\tRm,SGR", Code: "0100mmmm00111010", SH2A: true},
-		{Group: "System Control Instructions", Format: "ldc\tRm,DBR", Code: "0100mmmm11111010", SH2A: true},
 		{Group: "System Control Instructions", Format: "setrc\tRn", Code: "0100mmmm00010100", SH2A: true},
 	}
 	for _, raw := range reject {
@@ -212,6 +210,28 @@ func TestDoublePrecisionFPSelected(t *testing.T) {
 
 	// fipr is no longer deferred; it is accepted regardless of operand shape.
 	// (Previously rejected when fipr was in fpDeferMnemonics.)
+}
+
+func TestSgrDbr(t *testing.T) {
+	accept := []loader.RawInsn{
+		{Group: "System Control Instructions", Format: "ldc\tRm,SGR", Code: "0100mmmm00111010", SH4A: true},
+		{Group: "System Control Instructions", Format: "ldc.l\t@Rm+,SGR", Code: "0100mmmm00110110", SH4A: true},
+		{Group: "System Control Instructions", Format: "ldc\tRm,DBR", Code: "0100mmmm11111010", SH4: true},
+		{Group: "System Control Instructions", Format: "ldc.l\t@Rm+,DBR", Code: "0100mmmm11110110", SH4: true},
+		{Group: "System Control Instructions", Format: "stc\tSGR,Rn", Code: "0000nnnn00111010", SH4: true},
+		{Group: "System Control Instructions", Format: "stc.l\tSGR,@-Rn", Code: "0100nnnn00110010", SH4: true},
+		{Group: "System Control Instructions", Format: "stc\tDBR,Rn", Code: "0000nnnn11111010", SH4: true},
+		{Group: "System Control Instructions", Format: "stc.l\tDBR,@-Rn", Code: "0100nnnn11110010", SH4: true},
+	}
+	for _, raw := range accept {
+		insns, err := ir.Build([]loader.RawInsn{raw})
+		if err != nil {
+			t.Fatalf("%s: build: %v", raw.Format, err)
+		}
+		if !Is1aSimple(insns[0]) {
+			t.Errorf("should be selected (SGR/DBR): %s", raw.Format)
+		}
+	}
 }
 
 func TestIs1aSimpleAcceptsDispOperands(t *testing.T) {

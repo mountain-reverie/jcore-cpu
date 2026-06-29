@@ -1,4 +1,4 @@
-! mmuldtlbr.S -- guard for LDTLB.RN (fused Load-TLB-and-No-delay-slot-Return, 0x0068).
+! mmuldtlbr.S -- guard for LDTLB.RN (fused Load-TLB-and-No-delay-slot-Return, 0x0078).
 !
 ! Proves the two halves of the fused instruction in a SINGLE observable event:
 !   (1) INSTALL: LDTLB.RN latches {PTEH, PTEL, ASIDR} into a TLB entry.
@@ -19,7 +19,7 @@
 ! Contrast with mmurte.S (return only, AT disabled in handler): here AT stays ON
 ! across the return, so the re-executed access is genuinely re-translated.
 !
-! RED before change: 0x0068 is a delayed branch, so the slot (mov #1,r9)
+! RED before change: 0x0078 (was 0x0068) is a delayed branch, so the slot (mov #1,r9)
 ! executes -> r9==1 -> the no-delay-slot guard trips -> "Test failed. Result=1".
 !
 ! VBR = _v_load - 0x420 so the DMISS_R vector (VBR+0x420) hits _v_load.
@@ -145,7 +145,7 @@ _v_load:                                ! = VBR + 0x420
         .word   0x406E                  ! LDC r0, PTEL
         mov     #0, r0
         .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0068                  ! LDTLB.RN -- install + return (NO delay slot)
+        .word   0x0078                  ! LDTLB.RN -- install + return (NO delay slot)
         mov     #1, r9                  ! MUST NOT execute: LDTLB.RN has no delay slot
         ! If LDTLB.RN failed to return, execution falls through to here -> spin
         ! WITHOUT writing a result (RED = timeout).

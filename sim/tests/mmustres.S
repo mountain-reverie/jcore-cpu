@@ -9,7 +9,7 @@
 !     no fault (rules out a generic AT-store bug). Verified by load-back; on
 !     mismatch -> fail code 3.
 !   - store 0x5B5B0002 to an UNMAPPED identity page -> DMISS_W (vector 0x440).
-!     Handler installs the identity PTE and does LDTLB.RN (0x0068) to resume,
+!     Handler installs the identity PTE and does LDTLB.RN (0x0078) to resume,
 !     so the store RE-EXECUTES against the fresh TLB entry.
 !   - load the page back; compare to 0x5B5B0002.
 !       match           -> PASS (result 0)
@@ -150,7 +150,7 @@ _v_store:                               ! = VBR + 0x440
         .word   0x406E                  ! LDC r0, PTEL
         mov     #0, r0
         .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0068                  ! LDTLB.RN -- install + return atomically
+        .word   0x0078                  ! LDTLB.RN -- install + return atomically
 _h_fail_spin:
         bra     _h_fail_spin
         nop

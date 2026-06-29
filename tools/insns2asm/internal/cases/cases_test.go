@@ -317,13 +317,12 @@ func TestMovi20ImmBoundaries(t *testing.T) {
 	}
 }
 
-// TestDisp12SweepReachesMax verifies that a 12-bit displacement field sweeps to 4095×scale.
+// TestDisp12SweepReachesMax verifies that a 12-bit displacement field sweeps from
+// 16 (avoiding overlap with the disp4 range 0–15) through 4095.
 func TestDisp12SweepReachesMax(t *testing.T) {
-	// mov.b @(disp,GBR),R0 with 12-bit disp (if it exists) — use synthetic encoding
-	// Use a synthetic 12-bit disp instruction (MemGBR): 11000001dddddddddddd (hypothetical)
-	// Actually test via dispBoundariesFor directly
 	boundaries := dispBoundariesFor(12)
-	want := []int{0, 0x7f, 0x80, 4095}
+	// Starts at 16 (> disp4 max 15) so generated asm is unambiguous with 16-bit forms.
+	want := []int{16, 0x7ff, 0x800, 4095}
 	if len(boundaries) != len(want) {
 		t.Fatalf("dispBoundariesFor(12) len=%d want %d", len(boundaries), len(want))
 	}
@@ -332,10 +331,6 @@ func TestDisp12SweepReachesMax(t *testing.T) {
 			t.Errorf("dispBoundariesFor(12)[%d] = %d, want %d", i, boundaries[i], v)
 		}
 	}
-	// Also verify that a real 12-bit disp instruction reaches 4095*scale in the sweep
-	// movi20 doesn't have disp; use a hypothetical 12-bit mov.b @(disp,GBR):
-	// Code: 11000001dddddddddddd would be 12-bit but that's not in the ISA.
-	// The key requirement is that dispBoundariesFor(12) includes 4095 (checked above).
 }
 
 func scanMov(s string, a, b *int) (int, error) {

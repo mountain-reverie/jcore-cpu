@@ -14,8 +14,6 @@ var fpGroups = map[string]bool{
 	"Floating-Point Double-Precision Instructions (FPSCR.PR = 1)":     true,
 }
 
-var fpDeferMnemonics = map[string]bool{}
-
 var gpIntegerGroups = map[string]bool{
 	"Data Transfer Instructions":        true,
 	"Arithmetic Operation Instructions": true,
@@ -95,11 +93,12 @@ func oneACleanOperand(o operand.Operand) bool {
 	return false
 }
 
-// fpSelected reports whether an instruction belongs to the single-precision FP
-// subset supported by the current SH MC target. Double-precision, 64-bit
-// transfer, and multi-vector instructions (fipr/ftrv/fsca) are deferred.
+// fpSelected reports whether an instruction belongs to the SH floating-point
+// ISA supported by the SH MC target: single- and double-precision plus the
+// vector/matrix forms (fipr/ftrv). An instruction is selected when its group is
+// an FP group and every operand is a modelled FP/GPR/immediate/memory class.
 func fpSelected(in ir.Insn) bool {
-	if !fpGroups[in.Group] || fpDeferMnemonics[in.Mnemonic] {
+	if !fpGroups[in.Group] {
 		return false
 	}
 	for _, o := range in.Operands {

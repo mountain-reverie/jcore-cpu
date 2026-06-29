@@ -55,10 +55,6 @@ func IsEmittedGroup(group string) bool {
 	return emittedGroups[group]
 }
 
-// deferredFPOperands was used to exclude vector/matrix FP tokens in earlier
-// phases; all FP operands are now modelled so this map is empty.
-var deferredFPOperands = map[string]bool{}
-
 var dspCoprocOperands = map[string]bool{
 	"A0": true, "X0": true, "X1": true, "Y0": true, "Y1": true,
 	"RS": true, "RE": true, "MOD": true, "DSR": true,
@@ -96,10 +92,6 @@ func Load(r io.Reader) ([]RawInsn, int, error) {
 			dropped++
 			continue
 		}
-		if hasDeferredFPOperand(in.Format) {
-			dropped++
-			continue
-		}
 		out = append(out, in)
 	}
 	return out, dropped, nil
@@ -108,15 +100,6 @@ func Load(r io.Reader) ([]RawInsn, int, error) {
 func hasDSPCoprocOperand(formatStr string) bool {
 	for _, tok := range format.Parse(formatStr).Operands {
 		if isDSPCoprocOperand(tok) {
-			return true
-		}
-	}
-	return false
-}
-
-func hasDeferredFPOperand(formatStr string) bool {
-	for _, tok := range format.Parse(formatStr).Operands {
-		if deferredFPOperands[tok] {
 			return true
 		}
 	}

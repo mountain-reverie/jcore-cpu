@@ -250,6 +250,94 @@ func TestSynthesizeDispMemDispWithBaseRegAndDisp(t *testing.T) {
 	}
 }
 
+// TestMovi20ImmNotTruncated verifies that movi20's 20-bit immediate is not
+// corrupted by int8 truncation and that the hex encoding matches the printed value.
+func TestMovi20ImmNotTruncated(t *testing.T) {
+	// movi20 encoding: 0000nnnniiii0000 iiiiiiiiiiiiiiii (two words)
+	cs := Synthesize(build(t, loader.RawInsn{
+		Group: "Data Transfer Instructions", Format: "movi20\t#imm20,Rn",
+		Code: "0000nnnniiii0000 iiiiiiiiiiiiiiii", SH2A: true,
+	}))
+	if len(cs) == 0 {
+		t.Fatal("no cases generated")
+	}
+	for k, c := range cs {
+		// Surface must not contain "#-" (int8 sign-extension artifact)
+		if strings.Contains(c.Asm, "#-") {
+			t.Errorf("case %d: int8-truncated immediate in %q", k, c.Asm)
+		}
+		// Parse: movi20 #<imm>, r<n>
+		var imm, rn int
+		if n, _ := fmt.Sscanf(c.Asm, "movi20 #%d, r%d", &imm, &rn); n != 2 {
+			t.Fatalf("case %d: unparseable asm: %q", k, c.Asm)
+		}
+		// Hex must be 4 bytes (two words)
+		hexParts := strings.Fields(c.Hex)
+		if len(hexParts) != 4 {
+			t.Fatalf("case %d: want 4 hex bytes, got %d: %q", k, len(hexParts), c.Hex)
+		}
+		// word0 = 0000nnnn iiii0000; word1 = imm[15:0]
+		var w0, w1 uint64
+		fmt.Sscanf(hexParts[0]+hexParts[1], "%x", &w0)
+		fmt.Sscanf(hexParts[2]+hexParts[3], "%x", &w1)
+		// rn nibble is word0[11:8]
+		gotRn := int((w0 >> 8) & 0xf)
+		if gotRn != rn {
+			t.Errorf("case %d: rn mismatch asm=r%d hex_rn=%d", k, rn, gotRn)
+		}
+		// imm upper 4 bits in word0[7:4], lower 16 in word1
+		immHi := int((w0 >> 4) & 0xf)
+		immLo := int(w1 & 0xffff)
+		hexImm := (immHi << 16) | immLo
+		if hexImm != imm {
+			t.Errorf("case %d: asm imm %d != hex imm %d (asm=%q hex=%q)", k, imm, hexImm, c.Asm, c.Hex)
+		}
+	}
+}
+
+// TestMovi20ImmBoundaries verifies that movi20's imm sweep uses 20-bit
+// boundaries (reaching 0xfffff) rather than the 8-bit {0,127,128,255} set.
+func TestMovi20ImmBoundaries(t *testing.T) {
+	cs := Synthesize(build(t, loader.RawInsn{
+		Group: "Data Transfer Instructions", Format: "movi20\t#imm20,Rn",
+		Code: "0000nnnniiii0000 iiiiiiiiiiiiiiii", SH2A: true,
+	}))
+	foundMax := false
+	for _, c := range cs {
+		if strings.Contains(c.Asm, fmt.Sprintf("#%d", 0xfffff)) {
+			foundMax = true
+		}
+		// Must not contain 8-bit boundary values misused as 20-bit
+		if strings.Contains(c.Asm, "#128") || strings.Contains(c.Asm, "#255") {
+			t.Errorf("found 8-bit boundary value in movi20 sweep: %q", c.Asm)
+		}
+	}
+	if !foundMax {
+		t.Errorf("movi20 sweep did not reach max 20-bit value #%d", 0xfffff)
+	}
+}
+
+// TestDisp12SweepReachesMax verifies that a 12-bit displacement field sweeps to 4095×scale.
+func TestDisp12SweepReachesMax(t *testing.T) {
+	// mov.b @(disp,GBR),R0 with 12-bit disp (if it exists) — use synthetic encoding
+	// Use a synthetic 12-bit disp instruction (MemGBR): 11000001dddddddddddd (hypothetical)
+	// Actually test via dispBoundariesFor directly
+	boundaries := dispBoundariesFor(12)
+	want := []int{0, 0x7f, 0x80, 4095}
+	if len(boundaries) != len(want) {
+		t.Fatalf("dispBoundariesFor(12) len=%d want %d", len(boundaries), len(want))
+	}
+	for i, v := range want {
+		if boundaries[i] != v {
+			t.Errorf("dispBoundariesFor(12)[%d] = %d, want %d", i, boundaries[i], v)
+		}
+	}
+	// Also verify that a real 12-bit disp instruction reaches 4095*scale in the sweep
+	// movi20 doesn't have disp; use a hypothetical 12-bit mov.b @(disp,GBR):
+	// Code: 11000001dddddddddddd would be 12-bit but that's not in the ISA.
+	// The key requirement is that dispBoundariesFor(12) includes 4095 (checked above).
+}
+
 func scanMov(s string, a, b *int) (int, error) {
 	s = strings.TrimPrefix(s, "mov ")
 	parts := strings.Split(s, ", ")

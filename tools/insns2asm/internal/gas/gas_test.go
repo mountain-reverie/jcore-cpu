@@ -61,9 +61,56 @@ func TestNibblesKnownPattern(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "0x0,REG_N,IMM0_4,0x0"
+	want := "HEX_0,REG_N,IMM0_4,HEX_0"
 	if got != want {
 		t.Errorf("nibbles = %q, want %q", got, want)
+	}
+}
+
+func TestEmitDeltaLowercaseAndHexMacros(t *testing.T) {
+	insns, err := ir.Build([]loader.RawInsn{
+		{Group: "Data Transfer Instructions", Format: "cas.l\tRm, Rn, @R0", Code: "0010nnnnmmmm0011", J2: true},
+		{Group: "System Control Instructions", Format: "bgnd", Code: "0000000000111011", J1: true, J2: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := EmitDelta(insns)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantCas := `{"cas.l",{A_REG_M,A_REG_N,A_IND_M,0},{HEX_2,REG_N,REG_M,HEX_3},arch_j_core},`
+	wantBgnd := `{"bgnd",{0},{HEX_0,HEX_0,HEX_3,HEX_B},arch_j_core},`
+	if !strings.Contains(out, wantCas) {
+		t.Errorf("cas.l line wrong.\n got: %s\nwant substr: %s", out, wantCas)
+	}
+	if !strings.Contains(out, wantBgnd) {
+		t.Errorf("bgnd line wrong.\n got: %s\nwant substr: %s", out, wantBgnd)
+	}
+	// No raw 0x nibble literals should remain in emitted lines.
+	if strings.Contains(out, "0x") {
+		t.Errorf("expected HEX_n macros, found raw 0x nibble:\n%s", out)
+	}
+}
+
+func TestEmitDeltaLowercasesMnemonic(t *testing.T) {
+	// insns.json carries some uppercase formats (e.g. STC PTEH); the gas table
+	// mnemonic must be lowercase to match the assembler's parsing.
+	insns, err := ir.Build([]loader.RawInsn{
+		{Group: "System Control Instructions", Format: "STC PTEH, Rn", Code: "0000nnnn01010011", J2: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := EmitDelta(insns)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, `{"STC"`) {
+		t.Errorf("mnemonic must be lowercased:\n%s", out)
+	}
+	if !strings.Contains(out, `{"stc"`) {
+		t.Errorf("expected lowercase stc:\n%s", out)
 	}
 }
 

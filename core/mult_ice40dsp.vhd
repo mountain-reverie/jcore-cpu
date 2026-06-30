@@ -52,7 +52,9 @@ architecture ice40dsp of mult is
   type half_arr is array(0 to 3) of std_logic_vector(15 downto 0);
   type prod_arr is array(0 to 3) of std_logic_vector(31 downto 0);
   signal mac_a, mac_b : half_arr;
-  signal pp           : prod_arr;
+  signal pp           : prod_arr;   -- pp(0)=O0 raw; pp(1..3) are DSP-adder outputs
+  signal ACCUMCO1, ACCUMCO2 : std_logic;
+  signal c48, c48_and : std_logic;
 
   component SB_MAC16 is
     generic (
@@ -101,24 +103,90 @@ begin
   mac_a(2) <= r.dec.mag_a(31 downto 16);  mac_b(2) <= r.dec.mag_b(15 downto 0);
   mac_a(3) <= r.dec.mag_a(31 downto 16);  mac_b(3) <= r.dec.mag_b(31 downto 16);
 
-  gen_mac : for i in 0 to 3 generate
-    u_mac : SB_MAC16
-      generic map (
-        PIPELINE_16x16_MULT_REG1 => '1',
-        TOPOUTPUT_SELECT => "11", BOTOUTPUT_SELECT => "11",
-        A_SIGNED => '0', B_SIGNED => '0')
-      port map (
-        CLK => clk, CE => '1', A => mac_a(i), B => mac_b(i),
-        C => (others => '0'), D => (others => '0'),
-        AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
-        IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
-        OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
-        OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
-        SIGNEXTIN => '0', O => pp(i), CO => open, ACCUMCO => open,
-        SIGNEXTOUT => open);
-  end generate;
+  -- MAC0: al×bl — raw product; O0 = ll (bits 31..0 of the 32-bit product).
+  MAC0 : SB_MAC16
+    generic map (
+      PIPELINE_16x16_MULT_REG1 => '1',
+      TOPOUTPUT_SELECT => "11", BOTOUTPUT_SELECT => "11",
+      A_SIGNED => '0', B_SIGNED => '0')
+    port map (
+      CLK => clk, CE => '1', A => mac_a(0), B => mac_b(0),
+      C => (others => '0'), D => (others => '0'),
+      AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
+      IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
+      OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
+      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
+      SIGNEXTIN => '0', O => pp(0), CO => open, ACCUMCO => open,
+      SIGNEXTOUT => open);
 
-  comb : process(r, slot, a, pp)
+  -- MAC1: al×bh — fold ll[31:16] (pp(0)[31:16]) into DSP adder via D port.
+  -- O1 = lh + ll[31:16]; ACCUMCO1 = carry out at bit 48.
+  MAC1 : SB_MAC16
+    generic map (
+      PIPELINE_16x16_MULT_REG1 => '1',
+      BOTOUTPUT_SELECT => "00",    TOPOUTPUT_SELECT => "00",
+      BOTADDSUB_LOWERINPUT => "10", BOTADDSUB_UPPERINPUT => '1',
+      BOTADDSUB_CARRYSELECT => "00",
+      TOPADDSUB_LOWERINPUT => "10", TOPADDSUB_UPPERINPUT => '1',
+      TOPADDSUB_CARRYSELECT => "10",
+      A_SIGNED => '0', B_SIGNED => '0')
+    port map (
+      CLK => clk, CE => '1', A => mac_a(1), B => mac_b(1),
+      C => (others => '0'), D => pp(0)(31 downto 16),
+      AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
+      IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
+      OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
+      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
+      SIGNEXTIN => '0', O => pp(1), CO => open, ACCUMCO => ACCUMCO1,
+      SIGNEXTOUT => open);
+
+  -- MAC2: ah×bl — fold MAC1's output (pp(1)) into adder via D (low) and C (high).
+  -- O2[15:0] = final bits[31:16]; O2[31:16] = partial bits[47:32]; ACCUMCO2 = carry at bit 48.
+  MAC2 : SB_MAC16
+    generic map (
+      PIPELINE_16x16_MULT_REG1 => '1',
+      BOTOUTPUT_SELECT => "00",    TOPOUTPUT_SELECT => "00",
+      BOTADDSUB_LOWERINPUT => "10", BOTADDSUB_UPPERINPUT => '1',
+      BOTADDSUB_CARRYSELECT => "00",
+      TOPADDSUB_LOWERINPUT => "10", TOPADDSUB_UPPERINPUT => '1',
+      TOPADDSUB_CARRYSELECT => "10",
+      A_SIGNED => '0', B_SIGNED => '0')
+    port map (
+      CLK => clk, CE => '1', A => mac_a(2), B => mac_b(2),
+      C => pp(1)(31 downto 16), D => pp(1)(15 downto 0),
+      AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
+      IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
+      OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
+      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
+      SIGNEXTIN => '0', O => pp(2), CO => open, ACCUMCO => ACCUMCO2,
+      SIGNEXTOUT => open);
+
+  -- Fabric carry-merge: combine the two independent bit-48 carries.
+  c48     <= ACCUMCO1 xor ACCUMCO2;
+  c48_and <= ACCUMCO1 and ACCUMCO2;
+
+  -- MAC3: ah×bh — fold MAC2 upper (pp(2)[31:16]) via D, carry c48 via CI.
+  -- O3[15:0] = bits[47:32]; O3[31:16] = bits[63:48].
+  MAC3 : SB_MAC16
+    generic map (
+      PIPELINE_16x16_MULT_REG1 => '1',
+      BOTOUTPUT_SELECT => "00",    TOPOUTPUT_SELECT => "00",
+      BOTADDSUB_LOWERINPUT => "10", BOTADDSUB_UPPERINPUT => '1',
+      BOTADDSUB_CARRYSELECT => "11",
+      TOPADDSUB_LOWERINPUT => "10", TOPADDSUB_UPPERINPUT => '1',
+      TOPADDSUB_CARRYSELECT => "10",
+      A_SIGNED => '0', B_SIGNED => '0')
+    port map (
+      CLK => clk, CE => '1', A => mac_a(3), B => mac_b(3),
+      C => (others => '0'), D => pp(2)(31 downto 16),
+      AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
+      IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
+      OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
+      OHOLDTOP => '0', OHOLDBOT => '0', CI => c48, ACCUMCI => '0',
+      SIGNEXTIN => '0', O => pp(3), CO => open, ACCUMCO => open,
+      SIGNEXTOUT => open);
+
+  comb : process(r, slot, a, pp, c48_and)
     variable v      : dsp_reg_t;
     variable accept : boolean;
     variable dec    : mult_decode_t;
@@ -167,13 +235,16 @@ begin
       end if;
     end if;
 
-    -- DONE: assemble the 64-bit magnitude product from the four DSP partial
-    -- products, then shared finalize (sign + MAC seed + saturate + write).
+    -- DONE: assemble the 64-bit magnitude product from the DSP-adder cascade
+    -- outputs, then shared finalize (sign + MAC seed + saturate + write).
     if r.sstate = S_DONE then
-      acc := resize(unsigned(pp(0)), 64)
-           + shift_left(resize(unsigned(pp(1)), 64), 16)
-           + shift_left(resize(unsigned(pp(2)), 64), 16)
-           + shift_left(resize(unsigned(pp(3)), 64), 32);
+      acc(15 downto 0)  := unsigned(pp(0)(15 downto 0));
+      acc(31 downto 16) := unsigned(pp(2)(15 downto 0));
+      acc(47 downto 32) := unsigned(pp(3)(15 downto 0));
+      acc(63 downto 48) := unsigned(pp(3)(31 downto 16));
+      if c48_and = '1' then          -- rare double bit-48 carry: +1 at bit 49
+        acc(63 downto 49) := acc(63 downto 49) + 1;
+      end if;
       o := mult_finalize(r.dec, acc, r.mach, r.macl);
       v.mach    := o.mach;
       v.macl    := o.macl;

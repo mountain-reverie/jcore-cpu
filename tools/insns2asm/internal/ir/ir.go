@@ -25,6 +25,23 @@ type Insn struct {
 	Collides []string
 }
 
+// aliasMnemonic corrects known SH-reference-dataset spelling quirks so the
+// emitted assembler uses the canonical mnemonic. "ldtbl" is the dataset's
+// misspelling of LDTLB (opcode 0x0038). Mirrors decode/gen-go's aliasMnemonic.
+var aliasMnemonic = map[string]string{"ldtbl": "ldtlb"}
+
+func canonMnemonic(m string) string {
+	return CanonMnemonic(m)
+}
+
+// CanonMnemonic applies the dataset alias map (exported for use by main).
+func CanonMnemonic(m string) string {
+	if a, ok := aliasMnemonic[m]; ok {
+		return a
+	}
+	return m
+}
+
 // FieldFor returns the encoding field bound to a letter.
 func (i Insn) FieldFor(letter byte) (encoding.Field, bool) {
 	for _, f := range i.Fields {
@@ -64,7 +81,7 @@ func Build(raw []loader.RawInsn) ([]Insn, error) {
 			ops = append(ops, o)
 		}
 		out = append(out, Insn{
-			Mnemonic: p.Mnemonic,
+			Mnemonic: canonMnemonic(p.Mnemonic),
 			Operands: ops,
 			Words:    words,
 			Fields:   fields,

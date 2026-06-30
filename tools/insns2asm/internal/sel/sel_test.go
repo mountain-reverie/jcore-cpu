@@ -86,7 +86,6 @@ func TestIs1aSimpleAcceptsRegisterOnlyMemory(t *testing.T) {
 	}
 }
 
-
 func TestIs1aSimpleAcceptsFixedRegMem(t *testing.T) {
 	for _, r := range []loader.RawInsn{
 		{Group: "Data Transfer Instructions", Format: "movml.l\tRm,@-R15", Code: "0100mmmm11110001", SH2A: true},
@@ -127,6 +126,7 @@ func TestSelectsSystemControl(t *testing.T) {
 
 func TestSystemCoverage(t *testing.T) {
 	// SH3/SH4/SH4A no-operand and cache-op system instructions must be selected.
+	// ldtbl is the dataset spelling; the IR aliases it to ldtlb (HasSH3→HasSH4).
 	accept := []loader.RawInsn{
 		{Group: "System Control Instructions", Format: "clrs", Code: "0000000001001000", SH3: true},
 		{Group: "System Control Instructions", Format: "sets", Code: "0000000001011000", SH3: true},
@@ -247,7 +247,6 @@ func TestIs1aSimpleAcceptsDispOperands(t *testing.T) {
 	}
 }
 
-
 func TestNoUnselectedNonDSPSystem(t *testing.T) {
 	f, err := os.Open("../../../../docs/insns.json")
 	if err != nil {
@@ -269,7 +268,7 @@ func TestNoUnselectedNonDSPSystem(t *testing.T) {
 		a := in.Arch
 		hasStdArch := a.SH1 || a.SH2 || a.SH2E || a.SH3 || a.SH3E || a.SH4 || a.SH4A || a.SH2A
 		if !hasStdArch {
-			// J4-only or J2-only: out of 4a scope, skip.
+			// No standard SH arch (DSP-only, J-core-only, or J4-only): out of 4a scope, skip.
 			continue
 		}
 		if !Is1aSimple(in) {

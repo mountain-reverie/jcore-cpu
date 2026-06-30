@@ -60,6 +60,31 @@ func TestBuildPopulatesOperandWidth(t *testing.T) {
 	}
 }
 
+func TestBuildJ4MnemonicLowercase(t *testing.T) {
+	cases := []struct {
+		raw  loader.RawInsn
+		want string
+	}{
+		{
+			raw:  loader.RawInsn{Group: "System Control Instructions", Format: "STC TSBPTR, Rn", Code: "0000nnnn01000011", J4: true},
+			want: "stc",
+		},
+		{
+			raw:  loader.RawInsn{Group: "System Control Instructions", Format: "LDTLB.RN", Code: "0000000001111000", J4: true},
+			want: "ldtlb.rn",
+		},
+	}
+	for _, c := range cases {
+		got, err := Build([]loader.RawInsn{c.raw})
+		if err != nil {
+			t.Fatalf("%s: build: %v", c.raw.Format, err)
+		}
+		if got[0].Mnemonic != c.want {
+			t.Errorf("%s: mnemonic = %q, want %q", c.raw.Format, got[0].Mnemonic, c.want)
+		}
+	}
+}
+
 func TestBuildSumsSplitFieldWidth(t *testing.T) {
 	got, err := Build([]loader.RawInsn{{
 		Group: "Data Transfer Instructions", Format: "movi20\t#imm20,Rn",

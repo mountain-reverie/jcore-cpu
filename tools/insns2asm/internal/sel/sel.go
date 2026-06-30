@@ -91,7 +91,7 @@ func oneACleanOperand(o operand.Operand) bool {
 		return true
 	case operand.MemReg, operand.MemPostInc, operand.MemPreDec:
 		return true
-	case operand.BranchDisp:
+	case operand.BranchDisp, operand.MemTBRDisp:
 		return true
 	}
 	return false

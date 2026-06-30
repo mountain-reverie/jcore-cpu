@@ -246,3 +246,15 @@ func TestIs1aSimpleAcceptsDispOperands(t *testing.T) {
 	}
 }
 
+
+func TestJsrN(t *testing.T) {
+	raw := loader.RawInsn{
+		Group:  "Branch Instructions",
+		Format: "jsr/n\t@@(disp8,TBR)",
+		Code:   "10000011dddddddd",
+		SH2A:   true,
+	}
+	if !Is1aSimple(build(t, raw)) {
+		t.Errorf("jsr/n @@(disp8,TBR) should be selected")
+	}
+}

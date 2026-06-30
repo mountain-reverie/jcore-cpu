@@ -29,6 +29,8 @@ const (
 	DReg
 	XReg
 	FVReg
+	CP0Reg
+	CPIReg
 )
 
 func (c Class) String() string {
@@ -75,6 +77,10 @@ func (c Class) String() string {
 		return "XReg"
 	case FVReg:
 		return "FVReg"
+	case CP0Reg:
+		return "CP0Reg"
+	case CPIReg:
+		return "CPIReg"
 	}
 	return "??"
 }
@@ -142,6 +148,12 @@ var table = map[string]entry{
 	"PTEL":          {class: FixedReg, fixed: "PTEL"},
 	"ASIDR":         {class: FixedReg, fixed: "ASIDR"},
 	"TSBPTR":        {class: FixedReg, fixed: "TSBPTR"},
+	"CP0_Rm":        {class: CP0Reg, letter: 'm'},
+	"CP0_Rn":        {class: CP0Reg, letter: 'n'},
+	"CPI_Rm":        {class: CPIReg, letter: 'm'},
+	"CPI_Rn":        {class: CPIReg, letter: 'n'},
+	"CP0_COM":       {class: FixedReg, fixed: "CP0_COM"},
+	"CPI_COM":       {class: FixedReg, fixed: "CPI_COM"},
 	"FRn":           {class: FReg, letter: 'n'},
 	"FRm":           {class: FReg, letter: 'm'},
 	"DRn":           {class: DReg, letter: 'n'},

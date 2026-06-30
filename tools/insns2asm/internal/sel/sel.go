@@ -31,6 +31,7 @@ var systemRegAllow = map[string]bool{
 	"TBR": true, "MACH": true, "MACL": true, "PR": true,
 	"SGR": true, "DBR": true,
 	"PTEH": true, "PTEL": true, "ASIDR": true, "TSBPTR": true,
+	"CP0_COM": true, "CPI_COM": true,
 }
 
 // sysControlMnemonics are System Control insns accepted by mnemonic (no special
@@ -43,6 +44,7 @@ var sysControlMnemonics = map[string]bool{
 	"icbi": true, "ocbi": true, "ocbp": true, "ocbwb": true,
 	"prefi": true, "movca.l": true,
 	"ldtlb.rn": true,
+	"clds": true, "csts": true,
 }
 
 // sysRegMoveMnemonics are the system/banked register transfer mnemonics.
@@ -57,7 +59,8 @@ var sysRegMoveMnemonics = map[string]bool{
 func sysOperandClean(o operand.Operand) bool {
 	switch o.Class {
 	case operand.GPR, operand.Imm, operand.R0Fixed, operand.BankReg,
-		operand.MemReg, operand.MemPostInc, operand.MemPreDec:
+		operand.MemReg, operand.MemPostInc, operand.MemPreDec,
+		operand.CP0Reg, operand.CPIReg:
 		return true
 	case operand.FixedReg:
 		return systemRegAllow[o.Fixed]

@@ -27,17 +27,11 @@ func TestEmitTwoWordBitPos(t *testing.T) {
 	if !strings.Contains(out, "bits<32> Inst;") {
 		t.Errorf("missing bits<32>:\n%s", out)
 	}
-	// word0 nibble 0011 occupies bits 31..28
+	// word0 nibble 0011 occupies bits 31..28, coalesced
 	wantBits := []string{
-		"let Inst{31} = 0;",
-		"let Inst{30} = 0;",
-		"let Inst{29} = 1;",
-		"let Inst{28} = 1;",
-		// word1 leading nibble 0110 occupies bits 15..12
-		"let Inst{15} = 0;",
-		"let Inst{14} = 1;",
-		"let Inst{13} = 1;",
-		"let Inst{12} = 0;",
+		"let Inst{31-28} = 0b0011;",
+		// word0 tail 0001 and word1 lead 0110 are adjacent (bits 19..12), coalesced
+		"let Inst{19-12} = 0b00010110;",
 	}
 	for _, want := range wantBits {
 		if !strings.Contains(out, want) {
@@ -55,8 +49,8 @@ func TestEmitContainsDefAndEncoding(t *testing.T) {
 	if !strings.Contains(out, "def MOV_") {
 		t.Errorf("missing def:\n%s", out)
 	}
-	// fixed top nibble 0110 => Inst{15} = 0; Inst{13} = 1
-	if !strings.Contains(out, "let Inst{15} = 0;") {
+	// fixed top nibble 0110 => coalesced Inst{15-12}
+	if !strings.Contains(out, "let Inst{15-12} = 0b0110;") {
 		t.Errorf("missing fixed bit assignment:\n%s", out)
 	}
 	if !strings.Contains(out, "Predicates = [HasJ2]") {

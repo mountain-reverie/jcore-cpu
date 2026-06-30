@@ -1,4 +1,5 @@
--- Busy-aware TAP testbench for the J1 sequential multiplier, mult(seq).
+-- Busy-aware TAP testbench for the J1 sequential multiplier, mult(seq),
+-- the J2 array multiplier mult(stru), and the iCE40 DSP multiplier mult(ice40dsp).
 --
 -- The original tests/mult_tap.vhd samples MACH/MACL at a FIXED short delay
 -- and never waits on busy.  That is fine for the single-cycle pipelined J2
@@ -14,12 +15,12 @@
 --   4. once busy falls, samples MACH/MACL and checks against the expected
 --      product (the same expected constants mult_tap uses).
 --
--- Both architectures are instantiated (direct entity binding, so each is bound
--- unambiguously regardless of analysis order) and driven by the SAME stimulus.
--- Every functional vector is checked against the golden constants on BOTH the
--- sequential (seq) and the J2 array (stru) multiplier, and the saturating MAC.W
--- cases cross-check seq against stru. So this one busy-aware harness validates
--- both mult units (and any future architecture wired in the same way).
+-- All three architectures are instantiated (direct entity binding, so each is
+-- bound unambiguously regardless of analysis order) and driven by the SAME
+-- stimulus.  Every functional vector is checked against the golden constants on
+-- seq, stru, AND ice40dsp; the saturating MAC.W cases cross-check all three
+-- against the stru oracle.  So this one busy-aware harness validates all three
+-- mult units from a single stimulus.
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -46,6 +47,9 @@ architecture tb of mult_seq_tap is
   -- for the saturating (S-bit) MAC.W cross-check below.  It is driven by the
   -- SAME stimulus bus (mac_i) so its MACH/MACL must match the sequential one.
   signal mac_o_ref : mult_o_t;
+
+  -- Third multiplier instance: iCE40 DSP architecture (SB_MAC16 partial products).
+  signal mac_o_dsp : mult_o_t;
 
   procedure test_mult(actualh    : std_logic_vector(31 downto 0);
                       actuall    : std_logic_vector(31 downto 0);
@@ -112,12 +116,18 @@ begin
   mult_ref : entity work.mult(stru)
     port map (clk => clk, rst => rst, slot => slot, a => mac_i, y => mac_o_ref);
 
+  -- The iCE40 DSP multiplier (ice40dsp) bound explicitly.
+  dsp_dut : entity work.mult(ice40dsp)
+    port map (clk => clk, rst => rst, slot => slot, a => mac_i, y => mac_o_dsp);
+
   process
   begin
 
-    -- 7 functional vectors checked on BOTH architectures (seq + stru) against
-    -- the golden constants, plus 5 saturating seq-vs-stru cross-checks = 19.
-    test_plan(19, "Mult seq+stru (busy-aware)");
+    -- 7 functional vectors checked on ALL THREE architectures (seq + stru + ice40dsp)
+    -- against the golden constants (21), plus 5 saturating cross-checks on all three
+    -- against the stru oracle (15 but only the 5 seq+stru pairs were original; adding
+    -- 5 dsp cross-checks) = 31 total.
+    test_plan(31, "Mult seq+stru+ice40dsp (busy-aware)");
 
     -- Bypass a lot of logic, same as mult_tap.
     mac_i.s       <= '0';
@@ -144,6 +154,7 @@ begin
     run_to_completion(clk, mac_o.busy, "DMULS.L");
     test_mult(mac_o.mach, mac_o.macl, x"ffffffff", x"ffff5556", "test DMULS.L (seq)");
     test_mult(mac_o_ref.mach, mac_o_ref.macl, x"ffffffff", x"ffff5556", "test DMULS.L (stru)");
+    test_mult(mac_o_dsp.mach, mac_o_dsp.macl, x"ffffffff", x"ffff5556", "test DMULS.L (ice40dsp)");
 
     -------------------------------------------------------------- DMULU.L
     mac_i.command <= DMULUL;
@@ -154,6 +165,7 @@ begin
     run_to_completion(clk, mac_o.busy, "DMULU.L");
     test_mult(mac_o.mach, mac_o.macl, x"00005554", x"ffff5556", "test DMULU.L (seq)");
     test_mult(mac_o_ref.mach, mac_o_ref.macl, x"00005554", x"ffff5556", "test DMULU.L (stru)");
+    test_mult(mac_o_dsp.mach, mac_o_dsp.macl, x"00005554", x"ffff5556", "test DMULU.L (ice40dsp)");
 
     -------------------------------------------------------------- MUL.L
     mac_i.command <= MULL;
@@ -164,6 +176,7 @@ begin
     run_to_completion(clk, mac_o.busy, "MUL.L");
     test_equal(mac_o.macl, x"ffff5556", "test MUL.L (seq)");
     test_equal(mac_o_ref.macl, x"ffff5556", "test MUL.L (stru)");
+    test_equal(mac_o_dsp.macl, x"ffff5556", "test MUL.L (ice40dsp)");
 
     -------------------------------------------------------------- MULS.W
     mac_i.command <= MULSW;
@@ -174,6 +187,7 @@ begin
     run_to_completion(clk, mac_o.busy, "MULS.W");
     test_equal(mac_o.macl, x"ffff5556", "test MULS.W (seq)");
     test_equal(mac_o_ref.macl, x"ffff5556", "test MULS.W (stru)");
+    test_equal(mac_o_dsp.macl, x"ffff5556", "test MULS.W (ice40dsp)");
 
     -------------------------------------------------------------- MULU.W
     mac_i.command <= MULUW;
@@ -186,6 +200,7 @@ begin
     run_to_completion(clk, mac_o.busy, "MULU.W");
     test_equal(mac_o.macl, x"00015554", "test MULU.W (seq)");
     test_equal(mac_o_ref.macl, x"00015554", "test MULU.W (stru)");
+    test_equal(mac_o_dsp.macl, x"00015554", "test MULU.W (ice40dsp)");
 
     -------------------------------------------------------------- MAC.W
     -- Load m1 first (one slot), then issue MAC.W with the second operand.
@@ -200,6 +215,7 @@ begin
     run_to_completion(clk, mac_o.busy, "MAC.W");
     test_equal(mac_o.macl, x"0001555a", "test MAC.W (seq)");
     test_equal(mac_o_ref.macl, x"0001555a", "test MAC.W (stru)");
+    test_equal(mac_o_dsp.macl, x"0001555a", "test MAC.W (ice40dsp)");
 
     -------------------------------------------------------------- MAC.L
     mac_i.wr_m1   <= '1';
@@ -213,6 +229,7 @@ begin
     run_to_completion(clk, mac_o.busy, "MAC.L");
     test_mult(mac_o.mach, mac_o.macl, x"40005553", x"0001555B", "test MAC.L (seq)");
     test_mult(mac_o_ref.mach, mac_o_ref.macl, x"40005553", x"0001555B", "test MAC.L (stru)");
+    test_mult(mac_o_dsp.mach, mac_o_dsp.macl, x"40005553", x"0001555B", "test MAC.L (ice40dsp)");
 
     --------------------------------------------------------------------
     -- SATURATE32 cross-check: drive identical saturating MAC.W (s='1')
@@ -251,6 +268,8 @@ begin
     run_to_completion(clk, mac_o.busy, "MAC.W S neg-no-ovf");
     test_mult(mac_o.mach, mac_o.macl, mac_o_ref.mach, mac_o_ref.macl,
               "xchk MACWS negative MACL, no overflow");
+    test_mult(mac_o_dsp.mach, mac_o_dsp.macl, mac_o_ref.mach, mac_o_ref.macl,
+              "xchk MACWS negative MACL, no overflow (ice40dsp)");
 
     -- Case B: POSITIVE overflow clamp.
     --   prior MACL = 0x7fffffff (max positive), add a positive product
@@ -274,6 +293,8 @@ begin
     run_to_completion(clk, mac_o.busy, "MAC.W S pos-ovf");
     test_mult(mac_o.mach, mac_o.macl, mac_o_ref.mach, mac_o_ref.macl,
               "xchk MACWS positive overflow clamp + MACH carry");
+    test_mult(mac_o_dsp.mach, mac_o_dsp.macl, mac_o_ref.mach, mac_o_ref.macl,
+              "xchk MACWS positive overflow clamp + MACH carry (ice40dsp)");
 
     -- Case C: NEGATIVE overflow clamp.
     --   prior MACL = 0x80000000 (max negative), add a negative product
@@ -296,6 +317,8 @@ begin
     run_to_completion(clk, mac_o.busy, "MAC.W S neg-ovf");
     test_mult(mac_o.mach, mac_o.macl, mac_o_ref.mach, mac_o_ref.macl,
               "xchk MACWS negative overflow clamp");
+    test_mult(mac_o_dsp.mach, mac_o_dsp.macl, mac_o_ref.mach, mac_o_ref.macl,
+              "xchk MACWS negative overflow clamp (ice40dsp)");
 
     -- Case D: NEGATIVE accumulator, negative product, NO overflow.
     --   prior MACL = 0xffff0000, add (-0x4000) x (0x2) = -0x8000 ->
@@ -319,6 +342,8 @@ begin
     run_to_completion(clk, mac_o.busy, "MAC.W S neg-acc");
     test_mult(mac_o.mach, mac_o.macl, mac_o_ref.mach, mac_o_ref.macl,
               "xchk MACWS negative accumulator, no overflow");
+    test_mult(mac_o_dsp.mach, mac_o_dsp.macl, mac_o_ref.mach, mac_o_ref.macl,
+              "xchk MACWS negative accumulator, no overflow (ice40dsp)");
 
     -- Case E: MACH carry-out preservation.
     --   prior MACH = 0xa5a5a5a4 (bit 0 clear), prior MACL = 0x7fffffff,
@@ -342,6 +367,8 @@ begin
     run_to_completion(clk, mac_o.busy, "MAC.W S mach-carry");
     test_mult(mac_o.mach, mac_o.macl, mac_o_ref.mach, mac_o_ref.macl,
               "xchk MACWS MACH bit-0 carry preserves high bits");
+    test_mult(mac_o_dsp.mach, mac_o_dsp.macl, mac_o_ref.mach, mac_o_ref.macl,
+              "xchk MACWS MACH bit-0 carry preserves high bits (ice40dsp)");
 
     test_finished("done");
 

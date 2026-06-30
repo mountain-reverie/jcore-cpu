@@ -2,6 +2,7 @@ package sel
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/ir"
@@ -265,10 +266,10 @@ func TestNoUnselectedNonDSPSystem(t *testing.T) {
 		if in.Group != "System Control Instructions" && in.Group != "Branch Instructions" {
 			continue
 		}
+		// Skip DSP-family: DSP-only (no known arch flag set) or DSP-prefixed group.
 		a := in.Arch
-		hasStdArch := a.SH1 || a.SH2 || a.SH2E || a.SH3 || a.SH3E || a.SH4 || a.SH4A || a.SH2A
-		if !hasStdArch {
-			// No standard SH arch (DSP-only, J-core-only, or J4-only): out of 4a scope, skip.
+		isDSPOnly := !(a.SH1 || a.SH2 || a.SH2E || a.SH3 || a.SH3E || a.SH4 || a.SH4A || a.SH2A || a.J1 || a.J2 || a.J4)
+		if isDSPOnly || strings.HasPrefix(in.Group, "DSP") {
 			continue
 		}
 		if !Is1aSimple(in) {

@@ -1,7 +1,8 @@
 -- Unit test for the behavioral SB_MAC16 (core/sb_mac16_sim.vhd): proves the
--- model registers the unsigned 16x16 product with one clock of latency. This
--- is the sim stand-in that mult(ice40dsp) binds; the real DSP is supplied by
--- yosys synth_ice40 at synthesis.
+-- model registers the unsigned 16x16 product with one clock of latency, and
+-- that the BOT/TOP post-multiply adder stage produces correct results.
+-- dut  : product-bypass mode (TOPOUTPUT_SELECT/BOTOUTPUT_SELECT = "11")
+-- dut2 : adder mode (OUTPUT_SELECT = "00", adder engaged, iH feeds adder)
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -14,6 +15,12 @@ architecture tb of sb_mac16_tap is
   signal clk : std_logic := '0';
   signal a, b : std_logic_vector(15 downto 0) := (others => '0');
   signal o : std_logic_vector(31 downto 0);
+
+  -- dut2 signals (adder mode)
+  signal a2, b2, c2, d2 : std_logic_vector(15 downto 0) := (others => '0');
+  signal o2 : std_logic_vector(31 downto 0);
+  signal accumco2 : std_logic;
+
   shared variable ENDSIM : boolean := false;
 
   component SB_MAC16 is
@@ -57,6 +64,7 @@ begin
     wait;
   end process;
 
+  -- Product-bypass instance (existing tests)
   dut : SB_MAC16
     generic map (PIPELINE_16x16_MULT_REG1 => '1',
                  TOPOUTPUT_SELECT => "11", BOTOUTPUT_SELECT => "11")
@@ -68,6 +76,31 @@ begin
       OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
       OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
       SIGNEXTIN => '0', O => o, CO => open, ACCUMCO => open, SIGNEXTOUT => open);
+
+  -- Adder-mode instance: iH feeds BOT+TOP adder, C/D are addends
+  -- BOTADDSUB_LOWERINPUT="10" → iH[15:0]; BOTADDSUB_UPPERINPUT='1' → D
+  -- BOTADDSUB_CARRYSELECT="00" → LCI=0; BOTOUTPUT_SELECT="00" → adder result
+  -- TOPADDSUB_LOWERINPUT="10" → iH[31:16]; TOPADDSUB_UPPERINPUT='1' → C
+  -- TOPADDSUB_CARRYSELECT="10" → HCI=LCO; TOPOUTPUT_SELECT="00" → adder result
+  dut2 : SB_MAC16
+    generic map (
+      PIPELINE_16x16_MULT_REG1  => '1',
+      BOTADDSUB_LOWERINPUT      => "10",
+      BOTADDSUB_UPPERINPUT      => '1',
+      BOTADDSUB_CARRYSELECT     => "00",
+      BOTOUTPUT_SELECT          => "00",
+      TOPADDSUB_LOWERINPUT      => "10",
+      TOPADDSUB_UPPERINPUT      => '1',
+      TOPADDSUB_CARRYSELECT     => "10",
+      TOPOUTPUT_SELECT          => "00")
+    port map (
+      CLK => clk, CE => '1', A => a2, B => b2, C => c2, D => d2,
+      AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
+      IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
+      OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
+      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
+      SIGNEXTIN => '0', O => o2, CO => open, ACCUMCO => accumco2,
+      SIGNEXTOUT => open);
 
   stim : process
     procedure check(av, bv : integer) is
@@ -82,12 +115,53 @@ begin
       exp := std_logic_vector(to_unsigned(av, 16) * to_unsigned(bv, 16));
       test_ok(o = exp, "SB_MAC16 " & integer'image(av) & "*" & integer'image(bv));
     end procedure;
+
+    -- Check adder mode: O = (A*B) + (C concatenated with D) as 32-bit add.
+    -- Hand-computed expected values (see comments below each call).
+    procedure check_adder(
+      av, bv, cv, dv : integer;
+      exp_o          : std_logic_vector(31 downto 0);
+      exp_accumco    : std_logic;
+      tag            : string) is
+    begin
+      a2 <= std_logic_vector(to_unsigned(av, 16));
+      b2 <= std_logic_vector(to_unsigned(bv, 16));
+      c2 <= std_logic_vector(to_unsigned(cv, 16));
+      d2 <= std_logic_vector(to_unsigned(dv, 16));
+      wait until rising_edge(clk);  -- inputs presented, prod will update
+      wait until rising_edge(clk);  -- prod now = A*B; O is combinational
+      test_ok(o2 = exp_o and accumco2 = exp_accumco,
+              "SB_MAC16 adder " & tag);
+    end procedure;
   begin
-    test_plan(4, "SB_MAC16 behavioral model");
+    test_plan(7, "SB_MAC16 behavioral model");
+
+    -- Existing product-bypass cases (dut, BOTOUTPUT_SELECT/TOPOUTPUT_SELECT="11")
     check(0, 0);
     check(3, 7);
     check(65535, 65535);   -- 0xFFFF * 0xFFFF = 0xFFFE0001
     check(1234, 4321);
+
+    -- Adder-mode cases (dut2, OUTPUT_SELECT="00" → combinational adder result)
+    --
+    -- bot_add_d: A=16, B=16 → prod=0x00000100; D=5, C=0; LCI=0
+    --   BOTres = 0x0100 + 0x0005 + 0 = 0x0105, LCO=0
+    --   TOPres = 0x0000 + 0x0000 + LCO(0) = 0x0000
+    --   O = 0x00000105, ACCUMCO=0
+    check_adder(16, 16, 0, 5, x"00000105", '0', "bot_add_d");
+
+    -- full32_add: A=256, B=256 → prod=0x00010000; C=1, D=0; LCI=0
+    --   BOTres = 0x0000 + 0x0000 + 0 = 0x0000, LCO=0
+    --   TOPres = 0x0001 + 0x0001 + LCO(0) = 0x0002
+    --   O = 0x00020000, ACCUMCO=0
+    check_adder(256, 256, 1, 0, x"00020000", '0', "full32_add");
+
+    -- full32_carry: A=255, B=257 → prod=0x0000FFFF; C=0, D=1; LCI=0
+    --   BOTres = 0xFFFF + 0x0001 + 0 = 0x10000 → BOTres=0x0000, LCO=1
+    --   TOPres = 0x0000 + 0x0000 + LCO(1) = 0x0001
+    --   O = 0x00010000, ACCUMCO=0
+    check_adder(255, 257, 0, 1, x"00010000", '0', "full32_carry");
+
     test_finished("done");
     ENDSIM := true;
     wait;

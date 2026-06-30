@@ -17,6 +17,7 @@ VHDL_TESTS += shifter_seq_tap
 VHDL_TESTS += arith_tap
 VHDL_TESTS += logic_tap
 VHDL_TESTS += manip_tap
+VHDL_TESTS += sb_mac16_tap
 
 # Add VHDL files used by the test benches
 
@@ -31,6 +32,8 @@ VHDS += shifter_seq_tap.vhd
 VHDS += arith_tap.vhd
 VHDS += logic_tap.vhd
 VHDS += manip_tap.vhd
+VHDS += ../core/sb_mac16_sim.vhd
+VHDS += sb_mac16_tap.vhd
 
 
 ####################################################################

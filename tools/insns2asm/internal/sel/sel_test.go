@@ -7,6 +7,7 @@ import (
 
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/ir"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/loader"
+	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/operand"
 )
 
 func build(t *testing.T, raw loader.RawInsn) ir.Insn {
@@ -306,6 +307,90 @@ func TestJsrN(t *testing.T) {
 	}
 	if !Is1aSimple(build(t, raw)) {
 		t.Errorf("jsr/n @@(disp8,TBR) should be selected")
+	}
+}
+
+// TestCoprocInCompleteness loads the real insns.json and confirms all 8 CP0/CPI
+// coprocessor forms are present and selected. A future re-exclusion in the loader
+// would remove them from the loaded set and cause this test to fail.
+func TestCoprocInCompleteness(t *testing.T) {
+	f, err := os.Open("../../../../docs/insns.json")
+	if err != nil {
+		t.Fatalf("open insns.json: %v", err)
+	}
+	defer f.Close()
+	raw, _, err := loader.Load(f)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	insns, err := ir.Build(raw)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+
+	hasClass := func(in ir.Insn, c operand.Class) bool {
+		for _, op := range in.Operands {
+			if op.Class == c {
+				return true
+			}
+		}
+		return false
+	}
+	hasFixed := func(in ir.Insn, name string) bool {
+		for _, op := range in.Operands {
+			if op.Fixed == name {
+				return true
+			}
+		}
+		return false
+	}
+
+	// The 8 coprocessor forms identified by mnemonic + operand signature.
+	type check struct {
+		label string
+		match func(in ir.Insn) bool
+	}
+	checks := []check{
+		{"lds Rm,CP0_COM", func(in ir.Insn) bool {
+			return strings.EqualFold(in.Mnemonic, "lds") && hasFixed(in, "CP0_COM") && hasClass(in, operand.GPR)
+		}},
+		{"sts CP0_COM,Rn", func(in ir.Insn) bool {
+			return strings.EqualFold(in.Mnemonic, "sts") && hasFixed(in, "CP0_COM") && hasClass(in, operand.GPR)
+		}},
+		{"clds CP0_Rm,CP0_COM", func(in ir.Insn) bool {
+			return strings.EqualFold(in.Mnemonic, "clds") && hasFixed(in, "CP0_COM") && hasClass(in, operand.CP0Reg)
+		}},
+		{"csts CP0_COM,CP0_Rn", func(in ir.Insn) bool {
+			return strings.EqualFold(in.Mnemonic, "csts") && hasFixed(in, "CP0_COM") && hasClass(in, operand.CP0Reg)
+		}},
+		{"lds Rm,CPI_COM", func(in ir.Insn) bool {
+			return strings.EqualFold(in.Mnemonic, "lds") && hasFixed(in, "CPI_COM") && hasClass(in, operand.GPR)
+		}},
+		{"sts CPI_COM,Rn", func(in ir.Insn) bool {
+			return strings.EqualFold(in.Mnemonic, "sts") && hasFixed(in, "CPI_COM") && hasClass(in, operand.GPR)
+		}},
+		{"clds CPI_Rm,CPI_COM", func(in ir.Insn) bool {
+			return strings.EqualFold(in.Mnemonic, "clds") && hasFixed(in, "CPI_COM") && hasClass(in, operand.CPIReg)
+		}},
+		{"csts CPI_COM,CPI_Rn", func(in ir.Insn) bool {
+			return strings.EqualFold(in.Mnemonic, "csts") && hasFixed(in, "CPI_COM") && hasClass(in, operand.CPIReg)
+		}},
+	}
+
+	for _, c := range checks {
+		found := false
+		for _, in := range insns {
+			if c.match(in) {
+				found = true
+				if !Is1aSimple(in) {
+					t.Errorf("coprocessor form loaded but not selected: %s", c.label)
+				}
+				break
+			}
+		}
+		if !found {
+			t.Errorf("coprocessor form missing from insns.json: %s", c.label)
+		}
 	}
 }
 

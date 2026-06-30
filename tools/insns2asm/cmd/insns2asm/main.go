@@ -104,7 +104,7 @@ func run(args []string, stdout io.Writer) error {
 		rawMap := map[string]string{}
 		for _, r := range raw {
 			p := format.Parse(r.Format)
-			key := p.Mnemonic
+			key := ir.CanonMnemonic(p.Mnemonic)
 			if len(p.Operands) > 0 {
 				key += "\t" + strings.Join(p.Operands, ",")
 			}

@@ -328,6 +328,67 @@ func TestEmitConstrainedFixedRegMem(t *testing.T) {
 	}
 }
 
+func TestEmitIsAsmParserOnly(t *testing.T) {
+	// J4-only insn with Collides that shares an encoding with an SH4A insn in
+	// the same set -> must emit isAsmParserOnly = 1.
+	// Use same encoding 0000????01100011 for both (ptel/movli.l scenario).
+	ptelRaw := loader.RawInsn{
+		Group: "System Control Instructions", Format: "stc\tPTEL,Rn",
+		Code: "0000nnnn01100011", J4: true,
+		Collides: []string{`movli.l\t@Rm,R0`},
+	}
+	movliRaw := loader.RawInsn{
+		Group: "Data Transfer Instructions", Format: "movli.l\t@Rm,R0",
+		Code: "0000mmmm01100011", SH4A: true,
+		Collides: []string{`stc\tPTEL,Rn`},
+	}
+	insns, err := ir.Build([]loader.RawInsn{ptelRaw, movliRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := EmitInstrInfo(insns)
+	// The J4-only ptel def gets isAsmParserOnly
+	if !strings.Contains(out, "isAsmParserOnly = 1") {
+		t.Errorf("J4-only+Collides with same encoding must get isAsmParserOnly:\n%s", out)
+	}
+	// The SH4A movli.l def (owns the disasm slot) must NOT be parser-only
+	outMovli := EmitInstrInfo([]ir.Insn{insns[1]})
+	if strings.Contains(outMovli, "isAsmParserOnly") {
+		t.Errorf("SH4A insn must NOT be isAsmParserOnly:\n%s", outMovli)
+	}
+
+	// J4-only insn with Collides but different encoding (informational only) -> NOT parser-only.
+	// Simulates LDTLB.RN (0x0078) collides with nott (0x0068) — different encoding.
+	ldtlbRaw := loader.RawInsn{
+		Group: "System Control Instructions", Format: "LDTLB.RN",
+		Code: "0000000001111000", J4: true,
+		Collides: []string{"nott"},
+	}
+	nottRaw := loader.RawInsn{
+		Group: "System Control Instructions", Format: "nott",
+		Code: "0000000001101000", SH2A: true,
+		Collides: []string{"LDTLB.RN"},
+	}
+	insns2, err := ir.Build([]loader.RawInsn{ldtlbRaw, nottRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out2 := EmitInstrInfo(insns2)
+	if strings.Contains(out2, "isAsmParserOnly") {
+		t.Errorf("J4-only insn with different-encoding Collides must NOT be isAsmParserOnly:\n%s", out2)
+	}
+
+	// J4-only insn with empty Collides -> must NOT be parser-only
+	j4NoCollides := build(t, loader.RawInsn{
+		Group: "System Control Instructions", Format: "stc\tPTEH,Rn",
+		Code: "0000nnnn00100011", J4: true,
+	})
+	out3 := EmitInstrInfo(j4NoCollides)
+	if strings.Contains(out3, "isAsmParserOnly") {
+		t.Errorf("J4-only without Collides must NOT be isAsmParserOnly:\n%s", out3)
+	}
+}
+
 func TestScaleOf(t *testing.T) {
 	for m, want := range map[string]int{"mov.b": 1, "mov.w": 2, "mov.l": 4, "mova": 4} {
 		if got := ScaleOf(m); got != want {

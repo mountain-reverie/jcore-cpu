@@ -1,6 +1,7 @@
 package sel
 
 import (
+	"os"
 	"testing"
 
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/ir"
@@ -246,6 +247,36 @@ func TestIs1aSimpleAcceptsDispOperands(t *testing.T) {
 	}
 }
 
+
+func TestNoUnselectedNonDSPSystem(t *testing.T) {
+	f, err := os.Open("../../../../docs/insns.json")
+	if err != nil {
+		t.Fatalf("open insns.json: %v", err)
+	}
+	defer f.Close()
+	raw, _, err := loader.Load(f)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	insns, err := ir.Build(raw)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	for _, in := range insns {
+		if in.Group != "System Control Instructions" && in.Group != "Branch Instructions" {
+			continue
+		}
+		a := in.Arch
+		hasStdArch := a.SH1 || a.SH2 || a.SH2E || a.SH3 || a.SH3E || a.SH4 || a.SH4A || a.SH2A
+		if !hasStdArch {
+			// J4-only or J2-only: out of 4a scope, skip.
+			continue
+		}
+		if !Is1aSimple(in) {
+			t.Errorf("non-DSP system/branch instruction not selected: %s (group=%q arch=%+v)", in.Mnemonic, in.Group, in.Arch)
+		}
+	}
+}
 
 func TestJsrN(t *testing.T) {
 	raw := loader.RawInsn{

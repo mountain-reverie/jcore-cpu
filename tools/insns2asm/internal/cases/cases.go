@@ -77,7 +77,7 @@ func dispLetters(in ir.Insn) map[byte]int {
 	result := make(map[byte]int)
 	for _, o := range in.Operands {
 		switch o.Class {
-		case operand.MemDisp, operand.MemPC, operand.MemGBR:
+		case operand.MemDisp, operand.MemPC, operand.MemGBR, operand.MemTBRDisp:
 			if o.Letter != 0 {
 				result[o.Letter] = o.Width
 			}
@@ -191,6 +191,10 @@ func surfaceWithMnemonic(mnemonic string, o operand.Operand, vals map[byte]int) 
 		scale := llvm.ScaleOf(mnemonic)
 		byteDisp := vals[o.Letter] * scale
 		return fmt.Sprintf("@(%d,gbr)", byteDisp)
+	case operand.MemTBRDisp:
+		// SH-2A jsr/n @@(disp8,TBR): fixed scale 4 (disp*4 + TBR -> PC).
+		byteDisp := vals[o.Letter] * 4
+		return fmt.Sprintf("@@(%d, tbr)", byteDisp)
 	default:
 		return surface(o, vals[o.Letter])
 	}

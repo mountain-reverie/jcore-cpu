@@ -344,6 +344,7 @@ func isGeneratedClass(name string) bool {
 	if strings.HasPrefix(name, "memdisp_") ||
 		strings.HasPrefix(name, "gbrdisp_") ||
 		strings.HasPrefix(name, "pcdisp_") ||
+		strings.HasPrefix(name, "tbrdisp") ||
 		strings.HasPrefix(name, "bdisp") {
 		return false
 	}

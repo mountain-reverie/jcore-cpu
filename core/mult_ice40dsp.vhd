@@ -103,7 +103,7 @@ begin
   mac_a(2) <= r.dec.mag_a(31 downto 16);  mac_b(2) <= r.dec.mag_b(15 downto 0);
   mac_a(3) <= r.dec.mag_a(31 downto 16);  mac_b(3) <= r.dec.mag_b(31 downto 16);
 
-  -- MAC0: al×bl — raw product; O0 = ll (bits 31..0 of the 32-bit product).
+  -- MAC0: al*bl - raw product; O0 = ll (bits 31..0 of the 32-bit product).
   MAC0 : SB_MAC16
     generic map (
       PIPELINE_16x16_MULT_REG1 => '1',
@@ -119,7 +119,7 @@ begin
       SIGNEXTIN => '0', O => pp(0), CO => open, ACCUMCO => open,
       SIGNEXTOUT => open);
 
-  -- MAC1: al×bh — fold ll[31:16] (pp(0)[31:16]) into DSP adder via D port.
+  -- MAC1: al*bh - fold ll[31:16] (pp(0)[31:16]) into DSP adder via D port.
   -- O1 = lh + ll[31:16]; ACCUMCO1 = carry out at bit 48.
   MAC1 : SB_MAC16
     generic map (
@@ -140,7 +140,7 @@ begin
       SIGNEXTIN => '0', O => pp(1), CO => open, ACCUMCO => ACCUMCO1,
       SIGNEXTOUT => open);
 
-  -- MAC2: ah×bl — fold MAC1's output (pp(1)) into adder via D (low) and C (high).
+  -- MAC2: ah*bl - fold MAC1's output (pp(1)) into adder via D (low) and C (high).
   -- O2[15:0] = final bits[31:16]; O2[31:16] = partial bits[47:32]; ACCUMCO2 = carry at bit 48.
   MAC2 : SB_MAC16
     generic map (
@@ -165,7 +165,7 @@ begin
   c48     <= ACCUMCO1 xor ACCUMCO2;
   c48_and <= ACCUMCO1 and ACCUMCO2;
 
-  -- MAC3: ah×bh — fold MAC2 upper (pp(2)[31:16]) via D, carry c48 via CI.
+  -- MAC3: ah*bh - fold MAC2 upper (pp(2)[31:16]) via D, carry c48 via CI.
   -- O3[15:0] = bits[47:32]; O3[31:16] = bits[63:48].
   MAC3 : SB_MAC16
     generic map (

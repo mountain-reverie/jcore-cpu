@@ -89,6 +89,16 @@ func argCode(o operand.Operand) (string, error) {
 		return "A_REG_B", nil
 	case operand.MemTBRDisp:
 		return "A_DISP_TBR", nil
+	case operand.CP0Reg:
+		if o.Letter == 'n' {
+			return "A_CP0_REG_N", nil
+		}
+		return "A_CP0_REG_M", nil
+	case operand.CPIReg:
+		if o.Letter == 'n' {
+			return "A_CPI_REG_N", nil
+		}
+		return "A_CPI_REG_M", nil
 	}
 	return "", fmt.Errorf("gas: unhandled operand class %v (token %q)", o.Class, o.Token)
 }

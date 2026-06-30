@@ -352,6 +352,10 @@ func operandClassName(o operand.Operand) string {
 		return "XReg"
 	case operand.FVReg:
 		return "FVReg"
+	case operand.CP0Reg:
+		return "CP0Reg"
+	case operand.CPIReg:
+		return "CPIReg"
 	}
 	return "SHImm"
 }
@@ -373,7 +377,8 @@ func dispClass(o operand.Operand) string {
 // `def NAME : Operand<i32>;` (i.e. not a builtin or hand-written register class).
 func isGeneratedClass(name string) bool {
 	switch name {
-	case "GPR", "BankReg", "FReg", "DReg", "XReg", "FVReg", "SHImm", "MemDec", "MemR0Idx", "MemR0Fixed", "MemDecR15", "MemIncR15", "FR0Fixed":
+	case "GPR", "BankReg", "FReg", "DReg", "XReg", "FVReg", "SHImm", "MemDec", "MemR0Idx", "MemR0Fixed", "MemDecR15", "MemIncR15", "FR0Fixed",
+		"CP0Reg", "CPIReg":
 		return false
 	}
 	// Scaled-displacement operand classes are hand-written in SHOperands.td
@@ -454,7 +459,8 @@ func asmOperand(o operand.Operand) string {
 		return "r0"
 	case operand.FR0Fixed:
 		return "${fr0}"
-	case operand.FReg, operand.DReg, operand.XReg, operand.FVReg:
+	case operand.FReg, operand.DReg, operand.XReg, operand.FVReg,
+		operand.CP0Reg, operand.CPIReg:
 		return "${" + LetterVar(o.Letter) + "}"
 	case operand.GPR, operand.BankReg, operand.Imm, operand.BranchDisp:
 		return "${" + LetterVar(o.Letter) + "}"

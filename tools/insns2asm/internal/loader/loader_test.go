@@ -78,14 +78,31 @@ func TestIsEmittedGroup(t *testing.T) {
 }
 
 func TestIsDSPCoprocOperand(t *testing.T) {
-	for _, tok := range []string{"A0", "X0", "DSR", "CP0_Rm", "Sx"} {
+	for _, tok := range []string{"A0", "X0", "DSR", "Sx"} {
 		if !isDSPCoprocOperand(tok) {
 			t.Errorf("%q should be a DSP/coproc operand", tok)
 		}
 	}
-	for _, tok := range []string{"Rn", "SR", "label", "@Rm"} {
+	for _, tok := range []string{"Rn", "SR", "label", "@Rm", "CP0_Rm", "CP0_COM", "CPI_Rm", "CPI_COM"} {
 		if isDSPCoprocOperand(tok) {
 			t.Errorf("%q should NOT be a DSP/coproc operand", tok)
 		}
+	}
+}
+
+const coprocSample = `{"instructions":[
+  {"group":"System Control Instructions","format":"clds\tCP0_Rm,CP0_COM","code":"0100mmmm10001001","J1":true,"J2":true,"J4":true}
+]}`
+
+func TestCoprocLoaded(t *testing.T) {
+	got, dropped, err := Load(strings.NewReader(coprocSample))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 loaded insn (clds CP0_Rm,CP0_COM), got %d (dropped=%d)", len(got), dropped)
+	}
+	if dropped != 0 {
+		t.Errorf("want dropped=0, got %d", dropped)
 	}
 }

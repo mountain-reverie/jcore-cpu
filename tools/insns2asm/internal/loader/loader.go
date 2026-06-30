@@ -58,8 +58,6 @@ func IsEmittedGroup(group string) bool {
 var dspCoprocOperands = map[string]bool{
 	"A0": true, "X0": true, "X1": true, "Y0": true, "Y1": true,
 	"RS": true, "RE": true, "MOD": true, "DSR": true,
-	"CP0_COM": true, "CP0_Rm": true, "CP0_Rn": true,
-	"CPI_COM": true, "CPI_Rm": true, "CPI_Rn": true,
 	"Dx": true, "Dy": true, "Dz": true, "Da": true, "Dg": true, "Ds": true,
 	"Se": true, "Sf": true, "Sx": true, "Sy": true,
 }

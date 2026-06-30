@@ -49,7 +49,8 @@ func regLetters(in ir.Insn) []byte {
 	var ls []byte
 	for _, o := range in.Operands {
 		switch o.Class {
-		case operand.GPR, operand.MemReg, operand.MemPostInc, operand.MemPreDec, operand.MemR0, operand.BankReg, operand.FReg, operand.DReg, operand.XReg, operand.FVReg:
+		case operand.GPR, operand.MemReg, operand.MemPostInc, operand.MemPreDec, operand.MemR0, operand.BankReg, operand.FReg, operand.DReg, operand.XReg, operand.FVReg,
+			operand.CP0Reg, operand.CPIReg:
 			if o.Letter != 0 {
 				ls = append(ls, o.Letter)
 			}
@@ -209,6 +210,10 @@ func surface(o operand.Operand, val int) string {
 		return "r0"
 	case operand.FR0Fixed:
 		return "fr0"
+	case operand.CP0Reg:
+		return fmt.Sprintf("cp0_r%d", val)
+	case operand.CPIReg:
+		return fmt.Sprintf("cpi_r%d", val)
 	case operand.FReg:
 		return fmt.Sprintf("fr%d", val)
 	case operand.DReg:

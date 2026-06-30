@@ -308,3 +308,25 @@ func TestJsrN(t *testing.T) {
 		t.Errorf("jsr/n @@(disp8,TBR) should be selected")
 	}
 }
+
+func TestCoprocCoverage(t *testing.T) {
+	accept := []loader.RawInsn{
+		{Group: "System Control Instructions", Format: "lds\tRm,CP0_COM", Code: "0100mmmm10001000", J1: true, J2: true, J4: true},
+		{Group: "System Control Instructions", Format: "sts\tCP0_COM,Rn", Code: "0100nnnn11001000", J1: true, J2: true, J4: true},
+		{Group: "System Control Instructions", Format: "clds\tCP0_Rm,CP0_COM", Code: "0100mmmm10001001", J1: true, J2: true, J4: true},
+		{Group: "System Control Instructions", Format: "csts\tCP0_COM,CP0_Rn", Code: "0100nnnn11001001", J1: true, J2: true, J4: true},
+		{Group: "System Control Instructions", Format: "lds\tRm,CPI_COM", Code: "0100mmmm01011010", J1: true, J2: true, J4: true},
+		{Group: "System Control Instructions", Format: "sts\tCPI_COM,Rn", Code: "0000nnnn01011010", J1: true, J2: true, J4: true},
+		{Group: "System Control Instructions", Format: "clds\tCPI_Rm,CPI_COM", Code: "1111mmmm00011101", J1: true, J2: true, J4: true},
+		{Group: "System Control Instructions", Format: "csts\tCPI_COM,CPI_Rn", Code: "1111nnnn00001101", J1: true, J2: true, J4: true},
+	}
+	for _, raw := range accept {
+		insns, err := ir.Build([]loader.RawInsn{raw})
+		if err != nil {
+			t.Fatalf("%s: build: %v", raw.Format, err)
+		}
+		if !Is1aSimple(insns[0]) {
+			t.Errorf("coprocessor insn should be selected: %s", raw.Format)
+		}
+	}
+}

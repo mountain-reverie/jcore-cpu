@@ -14,8 +14,8 @@ import (
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/operand"
 )
 
-// instrInfoHeader is prepended to every emitted SHInstrInfo.td.
-const instrInfoHeader = `//===-- SHInstrInfo.td - SH Instruction definitions -------*- tablegen -*-===//
+// instrInfoHeader is prepended to every emitted SHDepInstrInfo.td.
+const instrInfoHeader = `//===-- SHDepInstrInfo.td - SH Instruction definitions ----*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.

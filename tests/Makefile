@@ -52,6 +52,7 @@ VHDS += $(addprefix ../, $(CPU_VHDS))
 # testbench.  mult_seq_tap uses a direct entity instantiation of mult(seq),
 # so it is unaffected by default-binding order either way.
 VHDS += ../core/mult_seq.vhd
+VHDS += ../core/mult_ice40dsp.vhd
 VHDS += $(TOOLS_DIR)/tests/tap/test_pkg.vhd
 
 VHDL_TOPS := $(VHDL_TESTS)

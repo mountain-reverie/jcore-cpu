@@ -73,10 +73,52 @@ func fixedMemClass(o operand.Operand) string {
 	return "MemFixed"
 }
 
+// fixedBitPattern returns a string representing the fixed (non-variable) bits of
+// an instruction's encoding, e.g. "0000????01100011". Instructions with the
+// same pattern share a decode prefix and conflict in the disassembler.
+func fixedBitPattern(in ir.Insn) string {
+	out := make([]byte, 0, 16*len(in.Words))
+	for _, w := range in.Words {
+		for i := 0; i < 16; i++ {
+			if w[i].Fixed {
+				out = append(out, byte('0'+w[i].Val))
+			} else {
+				out = append(out, '?')
+			}
+		}
+	}
+	return string(out)
+}
+
+// isAsmParserOnly reports whether an instruction must be assemble-only: a
+// J-core-only instruction that reuses a standard-SH encoding (declared via the
+// collides field) yields the disassembler slot to the standard instruction, so
+// the decode table has no conflict.
+func isAsmParserOnly(in ir.Insn) bool {
+	return len(in.Collides) > 0 && in.Arch.IsJCoreOnly()
+}
+
+// isAsmParserOnlyWith is the encoding-aware variant: a J-core-only instruction
+// is assemble-only when its fixed-bit pattern is claimed by a standard-SH
+// instruction in the same generated set. Informational cross-references in the
+// collides field (e.g. same-arch or different-encoding) are excluded.
+func isAsmParserOnlyWith(in ir.Insn, shPatterns map[string]bool) bool {
+	return len(in.Collides) > 0 && in.Arch.IsJCoreOnly() && shPatterns[fixedBitPattern(in)]
+}
+
 // EmitInstrInfo renders generated operand-class defs followed by one
 // instruction def per insn.
 func EmitInstrInfo(insns []ir.Insn) string {
 	var b strings.Builder
+
+	// Build the set of fixed-bit patterns used by standard-SH (non-J-core-only)
+	// instructions, for encoding-collision detection.
+	shPatterns := make(map[string]bool, len(insns))
+	for _, in := range insns {
+		if !in.Arch.IsJCoreOnly() {
+			shPatterns[fixedBitPattern(in)] = true
+		}
+	}
 
 	// Collect the set of generated Operand classes used (non-builtin).
 	classes := map[string]bool{}
@@ -170,6 +212,9 @@ func EmitInstrInfo(insns []ir.Insn) string {
 		fmt.Fprintf(&b, "  dag InOperandList = (ins %s);\n", inOperandList(bfs))
 		fmt.Fprintf(&b, "  let AsmString = %q;\n", AsmString(in))
 		fmt.Fprintf(&b, "  let Predicates = [%s];\n", strings.Join(in.Arch.LLVMPredicates(), ", "))
+		if isAsmParserOnlyWith(in, shPatterns) {
+			fmt.Fprintf(&b, "  let isAsmParserOnly = 1;\n")
+		}
 		fmt.Fprintf(&b, "}\n\n")
 	}
 	return b.String()

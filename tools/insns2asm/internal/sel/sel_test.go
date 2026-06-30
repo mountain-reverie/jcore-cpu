@@ -277,6 +277,25 @@ func TestNoUnselectedNonDSPSystem(t *testing.T) {
 	}
 }
 
+func TestJ4Family(t *testing.T) {
+	accept := []loader.RawInsn{
+		{Group: "System Control Instructions", Format: "STC PTEH, Rn", Code: "0000nnnn01010011", J4: true},
+		{Group: "System Control Instructions", Format: "STC PTEL, Rn", Code: "0000nnnn01100011", J4: true},
+		{Group: "System Control Instructions", Format: "STC ASIDR, Rn", Code: "0000nnnn01110011", J4: true},
+		{Group: "System Control Instructions", Format: "STC TSBPTR, Rn", Code: "0000nnnn01000011", J4: true},
+		{Group: "System Control Instructions", Format: "LDTLB.RN", Code: "0000000001111000", J4: true},
+	}
+	for _, raw := range accept {
+		insns, err := ir.Build([]loader.RawInsn{raw})
+		if err != nil {
+			t.Fatalf("%s: build: %v", raw.Format, err)
+		}
+		if !Is1aSimple(insns[0]) {
+			t.Errorf("J4 insn should be selected: %s (mnemonic=%q)", raw.Format, insns[0].Mnemonic)
+		}
+	}
+}
+
 func TestJsrN(t *testing.T) {
 	raw := loader.RawInsn{
 		Group:  "Branch Instructions",

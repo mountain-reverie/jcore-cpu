@@ -29,6 +29,7 @@ var systemRegAllow = map[string]bool{
 	"SR": true, "GBR": true, "VBR": true, "SSR": true, "SPC": true,
 	"TBR": true, "MACH": true, "MACL": true, "PR": true,
 	"SGR": true, "DBR": true,
+	"PTEH": true, "PTEL": true, "ASIDR": true, "TSBPTR": true,
 }
 
 // sysControlMnemonics are System Control insns accepted by mnemonic (no special
@@ -40,6 +41,7 @@ var sysControlMnemonics = map[string]bool{
 	"clrs": true, "sets": true, "synco": true, "ldtlb": true,
 	"icbi": true, "ocbi": true, "ocbp": true, "ocbwb": true,
 	"prefi": true, "movca.l": true,
+	"ldtlb.rn": true,
 }
 
 // sysRegMoveMnemonics are the system/banked register transfer mnemonics.

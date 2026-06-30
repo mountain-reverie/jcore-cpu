@@ -4,6 +4,7 @@ package ir
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/arch"
 	"github.com/j-core/jcore-cpu/tools/insns2asm/internal/encoding"
@@ -36,6 +37,7 @@ func canonMnemonic(m string) string {
 
 // CanonMnemonic applies the dataset alias map (exported for use by main).
 func CanonMnemonic(m string) string {
+	m = strings.ToLower(m)
 	if a, ok := aliasMnemonic[m]; ok {
 		return a
 	}

@@ -259,8 +259,8 @@ func TestEmitImmUsesSHImm(t *testing.T) {
 		Code: "1110nnnniiiiiiii", SH1: true,
 	})
 	out := EmitInstrInfo(insns)
-	if !strings.Contains(out, "SHImm:$imm") {
-		t.Errorf("imm operand should use SHImm class:\n%s", out)
+	if !strings.Contains(out, "SHImm8:$imm") {
+		t.Errorf("imm operand should use SHImm8 class:\n%s", out)
 	}
 	if strings.Contains(out, "i32imm") {
 		t.Errorf("should not emit builtin i32imm:\n%s", out)

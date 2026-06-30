@@ -333,7 +333,7 @@ func operandClassName(o operand.Operand) string {
 	case operand.BankReg:
 		return "BankReg"
 	case operand.Imm:
-		return "SHImm"
+		return fmt.Sprintf("SHImm%d", o.Width)
 	case operand.BranchDisp:
 		return dispClass(o)
 	case operand.MemTBRDisp:
@@ -377,8 +377,12 @@ func dispClass(o operand.Operand) string {
 // `def NAME : Operand<i32>;` (i.e. not a builtin or hand-written register class).
 func isGeneratedClass(name string) bool {
 	switch name {
-	case "GPR", "BankReg", "FReg", "DReg", "XReg", "FVReg", "SHImm", "MemDec", "MemR0Idx", "MemR0Fixed", "MemDecR15", "MemIncR15", "FR0Fixed",
+	case "GPR", "BankReg", "FReg", "DReg", "XReg", "FVReg", "MemDec", "MemR0Idx", "MemR0Fixed", "MemDecR15", "MemIncR15", "FR0Fixed",
 		"CP0Reg", "CPIReg":
+		return false
+	}
+	// Per-width immediate operand classes are hand-written in SHOperands.td.
+	if strings.HasPrefix(name, "SHImm") {
 		return false
 	}
 	// Scaled-displacement operand classes are hand-written in SHOperands.td

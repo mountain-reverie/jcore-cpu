@@ -9,3 +9,4 @@ shifter_seq_tap
 arith_tap
 logic_tap
 manip_tap
+sb_mac16_tap

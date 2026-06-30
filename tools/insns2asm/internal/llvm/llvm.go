@@ -90,14 +90,6 @@ func fixedBitPattern(in ir.Insn) string {
 	return string(out)
 }
 
-// isAsmParserOnly reports whether an instruction must be assemble-only: a
-// J-core-only instruction that reuses a standard-SH encoding (declared via the
-// collides field) yields the disassembler slot to the standard instruction, so
-// the decode table has no conflict.
-func isAsmParserOnly(in ir.Insn) bool {
-	return len(in.Collides) > 0 && in.Arch.IsJCoreOnly()
-}
-
 // isAsmParserOnlyWith is the encoding-aware variant: a J-core-only instruction
 // is assemble-only when its fixed-bit pattern is claimed by a standard-SH
 // instruction in the same generated set. Informational cross-references in the

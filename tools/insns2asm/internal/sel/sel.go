@@ -24,7 +24,8 @@ var gpIntegerGroups = map[string]bool{
 }
 
 // systemRegAllow is the set of special registers (FixedReg.Fixed) accepted in
-// System Control scope. Out-of-scope registers (SGR, DBR, PTEH, …) are rejected.
+// System Control scope: standard SH control registers plus J4 MMU registers.
+// DSP and coprocessor registers (not listed here) are rejected.
 var systemRegAllow = map[string]bool{
 	"SR": true, "GBR": true, "VBR": true, "SSR": true, "SPC": true,
 	"TBR": true, "MACH": true, "MACL": true, "PR": true,

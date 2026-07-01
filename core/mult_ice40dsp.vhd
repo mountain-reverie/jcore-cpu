@@ -51,26 +51,33 @@ architecture ice40dsp of mult is
 
   -- Operand halves: Al=mag_a[15:0], Ah=mag_a[31:16], Bl=mag_b[15:0], Bh=mag_b[31:16].
   -- Partial products: G=Al*Bl, K=Ah*Bl, J=Al*Bh, F=Ah*Bh.
-  -- Product = G + (K+J)<<16 + F<<32. The middle term M=K+J is a 33-bit value.
+  -- Product = G + (K+J)<<16 + F<<32.  M=K+J is a 33-bit value.
   --
-  -- Routable cascade (NO ACCUMCO/CO drives general fabric):
-  --   DSP_K   : raw product K (routable O).
-  --   DSP_J   : O_J = (J+K)[31:0] = M[31:0]; ACCUMCO_J = M[32].
-  --   DSP_X   : prod=0, ACCUMCI=ACCUMCO_J (dedicated) -> O_X[0] = M[32] (routable).
-  --   DSP_LOW : prod=G, C=M[15:0]; O_low = result[31:0]; ACCUMCO_low = carry@bit32.
-  --   DSP_HIGH: prod=F, D=M[31:16], C=M[32], ACCUMCI=ACCUMCO_low (dedicated);
-  --             O_high = result[63:32].
-  -- Two dedicated ACCUMCO->ACCUMCI cascade pairs, both 32-bit-aligned (DSP_J->DSP_X
-  -- and DSP_LOW->DSP_HIGH): the only legal use of the carry ports on iCE40.
-  signal al, ah, bl, bh             : std_logic_vector(15 downto 0);
-  signal o_g, o_k, o_j, o_x, o_high : std_logic_vector(31 downto 0);
-  signal m32_c                      : std_logic_vector(15 downto 0);
-  -- Cascade carries. To keep nextpnr happy the four cascaded DSPs form ONE
-  -- contiguous ACCUMCO->ACCUMCI chain (J -> X -> LOW -> HIGH) so no intermediate
-  -- ACCUMCO is left dangling next to another chain (which aliases the shared
-  -- dsp:accumco wire). accj and acclow carry real bits; accx is a harmless 0
-  -- (DSP_X's top adder never overflows) that DSP_LOW ignores functionally.
-  signal accj, accx, acclow         : std_logic;
+  -- IMPORTANT (iCE40 UP5K, verified in icebox chipdb-5k.txt): the 8 SB_MAC16
+  -- sites sit at X in {0,25}, Y-base in {5,10,15,23}, each spanning 4 tiles with
+  -- GAPS between blocks -- they are NEVER vertically adjacent. The ACCUMCI/ACCUMCO
+  -- carry wires are tile-local to a single SB_MAC16 (its own accumulator loop),
+  -- so an inter-DSP ACCUMCO->ACCUMCI cascade is physically unroutable here
+  -- (nextpnr aborts: "dsp:accumco used as source and sink in different nets").
+  -- Likewise ACCUMCO/CO cannot drive fabric. So EVERY inter-DSP carry is captured
+  -- in a routable O[16] bit (a DSP whose top adder computes 0+0+LCO puts the
+  -- bottom-adder carry in O[16]) and re-injected into the next DSP via routable
+  -- C/D/CI inputs. No ACCUMCO/ACCUMCI/CO/CI DSP-cascade wire is used anywhere.
+  --
+  -- Column carry-propagate (16-bit columns c0..c3), all inside DSP adders:
+  --   result[15:0]  = G[15:0]                              (o_g[15:0])
+  --   result[31:16] = G[31:16] + M[15:0]        -> cB      (DSP_C1  bottom)
+  --   result[47:32] = F[15:0]  + M[31:16] + cB  -> cC      (DSP_C23 bottom)
+  --   result[63:48] = F[31:16] + M[32]    + cC             (DSP_C23 top)
+  -- M=K+J is formed by DSP_KJLO (K's product + J[15:0], with K[31:16]+Slo[16] in
+  -- its top half) and DSP_MHI (that + J[31:16], carry-captured -> M[32]=o_mhi[16]).
+  signal al, ah, bl, bh : std_logic_vector(15 downto 0);
+  signal o_g, o_f, o_j  : std_logic_vector(31 downto 0);  -- raw products G,F,J
+  signal o_kjlo         : std_logic_vector(31 downto 0);  -- [15:0]=M[15:0]; [31:16]=K[31:16]+Slo[16]
+  signal o_mhi          : std_logic_vector(31 downto 0);  -- [15:0]=M[31:16]; [16]=M[32]
+  signal o_c1           : std_logic_vector(31 downto 0);  -- [15:0]=result[31:16]; [16]=cB
+  signal o_c23          : std_logic_vector(31 downto 0);  -- [15:0]=result[47:32]; [31:16]=result[63:48]
+  signal m32_d          : std_logic_vector(15 downto 0);  -- {0..0, M[32]} for DSP_C23 top C
 
   component SB_MAC16 is
     generic (
@@ -116,110 +123,144 @@ begin
   -- Operand-half fan-out from the held magnitudes.
   al <= r.dec.mag_a(15 downto 0);   ah <= r.dec.mag_a(31 downto 16);
   bl <= r.dec.mag_b(15 downto 0);   bh <= r.dec.mag_b(31 downto 16);
-  m32_c <= "000000000000000" & o_x(0);   -- M[32] placed at C top-input bit 0
+  m32_d <= "000000000000000" & o_mhi(16);   -- M[32] as a 16-bit input for DSP_C23 top C
 
-  -- DSP_K: K = Ah*Bl, raw product on O (routable).
-  DSP_K : SB_MAC16
+  -- DSP_G: G = Al*Bl, raw product on O (routable).
+  DSP_G : SB_MAC16
     generic map (
       PIPELINE_16x16_MULT_REG1 => '1',
       TOPOUTPUT_SELECT => "11", BOTOUTPUT_SELECT => "11",
       A_SIGNED => '0', B_SIGNED => '0')
     port map (
-      CLK => clk, CE => '1', A => ah, B => bl,
-      C => (others => '0'), D => (others => '0'),
-      AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
-      IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
-      OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
-      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
-      SIGNEXTIN => '0', O => o_k, CO => open, ACCUMCO => open,
-      SIGNEXTOUT => open);
-
-  -- DSP_J: prod=J=Al*Bh, add K (via C/D) -> O_J = M[31:0]; ACCUMCO_J = M[32].
-  DSP_J : SB_MAC16
-    generic map (
-      PIPELINE_16x16_MULT_REG1 => '1',
-      BOTOUTPUT_SELECT => "00",    TOPOUTPUT_SELECT => "00",
-      BOTADDSUB_LOWERINPUT => "10", BOTADDSUB_UPPERINPUT => '1',
-      BOTADDSUB_CARRYSELECT => "00",
-      TOPADDSUB_LOWERINPUT => "10", TOPADDSUB_UPPERINPUT => '1',
-      TOPADDSUB_CARRYSELECT => "10",
-      A_SIGNED => '0', B_SIGNED => '0')
-    port map (
-      CLK => clk, CE => '1', A => al, B => bh,
-      C => o_k(31 downto 16), D => o_k(15 downto 0),
-      AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
-      IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
-      OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
-      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
-      SIGNEXTIN => '0', O => o_j, CO => open, ACCUMCO => accj,
-      SIGNEXTOUT => open);
-
-  -- DSP_X: prod=0, ACCUMCI=ACCUMCO_J via dedicated cascade -> O_X[0] = M[32].
-  DSP_X : SB_MAC16
-    generic map (
-      PIPELINE_16x16_MULT_REG1 => '1',
-      BOTOUTPUT_SELECT => "00",    TOPOUTPUT_SELECT => "00",
-      BOTADDSUB_LOWERINPUT => "10", BOTADDSUB_UPPERINPUT => '0',
-      BOTADDSUB_CARRYSELECT => "10",
-      A_SIGNED => '0', B_SIGNED => '0')
-    port map (
-      CLK => clk, CE => '1', A => (others => '0'), B => (others => '0'),
-      C => (others => '0'), D => (others => '0'),
-      AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
-      IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
-      OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
-      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => accj,
-      -- ACCUMCO wired on to DSP_LOW.ACCUMCI so the J->X->LOW->HIGH cascade is
-      -- ONE contiguous column chain: no intermediate ACCUMCO dangles to alias
-      -- the shared dsp:accumco tile wire. DSP_LOW ignores this input
-      -- functionally (its BOTADDSUB_CARRYSELECT="00", not "10").
-      SIGNEXTIN => '0', O => o_x, CO => open, ACCUMCO => accx,
-      SIGNEXTOUT => open);
-
-  -- DSP_LOW: prod=G=Al*Bl, add M[15:0] (=o_j[15:0]) at the top half via C.
-  -- O_low = result[31:0]; ACCUMCO_low = carry into bit 32.
-  DSP_LOW : SB_MAC16
-    generic map (
-      PIPELINE_16x16_MULT_REG1 => '1',
-      BOTOUTPUT_SELECT => "00",    TOPOUTPUT_SELECT => "00",
-      BOTADDSUB_LOWERINPUT => "10", BOTADDSUB_UPPERINPUT => '0',
-      BOTADDSUB_CARRYSELECT => "00",
-      TOPADDSUB_LOWERINPUT => "10", TOPADDSUB_UPPERINPUT => '1',
-      TOPADDSUB_CARRYSELECT => "10",
-      A_SIGNED => '0', B_SIGNED => '0')
-    port map (
       CLK => clk, CE => '1', A => al, B => bl,
-      C => o_j(15 downto 0), D => (others => '0'),
+      C => (others => '0'), D => (others => '0'),
       AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
       IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
       OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
-      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => accx,
-      SIGNEXTIN => '0', O => o_g, CO => open, ACCUMCO => acclow,
+      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
+      SIGNEXTIN => '0', O => o_g, CO => open, ACCUMCO => open,
       SIGNEXTOUT => open);
 
-  -- DSP_HIGH: prod=F=Ah*Bh, add M[31:16] (=o_j[31:16]) via D at bottom and
-  -- M[32] (=o_x[0]) via C at top; carry-in from DSP_LOW via dedicated ACCUMCI.
-  -- O_high = result[63:32].
-  DSP_HIGH : SB_MAC16
+  -- DSP_F: F = Ah*Bh, raw product on O (routable).
+  DSP_F : SB_MAC16
     generic map (
       PIPELINE_16x16_MULT_REG1 => '1',
-      BOTOUTPUT_SELECT => "00",    TOPOUTPUT_SELECT => "00",
-      BOTADDSUB_LOWERINPUT => "10", BOTADDSUB_UPPERINPUT => '1',
-      BOTADDSUB_CARRYSELECT => "10",
-      TOPADDSUB_LOWERINPUT => "10", TOPADDSUB_UPPERINPUT => '1',
-      TOPADDSUB_CARRYSELECT => "10",
+      TOPOUTPUT_SELECT => "11", BOTOUTPUT_SELECT => "11",
       A_SIGNED => '0', B_SIGNED => '0')
     port map (
       CLK => clk, CE => '1', A => ah, B => bh,
-      C => m32_c, D => o_j(31 downto 16),
+      C => (others => '0'), D => (others => '0'),
       AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
       IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
       OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
-      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => acclow,
-      SIGNEXTIN => '0', O => o_high, CO => open, ACCUMCO => open,
+      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
+      SIGNEXTIN => '0', O => o_f, CO => open, ACCUMCO => open,
       SIGNEXTOUT => open);
 
-  comb : process(r, slot, a, o_g, o_high)
+  -- DSP_J: J = Al*Bh, raw product on O (routable).
+  DSP_J : SB_MAC16
+    generic map (
+      PIPELINE_16x16_MULT_REG1 => '1',
+      TOPOUTPUT_SELECT => "11", BOTOUTPUT_SELECT => "11",
+      A_SIGNED => '0', B_SIGNED => '0')
+    port map (
+      CLK => clk, CE => '1', A => al, B => bh,
+      C => (others => '0'), D => (others => '0'),
+      AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
+      IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
+      OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
+      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
+      SIGNEXTIN => '0', O => o_j, CO => open, ACCUMCO => open,
+      SIGNEXTOUT => open);
+
+  -- DSP_KJLO: prod=K=Ah*Bl.  bottom = K[15:0] + J[15:0] -> o_kjlo[15:0]=M[15:0],
+  -- carry Slo[16] into the top.  top = K[31:16] + 0 + Slo[16] -> o_kjlo[31:16]
+  -- (= K[31:16]+Slo[16], never overflows so its ACCUMCO is 0 and left open).
+  DSP_KJLO : SB_MAC16
+    generic map (
+      PIPELINE_16x16_MULT_REG1 => '1',
+      BOTOUTPUT_SELECT => "00",    TOPOUTPUT_SELECT => "00",
+      BOTADDSUB_LOWERINPUT => "10", BOTADDSUB_UPPERINPUT => '1',
+      BOTADDSUB_CARRYSELECT => "00",
+      TOPADDSUB_LOWERINPUT => "10", TOPADDSUB_UPPERINPUT => '0',
+      TOPADDSUB_CARRYSELECT => "10",
+      A_SIGNED => '0', B_SIGNED => '0')
+    port map (
+      CLK => clk, CE => '1', A => ah, B => bl,
+      C => (others => '0'), D => o_j(15 downto 0),
+      AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
+      IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
+      OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
+      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
+      SIGNEXTIN => '0', O => o_kjlo, CO => open, ACCUMCO => open,
+      SIGNEXTOUT => open);
+
+  -- DSP_MHI: pure adder (no product used).  bottom = o_kjlo[31:16] + J[31:16]
+  -- = Shi -> o_mhi[15:0]=M[31:16], carry Shi[16]=M[32] captured in o_mhi[16]
+  -- (top = 0 + 0 + LCO).  iZ=B via LOWERINPUT="00".
+  DSP_MHI : SB_MAC16
+    generic map (
+      PIPELINE_16x16_MULT_REG1 => '1',
+      BOTOUTPUT_SELECT => "00",    TOPOUTPUT_SELECT => "00",
+      BOTADDSUB_LOWERINPUT => "00", BOTADDSUB_UPPERINPUT => '1',
+      BOTADDSUB_CARRYSELECT => "00",
+      TOPADDSUB_LOWERINPUT => "00", TOPADDSUB_UPPERINPUT => '0',
+      TOPADDSUB_CARRYSELECT => "10",
+      A_SIGNED => '0', B_SIGNED => '0')
+    port map (
+      CLK => clk, CE => '1', A => (others => '0'), B => o_kjlo(31 downto 16),
+      C => (others => '0'), D => o_j(31 downto 16),
+      AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
+      IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
+      OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
+      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
+      SIGNEXTIN => '0', O => o_mhi, CO => open, ACCUMCO => open,
+      SIGNEXTOUT => open);
+
+  -- DSP_C1: pure adder.  bottom = G[31:16] + M[15:0] -> o_c1[15:0]=result[31:16],
+  -- carry cB captured in o_c1[16] (top = 0 + 0 + LCO).
+  DSP_C1 : SB_MAC16
+    generic map (
+      PIPELINE_16x16_MULT_REG1 => '1',
+      BOTOUTPUT_SELECT => "00",    TOPOUTPUT_SELECT => "00",
+      BOTADDSUB_LOWERINPUT => "00", BOTADDSUB_UPPERINPUT => '1',
+      BOTADDSUB_CARRYSELECT => "00",
+      TOPADDSUB_LOWERINPUT => "00", TOPADDSUB_UPPERINPUT => '0',
+      TOPADDSUB_CARRYSELECT => "10",
+      A_SIGNED => '0', B_SIGNED => '0')
+    port map (
+      CLK => clk, CE => '1', A => (others => '0'), B => o_g(31 downto 16),
+      C => (others => '0'), D => o_kjlo(15 downto 0),
+      AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
+      IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
+      OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
+      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
+      SIGNEXTIN => '0', O => o_c1, CO => open, ACCUMCO => open,
+      SIGNEXTOUT => open);
+
+  -- DSP_C23: pure adder, both columns.  bottom = F[15:0] + M[31:16] + cB(via CI)
+  -- -> o_c23[15:0]=result[47:32], carry cC=LCO into top.  top = F[31:16] + M[32]
+  -- + cC -> o_c23[31:16]=result[63:48] (never overflows; ACCUMCO=0, open).
+  DSP_C23 : SB_MAC16
+    generic map (
+      PIPELINE_16x16_MULT_REG1 => '1',
+      BOTOUTPUT_SELECT => "00",    TOPOUTPUT_SELECT => "00",
+      BOTADDSUB_LOWERINPUT => "00", BOTADDSUB_UPPERINPUT => '1',
+      BOTADDSUB_CARRYSELECT => "11",
+      TOPADDSUB_LOWERINPUT => "00", TOPADDSUB_UPPERINPUT => '1',
+      TOPADDSUB_CARRYSELECT => "10",
+      A_SIGNED => '0', B_SIGNED => '0')
+    port map (
+      CLK => clk, CE => '1', A => o_f(31 downto 16), B => o_f(15 downto 0),
+      C => m32_d, D => o_mhi(15 downto 0),
+      AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
+      IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
+      OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
+      OHOLDTOP => '0', OHOLDBOT => '0', CI => o_c1(16), ACCUMCI => '0',
+      SIGNEXTIN => '0', O => o_c23, CO => open, ACCUMCO => open,
+      SIGNEXTOUT => open);
+
+  comb : process(r, slot, a, o_g, o_c1, o_c23)
     variable v      : dsp_reg_t;
     variable accept : boolean;
     variable dec    : mult_decode_t;
@@ -271,8 +312,10 @@ begin
     -- DONE: assemble the 64-bit magnitude product from the DSP-adder cascade
     -- outputs, then shared finalize (sign + MAC seed + saturate + write).
     if r.sstate = S_DONE then
-      acc(31 downto 0)  := unsigned(o_g);     -- result[31:0]  (DSP_LOW)
-      acc(63 downto 32) := unsigned(o_high);  -- result[63:32] (DSP_HIGH)
+      acc(15 downto 0)  := unsigned(o_g(15 downto 0));    -- result[15:0]
+      acc(31 downto 16) := unsigned(o_c1(15 downto 0));   -- result[31:16]
+      acc(47 downto 32) := unsigned(o_c23(15 downto 0));  -- result[47:32]
+      acc(63 downto 48) := unsigned(o_c23(31 downto 16)); -- result[63:48]
       o := mult_finalize(r.dec, acc, r.mach, r.macl);
       v.mach    := o.mach;
       v.macl    := o.macl;

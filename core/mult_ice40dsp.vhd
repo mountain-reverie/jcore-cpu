@@ -169,7 +169,11 @@ begin
       IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
       OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
       OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => accj,
-      SIGNEXTIN => '0', O => o_x, CO => open, ACCUMCO => open,
+      -- ACCUMCO wired on to DSP_LOW.ACCUMCI so the J->X->LOW->HIGH cascade is
+      -- ONE contiguous column chain: no intermediate ACCUMCO dangles to alias
+      -- the shared dsp:accumco tile wire. DSP_LOW ignores this input
+      -- functionally (its BOTADDSUB_CARRYSELECT="00", not "10").
+      SIGNEXTIN => '0', O => o_x, CO => open, ACCUMCO => accx,
       SIGNEXTOUT => open);
 
   -- DSP_LOW: prod=G=Al*Bl, add M[15:0] (=o_j[15:0]) at the top half via C.
@@ -189,7 +193,7 @@ begin
       AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
       IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
       OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
-      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
+      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => accx,
       SIGNEXTIN => '0', O => o_g, CO => open, ACCUMCO => acclow,
       SIGNEXTOUT => open);
 

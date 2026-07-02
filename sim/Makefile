@@ -90,9 +90,10 @@ VHDS += ../cache/icache_cacheable_mux_tb.vhd
 VHDS += ../cache/is_cacheable_tb.vhd
 VHDS += ../cache/dcache_color_tb.vhd
 VHDS += bus_mux_pkg.vhd multi_master_bus_mux.vhd
+VHDS += cpu_dualcore_tb.vhh
 #UNISIM_VHDS := unisims/unisim_VCOMP.vhd unisims/unisim_VPKG.vhd $(wildcard unisims/primitive/*.vhd)
 
-VHDL_TOPS := cpu_tb cpu_pure_tb tlb_match_tb seg_decode_tb is_cacheable_tb dcache_color_tb icache_cacheable_mux_tb cpu_cache_tb
+VHDL_TOPS := cpu_tb cpu_pure_tb tlb_match_tb seg_decode_tb is_cacheable_tb dcache_color_tb icache_cacheable_mux_tb cpu_cache_tb cpu_dualcore_tb
 #VHDL_LIBS := unisim work
 VHDL_LIBS := work
 
@@ -157,6 +158,9 @@ cpu_tb.vhh: cpu_tb.vhd cpu_signals.h sim/sim_macros.h
 	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -I. -I../config -Isim $< -o $@
 
 cpu_cache_tb.vhh: cpu_cache_tb.vhd cpu_signals.h sim/sim_macros.h
+	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -I. -I../config -Isim $< -o $@
+
+cpu_dualcore_tb.vhh: cpu_dualcore_tb.vhd cpu_signals.h sim/sim_macros.h
 	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -I. -I../config -Isim $< -o $@
 
 %.vpi:

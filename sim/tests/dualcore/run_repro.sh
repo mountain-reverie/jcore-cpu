@@ -35,8 +35,12 @@ for img in smp_ok.img smp_bug.img; do
 done
 
 # cpu_ctb must run from sim/ (it resolves relative simulation resources there).
-run(){ ( cd "$SIMDIR" && SIM_TOP=cpu_dualcore_tb ./cpu_ctb -i "$1" --stop-time=200us 2>&1 ) \
-        | grep -oiE "LED: WRITE 0x[0-9A-Fa-f]+" | tail -1; }
+# `|| true`: under `set -o pipefail`, a run that emits zero LED lines would make
+# grep exit 1 and abort the script at the `ok=$(...)` assignment, pre-empting the
+# human-readable FAIL diagnostic below. Swallow it so the empty result flows to
+# the case checks (which still fail with a clear message + non-zero exit).
+run(){ { ( cd "$SIMDIR" && SIM_TOP=cpu_dualcore_tb ./cpu_ctb -i "$1" --stop-time=200us 2>&1 ) \
+        | grep -oiE "LED: WRITE 0x[0-9A-Fa-f]+" | tail -1; } || true; }
 ok=$(run tests/dualcore/smp_ok.img);   echo "fixed loop:  $ok"
 bug=$(run tests/dualcore/smp_bug.img); echo "buggy loop:  $bug"
 

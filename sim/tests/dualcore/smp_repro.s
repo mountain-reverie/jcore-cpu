@@ -42,6 +42,12 @@ cpu1_role:
     mov.l   r5, @r6          ! *result = seed*136
     mov.l   finish_addr, r7
     mov     #1, r0
+.ifdef DELAY
+    ! timing knob: slide cpu1's snoop-invalidate across cpu0's poll pipeline slots
+    .rept DELAY
+    nop
+    .endr
+.endif
     mov.l   r0, @r7          ! *finish = 1  (snoop-invalidates cpu0's cached line)
 1:  bra     1b
     nop

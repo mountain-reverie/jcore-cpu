@@ -90,6 +90,7 @@ VHDS += ../cache/icache_cacheable_mux_tb.vhd
 VHDS += ../cache/is_cacheable_tb.vhd
 VHDS += ../cache/dcache_color_tb.vhd
 VHDS += bus_mux_pkg.vhd multi_master_bus_mux.vhd
+VHDS += dcache_snoop_cacheable_mux.vhd
 VHDS += cpu_dualcore_tb.vhh
 #UNISIM_VHDS := unisims/unisim_VCOMP.vhd unisims/unisim_VPKG.vhd $(wildcard unisims/primitive/*.vhd)
 

@@ -36,6 +36,7 @@ architecture behaviour of cpu_dualcore_tb is
   signal cpu0_inst_o, cpu1_inst_o : cpu_instruction_o_t;
   signal cpu0_inst_i, cpu1_inst_i : cpu_instruction_i_t;
   signal cpu0_mmu, cpu1_mmu : cpu_mmu_o_t;
+  signal cpu0_a_mmu, cpu1_a_mmu : mmu_cache_i_t;
 
   -- cpuid-intercepted cpu->cache data buses
   signal c0_db_o, c1_db_o : cpu_data_o_t;
@@ -165,19 +166,25 @@ begin
     end if;
   end process;
 
-  -- D-caches (snoop cross-wired) + I-caches per cpu
-  u_dc0: entity work.dcache_adapter port map(
+  -- per-cpu d-side MMU cacheability inputs (mirror cpu_cache_tb.vhd:232)
+  cpu0_a_mmu <= (pa_tag => cpu0_mmu.d_pa_tag, at => cpu0_mmu.d_at, c => cpu0_mmu.d_c);
+  cpu1_a_mmu <= (pa_tag => cpu1_mmu.d_pa_tag, at => cpu1_mmu.d_at, c => cpu1_mmu.d_c);
+
+  -- D-caches (snoop cross-wired) + I-caches per cpu. The snoop-preserving
+  -- cacheable mux routes uncached (MMIO) accesses straight to the bus with the
+  -- full 32-bit address, fixing the LED/MMIO path, while keeping snoop coherency.
+  u_dc0: entity work.dcache_snoop_cacheable_mux port map(
     clk125 => clk, clk200 => clk, rst => rst, ctrl => cctrl,
-    ibus_o => c0_db_o, lock => cpu0_db_lock, ibus_i => c0_db_i,
+    cpu_o => c0_db_o, a_mmu => cpu0_a_mmu, lock => cpu0_db_lock, cpu_i => c0_db_i,
     snpc_o => snp0, snpc_i => snp1,
-    dbus_o => d0_o, dbus_lock => open, dbus_ddrburst => open,
-    dbus_i => d0_i, dbus_ack_r => d0_i.ack);
-  u_dc1: entity work.dcache_adapter port map(
+    mem_o => d0_o, mem_lock => open, mem_ddrburst => open,
+    mem_i => d0_i, mem_ack_r => d0_i.ack);
+  u_dc1: entity work.dcache_snoop_cacheable_mux port map(
     clk125 => clk, clk200 => clk, rst => rst, ctrl => cctrl,
-    ibus_o => c1_db_o, lock => cpu1_db_lock, ibus_i => c1_db_i,
+    cpu_o => c1_db_o, a_mmu => cpu1_a_mmu, lock => cpu1_db_lock, cpu_i => c1_db_i,
     snpc_o => snp1, snpc_i => snp0,
-    dbus_o => d1_o, dbus_lock => open, dbus_ddrburst => open,
-    dbus_i => d1_i, dbus_ack_r => d1_i.ack);
+    mem_o => d1_o, mem_lock => open, mem_ddrburst => open,
+    mem_i => d1_i, mem_ack_r => d1_i.ack);
   u_ic0: entity work.icache_adapter port map(
     clk125 => clk, clk200 => clk, rst => rst, ctrl => cctrl,
     ibus_o => cpu0_inst_o, ibus_i => cpu0_inst_i,

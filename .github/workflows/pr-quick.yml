@@ -224,7 +224,24 @@ jobs:
           cd ..
           cp "$CPU_CONFIG_BAK" "$CPU_CONFIG"; rm -f "$CPU_CONFIG_BAK"; trap - EXIT
 
-          echo "==> pr-quick: Steps 1-6 PASSED"
+          # Step 7: dual-core cache-coherency guard (the repo's only SMP
+          # functional test). cpu_dualcore_tb = two J2 cores with snoop-cross-
+          # wired write-back D-caches sharing one memory. cpu1 stores a sentinel;
+          # cpu0 polls its cached copy and must observe the write via coherency
+          # (LED 0x5A). Also carries the T-bit delay-slot hazard shape (buggy
+          # image): that hazard is hardware-only and does NOT reproduce in
+          # functional sim, so 0x5A on both loops is healthy. run_repro.sh exits
+          # 0 on health, 1 if coherency breaks, 2 on an (unexpected) sim repro --
+          # a non-zero exit fails this step. Uses committed *.img fixtures (no
+          # SH-2 cross-compiler in CI).
+          echo "==> Step 7: cpu_dualcore_tb [SMP cache coherency]"
+          cd sim
+          rm -f work-obj93.cf cpu_ctb
+          make TOOLS_DIR="$TOOLS_DIR" cpu_ctb cpu_dualcore_tb work-obj93.cf >/dev/null
+          cd ..
+          sim/tests/dualcore/run_repro.sh
+
+          echo "==> pr-quick: Steps 1-7 PASSED"
 
       - name: J4 overlay decoder elaboration (Step 4b)
         working-directory: jcore-cpu

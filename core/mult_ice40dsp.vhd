@@ -62,7 +62,8 @@ architecture ice40dsp of mult is
   -- Likewise ACCUMCO/CO cannot drive fabric. So EVERY inter-DSP carry is captured
   -- in a routable O[16] bit (a DSP whose top adder computes 0+0+LCO puts the
   -- bottom-adder carry in O[16]) and re-injected into the next DSP via routable
-  -- C/D/CI inputs. No ACCUMCO/ACCUMCI/CO/CI DSP-cascade wire is used anywhere.
+  -- C/D/CI inputs. No ACCUMCO/ACCUMCI/CO dedicated DSP-cascade wire is used
+  -- anywhere (CI is a routable general fabric input, not the cascade carry).
   --
   -- Column carry-propagate (16-bit columns c0..c3), all inside DSP adders:
   --   result[15:0]  = G[15:0]                              (o_g[15:0])

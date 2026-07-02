@@ -57,11 +57,20 @@ jobs:
           repository: j-core/jcore-soc
           path: jcore-soc
 
-      - name: Install apt dependencies (GHDL, GCC, make)
+      # Ubuntu's ghdl-mcode (4.1.0) ships without a usable ieee.vital_timing,
+      # so it cannot elaborate the cache testbenches (dcache/icache pull the
+      # jcore-soc VITAL tech-RAM sim models -> Step 7). Use the upstream ghdl
+      # release (mcode), which includes VITAL, for the whole pr-quick job.
+      - name: Set up GHDL (mcode, VITAL-capable)
+        uses: ghdl/setup-ghdl@v1
+        with:
+          version: '5.0.1'
+          backend: 'mcode'
+
+      - name: Install apt dependencies (GCC, make)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            ghdl ghdl-mcode \
             gcc make build-essential \
             python3
 

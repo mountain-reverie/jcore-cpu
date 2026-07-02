@@ -35,17 +35,24 @@ for img in smp_ok.img smp_bug.img; do
 done
 
 # cpu_ctb must run from sim/ (it resolves relative simulation resources there).
-# `|| true`: under `set -o pipefail`, a run that emits zero LED lines would make
-# grep exit 1 and abort the script at the `ok=$(...)` assignment, pre-empting the
-# human-readable FAIL diagnostic below. Swallow it so the empty result flows to
-# the case checks (which still fail with a clear message + non-zero exit).
-run(){ { ( cd "$SIMDIR" && SIM_TOP=cpu_dualcore_tb ./cpu_ctb -i "$1" --stop-time=200us 2>&1 ) \
-        | grep -oiE "LED: WRITE 0x[0-9A-Fa-f]+" | tail -1; } || true; }
-ok=$(run tests/dualcore/smp_ok.img);   echo "fixed loop:  $ok"
-bug=$(run tests/dualcore/smp_bug.img); echo "buggy loop:  $bug"
+# Capture the FULL raw sim output to a file so a no-LED run can be diagnosed
+# (elaboration/binding errors, protocol desync, etc.) instead of failing blind.
+RAW_OK="$(mktemp)"; RAW_BUG="$(mktemp)"
+trap 'rm -f "$RAW_OK" "$RAW_BUG"' EXIT
+run(){ # $1=image $2=raw-output-file
+  ( cd "$SIMDIR" && SIM_TOP=cpu_dualcore_tb ./cpu_ctb -i "$1" --stop-time=200us ) >"$2" 2>&1 || true
+  grep -oiE "LED: WRITE 0x[0-9A-Fa-f]+" "$2" | tail -1 || true
+}
+dump_raw(){ # $1=raw file, $2=label -- last lines minus the benign init-time metavalue/RAM noise
+  echo "---- raw $2 sim output (tail, noise filtered) ----" >&2
+  grep -ivE "metavalue detected|EN UNKNOWN|EN0 UNKNOWN|EN1 UNKNOWN|Read invalid cmd" "$1" | tail -25 >&2
+  echo "---- end raw $2 ----" >&2
+}
+ok=$(run tests/dualcore/smp_ok.img  "$RAW_OK");  echo "fixed loop:  $ok"
+bug=$(run tests/dualcore/smp_bug.img "$RAW_BUG"); echo "buggy loop:  $bug"
 
 # Coherency invariant: the fixed loop MUST see cpu1 (0x5A).
-case "$ok" in *0x5A|*0x5a) : ;; *) echo "FAIL: fixed loop did not see CPU1 ($ok) -- snoop coherency regressed"; exit 1;; esac
+case "$ok" in *0x5A|*0x5a) : ;; *) echo "FAIL: fixed loop did not see CPU1 ($ok) -- snoop coherency regressed"; dump_raw "$RAW_OK" "fixed"; exit 1;; esac
 # Buggy shape: 0x5A is the healthy/expected sim result; 0x7A would be an
 # unexpected functional-sim reproduction of the hardware-only hazard.
 case "$bug" in

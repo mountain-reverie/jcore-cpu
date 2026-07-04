@@ -18,6 +18,10 @@ CONFIG_PREFETCHER=0
 CONFIG_PRIV_ARCH=0
 # Enable MMU control-register file (J4 MMU). Requires CONFIG_PRIV_ARCH=1. Default 0.
 CONFIG_MMU_ARCH=0
+# J1/iCESugar DSP-ALU verification variant ONLY: bind cpu_sim_dsp_alu (datapath
+# DSP_ALU=>true, core/dsp_arith.vhd exercised) instead of cpu_sim. Default 0
+# leaves the default sim config (and its DSP_ALU=false datapath) untouched.
+CONFIG_DSP_ALU=0
 
 GHDL_EXISTS := $(shell sh -c 'which $(GHDL) >/dev/null && echo true')
 IVERILOG_EXISTS := $(shell sh -c 'which $(IVERILOG) >/dev/null && echo true')
@@ -54,6 +58,12 @@ CPU_VHDS += $(addprefix ../../prefetch/,$(PREFETCH_VHDS))
 endif
 
 VHDS := $(CPU_VHDS) bridge_pkg.vhd monitor_pkg.vhd bus_monitor.vhd timeout_cnt.vhd cpu_tb.vhh data_bus_pkg.vhd cpu_pure_tb.vhh cpusim_miniaic2.vhd cpu_cache_tb.vhh
+# J1/iCESugar DSP-ALU prototype (see core/cpu_config.vhd cpu_sim_dsp_alu):
+# core/dsp_arith.vhd is only ever elaborated when CONFIG_DSP_ALU=1 selects
+# that configuration, but must be analyzed unconditionally so the -obj93.cf
+# library contains it. core/sb_mac16_sim.vhd binds SB_MAC16 in simulation
+# (same idiom as core/mult_ice40dsp.vhd).
+VHDS += ../core/dsp_arith.vhd ../core/sb_mac16_sim.vhd
 VHDS += mem/cpu_sram.vhd mem/asymmetric_ram.vhd
 VHDS += tlb_match_tb.vhd
 VHDS += seg_decode_tb.vhd
@@ -156,10 +166,10 @@ cpu_pure_tb: ram.img
 # Add dependencies to particular vhh files. TODO: how to avoid
 # repeating this rule?
 cpu_tb.vhh: cpu_tb.vhd cpu_signals.h sim/sim_macros.h
-	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -I. -I../config -Isim $< -o $@
+	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -I. -I../config -Isim $< -o $@
 
 cpu_cache_tb.vhh: cpu_cache_tb.vhd cpu_signals.h sim/sim_macros.h
-	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -I. -I../config -Isim $< -o $@
+	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -I. -I../config -Isim $< -o $@
 
 cpu_dualcore_tb.vhh: cpu_dualcore_tb.vhd cpu_signals.h sim/sim_macros.h
 	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -I. -I../config -Isim $< -o $@

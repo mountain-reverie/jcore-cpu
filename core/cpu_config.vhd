@@ -81,6 +81,38 @@ configuration cpu_sim of cpu is
   end for;
 end configuration;
 
+-- J1/iCESugar DSP-ALU VERIFICATION-ONLY variant of cpu_sim: identical to
+-- cpu_sim above except u_datapath's DSP_ALU generic is true, so
+-- core/dsp_arith.vhd (SB_MAC16-offloaded add/sub) is elaborated and
+-- exercised in place of the plain arith_unit call. Selected only when
+-- sim/Makefile's CONFIG_DSP_ALU=1 (see sim/cpu_tb.vhd); the default
+-- CONFIG_DSP_ALU=0 keeps using cpu_sim, so the standard sim regression is
+-- completely unaffected by this prototype.
+configuration cpu_sim_dsp_alu of cpu is
+  for stru
+    for u_decode : decode
+      use configuration work.cpu_decode_direct_mmu;
+    end for;
+    for u_datapath : datapath
+      use entity work.datapath(stru)
+        generic map (DSP_ALU => true);
+      for stru
+        for u_regfile : register_file
+          use entity work.register_file(two_bank);
+        end for;
+        for u_shifter : shifter
+          use entity work.shifter(comb);
+        end for;
+        for dsp_alu_gen
+          for u_dsp_arith : dsp_arith
+            use entity work.dsp_arith(ice40dsp);
+          end for;
+        end for;
+      end for;
+    end for;
+  end for;
+end configuration;
+
 configuration cpu_j2 of cpu is
   for stru
     for u_mult : mult use entity work.mult(stru); end for;

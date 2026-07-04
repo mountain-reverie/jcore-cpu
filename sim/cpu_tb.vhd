@@ -187,7 +187,15 @@ begin
   splice_instr_data_bus(instr_slaves_o(DEV_DDR), instr_slaves_i(DEV_DDR),
                         instrd_slaves_o(DEV_DDR), instrd_slaves_i(DEV_DDR));
 
+  -- CONFIG_DSP_ALU=1 selects cpu_sim_dsp_alu (datapath DSP_ALU=>true, see
+  -- core/cpu_config.vhd): a J1/iCESugar DSP-ALU verification-only variant
+  -- that exercises core/dsp_arith.vhd through the full instruction-level
+  -- test ROM. Default CONFIG_DSP_ALU=0 keeps binding cpu_sim unchanged.
+#if CONFIG_DSP_ALU
+  cpu1: configuration work.cpu_sim_dsp_alu
+#else
   cpu1: configuration work.cpu_sim
+#endif
 #if CONFIG_PRIV_ARCH
 #if CONFIG_MMU_ARCH
             generic map(PRIV_ARCH => true, MMU_ARCH => true)

@@ -18,6 +18,7 @@ VHDL_TESTS += arith_tap
 VHDL_TESTS += logic_tap
 VHDL_TESTS += manip_tap
 VHDL_TESTS += sb_mac16_tap
+VHDL_TESTS += dsp_arith_tap
 
 # Add VHDL files used by the test benches
 
@@ -34,6 +35,8 @@ VHDS += logic_tap.vhd
 VHDS += manip_tap.vhd
 VHDS += ../core/sb_mac16_sim.vhd
 VHDS += sb_mac16_tap.vhd
+VHDS += ../core/dsp_arith.vhd
+VHDS += dsp_arith_tap.vhd
 
 
 ####################################################################

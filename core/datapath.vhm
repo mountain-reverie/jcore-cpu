@@ -12,7 +12,12 @@ entity datapath is
 	  MMU_ARCH  : boolean := false;  -- MMU control-register file (subordinate to PRIV_ARCH)
 	  -- J1 only: drive the register file's early-read addresses and let
 	  -- architecture(ebr) read on the rising edge (full cycle). false for J2/J4.
-	  EARLY_REGFILE_READ : boolean := false );
+	  EARLY_REGFILE_READ : boolean := false;
+	  -- J1/iCESugar prototype only: offload the 32-bit arith_unit add/sub onto
+	  -- a free iCE40 SB_MAC16 DSP block (core/dsp_arith.vhd) instead of LUT
+	  -- adder logic. MUST default to false so J2/J4/sim VHDL stays
+	  -- byte-identical; set true only in the iCESugar J1-DSP board config.
+	  DSP_ALU : boolean := false );
 	port (
 		     clk : in std_logic;
 		     rst : in std_logic;
@@ -245,6 +250,31 @@ architecture stru of datapath is
           end case;
           return r;
         end align_read_data;
+
+	-- J1/iCESugar DSP-ALU prototype (see DSP_ALU generic above and
+	-- core/dsp_arith.vhd). Only elaborated when the DSP_ALU generate branch
+	-- fires. Deliberately a COMPONENT instantiation (not a direct entity
+	-- instantiation): component binding is resolved at ELABORATION time (after
+	-- all files are analyzed), so it does not depend on dsp_arith.vhd being
+	-- analyzed before this file -- unlike a direct `entity work.dsp_arith(..)`
+	-- instantiation, which GHDL resolves at ANALYSIS time and therefore
+	-- requires strict file ordering (this bit both targets/boards/icesugar/
+	-- synth.sh, which analyzes the whole design in one ghdl invocation, and
+	-- sim.sh, which does separate `ghdl -a` calls in filelist.sh's fixed
+	-- order). u_dsp_arith is bound explicitly in
+	-- synth/cpu_synth_j1_dsp_config.vhd and core/cpu_config.vhd's
+	-- cpu_sim_dsp_alu (`for u_dsp_arith : dsp_arith use entity
+	-- work.dsp_arith(ice40dsp)`), which also keeps it un-blackboxed under
+	-- ghdl --syn-binding (which only blackboxes components left UNBOUND).
+	component dsp_arith is
+	  port (
+	    clk    : in  std_logic;
+	    a      : in  std_logic_vector(31 downto 0);
+	    b      : in  std_logic_vector(31 downto 0);
+	    is_sub : in  std_logic;
+	    ci     : in  std_logic;
+	    result : out std_logic_vector(32 downto 0));
+	end component;
 begin
 	-- Multiplexors for the internal buses
 	-- SEL_TLBPC delivers the hardware-captured faulting-instruction PC
@@ -406,7 +436,35 @@ begin
         div1_arith_func <= SUB when sr.m = sr.q else ADD;
         arith_func <=  div1_arith_func when func.arith.sr = DIV1 else func.arith.func;
 
-        arith_out <= arith_unit(aluinx, aluiny, arith_func, func.arith.ci_en and sr.t);
+        -- J1/iCESugar DSP-ALU prototype: when DSP_ALU is set, offload the
+        -- arith_unit add/sub computation onto an SB_MAC16 DSP block
+        -- (core/dsp_arith.vhd) instead of LUT adder logic. Bit-for-bit
+        -- equivalence with arith_unit is proven by
+        -- components/cpu/tests/dsp_arith_tap.vhd. Default (DSP_ALU=false)
+        -- keeps the original arith_unit call unchanged, so J2/J4/sim VHDL
+        -- is byte-identical to before this prototype.
+        dsp_alu_gen: if DSP_ALU generate
+          signal dsp_arith_result : std_logic_vector(32 downto 0);
+          signal dsp_is_sub       : std_logic;
+          signal dsp_ci           : std_logic;
+        begin
+          dsp_is_sub <= '1' when arith_func = SUB else '0';
+          dsp_ci     <= func.arith.ci_en and sr.t;
+          u_dsp_arith : dsp_arith
+            port map (
+              clk    => clk,
+              a      => aluinx,
+              b      => aluiny,
+              is_sub => dsp_is_sub,
+              ci     => dsp_ci,
+              result => dsp_arith_result);
+          arith_out <= dsp_arith_result;
+        end generate dsp_alu_gen;
+
+        no_dsp_alu_gen: if not DSP_ALU generate
+          arith_out <= arith_unit(aluinx, aluiny, arith_func, func.arith.ci_en and sr.t);
+        end generate no_dsp_alu_gen;
+
         logic_out <= logic_unit(aluinx, aluiny, func.logic_func);
 
         with buses.z_sel select zbus <=

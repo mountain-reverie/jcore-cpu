@@ -30,6 +30,12 @@ generate:
 generate-j4:
 	go -C $(GEN_DIR) run ./cmd/cpugen -w $(ROM_WIDTH) -overlay spec/sh4 -o ..
 
+# PAGE_FAULT_ARCH decoder: base + the page-fault overlay (Page Fault I/D
+# microcode). Like generate-j4, this is an on-demand build variant (see
+# sim/pagefault_sim.sh); committed tables stay base (PF ops = x"00").
+generate-pagefault:
+	go -C $(GEN_DIR) run ./cmd/cpugen -w $(ROM_WIDTH) -overlay spec/pagefault -o ..
+
 insns:
 	go -C $(GEN_DIR) run ./cmd/cpugen insns -json ../../docs/insns.json
 

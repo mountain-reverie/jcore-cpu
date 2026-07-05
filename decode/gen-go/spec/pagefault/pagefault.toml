@@ -1,0 +1,153 @@
+# PAGE_FAULT_ARCH overlay: the two base-stack-model external page-fault exception
+# ops. Kept OUT of the base spec so the base decoder leaves PAGE_FAULT_I/D as
+# x"00" placeholders (byte-identical j1/j2/turtle ROM, 8-bit system-op address);
+# `make -C decode generate-pagefault` (this overlay) gives them real microcode for
+# PAGE_FAULT_ARCH builds. Mirrors how spec/sh4 carries the MMU ops. See
+# sim/pagefault_sim.sh. Structurally identical to General Illegal (push SR/PC to
+# @-R15, indirect-vector VBR+U*4=VBR+0); Page Fault I restarts at PC-2, Page Fault
+# D at the ma_pc/TLBPC latch. No MMU/PRIV state.
+
+[[instr]]
+  name = "Page Fault I"
+  format = "d8"
+  opcode = "---- 0100 dddd dddd"
+  operation = ""
+  plane = "system"
+
+  # Restart at the faulting fetch: PC-2, same as GENERAL_ILLEGAL (empirically
+  # confirmed by pagefault_i.S's window re-execution landing on 0x10000).
+  [[instr.slots]]
+    alu_y = "2"
+    arith = "SUB"
+    pc = "HOLD"
+    xbus = "PC"
+    zbus = "PC"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+    alu_y = "4"
+    arith = "SUB"
+    ma_addy = "ZBUS"
+    ma_data = "YBUS"
+    ma_op = "WRITE"
+    ma_size = "32"
+    pc = "HOLD"
+    xbus = "R15"
+    ybus = "SR"
+    zbus = "R15"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+    alu_y = "4"
+    arith = "SUB"
+    ma_addy = "ZBUS"
+    ma_data = "YBUS"
+    ma_op = "WRITE"
+    ma_size = "32"
+    pc = "HOLD"
+    xbus = "R15"
+    ybus = "PC"
+    zbus = "R15"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "32"
+    pc = "HOLD"
+    xbus = "U*4"
+    ybus = "VBR"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+    pc = "HOLD"
+
+  [[instr.slots]]
+    pc = "HOLD"
+    zbus = "PC"
+    zbus_sel = "W"
+
+  [[instr.slots]]
+    if_addy = "ZBUS"
+    if_issue = "YES"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    dispatch = "YES"
+    if_issue = "YES"
+    pc = "INC"
+
+  [[instr.slots]]
+
+[[instr]]
+  name = "Page Fault D"
+  format = "d8"
+  opcode = "---- 0101 dddd dddd"
+  operation = ""
+  plane = "system"
+
+  [[instr.slots]]
+    alu_y = "2"
+    arith = "SUB"
+    pc = "HOLD"
+    xbus = "TLBPC"
+    zbus = "PC"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+    alu_y = "4"
+    arith = "SUB"
+    ma_addy = "ZBUS"
+    ma_data = "YBUS"
+    ma_op = "WRITE"
+    ma_size = "32"
+    pc = "HOLD"
+    xbus = "R15"
+    ybus = "SR"
+    zbus = "R15"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+    alu_y = "4"
+    arith = "SUB"
+    ma_addy = "ZBUS"
+    ma_data = "YBUS"
+    ma_op = "WRITE"
+    ma_size = "32"
+    pc = "HOLD"
+    xbus = "R15"
+    ybus = "PC"
+    zbus = "R15"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "32"
+    pc = "HOLD"
+    xbus = "U*4"
+    ybus = "VBR"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+    pc = "HOLD"
+
+  [[instr.slots]]
+    pc = "HOLD"
+    zbus = "PC"
+    zbus_sel = "W"
+
+  [[instr.slots]]
+    if_addy = "ZBUS"
+    if_issue = "YES"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    dispatch = "YES"
+    if_issue = "YES"
+    pc = "INC"
+
+  [[instr.slots]]
+

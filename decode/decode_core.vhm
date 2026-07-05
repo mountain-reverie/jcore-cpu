@@ -301,6 +301,15 @@ begin
       when MMU_ARCH and texc_req = '1' and texc_kind_held = DPROT_R else
     system_op(TLB_DPROT_W)
       when MMU_ARCH and texc_req = '1' and texc_kind_held = DPROT_W else
+    -- External page-fault exceptions (PAGE_FAULT_ARCH). Same held-request
+    -- mechanism as the TLB path; page_fault_i maps PF_IFETCH->IMISS (restart
+    -- PC-2, base-model Page Fault I) and PF_DREAD->DMISS_R (restart via the
+    -- ma_pc latch, Page Fault D). MMU_ARCH is false in these builds so the TLB
+    -- arms above never fire.
+    system_op(PAGE_FAULT_I)
+      when PAGE_FAULT_ARCH and texc_req = '1' and texc_kind_held = IMISS else
+    system_op(PAGE_FAULT_D)
+      when PAGE_FAULT_ARCH and texc_req = '1' and texc_kind_held = DMISS_R else
     -- Break Instruction
     system_op(BREAK)
       when delay_slot = '0' and enter_debug = '1' else

@@ -118,7 +118,7 @@ func newStaticPackage() *Package {
 			{Name: "zbus_sel_t", Literals: []string{"SEL_ARITH", "SEL_LOGIC", "SEL_SHIFT", "SEL_MANIP", "SEL_YBUS", "SEL_WBUS"}},
 		},
 		SystemInstrNames: []string{
-			"BREAK", "ERROR", "GENERAL_ILLEGAL", "INTERRUPT", "RESET_CPU", "SLOT_ILLEGAL",
+			"BREAK", "ERROR", "GENERAL_ILLEGAL", "INTERRUPT", "PAGE_FAULT_D", "PAGE_FAULT_I", "RESET_CPU", "SLOT_ILLEGAL",
 			"TLB_DMISS_R", "TLB_DMISS_W", "TLB_DPROT_R", "TLB_DPROT_W", "TLB_IMISS", "TLB_IPROT",
 		},
 		Records: []RecordType{
@@ -448,7 +448,7 @@ func newStaticPackage() *Package {
 			{
 				Name: "system_instr_codes",
 				Type: "system_instr_code_array",
-				Init: "(BREAK => x\"2\", ERROR => x\"1\", GENERAL_ILLEGAL => x\"7\", INTERRUPT => x\"0\", RESET_CPU => x\"3\", SLOT_ILLEGAL => x\"6\", TLB_DMISS_R => x\"9\", TLB_DMISS_W => x\"A\", TLB_DPROT_R => x\"C\", TLB_DPROT_W => x\"D\", TLB_IMISS => x\"8\", TLB_IPROT => x\"B\")",
+				Init: "(BREAK => x\"2\", ERROR => x\"1\", GENERAL_ILLEGAL => x\"7\", INTERRUPT => x\"0\", PAGE_FAULT_D => x\"5\", PAGE_FAULT_I => x\"4\", RESET_CPU => x\"3\", SLOT_ILLEGAL => x\"6\", TLB_DMISS_R => x\"9\", TLB_DMISS_W => x\"A\", TLB_DPROT_R => x\"C\", TLB_DPROT_W => x\"D\", TLB_IMISS => x\"8\", TLB_IPROT => x\"B\")",
 			},
 			{
 				Name: "system_event_codes",

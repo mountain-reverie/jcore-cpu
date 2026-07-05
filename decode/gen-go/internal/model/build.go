@@ -646,6 +646,10 @@ var csvInstrOrder = []string{
 	"Interrupt",
 	"Error",
 	"Break",
+	// External page-fault exceptions (PAGE_FAULT_ARCH; base spec). Appended after
+	// the existing base system ops so their ROM addresses are preserved.
+	"Page Fault I",
+	"Page Fault D",
 	// TLB miss/protection exceptions (J4+MMU_ARCH overlay):
 	"TLB IMISS",
 	"TLB DMISS R",

@@ -676,8 +676,15 @@ begin
             -- it persists past the handler prologue. (TEA/PTEH stay here:
             -- they are VA-dependent and consumed before any slot boundary.)
           end if;
-          if MMU_ARCH and tlb_exc_pend = '0' then
+          if (MMU_ARCH or PAGE_FAULT_ARCH) and tlb_exc_pend = '0' then
             this.tlb_exc_captured := '0';
+          end if;
+          -- PAGE_FAULT_ARCH minimal restart-PC capture (no TEA/PTEH/SSR/@Rn+
+          -- restore): latch the faulting instruction's PC from ma_pc on the first
+          -- fault cycle, for the Page Fault D entry's xbus=TLBPC restart.
+          if PAGE_FAULT_ARCH and tlb_exc_pend = '1' and this.tlb_exc_captured = '0' then
+            this.tlb_exc_captured := '1';
+            this.tlb_exc_pc := std_logic_vector(unsigned(this.ma_pc) - 2);
           end if;
 
           -- Precise-exception squash window. Arm on the first fault cycle; hold
@@ -904,8 +911,14 @@ begin
                 -- data access (a fixed pipeline point). On a later fault this is
                 -- the faulting instruction's PC, independent of how far the fetch
                 -- pointer has since advanced. (J4+MMU_ARCH only.)
-                if MMU_ARCH then
+                if MMU_ARCH or PAGE_FAULT_ARCH then
+                  -- Restart-PC shadow, needed by the D-side fault entry. This is
+                  -- the ONLY ma_pc-latch piece PAGE_FAULT_ARCH extracts; the @Rn+
+                  -- base-restore shadows below stay MMU-only (v1 flash D-faults are
+                  -- PC-relative displacement loads, no base writeback).
                   this.ma_pc := this.pc;
+                end if;
+                if MMU_ARCH then
                   -- Shadow the (bank-remapped) base register (Rm = num_x in the
                   -- @Rm+ access slot) and the post-increment marker of the
                   -- instruction launching this access, at the same fixed pipeline

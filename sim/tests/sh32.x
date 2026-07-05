@@ -49,6 +49,12 @@ __idata_end = __idata_start + SIZEOF(.data);
 	_end = .;
 	}  >ram
 
+/* Fixed-VMA windows for the PAGE_FAULT_ARCH sim tests: the testbench faults the
+   first access into these ranges (see cpu_tb.vhd's pf injector). Empty (zero
+   size, no binary contribution) for every other test, so they are harmless. */
+.window 0x00010000 : { *(.window) } > ram
+.dwindow 0x00050000 : { *(.dwindow) } > ram
+
 .stack :
 	{
 	_stack = .;

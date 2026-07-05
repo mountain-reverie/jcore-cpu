@@ -44,7 +44,7 @@ package decode_pack is
     type system_instr_addr_array is array (system_instr_t range <>) of std_logic_vector({{ sub1 .AddressBits }} downto 0);
     constant system_instr_rom_addrs : system_instr_addr_array := ({{ range $i, $k := .Package.SystemInstrNames }}{{ if $i }}, {{ end }}{{ $k }} => {{ index $.Package.SystemInstrROMAddrs $k }}{{ end }});
     type system_instr_code_array is array (system_instr_t range <>) of std_logic_vector(11 downto 8);
-    constant system_instr_codes : system_instr_code_array := (BREAK => x"2", ERROR => x"1", GENERAL_ILLEGAL => x"7", INTERRUPT => x"0", RESET_CPU => x"3", SLOT_ILLEGAL => x"6", TLB_DMISS_R => x"9", TLB_DMISS_W => x"A", TLB_DPROT_R => x"C", TLB_DPROT_W => x"D", TLB_IMISS => x"8", TLB_IPROT => x"B");
+    constant system_instr_codes : system_instr_code_array := (BREAK => x"2", ERROR => x"1", GENERAL_ILLEGAL => x"7", INTERRUPT => x"0", PAGE_FAULT_D => x"5", PAGE_FAULT_I => x"4", RESET_CPU => x"3", SLOT_ILLEGAL => x"6", TLB_DMISS_R => x"9", TLB_DMISS_W => x"A", TLB_DPROT_R => x"C", TLB_DPROT_W => x"D", TLB_IMISS => x"8", TLB_IPROT => x"B");
     type system_event_code_array is array (cpu_event_cmd_t range <>) of std_logic_vector(11 downto 8);
     constant system_event_codes : system_event_code_array := (INTERRUPT => x"0", ERROR => x"1", BREAK => x"2", RESET_CPU => x"3");
     type system_event_instr_array is array (cpu_event_cmd_t range <>) of system_instr_t;

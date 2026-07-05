@@ -101,10 +101,14 @@ architecture behaviour of cpu_tb is
   signal data_select : data_bus_device_t;
 
 #if CONFIG_PAGE_FAULT_ARCH
-  -- External page-fault stimulus (sim-only, driven by the process below under
-  -- CONFIG_PAGE_FAULT_ARCH). Defaults inert; a fault-injection process (Task 4/5)
-  -- asserts it on the first access into a magic window and disarms on a store.
+  -- External page-fault stimulus (sim-only). Models a SoC flash page-cache:
+  -- the FIRST instruction fetch into the I-window (0x00010000..0x0001FFFF) and
+  -- the FIRST data read into the D-window (0x00050000..0x0005FFFF) fault; the
+  -- handler "maps the page" by storing to a magic disarm address, then RTE
+  -- retries the now-served access. Mirrors mmuimiss.S's fault->map->retry.
   signal page_fault_i : cpu_page_fault_i_t := NULL_PAGE_FAULT_I;
+  signal pf_armed_i   : boolean := true;   -- I-fetch window still faults
+  signal pf_armed_d   : boolean := true;   -- D-read window still faults
 #endif
 begin
   rst <= '1', '0' after 10 ns;
@@ -224,6 +228,35 @@ begin
                      , page_fault_i => page_fault_i
 #endif
                      );
+
+#if CONFIG_PAGE_FAULT_ARCH
+  -- Sim-only external page-fault injector (models the SoC flash page-cache).
+  -- Disarm each window when the handler stores to its magic disarm address:
+  -- I-window (0x0001_xxxx) disarmed by a store to 0x0003_0000; D-window
+  -- (0x0005_xxxx) disarmed by a store to 0x0006_0000.
+  pf_arm : process(clk, rst)
+  begin
+    if rst = '1' then
+      pf_armed_i <= true;
+      pf_armed_d <= true;
+    elsif rising_edge(clk) then
+      if data_master_o.en = '1' and data_master_o.wr = '1' then
+        if data_master_o.a = x"00030000" then pf_armed_i <= false; end if;
+        if data_master_o.a = x"00060000" then pf_armed_d <= false; end if;
+      end if;
+    end if;
+  end process;
+  -- Combinational fault assertion during the offending access cycle (as the MMU
+  -- TLB compare does). I-fetch takes priority; both are single-window one-shots.
+  page_fault_i.en <= '1' when (pf_armed_i and instr_master_o.en = '1'
+                                 and instr_master_o.a(31 downto 16) = x"0001")
+                           or (pf_armed_d and data_master_o.en = '1' and data_master_o.rd = '1'
+                                 and data_master_o.a(31 downto 16) = x"0005")
+                     else '0';
+  page_fault_i.kind <= PF_IFETCH when (pf_armed_i and instr_master_o.en = '1'
+                                         and instr_master_o.a(31 downto 16) = x"0001")
+                       else PF_DREAD;
+#endif
 
   -- FIXME: Old CPU interface wrapper
   event_i.en  <= '0'       when event_req_i = "111" else '1';

@@ -242,7 +242,7 @@ begin
   -- when the exception is dispatched. texc_ack mirrors the op-latch condition in
   -- the decode_core process (slot, not stalled, at an instruction boundary), so
   -- the request clears exactly when next_op is latched into the registered op.
-  texc_ack <= '1' when MMU_ARCH and slot = '1' and texc_req = '1'
+  texc_ack <= '1' when (MMU_ARCH or PAGE_FAULT_ARCH) and slot = '1' and texc_req = '1'
                        and this'register.id_stall = '0'
                        and this'register.instr_seq_zero = '1'
               else '0';
@@ -254,7 +254,7 @@ begin
     elsif clk = '1' and clk'event then
       if texc_ack = '1' then
         texc_req <= '0';
-      elsif MMU_ARCH and tlb_exc_en = '1' and texc_req = '0' then
+      elsif (MMU_ARCH or PAGE_FAULT_ARCH) and tlb_exc_en = '1' and texc_req = '0' then
         texc_req       <= '1';
         texc_kind_held <= tlb_exc_kind;
       end if;

@@ -382,12 +382,24 @@ begin
 
   g_no_mmu : if not MMU_ARCH generate
     mmu_o        <= NULL_MMU_O;
-    tlb_exc_en   <= '0';
-    tlb_exc_kind <= IMISS;
-    tlb_exc_pend <= '0';
     tlb_fault_va <= (others => '0');
     tlb_exc_expevt <= (others => '0');
     tlb_exc_is_i <= '0';   -- tie off so J1/J2 datapath sees a constant, not a float
+    -- External page fault (PAGE_FAULT_ARCH): the SoC drives page_fault_i.en/kind
+    -- combinationally during the faulting access. Feed the same internal
+    -- tlb_exc_* signals the MMU path uses, so decode's texc_req hold/dispatch and
+    -- the datapath ma_pc capture are reused unchanged. PF_IFETCH -> IMISS (restart
+    -- PC-2), PF_DREAD -> DMISS_R (restart via ma_pc latch).
+    g_pf : if PAGE_FAULT_ARCH generate
+      tlb_exc_en   <= page_fault_i.en;
+      tlb_exc_kind <= IMISS when page_fault_i.kind = PF_IFETCH else DMISS_R;
+      tlb_exc_pend <= page_fault_i.en;
+    end generate g_pf;
+    g_no_pf : if not PAGE_FAULT_ARCH generate
+      tlb_exc_en   <= '0';
+      tlb_exc_kind <= IMISS;
+      tlb_exc_pend <= '0';
+    end generate g_no_pf;
   end generate g_no_mmu;
 
 end architecture stru;

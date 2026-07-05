@@ -17,9 +17,9 @@ selected via VHDL configurations:
 
 | Variant | Description |
 |---|---|
-| **J2** | Baseline core targeting ASIC and FPGA; runs Linux no-MMU. Implements the SH-2 ISA plus SH-4 dynamic shift instructions (SHAD/SHLD). 2–3 cycle Karatsuba multiplier. |
-| **J1** | Smaller variant targeting iCE40 and other small FPGAs; microcontroller-oriented core. Sequential shift-add multiplier (~34 cycles) replaces the hardware array — same ISA, multiply stalls longer, ~9% fewer cells. |
-| **J4** | J2 + full SH-4 extensions targeting complete Linux (MMU, privileged modes, banked registers). Placeholder today — byte-identical to J2 while extensions are developed. |
+| [**J2**](docs/architecture/j2.md) | Baseline core targeting ASIC and FPGA; runs Linux no-MMU. Implements the SH-2 ISA plus SH-4 dynamic shift instructions (SHAD/SHLD). 2–3 cycle Karatsuba multiplier. |
+| [**J1**](docs/architecture/j1.md) | Smaller variant targeting iCE40 and other small FPGAs; microcontroller-oriented core. Sequential shift-add multiplier (~34 cycles) replaces the hardware array — same ISA, multiply stalls longer, ~9% fewer cells. |
+| [**J4**](docs/architecture/j4.md) | J2 + full SH-4 extensions targeting complete Linux (MMU, privileged modes, banked registers). Placeholder today — byte-identical to J2 while extensions are developed. |
 
 See [`docs/architecture/cpu-variants.md`](docs/architecture/cpu-variants.md) for
 the full design, configuration guide, and build commands.

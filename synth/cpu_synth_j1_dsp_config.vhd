@@ -4,13 +4,15 @@
 -- the product moves from ~1200 LUT4 onto the iCE40 DSP blocks. ROM decode, the
 -- EBR register file and the sequential shifter are unchanged.
 --
--- DSP_ALU => true: J1-DSP-ALU prototype (see core/dsp_arith.vhd and the
--- DSP_ALU generic on entity datapath, core/datapath.vhm). Offloads the
--- 32-bit arith_unit add/sub onto a third free SB_MAC16 DSP pair instead of
--- LUT adder logic. This is a measurement prototype: it only takes effect
--- here (the iCESugar J1-DSP config); every other cpu_synth_* configuration
--- (and cpu_sim) leaves datapath's DSP_ALU at its default false, so J2/J4/sim
--- VHDL elaborates byte-identically to before this prototype.
+-- DSP_ALU => true: J1-DSP-ALU (see core/dsp_arith.vhd and the DSP_ALU generic
+-- on entity datapath, core/datapath.vhm). Offloads the 32-bit arith_unit
+-- add/sub onto a third free SB_MAC16 DSP pair instead of LUT adder logic.
+-- This is the default up5k J1 build (`cpu_synth.sh ice40`, via
+-- cpu_timing_j1_dsp in synth/cpu_timing_config.vhd): the up5k has 8 free
+-- SB_MAC16 blocks and no ASIC/ECP5 equivalent to trade away, so J1 spends
+-- them here. Every other cpu_synth_* configuration (and cpu_sim) leaves
+-- datapath's DSP_ALU at its default false, so J2/J4/ECP5-J1/ASIC-J1/sim
+-- VHDL elaborates byte-identically to before this config existed.
 configuration cpu_synth_j1_dsp of cpu is
   for stru
     for u_mult : mult

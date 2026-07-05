@@ -23,7 +23,12 @@
 #   j2 -> elaborate cpu_synth_direct (the default; J2 hardware multiplier).
 #   j1 -> elaborate cpu_synth_j1 (sequential mult(seq) + shifter(seq), no hw
 #         multiplier/barrel); adds core/mult_seq.vhd + core/shifter_seq.vhd +
-#         synth/cpu_synth_j1_config.vhd to the file list.
+#         synth/cpu_synth_j1_config.vhd to the file list. The `ice40` backend
+#         (the up5k fit gauge) instead elaborates cpu_timing_j1_dsp, which
+#         offloads the multiplier and ALU add/sub onto the up5k's free
+#         SB_MAC16 DSP blocks (core/mult_ice40dsp.vhd, core/dsp_arith.vhd) —
+#         ECP5/ASIC J1 synth (timing/ecp5/asic backends) has no SB_MAC16
+#         equivalent and stays on the LUT-only cpu_timing_j1/cpu_synth_j1.
 #   j4 -> elaborate cpu_synth_j4 (== J2 today);
 #         adds synth/cpu_synth_j4_config.vhd to the file list.
 # When SYNTH_VARIANT is unset or j2 the synth commands are byte-identical to the
@@ -97,10 +102,16 @@ case "$SYNTH_VARIANT" in
     # case below). The direct table files are already in the base FILES list; both
     # decoder configs may coexist in the library since only cpu_decode_rom is bound.
     TOP="cpu_synth_j1"; TIMING_TOP="cpu_timing_j1"
-    FILES+=(core/mult_seq.vhd core/shifter_seq.vhd \
+    FILES+=(core/mult_seq.vhd core/shifter_seq.vhd core/mult_ice40dsp.vhd core/dsp_arith.vhd \
             decode/decode_table_rom.vhd decode/decode_table_rom_config.vhd \
-            synth/cpu_synth_j1_config.vhd \
+            synth/cpu_synth_j1_config.vhd synth/cpu_synth_j1_dsp_config.vhd \
             synth/cpu_timing_top.vhd synth/cpu_timing_config.vhd)
+    # up5k has 8 free SB_MAC16 DSP blocks; the ice40 fit gauge is the only
+    # backend that can use them (ECP5/ASIC synth of J1 have no SB_MAC16
+    # equivalent, so `timing`/`ecp5`/`asic` stay on the LUT-only harness).
+    if [ "$BACKEND" = ice40 ]; then
+      TIMING_TOP="cpu_timing_j1_dsp"
+    fi
     ;;
   j4)
     if [ "${DECODER:-direct}" = "rom" ]; then

@@ -8,9 +8,10 @@ use work.mult_pkg.all;
 
 entity cpu is
  generic (
-   COPRO_DECODE : boolean := true;
-   PRIV_ARCH    : boolean := false;
-   MMU_ARCH     : boolean := false);  -- MMU control-register file (subordinate to PRIV_ARCH)
+   COPRO_DECODE    : boolean := true;
+   PRIV_ARCH       : boolean := false;
+   MMU_ARCH        : boolean := false;  -- MMU control-register file (subordinate to PRIV_ARCH)
+   PAGE_FAULT_ARCH : boolean := false);  -- external restartable page fault (no MMU/PRIV)
  port (
    clk          : in  std_logic;
    rst          : in  std_logic;
@@ -26,7 +27,8 @@ entity cpu is
    cop_o        : out cop_o_t;
    cop_i        : in  cop_i_t;
    priv_o       : out cpu_priv_o_t := NULL_PRIV_O;  -- SH-4 EXPEVT/INTEVT/TRA (J4)
-   mmu_o        : out cpu_mmu_o_t  := NULL_MMU_O);  -- TLB PA tags for cache wrappers (J4+MMU_ARCH)
+   mmu_o        : out cpu_mmu_o_t  := NULL_MMU_O;   -- TLB PA tags for cache wrappers (J4+MMU_ARCH)
+   page_fault_i : in  cpu_page_fault_i_t := NULL_PAGE_FAULT_I);  -- SoC-driven restartable page fault
 end entity cpu;
 
 architecture stru of cpu is
@@ -132,7 +134,7 @@ begin
       mac_i.wr_mach <= mac.wrmach; mac_i.wr_macl <= mac.wrmacl;
       mac_i.acc_squash <= dp_tlb_squash;
 
-   u_datapath : datapath generic map (PRIV_ARCH => PRIV_ARCH, MMU_ARCH => MMU_ARCH) port map (clk => clk, rst => rst, slot => slot,
+   u_datapath : datapath generic map (PRIV_ARCH => PRIV_ARCH, MMU_ARCH => MMU_ARCH, PAGE_FAULT_ARCH => PAGE_FAULT_ARCH) port map (clk => clk, rst => rst, slot => slot,
       debug => debug, enter_debug => enter_debug,
       db_lock => db_lock, db_o => sig_db_o, db_i => db_i, inst_o => sig_inst_o, inst_i => inst_i,
       debug_o => debug_o, debug_i => debug_i,

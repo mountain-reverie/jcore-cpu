@@ -10,6 +10,10 @@ entity datapath is
 	generic (
 	  PRIV_ARCH : boolean := false;
 	  MMU_ARCH  : boolean := false;  -- MMU control-register file (subordinate to PRIV_ARCH)
+	  -- Un-gates ONLY the ma_pc restart-PC latch (this.ma_pc := this.pc and the
+	  -- tlb_exc_pc capture) for the external page-fault feature, WITHOUT the MMU's
+	  -- translation/TEA/PTEH/SSR/@Rn+-restore machinery. Independent of MMU_ARCH.
+	  PAGE_FAULT_ARCH : boolean := false;
 	  -- J1 only: drive the register file's early-read addresses and let
 	  -- architecture(ebr) read on the rising edge (full cycle). false for J2/J4.
 	  EARLY_REGFILE_READ : boolean := false;

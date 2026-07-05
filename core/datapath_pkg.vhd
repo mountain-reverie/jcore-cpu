@@ -36,6 +36,7 @@ package datapath_pack is
      generic (
        PRIV_ARCH : boolean := false;
        MMU_ARCH  : boolean := false;  -- MMU control-register file (subordinate to PRIV_ARCH)
+       PAGE_FAULT_ARCH : boolean := false;  -- ma_pc restart latch for external page fault
        EARLY_REGFILE_READ : boolean := false );
      port (
       clk         : in  std_logic;

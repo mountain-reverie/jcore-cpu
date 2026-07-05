@@ -14,7 +14,12 @@ entity decode_core is
     -- (j1/j2 and all synth variants) elaborate the TLB logic away - it is pure
     -- decode-mux depth on the Fmax-critical path with no consumer when the MMU
     -- is absent. The functional MMU build sets this true via cpu_decode_direct_mmu.
-    MMU_ARCH : boolean := false);
+    MMU_ARCH : boolean := false;
+    -- Un-gates the texc_req hold + the two base-stack-model page-fault system_op
+    -- dispatch branches (PAGE_FAULT_I / PAGE_FAULT_D) in next_op. Independent of
+    -- MMU_ARCH: a page-fault build sets MMU_ARCH=>false, PAGE_FAULT_ARCH=>true so
+    -- the TLB branches stay pruned and only the base-model PF branches dispatch.
+    PAGE_FAULT_ARCH : boolean := false);
   port (
     clk : in std_logic;
     delay_jump : in std_logic;

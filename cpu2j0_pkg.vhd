@@ -62,6 +62,18 @@ package cpu2j0_pack is
    end record;
    constant NULL_PRIV_O : cpu_priv_o_t := (others => (others => '0'));
 
+   -- External restartable page fault (PAGE_FAULT_ARCH; no MMU/PRIV). Driven by
+   -- SoC bus glue during the faulting access cycle: PF_IFETCH -> restart at the
+   -- faulting fetch PC (like IMISS); PF_DREAD -> restart the faulting PC-relative
+   -- load via the datapath ma_pc latch (like DMISS_R). Tied inert
+   -- (NULL_PAGE_FAULT_I) when PAGE_FAULT_ARCH is false, so builds are unchanged.
+   type page_fault_kind_t is (PF_IFETCH, PF_DREAD);
+   type cpu_page_fault_i_t is record
+      en   : std_logic;
+      kind : page_fault_kind_t;
+   end record;
+   constant NULL_PAGE_FAULT_I : cpu_page_fault_i_t := (en => '0', kind => PF_IFETCH);
+
    type cpu_debug_cmd_t is (BREAK, STEP, INSERT, CONTINUE);
 
    type cpu_debug_i_t is record
@@ -120,9 +132,10 @@ package cpu2j0_pack is
      ack => '1', t => '0', exc => '0');
 
    component cpu is generic (
-      COPRO_DECODE : boolean := true;
-      PRIV_ARCH    : boolean := false;
-      MMU_ARCH     : boolean := false);
+      COPRO_DECODE    : boolean := true;
+      PRIV_ARCH       : boolean := false;
+      MMU_ARCH        : boolean := false;
+      PAGE_FAULT_ARCH : boolean := false);
      port (
       clk          : in  std_logic;
       rst          : in  std_logic;
@@ -138,7 +151,8 @@ package cpu2j0_pack is
       cop_o        : out cop_o_t;
       cop_i        : in  cop_i_t;
       priv_o       : out cpu_priv_o_t := NULL_PRIV_O;
-      mmu_o        : out cpu_mmu_o_t := NULL_MMU_O);
+      mmu_o        : out cpu_mmu_o_t := NULL_MMU_O;
+      page_fault_i : in  cpu_page_fault_i_t := NULL_PAGE_FAULT_I);
    end component cpu;
 
    function loopback_bus(b : cpu_data_o_t) return cpu_data_i_t;

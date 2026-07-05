@@ -113,6 +113,49 @@ configuration cpu_sim_dsp_alu of cpu is
   end for;
 end configuration;
 
+-- Like cpu_decode_direct_mmu but for the external page-fault feature: keeps the
+-- DIRECT decoder, sets MMU_ARCH=>false (TLB dispatch pruned) and
+-- PAGE_FAULT_ARCH=>true so decode_core dispatches the base-stack-model
+-- PAGE_FAULT_I/PAGE_FAULT_D system ops instead. Hand-written like its MMU peer.
+configuration cpu_decode_direct_pagefault of decode is
+  for arch
+    for core : decode_core
+      use entity work.decode_core(arch)
+        generic map (
+          decode_type => DIRECT,
+          reset_vector => DEC_CORE_RESET,
+          MMU_ARCH => false,
+          PAGE_FAULT_ARCH => true);
+    end for;
+    for table : decode_table
+      use entity work.decode_table(direct_logic);
+    end for;
+  end for;
+end configuration;
+
+-- Sim config for the external page-fault feature: identical to cpu_sim except
+-- u_decode binds the page-fault decode config. The cpu-level PAGE_FAULT_ARCH
+-- generic (set true by the testbench under CONFIG_PAGE_FAULT_ARCH) flows to
+-- u_datapath via cpu.vhd's generic map, un-gating the ma_pc restart latch.
+configuration cpu_sim_pagefault of cpu is
+  for stru
+    for u_decode : decode
+      use configuration work.cpu_decode_direct_pagefault;
+    end for;
+    for u_datapath : datapath
+      use entity work.datapath(stru);
+      for stru
+        for u_regfile : register_file
+          use entity work.register_file(two_bank);
+        end for;
+        for u_shifter : shifter
+          use entity work.shifter(comb);
+        end for;
+      end for;
+    end for;
+  end for;
+end configuration;
+
 configuration cpu_j2 of cpu is
   for stru
     for u_mult : mult use entity work.mult(stru); end for;

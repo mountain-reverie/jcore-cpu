@@ -99,6 +99,13 @@ architecture behaviour of cpu_tb is
 #endif
 
   signal data_select : data_bus_device_t;
+
+#if CONFIG_PAGE_FAULT_ARCH
+  -- External page-fault stimulus (sim-only, driven by the process below under
+  -- CONFIG_PAGE_FAULT_ARCH). Defaults inert; a fault-injection process (Task 4/5)
+  -- asserts it on the first access into a magic window and disarms on a store.
+  signal page_fault_i : cpu_page_fault_i_t := NULL_PAGE_FAULT_I;
+#endif
 begin
   rst <= '1', '0' after 10 ns;
   clk <= '0' after clk_period/2 when clk = '1' else '1' after clk_period/2;
@@ -191,12 +198,16 @@ begin
   -- core/cpu_config.vhd): a J1/iCESugar DSP-ALU verification-only variant
   -- that exercises core/dsp_arith.vhd through the full instruction-level
   -- test ROM. Default CONFIG_DSP_ALU=0 keeps binding cpu_sim unchanged.
-#if CONFIG_DSP_ALU
+#if CONFIG_PAGE_FAULT_ARCH
+  cpu1: configuration work.cpu_sim_pagefault
+#elif CONFIG_DSP_ALU
   cpu1: configuration work.cpu_sim_dsp_alu
 #else
   cpu1: configuration work.cpu_sim
 #endif
-#if CONFIG_PRIV_ARCH
+#if CONFIG_PAGE_FAULT_ARCH
+            generic map(PAGE_FAULT_ARCH => true)
+#elif CONFIG_PRIV_ARCH
 #if CONFIG_MMU_ARCH
             generic map(PRIV_ARCH => true, MMU_ARCH => true)
 #else
@@ -208,7 +219,11 @@ begin
                      inst_o => instr_master_o, inst_i => instr_master_i,
                      debug_o => debug_o, debug_i => debug_i,
                      event_i => event_i, event_o => event_o,
-                     cop_o => copro_o, cop_i => copro_i);
+                     cop_o => copro_o, cop_i => copro_i
+#if CONFIG_PAGE_FAULT_ARCH
+                     , page_fault_i => page_fault_i
+#endif
+                     );
 
   -- FIXME: Old CPU interface wrapper
   event_i.en  <= '0'       when event_req_i = "111" else '1';

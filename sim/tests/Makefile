@@ -11,7 +11,7 @@ CONFIG_MMU_ARCH ?= 0
 CFLAGS = -m2 -g -Os -Wall -Iinclude -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH)
 LDFLAGS = -T sh32.x -Map main.map
 
-all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img rteredir.img mmureg.img mmuguard.img mmuxlate.img mmufault.img mmurte.img mmustore.img mmuimiss.img mmusr.img mmuicolor.img mmudcbit.img mmuldtlbr.img mmutsb.img mmurun.img mmuidx.img mmustres.img mmustr2.img mmuirun.img mmuainc.img mmuainc2.img mmureloc.img mmurelocif.img mmurelocbp.img mmustale.img mmuasid.img mmupage4k.img mmupagereloc16k.img mmupage16k.img mmupage64k.img mmupage1m.img mmupagemix.img mmupagemix2.img mmupagewalk.img m8_smoke.img m8_dside.img m8_ifetch_0.img m8_ifetch_1.img m8_ifetch_2.img m8_macarith.img m8_macseq.img
+all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img rteredir.img mmureg.img mmuguard.img mmuxlate.img mmufault.img mmudslot.img mmurte.img mmustore.img mmuimiss.img mmusr.img mmuicolor.img mmudcbit.img mmuldtlbr.img mmutsb.img mmurun.img mmuidx.img mmustres.img mmustr2.img mmuirun.img mmuainc.img mmuainc2.img mmureloc.img mmurelocif.img mmurelocbp.img mmustale.img mmuasid.img mmupage4k.img mmupagereloc16k.img mmupage16k.img mmupage64k.img mmupage1m.img mmupagemix.img mmupagemix2.img mmupagewalk.img m8_smoke.img m8_dside.img m8_ifetch_0.img m8_ifetch_1.img m8_ifetch_2.img m8_macarith.img m8_macseq.img
 
 m8_macarith.elf: m8_macarith.o
 interrupts.elf: interrupts.o
@@ -28,6 +28,9 @@ mmureg.elf: mmureg.o
 mmuguard.elf: mmuguard.o
 mmuxlate.elf: mmuxlate.o
 mmufault.elf: mmufault.o
+mmudslot.elf: mmudslot.o
+mmuidslot.elf: mmuidslot.o
+mmubratest.elf: mmubratest.o
 mmurte.elf: mmurte.o
 mmustore.elf: mmustore.o
 mmuimiss.elf: mmuimiss.o
@@ -73,6 +76,12 @@ m8_macseq.elf: m8_macseq.o tlbwalk.o
 m8_ifetch_0.elf: m8_ifetch_0.o tlbwalk.o
 m8_ifetch_1.elf: m8_ifetch_1.o tlbwalk.o
 m8_ifetch_2.elf: m8_ifetch_2.o tlbwalk.o
+# m8_idslot_{0,1,2}: the instruction-FETCH-in-DELAY-SLOT fault-transparency sweep
+# (same General non-memory set, planted in a branch delay slot straddling a page
+# boundary so the delay-slot fetch IMISSes; the restart must land on the branch).
+m8_idslot_0.elf: m8_idslot_0.o tlbwalk.o
+m8_idslot_1.elf: m8_idslot_1.o tlbwalk.o
+m8_idslot_2.elf: m8_idslot_2.o tlbwalk.o
 
 %.elf:
 	$(LD) $(LDFLAGS) $^ $(LIBGCC) -o $@

@@ -25,8 +25,10 @@ import (
 type Axis int
 
 const (
-	DSide  Axis = iota // data-side load/store faults (DMISS_R / DMISS_W)
-	IFetch             // instruction-fetch faults (IMISS at vector +0x400)
+	DSide       Axis = iota // data-side load/store faults (DMISS_R / DMISS_W)
+	IFetch                  // instruction-fetch faults (IMISS at vector +0x400)
+	IFetchDSlot             // instruction-fetch faults on an instruction IN A BRANCH DELAY SLOT
+	DSideDSlot              // data-side faults on a memory instruction IN A BRANCH DELAY SLOT
 )
 
 // Fixed workload page (see runtime header): VA 0x00100000 identity-mapped.
@@ -264,6 +266,10 @@ func emitCase(c Class, id int, axis Axis) (block string, dispatch string, err er
 	switch axis {
 	case IFetch:
 		return emitIFetch(c, id)
+	case IFetchDSlot:
+		return emitIFetchDSlot(c, id)
+	case DSideDSlot:
+		return emitDSideDSlot(c, id)
 	default:
 		return emitDSide(c, id)
 	}
@@ -641,6 +647,50 @@ func render(t *template.Template, d caseData) (string, string, error) {
 	return b.String(), dispatch, nil
 }
 
+// emitIFetchDSlot emits one case that plants the instruction under test into the
+// DELAY SLOT of a branch, straddling a page boundary so the delay-slot FETCH
+// (not the branch) IMISSes: [bra L ; instr] sits at 0x00100FFE / 0x00101000 (the
+// branch on page 0x100, the delay slot on page 0x101), with the branch target
+// L: jmp @r12 right after it. Cold leg (flushed TLB) faults on the delay-slot
+// fetch and must restart at the BRANCH (re-issuing the delay slot); warm leg does
+// not fault. The full arch snapshot {r0,r8,T,MACH,MACL,SR} must match -- a precise
+// delay-slot fetch fault is invisible iff the restart lands on the branch. Same
+// instruction scope as the I-fetch axis (General non-memory, non-branch).
+func emitIFetchDSlot(c Class, id int) (string, string, error) {
+	if c.Bucket == Bespoke || !c.IFaults {
+		return fmt.Sprintf("! case %d skipped: %s excluded from I-fetch-delay-slot axis (control-flow/system; a branch is illegal in a delay slot)\n", id, c.Instr.Name),
+			"", errSkip
+	}
+	if c.Instr.Plane == "system" {
+		return fmt.Sprintf("! case %d skipped: %s is a microcode-only system entry (plane=system), not a fetchable instruction\n", id, c.Instr.Name),
+			"", errSkip
+	}
+	if reason, bad := ifetchUnsupported(c.Instr.Name); bad {
+		return fmt.Sprintf("! case %d skipped: %s: %s\n", id, c.Instr.Name, reason),
+			"", errSkip
+	}
+	if c.Mem != NoMem {
+		return fmt.Sprintf("! case %d skipped: %s accesses memory; the I-fetch-delay-slot axis is fetch-only (data-access-in-delay-slot precision is the DSideDSlot axis)\n",
+				id, c.Instr.Name),
+			"", errSkip
+	}
+	if c.Bucket == PrivMem {
+		return fmt.Sprintf("! case %d skipped: %s writes/needs a control register; the I-fetch-delay-slot axis sweeps the General non-memory set\n",
+				id, c.Instr.Name),
+			"", errSkip
+	}
+	word, err := encodeWord(c)
+	if err != nil {
+		return "", "", err
+	}
+	d := caseData{
+		ID:   id,
+		Word: fmt.Sprintf("0x%04X", word),
+		Name: c.Instr.Name,
+	}
+	return render(tmplIFetchDSlot, d)
+}
+
 // EmitImage returns a complete `.S` for a slice of classes sharing one
 // bucket/axis: the runtime include, every emittable case routine, the
 // `_m8_run_all` table-walk dispatcher, and a manifest comment listing skips.
@@ -655,13 +705,19 @@ func EmitImage(classes []Class, axis Axis) (string, error) {
 // per-axis emitted IDs (== co-sim Result=<ID>). A nil/empty skip is identical
 // to EmitImage and preserves byte-for-byte determinism.
 func EmitImageSkip(classes []Class, axis Axis, skip map[int]bool) (string, error) {
-	if axis == IFetch {
-		// The I-fetch axis is partitioned into sub-images (see EmitIFetchImages);
+	if axis == IFetch || axis == IFetchDSlot {
+		// The I-fetch axes are partitioned into sub-images (see EmitIFetch*Images);
 		// a single combined image would exceed the co-sim cumulative-fetch ceiling.
-		// Concatenating the sub-images here keeps EmitImage(IFetch) meaningful for
+		// Concatenating the sub-images here keeps EmitImage meaningful for
 		// callers/tests that only inspect scaffolding, but production generation
-		// (m8gen) calls EmitIFetchImages directly to write separate .S files.
-		imgs, err := EmitIFetchImages(classes)
+		// (m8gen) calls EmitIFetch*Images directly to write separate .S files.
+		var imgs []string
+		var err error
+		if axis == IFetch {
+			imgs, err = EmitIFetchImages(classes)
+		} else {
+			imgs, err = EmitIFetchDSlotImages(classes)
+		}
 		if err != nil {
 			return "", err
 		}
@@ -825,6 +881,145 @@ func EmitIFetchImages(classes []Class) ([]string, error) {
 	return out, nil
 }
 
+// EmitIFetchDSlotImages is EmitIFetchImages for the IFetchDSlot axis: each case
+// plants the instruction in a branch delay slot straddling a page boundary and
+// faults the delay-slot fetch (see iFetchDSlotText). Same partitioning rationale
+// (co-sim cumulative-fetch ceiling), same global 1-based IDs.
+func EmitIFetchDSlotImages(classes []Class) ([]string, error) {
+	var emitted []ifetchEmitted
+	var manifest strings.Builder
+	n := 0
+	for _, c := range classes {
+		id := n + 1
+		block, disp, err := emitCase(c, id, IFetchDSlot)
+		if IsSkip(err) {
+			manifest.WriteString(block)
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		n++
+		emitted = append(emitted, ifetchEmitted{id: id, block: block, dispatch: disp})
+	}
+
+	per := IFetchPerImage
+	if per < 1 {
+		per = 1
+	}
+	nImages := (len(emitted) + per - 1) / per
+	if nImages == 0 {
+		nImages = 1
+	}
+
+	out := make([]string, 0, nImages)
+	for img := 0; img < nImages; img++ {
+		lo := img * per
+		hi := lo + per
+		if hi > len(emitted) {
+			hi = len(emitted)
+		}
+		chunk := emitted[lo:hi]
+
+		var blocks, dispatch strings.Builder
+		for _, e := range chunk {
+			blocks.WriteString(e.block)
+			blocks.WriteString("\n")
+			dispatch.WriteString(e.dispatch)
+		}
+
+		var b strings.Builder
+		fmt.Fprintf(&b, "! GENERATED by faultgen (M8). Axis=IFetchDSlot sub-image %d of %d. Do not edit.\n", img, nImages)
+		if len(chunk) > 0 {
+			fmt.Fprintf(&b, "! This sub-image runs global case IDs %d..%d (of %d emitted I-fetch-delay-slot cases).\n",
+				chunk[0].id, chunk[len(chunk)-1].id, len(emitted))
+		}
+		b.WriteString("! Manifest of excluded (skipped) instructions (whole axis):\n")
+		if manifest.Len() == 0 {
+			b.WriteString("!   (none)\n")
+		} else {
+			b.WriteString(manifest.String())
+		}
+		b.WriteString("! IFetchDSlot axis: each case plants [bra L ; instr] straddling VA\n")
+		b.WriteString("!   0x00100FFE/0x00101000 (branch on page 0x100, delay slot on page 0x101),\n")
+		b.WriteString("!   flushes the TLB, and jmps DIRECTLY to the branch; the delay-slot fetch\n")
+		b.WriteString("!   IMISSes and the restart must land on the branch (re-issuing the delay\n")
+		b.WriteString("!   slot). snapshot {r0,r8,T,MACH,MACL,SR} must match the warm leg.\n")
+		fmt.Fprintf(&b, "!   Split into %d sub-images of <=%d cases (separate sim runs) for the\n", nImages, per)
+		b.WriteString("!   co-sim cumulative-fetch ceiling.\n")
+		b.WriteString(`#include "m8_runtime.inc"` + "\n\n")
+		b.WriteString("#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH\n")
+		b.WriteString("        .text\n")
+		b.WriteString(blocks.String())
+		writeRunAll(&b, dispatch.String(), len(chunk))
+		b.WriteString("#endif\n")
+		out = append(out, b.String())
+	}
+	return out, nil
+}
+
+// emitDSideDSlot emits one D-side case with the memory instruction planted in a
+// branch DELAY SLOT: [bra L ; mem-instr] run straight-line from P1 (no fetch
+// fault), with the operand pointing at the cold workload page so the delay-slot
+// instruction's DATA access DMISSes. The restart must land on the branch, and the
+// per-form register restore (@Rm+ post-inc / @-Rn pre-dec base) must be applied
+// exactly once -- the cold-vs-warm snapshot {base reg, dest/probe} catches any
+// double auto-modify or lost write. Same General memory set as the D-side axis;
+// MAC dual-pointer and control-register loads/stores are deferred (their single-op
+// restart precision is already exercised by the General forms here).
+func emitDSideDSlot(c Class, id int) (string, string, error) {
+	if c.Mem == NoMem || !c.DFaults {
+		return fmt.Sprintf("! case %d skipped: %s has no D-side memory access\n", id, c.Instr.Name),
+			"", errSkip
+	}
+	if strings.HasPrefix(c.Instr.Name, "MAC.") {
+		return fmt.Sprintf("! case %d skipped: %s: MAC dual-pointer in a delay slot not yet modelled by DSideDSlot (the General @Rm+/@-Rn forms already exercise the delay-slot restart + base-restore path)\n", id, c.Instr.Name),
+			"", errSkip
+	}
+	if reason, bad := unmodelledBase(c.Instr.Name); bad {
+		return fmt.Sprintf("! case %d skipped: %s: %s\n", id, c.Instr.Name, reason),
+			"", errSkip
+	}
+	if strings.HasPrefix(c.Instr.Name, "LDC.L") || strings.HasPrefix(c.Instr.Name, "LDS.L") {
+		return fmt.Sprintf("! case %d skipped: %s: control-register memory load in a delay slot not yet modelled by DSideDSlot\n", id, c.Instr.Name),
+			"", errSkip
+	}
+	if c.Bucket == PrivMem && c.DestCtrl != "" {
+		return fmt.Sprintf("! case %d skipped: %s: control-register memory store in a delay slot not yet modelled by DSideDSlot\n", id, c.Instr.Name),
+			"", errSkip
+	}
+	if strings.HasPrefix(c.Instr.Name, "CAS.") && regBase != 0 {
+		return fmt.Sprintf("! case %d skipped: %s: implicit-R0 pointer requires regBase==r0 (currently r%d)\n", id, c.Instr.Name, regBase),
+			"", errSkip
+	}
+	word, err := encodeWord(c)
+	if err != nil {
+		return "", "", err
+	}
+	base := fmt.Sprintf("0x%08X", workloadVA)
+	probeAddr := workloadVA
+	if c.Addr == PreDec {
+		base = fmt.Sprintf("0x%08X", workloadVA+8)
+	}
+	if c.Mem == Write {
+		pa, reason, ok := storeProbeAddr(c, word, workloadVA)
+		if !ok {
+			return fmt.Sprintf("! case %d skipped: %s: %s\n", id, c.Instr.Name, reason),
+				"", errSkip
+		}
+		probeAddr = pa
+	}
+	d := caseData{
+		ID:       id,
+		Word:     fmt.Sprintf("0x%04X", word),
+		Name:     c.Instr.Name,
+		BaseInit: base,
+		Probe:    fmt.Sprintf("0x%08X", probeAddr),
+		IsWrite:  c.Mem == Write,
+	}
+	return render(tmplGeneralDSlot, d)
+}
+
 // ManifestEntry records one instruction's place in an axis image. ID is the
 // 1-based emitted case ID *within that axis* -- the exact number EmitImage
 // assigns and the value the co-sim reports as Result=<ID>. ID is 0 and Emitted
@@ -879,10 +1074,16 @@ func skipReason(block string, err error) string {
 }
 
 func axisName(a Axis) string {
-	if a == IFetch {
+	switch a {
+	case IFetch:
 		return "IFetch"
+	case IFetchDSlot:
+		return "IFetchDSlot"
+	case DSideDSlot:
+		return "DSideDSlot"
+	default:
+		return "DSide"
 	}
-	return "DSide"
 }
 
 // ---------------------------------------------------------------------------
@@ -894,6 +1095,8 @@ var (
 	tmplPrivMemD = template.Must(template.New("privD").Parse(privMemDText))
 	tmplMacD     = template.Must(template.New("macD").Parse(macDText))
 	tmplIFetch   = template.Must(template.New("ifetch").Parse(iFetchText))
+	tmplIFetchDSlot = template.Must(template.New("ifetchdslot").Parse(iFetchDSlotText))
+	tmplGeneralDSlot = template.Must(template.New("genDSlot").Parse(generalDSlotText))
 
 	tmplModePreservingD = template.Must(template.New("modePreservingD").Parse(modePreservingDText))
 )
@@ -981,6 +1184,80 @@ _m8_case_{{.ID}}:                       ! {{.Name}}  (General, D-side)
 {{if .IsWrite}}        mov.l   c{{.ID}}_pay, r8
 {{else}}        mov     #0, r8
 {{end}}        .word   {{.Word}}
+        mov.l   c{{.ID}}_snapb, r2
+        mov.l   r0, @r2
+{{if .IsWrite}}        mov.l   c{{.ID}}_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+{{else}}        mov.l   r8, @(4,r2)
+{{end}}        ! ---- compare ----
+        mov     #8, r4
+        mov.l   c{{.ID}}_id, r5
+        mov.l   c{{.ID}}_cmp, r3
+        jsr     @r3
+        nop
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+c{{.ID}}_va:     .long {{.BaseInit}}
+c{{.ID}}_seedva: .long 0x00100000
+c{{.ID}}_probe:  .long {{.Probe}}
+c{{.ID}}_seed:   .long 0xA11C0001
+c{{.ID}}_pay:    .long 0x57013333
+c{{.ID}}_snapa:  .long SNAP_A
+c{{.ID}}_snapb:  .long SNAP_B
+c{{.ID}}_id:     .long {{.ID}}
+c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
+c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
+`
+
+// generalDSlotText is generalDText with the memory instruction planted in the
+// DELAY SLOT of a branch: [bra Lx ; instr] runs straight-line from P1 (so the
+// FETCH never faults), and the delay-slot instruction's DATA access to the cold
+// workload page DMISSes. The restart must land on the branch (bra); when the
+// branch re-runs, the delay-slot instruction re-executes -- its base auto-modify
+// (@Rm+/@-Rn) must be restored so it applies exactly once. bra Lx uses disp=0
+// (Lx = branch+4 = right after the delay slot). Snapshot {base reg, dest/probe}
+// on the faulting leg must equal the warm leg.
+const generalDSlotText = `        .balign 4
+_m8_case_{{.ID}}:                       ! {{.Name}}  (General, D-side in delay slot)
+        sts.l   pr, @-r15
+        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
+        mov.l   c{{.ID}}_seedva, r0
+        mov.l   c{{.ID}}_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   c{{.ID}}_flush, r3
+        jsr     @r3
+        nop
+        mov.l   c{{.ID}}_va, r0
+{{if .IsWrite}}        mov.l   c{{.ID}}_pay, r8
+{{else}}        mov     #0, r8
+{{end}}        bra     c{{.ID}}_Da             ! delayed branch; delay slot faults DMISS
+        .word   {{.Word}}                ! DELAY SLOT: instruction under test
+c{{.ID}}_Da:
+        mov.l   c{{.ID}}_snapa, r2
+        mov.l   r0, @r2
+{{if .IsWrite}}        mov.l   c{{.ID}}_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+{{else}}        mov.l   r8, @(4,r2)
+{{end}}        ! ---- control leg (warm TLB; no fault) ----
+        mov.l   c{{.ID}}_seedva, r0
+        mov.l   c{{.ID}}_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   c{{.ID}}_va, r0
+{{if .IsWrite}}        mov.l   c{{.ID}}_pay, r8
+{{else}}        mov     #0, r8
+{{end}}        bra     c{{.ID}}_Db
+        .word   {{.Word}}
+c{{.ID}}_Db:
         mov.l   c{{.ID}}_snapb, r2
         mov.l   r0, @r2
 {{if .IsWrite}}        mov.l   c{{.ID}}_probe, r3
@@ -1268,6 +1545,121 @@ c{{.ID}}_in0:    .long 0x00000011
 c{{.ID}}_in8:    .long 0x00000022
 c{{.ID}}_srmsk:  .long 0x00000303        ! SR.{M(9),Q(8),S(1),T(0)} -- arch result bits
 c{{.ID}}_srclr:  .long 0xFFFFFCFC        ! mask clearing SR.{M,Q,S,T}, preserving MD/RB/BL/IMASK
+c{{.ID}}_snapa:  .long SNAP_A
+c{{.ID}}_snapb:  .long SNAP_B
+c{{.ID}}_id:     .long {{.ID}}
+c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
+c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
+`
+
+// iFetchDSlotText plants the instruction under test in the DELAY SLOT of a branch
+// straddling a page boundary so the delay-slot FETCH (not the branch) IMISSes:
+// [bra L] at 0x00100FFE (page 0x100), [instr] at 0x00101000 (page 0x101, the
+// delay slot), [L: jmp @r12] at 0x00101002, [nop] at 0x00101004. Cold leg flushes
+// the TLB then jmps DIRECTLY to the branch (no sled, so the prefetcher cannot pull
+// the delay-slot page in early); the branch-page fetch installs page 0x100, then
+// the delay-slot fetch at 0x00101000 IMISSes -> the restart MUST land on the branch
+// so the delay slot is re-issued. A precise delay-slot fetch fault is invisible iff
+// the snapshot {r0,r8,T,MACH,MACL,SR} matches the warm leg. bra L uses disp=0
+// (L = branch+4 = 0x00101002, right after the delay slot).
+const iFetchDSlotText = `        .balign 4
+_m8_case_{{.ID}}:                       ! {{.Name}}  (General non-memory, I-fetch in delay slot)
+        sts.l   pr, @-r15
+        ! ---- plant [bra L ; instr(delay slot) ; L: jmp @r12 ; nop] straddling
+        !      0x00100FFE (page 0x100) / 0x00101000 (page 0x101) ----
+        mov.l   c{{.ID}}_codeva, r5     ! 0x00100FFE (branch, page-end)
+        mov.w   c{{.ID}}_braw, r6
+        mov.w   r6, @r5                 ! bra L
+        add     #2, r5
+        mov.w   c{{.ID}}_instrw, r6
+        mov.w   r6, @r5                 ! instr @ 0x00101000 (delay slot)
+        add     #2, r5
+        mov.w   c{{.ID}}_jmp12, r6
+        mov.w   r6, @r5                 ! L: jmp @r12
+        add     #2, r5
+        mov.w   c{{.ID}}_nopw, r6
+        mov.w   r6, @r5                 ! nop (jmp delay slot)
+        ! ---- faulting leg (cold: delay-slot fetch IMISSes) ----
+        mov.l   c{{.ID}}_flush, r3
+        jsr     @r3                     ! arm cold TLB
+        nop
+        mov     #0, r9                  ! deterministic MAC/T seed (identical both legs)
+        lds     r9, mach
+        lds     r9, macl
+        stc     sr, r1                  ! seed SR.{Q,M,S,T}=0 -> controlled-equal inputs per leg
+        mov.l   c{{.ID}}_srclr, r2
+        and     r2, r1
+        ldc     r1, sr
+        mov.l   c{{.ID}}_in0, r0        ! seed instruction inputs
+        mov.l   c{{.ID}}_in8, r8
+        mov.l   c{{.ID}}_ireta, r12     ! in-page return target (P1 alias)
+        mov.l   c{{.ID}}_codeva, r5
+        jmp     @r5                     ! cold: branch-page install, then delay-slot IMISS -> restart at branch
+        nop
+c{{.ID}}_ireta_l:
+        mov.l   c{{.ID}}_snapa, r12
+        mov.l   r0, @r12
+        mov.l   r8, @(4,r12)
+        movt    r1
+        mov.l   r1, @(8,r12)
+        sts     mach, r1
+        mov.l   r1, @(12,r12)
+        sts     macl, r1
+        mov.l   r1, @(16,r12)
+        stc     sr, r1
+        mov.l   c{{.ID}}_srmsk, r2
+        and     r2, r1
+        mov.l   r1, @(20,r12)
+        ! ---- control leg (warm: both pages resident, no fault) ----
+        mov     #0, r9
+        lds     r9, mach
+        lds     r9, macl
+        stc     sr, r1
+        mov.l   c{{.ID}}_srclr, r2
+        and     r2, r1
+        ldc     r1, sr
+        mov.l   c{{.ID}}_in0, r0
+        mov.l   c{{.ID}}_in8, r8
+        mov.l   c{{.ID}}_iretb, r12
+        mov.l   c{{.ID}}_codeva, r5
+        jmp     @r5                     ! warm -> no fault
+        nop
+c{{.ID}}_iretb_l:
+        mov.l   c{{.ID}}_snapb, r12
+        mov.l   r0, @r12
+        mov.l   r8, @(4,r12)
+        movt    r1
+        mov.l   r1, @(8,r12)
+        sts     mach, r1
+        mov.l   r1, @(12,r12)
+        sts     macl, r1
+        mov.l   r1, @(16,r12)
+        stc     sr, r1
+        mov.l   c{{.ID}}_srmsk, r2
+        and     r2, r1
+        mov.l   r1, @(20,r12)
+        ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
+        mov     #24, r4
+        mov.l   c{{.ID}}_id, r5
+        mov.l   c{{.ID}}_cmp, r3
+        jsr     @r3
+        nop
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+c{{.ID}}_codeva: .long 0x00100FFE       ! branch VA (page-end); delay slot at 0x00101000
+c{{.ID}}_braw:   .word 0xA000            ! bra L  (disp=0 -> L = branch+4 = 0x00101002)
+c{{.ID}}_instrw: .word {{.Word}}
+c{{.ID}}_jmp12:  .word 0x4C2B            ! jmp @r12
+c{{.ID}}_nopw:   .word 0x0009            ! nop
+        .align 2
+c{{.ID}}_ireta:  .long 0x80000000 + c{{.ID}}_ireta_l
+c{{.ID}}_iretb:  .long 0x80000000 + c{{.ID}}_iretb_l
+c{{.ID}}_in0:    .long 0x00000011
+c{{.ID}}_in8:    .long 0x00000022
+c{{.ID}}_srmsk:  .long 0x00000303
+c{{.ID}}_srclr:  .long 0xFFFFFCFC
 c{{.ID}}_snapa:  .long SNAP_A
 c{{.ID}}_snapb:  .long SNAP_B
 c{{.ID}}_id:     .long {{.ID}}

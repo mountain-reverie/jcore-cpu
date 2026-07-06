@@ -390,13 +390,17 @@
   name = "TLB IMISS"
   format = "d8"
   opcode = "---- 1000 dddd dddd"
-  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x040; PC<-VBR+0x400"
+  operation = "SPC<-TLBPC (I-fetch restart PC, delay-slot aware); SSR<-SR; MD/RB/BL; EXPEVT<-0x040; PC<-VBR+0x400"
   plane = "system"
+  # SPC <- TLBPC: the datapath captures the I-side restart PC into tlb_exc_pc at
+  # the first-fault cycle (= faulting fetch VA, or branch = fetch VA-2 for a
+  # delay-slot fetch). alu_y=0/ADD so SPC = TLBPC exactly. Was SPC<-PC-2 (live
+  # PC), which mis-restarted a delay-slot fetch (live PC already at branch target).
   [[instr.slots]]
-    alu_y = "2"
-    arith = "SUB"
+    alu_y = "0"
+    arith = "ADD"
     pc = "HOLD"
-    xbus = "PC"
+    xbus = "TLBPC"
     zbus = "SPC"
     zbus_sel = "ARITH"
   [[instr.slots]]
@@ -510,13 +514,14 @@
   name = "TLB IPROT"
   format = "d8"
   opcode = "---- 1011 dddd dddd"
-  operation = "SPC<-PC-2; SSR<-SR; MD/RB/BL; EXPEVT<-0x0A0; PC<-VBR+0x400"
+  operation = "SPC<-TLBPC (I-fetch restart PC, delay-slot aware); SSR<-SR; MD/RB/BL; EXPEVT<-0x0A0; PC<-VBR+0x400"
   plane = "system"
+  # SPC <- TLBPC (I-side restart PC captured in the datapath); see TLB IMISS.
   [[instr.slots]]
-    alu_y = "2"
-    arith = "SUB"
+    alu_y = "0"
+    arith = "ADD"
     pc = "HOLD"
-    xbus = "PC"
+    xbus = "TLBPC"
     zbus = "SPC"
     zbus_sel = "ARITH"
   [[instr.slots]]

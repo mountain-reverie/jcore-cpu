@@ -87,6 +87,19 @@ architecture stru of cpu is
    -- D-store-on-bus is itself faulting (drives the external demote-to-read).
    signal d_store_faulting : std_logic;
    signal tlb_exc_expevt : std_logic_vector(11 downto 0);
+   -- '1' when the pending TLB fault is an I-fetch fault (IMISS/IPROT). The
+   -- datapath uses it to capture the I-side restart PC from the faulting fetch
+   -- VA (tlb_fault_va) instead of the D-side ma_pc shadow.
+   signal tlb_exc_is_i : std_logic;
+   -- Dynamic delay-slot flag (decode->datapath): lets a delay-slot D-side TLB
+   -- fault restart at the branch. Phase-aligned to the EX control in decode.
+   signal dslot : std_logic;
+   -- Per-instruction fetch-PC round-trip (datapath -> decode -> datapath): carries
+   -- the faulting instruction's OWN PC EX-aligned so a delay-slot D-fault restarts
+   -- at the branch. dp_if_pc = datapath's if_dr-stage PC; dec_ex_if_pc = decode's
+   -- EX-aligned copy shadowed at the MA-launch.
+   signal dp_if_pc     : std_logic_vector(31 downto 0);
+   signal dec_ex_if_pc : std_logic_vector(31 downto 0);
 begin
 
    event_o.ack  <= event_ack;
@@ -110,7 +123,10 @@ begin
       slp => slp_o,
       mask_int => mask_int,
       tlb_exc_en   => tlb_exc_en,
-      tlb_exc_kind => tlb_exc_kind);
+      tlb_exc_kind => tlb_exc_kind,
+      if_pc        => dp_if_pc,
+      delay_slot   => dslot,
+      ex_if_pc     => dec_ex_if_pc);
    u_mult : mult port map (clk => clk, rst => rst, slot => slot, a => mac_i, y => mac_o);
       mac_i.wr_m1 <= mac.com1; mac_i.command <= mac.com2;
       mac_i.wr_mach <= mac.wrmach; mac_i.wr_macl <= mac.wrmacl;
@@ -137,7 +153,11 @@ begin
       tlb_squash_o => dp_tlb_squash,
       tlb_exc_pend => tlb_exc_pend,
       tlb_fault_va => tlb_fault_va,
-      tlb_exc_expevt => tlb_exc_expevt);
+      tlb_exc_expevt => tlb_exc_expevt,
+      delay_slot => dslot,
+      tlb_exc_is_i => tlb_exc_is_i,
+      if_pc => dp_if_pc,
+      ex_if_pc => dec_ex_if_pc);
 
   -- D-store TLB-fault write suppression (J4+MMU_ARCH). A store that misses or
   -- violates the TLB must not mutate memory, but a write acks and commits in the
@@ -337,6 +357,13 @@ begin
       tlb_exc_kind <= exc_kind;
       tlb_exc_pend <= exc_en;
       tlb_fault_va <= fva;
+      -- I-fetch faults (IMISS/IPROT) come only from the i_at_translated branch
+      -- above; flag them so the datapath captures the I-side restart PC.
+      if exc_en = '1' and (exc_kind = IMISS or exc_kind = IPROT) then
+        tlb_exc_is_i <= '1';
+      else
+        tlb_exc_is_i <= '0';
+      end if;
     end process;
 
     -- SH-4 EXPEVT code for the detected fault kind, captured into EXPEVT as a

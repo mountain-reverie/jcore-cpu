@@ -49,12 +49,26 @@ entity decode_core is
     incpc : out std_logic;
     op : out operation_t;
     op_addr_next : out std_logic_vector(DEC_ADDR_BITS-1 downto 0);
-    next_id_stall : out std_logic
+    next_id_stall : out std_logic;
+    -- Dynamic delay-slot flag of the op being dispatched (registered in lockstep
+    -- with op). Surfaced so the datapath can restart a delay-slot D-side TLB fault
+    -- at the branch. decode.vhd re-registers it in step with pipeline_r to align
+    -- with the datapath EX control.
+    delay_slot_o : out std_logic;
+    -- Per-instruction fetch-PC. if_pc is the datapath's if_dr-stage VA; if_pc_o is
+    -- it latched IN LOCKSTEP WITH op (at the instruction boundary), so it HOLDS
+    -- across a multi-cycle op exactly as op does. decode.vhd re-registers if_pc_o
+    -- once more to reach the pipeline_r.ex1 (EX) stage.
+    if_pc     : in  std_logic_vector(31 downto 0) := (others => '0');
+    if_pc_o   : out std_logic_vector(31 downto 0)
     );
 end;
 
 architecture arch of decode_core is
 
+  -- Per-instruction fetch-PC latched in lockstep with `op` (holds across a
+  -- multi-cycle op). See if_pc/if_pc_o ports.
+  signal if_pc_op : std_logic_vector(31 downto 0);
   signal mac_stall : std_logic;
   -- Stage 2 read-ahead microcode address (full-cycle ROM read) intermediates.
   signal ra_base, ra_v : std_logic_vector(DEC_ADDR_BITS-1 downto 0);
@@ -158,6 +172,22 @@ begin
 
   maskint <= this'register.maskint;
   delay_slot <= this'register.delay_slot;
+  delay_slot_o <= delay_slot;
+  -- Latch if_pc EXACTLY when `op` is latched (the instruction boundary:
+  -- id_stall='0' and instr_seq_zero='1', slot-gated), so if_pc_op tracks the op
+  -- being dispatched and HOLDS across a multi-cycle op just like op does.
+  if_pc_op_reg : process(clk, rst)
+  begin
+    if rst = '1' then
+      if_pc_op <= (others => '0');
+    elsif clk = '1' and clk'event then
+      if slot = '1' and this'register.id_stall = '0'
+                    and this'register.instr_seq_zero = '1' then
+        if_pc_op <= if_pc;
+      end if;
+    end if;
+  end process;
+  if_pc_o <= if_pc_op;
   ilevel <= this'register.ilevel;
 
   mac_stall <= mac_stall_sense and (p.wb1.mac_busy or p.wb2.mac_busy or

@@ -83,7 +83,11 @@ package datapath_pack is
       tlb_squash_o : out std_logic := '0';             -- MAC accumulate squash (J4+MMU_ARCH)
       tlb_exc_pend   : in std_logic := '0';
       tlb_fault_va   : in std_logic_vector(31 downto 0) := (others => '0');
-      tlb_exc_expevt : in std_logic_vector(11 downto 0) := (others => '0'));
+      tlb_exc_expevt : in std_logic_vector(11 downto 0) := (others => '0');
+      delay_slot     : in std_logic := '0';
+      tlb_exc_is_i   : in std_logic := '0';
+      if_pc          : out std_logic_vector(31 downto 0);
+      ex_if_pc       : in  std_logic_vector(31 downto 0) := (others => '0'));
    end component datapath;
 end package;
 

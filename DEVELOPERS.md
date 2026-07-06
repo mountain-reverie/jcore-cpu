@@ -240,19 +240,19 @@ The `.vhm` files use the C preprocessor (`gcc -E`) for conditional compilation a
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    CPU (core/cpu.vhd)                    │
+│                    CPU (core/cpu.vhd)                   │
 │                                                         │
-│   ┌──────────┐    ┌──────────┐    ┌──────────────────┐ │
+│   ┌────-──────┐    ┌──────────┐    ┌──────────────────┐ │
 │   │  DECODE   │───▶│   MULT   │    │    DATAPATH      │ │
 │   │ (decoder, │    │ (MAC     │    │ (ALU, shifter,   │ │
 │   │  pipeline │    │  unit)   │    │  register file,  │ │
-│   │  control) │    │          │    │  bus interface)   │ │
-│   └──────────┘    └──────────┘    └──────────────────┘ │
+│   │  control) │    │          │    │  bus interface)  │ │
+│   └─────-─────┘    └──────────┘    └──────────────────┘ │
 │        │               │                   │            │
 │        └───────────────┴───────────────────┘            │
-│                 Control + Data Signals                   │
+│                 Control + Data Signals                  │
 ├─────────────────────────────────────────────────────────┤
-│  Ports: inst_o/i (fetch), db_o/i (data), debug_o/i,    │
+│  Ports: inst_o/i (fetch), db_o/i (data), debug_o/i,     │
 │         event_o/i (interrupts), cop_o/i (coprocessor)   │
 └─────────────────────────────────────────────────────────┘
 ```

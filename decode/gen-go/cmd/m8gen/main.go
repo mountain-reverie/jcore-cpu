@@ -77,6 +77,14 @@ func main() {
 		fmt.Fprintln(os.Stderr, "emit ifetch:", err)
 		os.Exit(1)
 	}
+	// The I-fetch-delay-slot axis (instruction under test planted in a branch
+	// delay slot; its fetch IMISSes; the restart must land on the branch) is also
+	// partitioned into sub-images for the cumulative-fetch ceiling.
+	idslotImgs, err := faultgen.EmitIFetchDSlotImages(classes)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "emit ifetch-dslot:", err)
+		os.Exit(1)
+	}
 	manifest := buildManifest(classes, skip)
 
 	if err := os.MkdirAll(*outDir, 0o755); err != nil {
@@ -89,6 +97,9 @@ func main() {
 	}
 	for i, img := range ifetchImgs {
 		outputs[fmt.Sprintf("m8_ifetch_%d.S", i)] = img
+	}
+	for i, img := range idslotImgs {
+		outputs[fmt.Sprintf("m8_idslot_%d.S", i)] = img
 	}
 	for name, content := range outputs {
 		if err := os.WriteFile(filepath.Join(*outDir, name), []byte(content), 0o644); err != nil {

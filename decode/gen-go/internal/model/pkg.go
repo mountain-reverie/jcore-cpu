@@ -367,6 +367,9 @@ func newStaticPackage() *Package {
 					{Name: "reg", Direction: "out", Type: "reg_ctrl_t"},
 					{Name: "slp", Direction: "out", Type: "std_logic"},
 					{Name: "sr", Direction: "out", Type: "sr_ctrl_t"},
+					{Name: "delay_slot", Direction: "out", Type: "std_logic"},
+					{Name: "if_pc", Direction: "in", Type: "std_logic_vector(31 downto 0)"},
+					{Name: "ex_if_pc", Direction: "out", Type: "std_logic_vector(31 downto 0)"},
 				},
 			},
 			{
@@ -406,6 +409,9 @@ func newStaticPackage() *Package {
 					{Name: "next_id_stall", Direction: "out", Type: "std_logic"},
 					{Name: "op", Direction: "out", Type: "operation_t"},
 					{Name: "op_addr_next", Direction: "out", Type: "std_logic_vector(7 downto 0)"},
+					{Name: "delay_slot_o", Direction: "out", Type: "std_logic"},
+					{Name: "if_pc", Direction: "in", Type: "std_logic_vector(31 downto 0)"},
+					{Name: "if_pc_o", Direction: "out", Type: "std_logic_vector(31 downto 0)"},
 				},
 			},
 			{

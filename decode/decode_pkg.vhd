@@ -226,7 +226,10 @@ package decode_pack is
             pc : out pc_ctrl_t;
             reg : out reg_ctrl_t;
             slp : out std_logic;
-            sr : out sr_ctrl_t
+            sr : out sr_ctrl_t;
+            delay_slot : out std_logic;
+            if_pc : in std_logic_vector(31 downto 0);
+            ex_if_pc : out std_logic_vector(31 downto 0)
         );
     end component;
     component decode_core
@@ -264,7 +267,10 @@ package decode_pack is
             incpc : out std_logic;
             next_id_stall : out std_logic;
             op : out operation_t;
-            op_addr_next : out std_logic_vector(7 downto 0)
+            op_addr_next : out std_logic_vector(7 downto 0);
+            delay_slot_o : out std_logic;
+            if_pc : in std_logic_vector(31 downto 0);
+            if_pc_o : out std_logic_vector(31 downto 0)
         );
     end component;
     component decode_table

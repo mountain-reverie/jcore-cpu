@@ -72,7 +72,26 @@ entity datapath is
 		     -- and EXPEVT (the latter selected from the fault kind by cpu.vhd).
 		     tlb_exc_pend   : in std_logic := '0';
 		     tlb_fault_va   : in std_logic_vector(31 downto 0) := (others => '0');
-		     tlb_exc_expevt : in std_logic_vector(11 downto 0) := (others => '0')
+		     tlb_exc_expevt : in std_logic_vector(11 downto 0) := (others => '0');
+		     -- Dynamic delay-slot flag of the instruction currently in EX, phase-
+		     -- aligned to the datapath EX control (registered in decode.vhd in
+		     -- lockstep with pipeline_r). Shadowed at the MA access-launch point as
+		     -- ma_dslot so a D-side TLB fault in a branch delay slot restarts at the
+		     -- BRANCH (re-issues the delay slot), not the delay-slot instruction.
+		     -- '0' on non-MMU builds (J1/J2 bit-identical).
+		     delay_slot     : in std_logic := '0';
+		     -- '1' when the pending TLB fault is an I-fetch fault (IMISS/IPROT):
+		     -- the datapath captures the I-side restart PC from tlb_fault_va (the
+		     -- faulting fetch VA) with a delay-slot bias, instead of the D-side
+		     -- ma_pc shadow. '0' -> D-side capture (existing).
+		     tlb_exc_is_i   : in std_logic := '0';
+		     -- Per-instruction fetch-PC round-trip (J4+MMU_ARCH). if_pc = the VA of
+		     -- the instruction currently in if_dr (its own PC, captured at fetch
+		     -- before any branch redirect). decode re-registers it EX-aligned and
+		     -- returns it as ex_if_pc, which the datapath shadows at the MA-launch
+		     -- (ma_if_pc) to derive the D-fault restart PC. '0' on non-MMU builds.
+		     if_pc          : out std_logic_vector(31 downto 0);
+		     ex_if_pc       : in  std_logic_vector(31 downto 0) := (others => '0')
 	     );
 end entity datapath;
 
@@ -516,7 +535,7 @@ begin
 
 	ibit <= sr.int_mask;
 
-	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, tlb_fault_va, tlb_exc_expevt, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire)
+	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, tlb_fault_va, tlb_exc_expevt, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, tlb_exc_is_i, ex_if_pc)
 	  register this when clk='1' and clk'event reset when rst='1';
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
@@ -573,7 +592,39 @@ begin
             -- faulting_instr - 2. Pre-bias by 2 here so tlb_exc_pc - 4 =
             -- faulting_instr - 2. Captured for every fault (I-fetch faults read
             -- SEL_PC, not SEL_TLBPC, so this value is simply unused for them).
-            this.tlb_exc_pc := std_logic_vector(unsigned(this.ma_pc) - 2);
+            -- Delay-slot D-fault: ma_pc is the BRANCH PC (the fetch PC is held
+            -- across the delayed branch), not faulting_instr + 4. Restart must be
+            -- the branch (so it re-issues its delay slot), i.e. SPC = branch - 2.
+            -- SPC = tlb_exc_pc - 4, so tlb_exc_pc = branch + 2 = ma_pc + 2 here.
+            -- (Without this the -2 bias yields SPC = branch - 6, landing three
+            -- instructions before the branch -> wrong control flow / fault cascade.)
+            -- I-fetch faults (IMISS/IPROT): the D-side ma_pc shadow is stale, but
+            -- tlb_fault_va IS the faulting FETCH VA at this first-fault cycle
+            -- (0x1000 in the delay-slot case). Normal I-fault -> restart = fetch VA
+            -- (re-fetch). Delay-slot I-fault -> the live fetch PC has already been
+            -- redirected to the branch TARGET by exception-entry time, so the old
+            -- SEL_PC (this.pc - 2) landed past the branch; capture branch = fetch
+            -- VA - 2 instead so the branch re-runs and re-issues the delay slot.
+            -- IMISS/IPROT entry reads this via SEL_TLBPC with alu_y=0.
+            if tlb_exc_is_i = '1' then
+              if delay_slot = '1' then
+                this.tlb_exc_pc := std_logic_vector(unsigned(tlb_fault_va) - 2);
+              else
+                this.tlb_exc_pc := tlb_fault_va;
+              end if;
+            -- D-side: derive the restart from the instruction's OWN PC (ma_if_pc,
+            -- EX-aligned), not the run-ahead this.pc shadow (ma_pc). SPC = TLBPC-4
+            -- and the resume re-enters one slot ahead, so SPC lands at tlb_exc_pc-2:
+            --   normal load: ma_if_pc = load_PC        -> tlb_exc_pc = ma_if_pc+2
+            --                -> SPC = load_PC-2 -> re-executes the load.
+            --   delay slot : ma_if_pc = delay_slot_PC(=branch+2) -> tlb_exc_pc =
+            --                ma_if_pc -> SPC = branch-2 -> re-executes the BRANCH,
+            --                which re-issues its delay slot (the load).
+            elsif this.ma_dslot = '1' then
+              this.tlb_exc_pc := this.ma_if_pc;
+            else
+              this.tlb_exc_pc := std_logic_vector(unsigned(this.ma_if_pc) + 2);
+            end if;
             -- Capture the user SR for the D-fault entry's SSR save (read via
             -- SEL_TLBSR), stable across the stalled entry slot's re-evaluations.
             this.tlb_exc_sr := this.sr;
@@ -692,6 +743,14 @@ begin
           -- check if instruction bus transaction finished
           if this.inst_o.en = '1' and inst_i.ack = '1' then
             this.if_dr_next := inst_i.d;
+            -- Capture this fetch's VA with the instruction word. inst_o.a is the
+            -- requested VA[31:1] (the MMU VA->PA fold is in cpu.vhd) and is still
+            -- valid here (NULLed just below). Taken before any branch redirect, so
+            -- a delay-slot load carries its true PC (=branch+2), not the run-ahead
+            -- fetch PC. Rides with if_dr_next -> if_dr -> out to decode.
+            if MMU_ARCH then
+              this.if_pc_next := this.inst_o.a & '0';
+            end if;
             this.if_en      := '1';
             this.inst_o := NULL_INST_O;
             slot_inst_en := '0';
@@ -749,6 +808,9 @@ begin
             end if;
             if this.if_en = '1' then
               this.if_dr := this.if_dr_next;
+              if MMU_ARCH then
+                this.if_pc := this.if_pc_next;  -- carry the fetch VA with if_dr
+              end if;
               this.illegal_delay_slot := check_illegal_delay_slot(this.if_dr);
               this.illegal_instr := check_illegal_instruction(this.if_dr);
               if PRIV_ARCH then
@@ -855,6 +917,16 @@ begin
                   -- the RTE-restart re-applies the decrement exactly once.
                   this.ma_predec  := mem_predec;
                   this.ma_base    := xbus;
+                  -- Shadow the delay-slot condition of the access-launching
+                  -- instruction (same fixed pipeline point as ma_pc) so a later
+                  -- D-fault selects the branch-restart bias below.
+                  this.ma_dslot   := delay_slot;
+                  -- Shadow the access-launching instruction's OWN PC (EX-aligned
+                  -- ex_if_pc from decode) so the D-fault restart is derived from
+                  -- the instruction's PC, not the run-ahead this.pc (ma_pc). For a
+                  -- delay-slot load ex_if_pc = delay_slot_PC (= branch+2) whereas
+                  -- ma_pc is the branch target.
+                  this.ma_if_pc   := ex_if_pc;
                 end if;
               end if;
             end if;
@@ -1031,6 +1103,7 @@ begin
         inst_o <= this'register.inst_o;
         if_dr <= this'register.if_dr;
         if_dr_next <= this'register.if_dr_next;
+        if_pc <= this'register.if_pc;
         illegal_delay_slot <= this'register.illegal_delay_slot;
         illegal_instr <= this'register.illegal_instr;
         cop_o.rna <= copreg(7 downto 4);

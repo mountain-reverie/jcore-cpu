@@ -44,12 +44,26 @@ entity decode is
         pc : out pc_ctrl_t;
         reg : out reg_ctrl_t;
         slp : out std_logic;
-        sr : out sr_ctrl_t
+        sr : out sr_ctrl_t;
+        delay_slot : out std_logic;
+        if_pc : in std_logic_vector(31 downto 0);
+        ex_if_pc : out std_logic_vector(31 downto 0)
     );
 end;
 architecture arch of decode is
     signal debug_o : std_logic;
     signal delay_jump : std_logic;
+    -- decode_core's delay-slot flag (aligned to ex/ex_stall) and its copy re-
+    -- registered in lockstep with pipeline_r.ex1_stall (delay_slot_r) so the
+    -- datapath sees it phase-aligned to the EX control that launches the MA access.
+    signal delay_slot_c : std_logic;
+    signal delay_slot_r : std_logic;
+    -- Per-instruction fetch-PC. if_pc_c comes from decode_core latched in lockstep
+    -- with `op` (holds across a multi-cycle op); one more slot-gated register
+    -- (if_pc_r1) reaches the pipeline_r.ex1 (EX) stage that launches the MA access,
+    -- so the datapath shadows the faulting instruction's OWN PC.
+    signal if_pc_c : std_logic_vector(31 downto 0);
+    signal if_pc_r1 : std_logic_vector(31 downto 0);
     signal dispatch : std_logic;
     signal event_ack_0 : std_logic;
     signal ex : pipeline_ex_t;
@@ -109,7 +123,10 @@ begin
             incpc => pc.inc,
             next_id_stall => next_id_stall,
             op => op,
-            op_addr_next => op_addr_next
+            op_addr_next => op_addr_next,
+            delay_slot_o => delay_slot_c,
+            if_pc => if_pc,
+            if_pc_o => if_pc_c
         );
     table : decode_table
         port map (
@@ -163,6 +180,40 @@ begin
             pipeline_r <= pipeline_c;
         end if;
     end process;
+    -- Re-register the delay-slot flag in lockstep with pipeline_r.ex1_stall
+    -- (slot-gated; reset to '0' on a stalled/bubbled slot exactly like
+    -- STAGE_EX_STALL_RESET) so delay_slot is phase-aligned with the datapath EX
+    -- control that launches the MA access. Lets a delay-slot D-side TLB fault
+    -- restart at the branch.
+    process(clk, rst)
+    begin
+        if rst = '1' then
+            delay_slot_r <= '0';
+        elsif (clk = '1' and clk'event) then
+            if slot = '1' then
+                if next_id_stall = '1' then
+                    delay_slot_r <= '0';
+                else
+                    delay_slot_r <= delay_slot_c;
+                end if;
+            end if;
+        end if;
+    end process;
+    delay_slot <= delay_slot_r;
+    -- if_pc_c is op-aligned (from decode_core, holds across multi-cycle ops); one
+    -- slot-gated register brings it to the pipeline_r.ex1 (EX) stage that drives
+    -- num_x/reg, so ex_if_pc is the PC of the instruction launching the MA access.
+    process(clk, rst)
+    begin
+        if rst = '1' then
+            if_pc_r1 <= (others => '0');
+        elsif (clk = '1' and clk'event) then
+            if slot = '1' then
+                if_pc_r1 <= if_pc_c;
+            end if;
+        end if;
+    end process;
+    ex_if_pc <= if_pc_r1;
     -- assign outputs
     func.alu.inx_sel <= pipeline_r.ex1.aluinx_sel;
     func.alu.iny_sel <= pipeline_r.ex1.aluiny_sel;

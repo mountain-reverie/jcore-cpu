@@ -18,6 +18,9 @@ CONFIG_PREFETCHER=0
 CONFIG_PRIV_ARCH=0
 # Enable MMU control-register file (J4 MMU). Requires CONFIG_PRIV_ARCH=1. Default 0.
 CONFIG_MMU_ARCH=0
+# Enable SH-2A ("J2A") extensions generic. Currently inert plumbing only
+# (no gated behavior yet). Default 0.
+CONFIG_SH2A_ARCH ?= 0
 # J1/iCESugar DSP-ALU verification variant ONLY: bind cpu_sim_dsp_alu (datapath
 # DSP_ALU=>true, core/dsp_arith.vhd exercised) instead of cpu_sim. Default 0
 # leaves the default sim config (and its DSP_ALU=false datapath) untouched.
@@ -166,7 +169,7 @@ cpu_pure_tb: ram.img
 # Add dependencies to particular vhh files. TODO: how to avoid
 # repeating this rule?
 cpu_tb.vhh: cpu_tb.vhd cpu_signals.h sim/sim_macros.h
-	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -I. -I../config -Isim $< -o $@
+	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -DCONFIG_SH2A_ARCH=$(CONFIG_SH2A_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -I. -I../config -Isim $< -o $@
 
 cpu_cache_tb.vhh: cpu_cache_tb.vhd cpu_signals.h sim/sim_macros.h
 	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -I. -I../config -Isim $< -o $@

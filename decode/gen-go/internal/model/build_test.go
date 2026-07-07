@@ -251,3 +251,68 @@ func TestJ2AOverlayAddsLatchExtFieldsAndSeedSlot0(t *testing.T) {
 		t.Errorf("seed slot0 assignments do not set id.latch_ext <= '1': %+v", slot0.Assignments)
 	}
 }
+
+// componentHasPort reports whether the named component in pkg has a port
+// with the given name.
+func componentHasPort(pkg *Package, component, port string) bool {
+	for _, c := range pkg.Components {
+		if c.Name != component {
+			continue
+		}
+		for _, p := range c.Ports {
+			if p.Name == port {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TestBaseBuildHasNoExtWordPorts proves the ext_word_o/ext_word component
+// ports wired between decode_core and decode_table (Task 1.3 increment B)
+// are variant-additive: the base (no-overlay) build must NOT gain them, and
+// Decoder.HasTwoWord (which gates the decode.vhd.tmpl signal/port-map
+// wiring) must be false.
+func TestBaseBuildHasNoExtWordPorts(t *testing.T) {
+	s, err := spec.LoadProfile("../../spec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := Build(s, 72)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.HasTwoWord {
+		t.Error("base build unexpectedly has HasTwoWord=true")
+	}
+	if componentHasPort(d.Package, "decode_core", "ext_word_o") {
+		t.Error("base build's decode_core component unexpectedly has ext_word_o port")
+	}
+	if componentHasPort(d.Package, "decode_table", "ext_word") {
+		t.Error("base build's decode_table component unexpectedly has ext_word port")
+	}
+}
+
+// TestJ2AOverlayAddsExtWordPorts proves the other half: loading the sh2a
+// overlay must (a) set Decoder.HasTwoWord and (b) add ext_word_o to
+// decode_core and ext_word to decode_table's component port lists, so
+// decode.vhd.tmpl's {{ if .HasTwoWord }}-guarded port maps resolve.
+func TestJ2AOverlayAddsExtWordPorts(t *testing.T) {
+	s, err := spec.LoadProfile("../../spec", "../../spec/sh2a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := Build(s, 72)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.HasTwoWord {
+		t.Error("J2A build's Decoder.HasTwoWord is false, want true")
+	}
+	if !componentHasPort(d.Package, "decode_core", "ext_word_o") {
+		t.Error("J2A build's decode_core component missing ext_word_o port")
+	}
+	if !componentHasPort(d.Package, "decode_table", "ext_word") {
+		t.Error("J2A build's decode_table component missing ext_word port")
+	}
+}

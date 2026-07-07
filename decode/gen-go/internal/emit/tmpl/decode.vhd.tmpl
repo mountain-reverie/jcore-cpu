@@ -24,6 +24,11 @@ architecture arch of decode is
     -- one slot-gated stage, MMU_ARCH-gated so it prunes on non-MMU). ex_if_pc is
     -- just this signal; the datapath shadows the faulting instruction's OWN PC.
     signal if_pc_c : std_logic_vector(31 downto 0);
+{{- if .HasTwoWord }}
+    -- SH-2A two-word extension word, latched inside decode_core and
+    -- forwarded to decode_table for the IMM_U_12_2-style immediate mux.
+    signal ext_word_c : std_logic_vector(15 downto 0);
+{{- end }}
     signal dispatch : std_logic;
     signal event_ack_0 : std_logic;
     signal ex : pipeline_ex_t;
@@ -85,6 +90,9 @@ begin
             op => op,
             op_addr_next => op_addr_next,
             delay_slot_o => delay_slot_c,
+{{- if .HasTwoWord }}
+            ext_word_o => ext_word_c,
+{{- end }}
             if_pc => if_pc,
             if_pc_o => if_pc_c
         );
@@ -99,6 +107,9 @@ begin
             delay_jump => delay_jump,
             dispatch => dispatch,
             event_ack_0 => event_ack_0,
+{{- if .HasTwoWord }}
+            ext_word => ext_word_c,
+{{- end }}
             ex => ex,
             ex_stall => ex_stall,
             id => id,

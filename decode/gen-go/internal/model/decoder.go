@@ -64,4 +64,12 @@ type Decoder struct {
 	// The simple/rom templates emit one extra imm-mux arm per entry. Empty
 	// for the production spec (keeping those templates byte-identical).
 	ExtraImmConsts []ExtraImmConst
+
+	// HasTwoWord is true when some loaded slot uses latch_ext (i.e. the
+	// spec/overlay has an SH-2A two-word instruction). Gates the
+	// variant-additive ext_word_o/ext_word port wiring between decode_core
+	// and decode_table in decode.vhd.tmpl, and the corresponding component
+	// ports in Package.Components. False (and thus byte-identical to base)
+	// for the base J1/J2/J4 builds.
+	HasTwoWord bool
 }

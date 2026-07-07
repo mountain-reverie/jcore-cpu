@@ -304,6 +304,25 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 		}
 	}
 
+	// Variant-additive ext_word_o/ext_word component ports: added to the
+	// decode_core/decode_table components only when this spec/overlay has
+	// a two-word instruction (usesLatchExt is exactly that condition, since
+	// latch_ext is set by slot0 of a two-word instr). Base J1/J2/J4 builds
+	// leave these components untouched (byte-identical decode_pkg.vhd).
+	d.HasTwoWord = usesLatchExt
+	if d.HasTwoWord {
+		for ci := range pkg.Components {
+			switch pkg.Components[ci].Name {
+			case "decode_core":
+				pkg.Components[ci].Ports = append(pkg.Components[ci].Ports,
+					Port{Name: "ext_word_o", Direction: "out", Type: "std_logic_vector(15 downto 0)"})
+			case "decode_table":
+				pkg.Components[ci].Ports = append(pkg.Components[ci].Ports,
+					Port{Name: "ext_word", Direction: "in", Type: "std_logic_vector(15 downto 0)"})
+			}
+		}
+	}
+
 	// CreateEncoding over ALL slots (normal + system).
 	enc := microcode.CreateEncoding(allSlots, width)
 

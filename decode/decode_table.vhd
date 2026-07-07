@@ -33,6 +33,14 @@ entity decode_table is
         maskint_next : out std_logic;
         slp : out std_logic;
         wb : out pipeline_wb_t;
-        wb_stall : out pipeline_wb_stall_t
+        wb_stall : out pipeline_wb_stall_t;
+        -- SH-2A extension word (second word of a two-word instruction),
+        -- forwarded from decode_core's ext_word_o. Consumed by the
+        -- immediate mux (IMM_U_12_2 and similar op.ext-sourced imms) in
+        -- decode_table_simple/direct/rom.vhd. Defaulted to zero and left
+        -- unconnected on base J1/J2/J4 builds, whose decode_pkg.vhd
+        -- component declaration omits this port entirely (variant-additive
+        -- Task 1.3 increment B); driven explicitly on J2A builds.
+        ext_word : in std_logic_vector(15 downto 0) := (others => '0')
     );
 end;

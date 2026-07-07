@@ -13,9 +13,11 @@ import (
 // still be correct (Build skips nil lookups) but the orphan is dead
 // weight that misleads future readers.
 func TestCsvInstrOrderNoOrphans(t *testing.T) {
-	// Load with the sh4 overlay: csvInstrOrder includes the SH-4 R*_BANK
-	// instructions (used by `make generate-j4`), which live in spec/sh4.
-	s, err := spec.LoadProfile("../../spec", "../../spec/sh4")
+	// Load with every overlay: csvInstrOrder includes both the SH-4
+	// R*_BANK instructions (used by `make generate-j4`, in spec/sh4) and
+	// the SH-2A two-word instructions (used by `make generate-j2a`, in
+	// spec/sh2a).
+	s, err := spec.LoadProfile("../../spec", "../../spec/sh4", "../../spec/sh2a")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,5 +159,95 @@ func TestBuildProductionImmVals(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("ImmValLiterals[%d]: got %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+// idFieldNames returns the flattened field names of pipeline_id_t in
+// pkg.Records, or nil if the record isn't present.
+func idFieldNames(pkg *Package) []string {
+	for _, r := range pkg.Records {
+		if r.Name != "pipeline_id_t" {
+			continue
+		}
+		var names []string
+		for _, f := range r.Fields {
+			names = append(names, f.Names...)
+		}
+		return names
+	}
+	return nil
+}
+
+func hasName(names []string, want string) bool {
+	for _, n := range names {
+		if n == want {
+			return true
+		}
+	}
+	return false
+}
+
+// TestBaseBuildHasNoLatchExtFields proves latch_ext/imm_from_ext are
+// variant-additive: the base (no-overlay) build's pipeline_id_t must
+// NOT gain these fields, even though the microcode.Signal machinery
+// (IsStdLogic/SignalVHDLPath) knows about them — nothing in the base
+// spec's AssignMaps sets them, so internal/model/build.go's
+// usesLatchExt/usesImmFromExt scan must find nothing and leave
+// pipeline_id_t at its historical 3 fields.
+func TestBaseBuildHasNoLatchExtFields(t *testing.T) {
+	s, err := spec.LoadProfile("../../spec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := Build(s, 72)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := idFieldNames(d.Package)
+	if hasName(names, "latch_ext") || hasName(names, "imm_from_ext") {
+		t.Errorf("base build's pipeline_id_t unexpectedly has latch_ext/imm_from_ext: %v", names)
+	}
+}
+
+// TestJ2AOverlayAddsLatchExtFieldsAndSeedSlot0 proves the other half of
+// the variant-additive contract: loading the sh2a overlay (which
+// contributes the two-word "MOV.L @(disp12,Rm),Rn" seed instruction,
+// whose slot0 sets latch_ext="1") must (a) widen pipeline_id_t with
+// both new fields and (b) actually emit slot0's id.latch_ext <= '1'
+// assignment for that instruction in the Simple decoder view.
+func TestJ2AOverlayAddsLatchExtFieldsAndSeedSlot0(t *testing.T) {
+	s, err := spec.LoadProfile("../../spec", "../../spec/sh2a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := Build(s, 72)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := idFieldNames(d.Package)
+	if !hasName(names, "latch_ext") || !hasName(names, "imm_from_ext") {
+		t.Fatalf("J2A build's pipeline_id_t missing latch_ext/imm_from_ext: %v", names)
+	}
+	var seed *SimpleInstr
+	for i := range d.Simple.Instructions {
+		if d.Simple.Instructions[i].Name == "MOV.L @(disp12,Rm),Rn" {
+			seed = &d.Simple.Instructions[i]
+		}
+	}
+	if seed == nil {
+		t.Fatal("seed instruction MOV.L @(disp12,Rm),Rn not found in J2A Simple.Instructions")
+	}
+	if len(seed.Slots) == 0 {
+		t.Fatal("seed instruction has no slots")
+	}
+	slot0 := seed.Slots[0]
+	found := false
+	for _, a := range slot0.Assignments {
+		if a.LHS == "id.latch_ext" && a.RHS == "'1'" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("seed slot0 assignments do not set id.latch_ext <= '1': %+v", slot0.Assignments)
 	}
 }

@@ -93,6 +93,19 @@ const (
 
 	// Immediate value (special — its Value is an ImmVal tag like "IMM_P4")
 	SigImmVal Signal = "imm_val"
+
+	// latch_ext/imm_from_ext are variant-additive: they only exist on
+	// pipeline_id_t for specs that actually use them (e.g. the J2A/SH-2A
+	// two-word instruction overlay latching the extension word in slot0
+	// and consuming it as an immediate source in slot1). Deliberately
+	// excluded from AllSignals so the base build's decode_table_direct.vhd
+	// default-fill (internal/model/direct.go) never force-defaults them
+	// for specs that don't use them; SignalDefault marks both nillable
+	// for the same reason. See internal/model/build.go's usesLatchExt/
+	// usesImmFromExt scan, which appends the corresponding RecordField
+	// to pipeline_id_t only when some slot's AssignMap sets them.
+	SigLatchExt   Signal = "latch_ext"
+	SigImmFromExt Signal = "imm_from_ext"
 )
 
 // IsStdLogic reports whether a Signal represents a single-bit std_logic
@@ -113,7 +126,8 @@ func (s Signal) IsStdLogic() bool {
 		SigIlevelCap, SigEventAck0, SigMaskInt,
 		SigMmuRegWr,
 		SigTlbWr,
-		SigDebug, SigSlp:
+		SigDebug, SigSlp,
+		SigLatchExt, SigImmFromExt:
 		return true
 	}
 	return false
@@ -144,7 +158,8 @@ func SignalDefault(s Signal) (string, bool) {
 		SigLogicFunc, SigLogicSrFn,
 		SigZbusSel,
 		SigMemAddrSel, SigMemSize, SigMemWdataSel,
-		SigRegnumW, SigRegnumX, SigRegnumY, SigRegnumZ:
+		SigRegnumW, SigRegnumX, SigRegnumY, SigRegnumZ,
+		SigLatchExt, SigImmFromExt:
 		return "", false
 	}
 	// std_logic signals default to '0'.
@@ -268,6 +283,8 @@ var SignalVHDLPath = map[Signal]string{
 	SigDebug:       "debug",
 	SigSlp:         "slp",
 	SigImmVal:      "imm_enum", // local signal, set via with-select to ex.imm_val
+	SigLatchExt:    "id.latch_ext",
+	SigImmFromExt:  "id.imm_from_ext",
 }
 
 // AllSignals lists every signal in a stable order. Tests use this

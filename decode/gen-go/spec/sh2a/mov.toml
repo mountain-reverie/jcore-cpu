@@ -1,8 +1,39 @@
 # SH-2A overlay: MOV instruction extensions.
-# Currently empty of new instructions; defaults mirror spec/mov.toml.
-# Phase 1 tasks will add the first real SH-2A MOV instructions here.
+# Defaults mirror spec/mov.toml.
 
 [defaults]
   pc = "INC"
   if_issue = "NO"
   sr = "HOLD"
+
+[[instr]]
+  name = "MOV.L @(disp12,Rm),Rn"
+  format = "nmd12"
+  opcode = "0011 nnnn mmmm 0001"
+  opcode2 = "0110 dddd dddd dddd"
+  operation = "(disp12 × 4 + Rm) ? Rn"
+  table_ref = "SH-2A"
+
+  # slot0: latch the second opcode word (the disp12 extension word) into
+  # hardware; nothing else happens this cycle.
+  [[instr.slots]]
+    latch_ext = "1"
+    pc = "INC"
+
+  # slot1: exactly the single-word "MOV.L @(disp, Rm), Rn" slot (same
+  # ma_*/bus fields, same wbus="Rn" writeback), plus imm_from_ext so the
+  # ALU-Y immediate (disp12*4, IMM_U_12_2) is sourced from the latched
+  # extension word instead of op.code.
+  [[instr.slots]]
+    imm_from_ext = "1"
+    alu_y = "U*4"
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "32"
+    pc = "INC"
+    wbus = "Rn"
+    xbus = "Rm"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]

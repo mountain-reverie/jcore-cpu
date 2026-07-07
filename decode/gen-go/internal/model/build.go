@@ -275,6 +275,35 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 		}
 	}
 
+	// Variant-additive control signals: latch_ext/imm_from_ext only
+	// become pipeline_id_t fields when some slot in this spec/overlay
+	// actually sets them (e.g. the J2A two-word MOV.L @(disp12,Rm),Rn
+	// seed). This keeps the base build's decode_pkg.vhd byte-identical
+	// (see microcode.SigLatchExt/SigImmFromExt doc comments).
+	usesLatchExt := false
+	usesImmFromExt := false
+	for _, am := range allSlots {
+		if _, ok := am[microcode.SigLatchExt]; ok {
+			usesLatchExt = true
+		}
+		if _, ok := am[microcode.SigImmFromExt]; ok {
+			usesImmFromExt = true
+		}
+	}
+	for ri := range pkg.Records {
+		if pkg.Records[ri].Name != "pipeline_id_t" {
+			continue
+		}
+		if usesLatchExt {
+			pkg.Records[ri].Fields = append(pkg.Records[ri].Fields,
+				RecordField{Names: []string{"latch_ext"}, Type: "std_logic", Default: "'0'"})
+		}
+		if usesImmFromExt {
+			pkg.Records[ri].Fields = append(pkg.Records[ri].Fields,
+				RecordField{Names: []string{"imm_from_ext"}, Type: "std_logic", Default: "'0'"})
+		}
+	}
+
 	// CreateEncoding over ALL slots (normal + system).
 	enc := microcode.CreateEncoding(allSlots, width)
 
@@ -639,6 +668,9 @@ var csvInstrOrder = []string{
 	"STC TSBPTR, Rn",
 	"LDTLB",
 	"LDTLB.RN",
+	// SH-2A two-word overlay (spec/sh2a, generate-j2a only): ignored by
+	// base J2 and J4 generation (not in their specs).
+	"MOV.L @(disp12,Rm),Rn",
 	// System-plane instructions (at end, in CSV row order):
 	"General Illegal",
 	"Slot Illegal",

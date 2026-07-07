@@ -26,6 +26,7 @@ type Instr struct {
 	Name       string `toml:"name"`
 	Format     string `toml:"format"`
 	Opcode     string `toml:"opcode"`
+	Opcode2    string `toml:"opcode2,omitempty"` // extension word for SH-2A two-word insns
 	Operation  string `toml:"operation"`
 	Plane      string `toml:"plane,omitempty"` // "" (default) or "system" (microcode-only, excluded from disassembler)
 	TableRef   string `toml:"table_ref,omitempty"`

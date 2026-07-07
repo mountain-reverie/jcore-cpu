@@ -10,7 +10,8 @@ entity cpu is
  generic (
    COPRO_DECODE : boolean := true;
    PRIV_ARCH    : boolean := false;
-   MMU_ARCH     : boolean := false);  -- MMU control-register file (subordinate to PRIV_ARCH)
+   MMU_ARCH     : boolean := false;  -- MMU control-register file (subordinate to PRIV_ARCH)
+   SH2A_ARCH    : boolean := false);  -- SH-2A extensions (inert plumbing only)
  port (
    clk          : in  std_logic;
    rst          : in  std_logic;
@@ -132,7 +133,7 @@ begin
       mac_i.wr_mach <= mac.wrmach; mac_i.wr_macl <= mac.wrmacl;
       mac_i.acc_squash <= dp_tlb_squash;
 
-   u_datapath : datapath generic map (PRIV_ARCH => PRIV_ARCH, MMU_ARCH => MMU_ARCH) port map (clk => clk, rst => rst, slot => slot,
+   u_datapath : datapath generic map (PRIV_ARCH => PRIV_ARCH, MMU_ARCH => MMU_ARCH, SH2A_ARCH => SH2A_ARCH) port map (clk => clk, rst => rst, slot => slot,
       debug => debug, enter_debug => enter_debug,
       db_lock => db_lock, db_o => sig_db_o, db_i => db_i, inst_o => sig_inst_o, inst_i => inst_i,
       debug_o => debug_o, debug_i => debug_i,

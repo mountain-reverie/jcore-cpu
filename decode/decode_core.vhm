@@ -172,7 +172,7 @@ begin
 
   maskint <= this'register.maskint;
   delay_slot <= this'register.delay_slot;
-  delay_slot_o <= delay_slot;
+  delay_slot_o <= delay_slot when MMU_ARCH else '0';
   -- if_pc pipeline: MMU_ARCH ONLY. Wrapped in a generate so the flops are simply
   -- absent on non-MMU (j1/j2) -- a plain `if MMU_ARCH then` inside the clocked
   -- process leaves if_pc_r1 assigned only in reset when MMU_ARCH=false, which

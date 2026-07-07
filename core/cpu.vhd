@@ -385,6 +385,7 @@ begin
     tlb_exc_pend <= '0';
     tlb_fault_va <= (others => '0');
     tlb_exc_expevt <= (others => '0');
+    tlb_exc_is_i <= '0';   -- tie off so J1/J2 datapath sees a constant, not a float
   end generate g_no_mmu;
 
 end architecture stru;

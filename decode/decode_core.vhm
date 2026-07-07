@@ -63,7 +63,12 @@ entity decode_core is
     -- across a multi-cycle op exactly as op does. decode.vhd re-registers if_pc_o
     -- once more to reach the pipeline_r.ex1 (EX) stage.
     if_pc     : in  std_logic_vector(31 downto 0) := (others => '0');
-    if_pc_o   : out std_logic_vector(31 downto 0)
+    if_pc_o   : out std_logic_vector(31 downto 0);
+    -- SH-2A extension word: the second 16-bit word of a two-word instruction,
+    -- latched in lockstep with op (like if_pc_o) so it HOLDS across the multi-
+    -- cycle op. Consumed by decode_table's immediate mux (op.ext-sourced imms).
+    -- Driven to zero when SH2A_ARCH=false; left unconnected on non-J2A builds.
+    ext_word_o : out std_logic_vector(15 downto 0)
     );
 end;
 
@@ -209,6 +214,30 @@ begin
   g_if_pc_off : if not MMU_ARCH generate
     if_pc_o <= (others => '0');
   end generate g_if_pc_off;
+  -- ext_word pipeline: SH2A_ARCH ONLY. Same generate-wrap rationale as g_if_pc
+  -- (a plain `if SH2A_ARCH then` in the clocked process infers a latch on
+  -- non-J2A). Latches the prefetched second word (if_dr_next) at the instruction
+  -- boundary (slot-gated, not stalled, instr_seq_zero) so it holds across the
+  -- two-word op's slots exactly as op does.
+  g_ext_word : if SH2A_ARCH generate
+    signal ext_word_op : std_logic_vector(15 downto 0);
+  begin
+    ext_word_reg : process(clk, rst)
+    begin
+      if rst = '1' then
+        ext_word_op <= (others => '0');
+      elsif clk = '1' and clk'event then
+        if slot = '1' and this'register.id_stall = '0'
+                      and this'register.instr_seq_zero = '1' then
+          ext_word_op <= if_dr_next;
+        end if;
+      end if;
+    end process;
+    ext_word_o <= ext_word_op;
+  end generate g_ext_word;
+  g_ext_word_off : if not SH2A_ARCH generate
+    ext_word_o <= (others => '0');
+  end generate g_ext_word_off;
   ilevel <= this'register.ilevel;
 
   mac_stall <= mac_stall_sense and (p.wb1.mac_busy or p.wb2.mac_busy or

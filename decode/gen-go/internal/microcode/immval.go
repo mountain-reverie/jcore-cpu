@@ -86,6 +86,10 @@ func ImmLiteralToVHDL(lit string) string {
 		return "imms_8_1"
 	case "IMM_S_12_1":
 		return "imms_12_1"
+	case "IMM_U_12_0":
+		return `x"00000" & ext_word(11 downto 0)`
+	case "IMM_S_20_0":
+		return `op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11 downto 8) & ext_word(15 downto 0)`
 	}
 	// General numeric constants: IMM_P<N> / IMM_N<N> for any N. The
 	// explicit cases above are kept for low-churn review, but this

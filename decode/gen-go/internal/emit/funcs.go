@@ -11,21 +11,49 @@ import (
 )
 
 var funcMap = template.FuncMap{
-	"hex16":         hex16,
-	"formatString":  formatString,
-	"registerArgs":  registerArgs,
-	"vhdlEnumList":  vhdlEnumList,
-	"join":          joinStr,
-	"lastIdx":       lastIdx,
-	"allEnums":      allEnums,
-	"sub1":          sub1,
-	"romTop":        romTop,
-	"romLines":      romLines,
-	"romConstBody":  romConstBody,
-	"opcodeComment": opcodeComment,
-	"slotHex":       slotHex,
-	"sortCondSigs":  sortCondSigs,
-	"joinBits":      joinBits,
+	"hex16":          hex16,
+	"formatString":   formatString,
+	"registerArgs":   registerArgs,
+	"vhdlEnumList":   vhdlEnumList,
+	"join":           joinStr,
+	"lastIdx":        lastIdx,
+	"allEnums":       allEnums,
+	"sub1":           sub1,
+	"romTop":         romTop,
+	"romLines":       romLines,
+	"romConstBody":   romConstBody,
+	"opcodeComment":  opcodeComment,
+	"slotHex":        slotHex,
+	"sortCondSigs":   sortCondSigs,
+	"joinBits":       joinBits,
+	"resetAggregate": resetAggregate,
+}
+
+// resetAggregate renders the comma-separated element list for a
+// record's default-reset positional aggregate (e.g. the RHS of
+// "ex_stall <= (...)" in decode_table_simple.vhd.tmpl), driven by
+// model.Package instead of a hardcoded literal. It walks the named
+// record's fields in declaration order and stops at the first field
+// whose Default is empty (VHDL positional aggregates cannot skip a
+// middle element, so a missing Default can only be reproduced as a
+// truncation of the tuple — see RecordField.Default's doc comment).
+func resetAggregate(pkg *model.Package, recordName string) (string, error) {
+	for _, r := range pkg.Records {
+		if r.Name != recordName {
+			continue
+		}
+		var parts []string
+		for _, f := range r.Fields {
+			if f.Default == "" {
+				break
+			}
+			for range f.Names {
+				parts = append(parts, f.Default)
+			}
+		}
+		return strings.Join(parts, ", "), nil
+	}
+	return "", fmt.Errorf("resetAggregate: record %q not found in Package.Records", recordName)
 }
 
 // hex16 formats a uint16 as a lowercase C hex literal with no leading

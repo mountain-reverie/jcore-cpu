@@ -193,6 +193,8 @@ begin
   -- test ROM. Default CONFIG_DSP_ALU=0 keeps binding cpu_sim unchanged.
 #if CONFIG_DSP_ALU
   cpu1: configuration work.cpu_sim_dsp_alu
+#elif CONFIG_SH2A_ARCH
+  cpu1: configuration work.cpu_sim_sh2a
 #else
   cpu1: configuration work.cpu_sim
 #endif

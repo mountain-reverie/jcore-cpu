@@ -78,6 +78,28 @@ configuration cpu_decode_direct_sh2a of decode is
   end for;
 end configuration;
 
+-- MMU+SH2A decode binding: like cpu_decode_direct_mmu but ALSO turns on
+-- decode_core's SH2A_ARCH so the ext_word capture register is instantiated.
+-- Used by cpu_sim_sh2a (the CONFIG_SH2A_ARCH functional sim, which is MMU-on
+-- like cpu_sim). Without this, the cpu-level SH2A_ARCH generic reaches the
+-- datapath but NOT decode_core (which is bound by configuration, not generic
+-- map), leaving ext_word ungated.
+configuration cpu_decode_direct_mmu_sh2a of decode is
+  for arch
+    for core : decode_core
+      use entity work.decode_core(arch)
+        generic map (
+          decode_type => DIRECT,
+          reset_vector => DEC_CORE_RESET,
+          MMU_ARCH => true,
+          SH2A_ARCH => true);
+    end for;
+    for table : decode_table
+      use entity work.decode_table(direct_logic);
+    end for;
+  end for;
+end configuration;
+
 configuration cpu_sim of cpu is
   for stru
     for u_decode : decode
@@ -86,6 +108,30 @@ configuration cpu_sim of cpu is
       -- decoder must keep the TLB exception dispatch. Synth/non-MMU configs use
       -- plain cpu_decode_direct (MMU_ARCH defaults false, TLB logic pruned).
       use configuration work.cpu_decode_direct_mmu;
+    end for;
+    for u_datapath : datapath
+      use entity work.datapath(stru);
+      for stru
+        for u_regfile : register_file
+          use entity work.register_file(two_bank);
+        end for;
+        for u_shifter : shifter
+          use entity work.shifter(comb);
+        end for;
+      end for;
+    end for;
+  end for;
+end configuration;
+
+-- CONFIG_SH2A_ARCH functional sim variant of cpu_sim: identical to cpu_sim
+-- except u_decode binds cpu_decode_direct_mmu_sh2a (decode_core SH2A_ARCH=true)
+-- so the ext_word capture register is elaborated. Selected by sim/cpu_tb.vhd
+-- when CONFIG_SH2A_ARCH=1; the cpu-level SH2A_ARCH generic (set in the same
+-- testbench) drives the datapath side.
+configuration cpu_sim_sh2a of cpu is
+  for stru
+    for u_decode : decode
+      use configuration work.cpu_decode_direct_mmu_sh2a;
     end for;
     for u_datapath : datapath
       use entity work.datapath(stru);

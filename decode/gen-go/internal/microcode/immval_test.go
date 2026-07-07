@@ -186,3 +186,14 @@ func TestCollectImmValsProduction(t *testing.T) {
 		t.Errorf("got  %v\nwant %v", lits, strings.Split(want, ","))
 	}
 }
+
+func TestExtWordImmVHDL(t *testing.T) {
+	if got := ImmLiteralToVHDL("IMM_U_12_0"); got != `x"00000" & ext_word(11 downto 0)` {
+		t.Errorf("disp12 VHDL = %q", got)
+	}
+	// movi20: imm20 = op.code(11..8) (high 4) & ext_word(15..0) (low 16), sign-extended from bit 19
+	got := ImmLiteralToVHDL("IMM_S_20_0")
+	if !strings.Contains(got, "op.code(11 downto 8)") || !strings.Contains(got, "ext_word(15 downto 0)") {
+		t.Errorf("imm20 VHDL = %q", got)
+	}
+}

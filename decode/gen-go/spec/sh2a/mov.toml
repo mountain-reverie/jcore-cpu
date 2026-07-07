@@ -15,10 +15,21 @@
   table_ref = "SH-2A"
 
   # slot0: latch the second opcode word (the disp12 extension word) into
-  # hardware; nothing else happens this cycle.
+  # hardware; nothing else happens this cycle. This slot consumes one
+  # 16-bit word of the instruction stream (the opcode word itself), so it
+  # must also pulse if_issue to advance the fetch-ahead buffer by one word
+  # -- otherwise the buffer ends up one word "behind" the two pc=INC pulses
+  # issued across this instruction's two slots, and the slot1 if_issue
+  # (auto-injected because it is the last slot) ends up committing the
+  # *extension* word itself as if it were the next instruction, instead of
+  # the real instruction that follows it. (Root cause of the U-address
+  # bus-exception hang in sh2a_movl12: xbus/ma read a spurious decode of
+  # the disp12 extension word.) if_issue alone (no dispatch) just commits
+  # the fetch-ahead buffer without ending the instruction.
   [[instr.slots]]
     latch_ext = "1"
     pc = "INC"
+    if_issue = "YES"
 
   # slot1: exactly the single-word "MOV.L @(disp, Rm), Rn" slot (same
   # ma_*/bus fields, same wbus="Rn" writeback), plus imm_from_ext so the

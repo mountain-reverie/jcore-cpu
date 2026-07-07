@@ -58,13 +58,15 @@ func mnemonicOf(s string) string {
 	return mnem
 }
 
-type Key struct{ Match, Mask uint16 }
+type Key struct {
+	Match, Mask   uint16
+	Match2, Mask2 uint16
+	Two           bool
+}
 
-func KeyOf(pattern string) (Key, bool) {
-	s := strings.ReplaceAll(pattern, " ", "")
-	if len(s) != 16 {
-		return Key{}, false
-	}
+// normalizeDashes converts non-0/1 characters in a binary pattern to dashes.
+// Used to prepare patterns for opcode.Parse.
+func normalizeDashes(s string) string {
 	var b strings.Builder
 	for _, c := range s {
 		if c == '0' || c == '1' {
@@ -73,9 +75,34 @@ func KeyOf(pattern string) (Key, bool) {
 			b.WriteByte('-')
 		}
 	}
-	m, mask, err := opcode.Parse(b.String())
+	return b.String()
+}
+
+func KeyOf(pattern string) (Key, bool) {
+	s := strings.ReplaceAll(pattern, " ", "")
+	if len(s) != 16 {
+		return Key{}, false
+	}
+	m, mask, err := opcode.Parse(normalizeDashes(s))
 	if err != nil {
 		return Key{}, false
 	}
 	return Key{Match: m, Mask: mask}, true
+}
+
+// KeyOf2 builds a two-word key from two 16-bit patterns.
+func KeyOf2(word1, word2 string) (Key, bool) {
+	k1, ok1 := KeyOf(word1)
+	if !ok1 {
+		return Key{}, false
+	}
+	word2Clean := strings.ReplaceAll(word2, " ", "")
+	if len(word2Clean) != 16 {
+		return Key{}, false
+	}
+	m2, mask2, err := opcode.Parse(normalizeDashes(word2Clean))
+	if err != nil {
+		return Key{}, false
+	}
+	return Key{Match: k1.Match, Mask: k1.Mask, Match2: m2, Mask2: mask2, Two: true}, true
 }

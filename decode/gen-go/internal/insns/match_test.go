@@ -28,3 +28,16 @@ func TestKeyOfRejectsBadLength(t *testing.T) {
 		t.Fatal("short code must be rejected")
 	}
 }
+
+func TestKeyOf2(t *testing.T) {
+	k, ok := KeyOf2("0011 nnnn mmmm 0001", "0110 dddd dddd dddd")
+	if !ok || !k.Two {
+		t.Fatalf("KeyOf2 ok=%v two=%v", ok, k.Two)
+	}
+	if k.Match != 0x3001 || k.Mask != 0xF00F {
+		t.Errorf("word1 match/mask = %#04x/%#04x", k.Match, k.Mask)
+	}
+	if k.Match2 != 0x6000 || k.Mask2 != 0xF000 {
+		t.Errorf("word2 match/mask = %#04x/%#04x", k.Match2, k.Mask2)
+	}
+}

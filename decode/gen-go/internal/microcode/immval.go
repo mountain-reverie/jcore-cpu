@@ -88,6 +88,8 @@ func ImmLiteralToVHDL(lit string) string {
 		return "imms_12_1"
 	case "IMM_U_12_0":
 		return `x"00000" & ext_word(11 downto 0)`
+	case "IMM_U_12_2":
+		return `"000000000000000000" & ext_word(11 downto 0) & "00"`
 	case "IMM_S_20_0":
 		return `op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11 downto 8) & ext_word(15 downto 0)`
 	}
@@ -180,7 +182,7 @@ func formatBitWidth(format string) int {
 		return 4
 	case "d8", "nd8", "i8", "ni":
 		return 8
-	case "d12":
+	case "d12", "nmd12":
 		return 12
 	default:
 		return 0

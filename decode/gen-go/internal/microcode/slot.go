@@ -273,6 +273,20 @@ func AssignSlot(instr spec.Instr, slot spec.Slot) (AssignMap, error) {
 		out[SigDebug] = "1"
 	}
 
+	// --- latch_ext / imm_from_ext ---
+	// Variant-additive two-word-instruction control bits (J2A/SH-2A
+	// overlay only): slot0 sets latch_ext="1" to capture the second
+	// opcode word as the extension word; slot1 sets imm_from_ext="1"
+	// to source its immediate from that latched word instead of
+	// op.code. Modeled directly on the "debug" boolean-flag pattern
+	// above — any non-empty TOML value is truthy.
+	if v := slot["latch_ext"]; v != "" {
+		out[SigLatchExt] = "1"
+	}
+	if v := slot["imm_from_ext"]; v != "" {
+		out[SigImmFromExt] = "1"
+	}
+
 	// --- if_issue ---
 	// Clojure line 265: (when-let [issue (:if-issue mc)] (ao :if-issue issue))
 	// Values in Clojure: yes/y→true, t, nt. In our TOML: "YES", "NO", "T", "NT".
@@ -1173,7 +1187,7 @@ func RegnumVHDL(tag string) string {
 
 func rnRegister(format string) string {
 	switch format {
-	case "n", "nd8", "ni", "nm", "nmd", "mn":
+	case "n", "nd8", "ni", "nm", "nmd", "nmd12", "mn":
 		return "RA"
 	case "nd4":
 		return "RB"
@@ -1193,7 +1207,7 @@ func rmRegister(format string) string {
 	switch format {
 	case "m":
 		return "RA"
-	case "md", "nm", "nmd", "mn":
+	case "md", "nm", "nmd", "nmd12", "mn":
 		return "RB"
 	default:
 		// "n", "nd8", "ni", "nd4", "d8", "d12", "i8", "0", "" and any other → no Rm

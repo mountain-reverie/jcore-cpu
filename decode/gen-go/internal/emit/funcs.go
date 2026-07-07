@@ -187,7 +187,7 @@ func registerExpr(format, reg string) string {
 		if reg == "Rm" {
 			return "(instr >> 8) & 0xF"
 		}
-	case "nm", "nmd":
+	case "nm", "nmd", "nmd12":
 		switch reg {
 		case "Rn":
 			return "(instr >> 8) & 0xF"

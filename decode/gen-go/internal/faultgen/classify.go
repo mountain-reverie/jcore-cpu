@@ -64,6 +64,7 @@ var (
 	// displacement formats
 	dispFormats = map[string]bool{
 		"nmd": true, "md": true, "nd4": true, "nd8": true, "d": true, "d8": true,
+		"nmd12": true,
 	}
 )
 

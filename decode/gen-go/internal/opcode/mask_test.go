@@ -33,3 +33,21 @@ func TestParse(t *testing.T) {
 		})
 	}
 }
+
+func TestParse32(t *testing.T) {
+	// mov.l @(disp12,Rm),Rn : 0011 nnnn mmmm 0001  0110 dddd dddd dddd
+	m, mask, err := Parse32("0011 nnnn mmmm 0001 0110 dddd dddd dddd")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	// fixed bits: 0011............0001 0110............  don't-cares elsewhere
+	if want := uint32(0x30016000); m != want {
+		t.Errorf("match = %#08x, want %#08x", m, want)
+	}
+	if want := uint32(0xF00FF000); mask != want {
+		t.Errorf("mask = %#08x, want %#08x", mask, want)
+	}
+	if _, _, err := Parse32("0011"); err == nil {
+		t.Error("want length error for short pattern")
+	}
+}

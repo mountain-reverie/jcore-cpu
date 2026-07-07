@@ -31,3 +31,27 @@ func Parse(pattern string) (match, mask uint16, err error) {
 	}
 	return match, mask, nil
 }
+
+// Parse32 parses a 32-bit (two-word) opcode pattern. Same character set as
+// Parse; the string must be exactly 32 bits after stripping spaces.
+func Parse32(pattern string) (match, mask uint32, err error) {
+	s := strings.ReplaceAll(strings.TrimSpace(pattern), " ", "")
+	if len(s) != 32 {
+		return 0, 0, fmt.Errorf("opcode %q: want 32 bits, got %d", pattern, len(s))
+	}
+	for i, c := range s {
+		bit := uint32(1) << (31 - i)
+		switch c {
+		case '1':
+			match |= bit
+			mask |= bit
+		case '0':
+			mask |= bit
+		case 'n', 'm', 'd', 'i', '-':
+			// don't care
+		default:
+			return 0, 0, fmt.Errorf("opcode %q: invalid character %q at %d", pattern, c, i)
+		}
+	}
+	return match, mask, nil
+}

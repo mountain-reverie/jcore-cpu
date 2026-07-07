@@ -1103,7 +1103,7 @@ begin
         inst_o <= this'register.inst_o;
         if_dr <= this'register.if_dr;
         if_dr_next <= this'register.if_dr_next;
-        if_pc <= this'register.if_pc;
+        if_pc <= this'register.if_pc when MMU_ARCH else (others => '0');
         illegal_delay_slot <= this'register.illegal_delay_slot;
         illegal_instr <= this'register.illegal_instr;
         cop_o.rna <= copreg(7 downto 4);

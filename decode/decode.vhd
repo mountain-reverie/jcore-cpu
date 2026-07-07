@@ -58,12 +58,10 @@ architecture arch of decode is
     -- datapath sees it phase-aligned to the EX control that launches the MA access.
     signal delay_slot_c : std_logic;
     signal delay_slot_r : std_logic;
-    -- Per-instruction fetch-PC. if_pc_c comes from decode_core latched in lockstep
-    -- with `op` (holds across a multi-cycle op); one more slot-gated register
-    -- (if_pc_r1) reaches the pipeline_r.ex1 (EX) stage that launches the MA access,
-    -- so the datapath shadows the faulting instruction's OWN PC.
+    -- Per-instruction fetch-PC, already EX-aligned inside decode_core (op-latch +
+    -- one slot-gated stage, MMU_ARCH-gated so it prunes on non-MMU). ex_if_pc is
+    -- just this signal; the datapath shadows the faulting instruction's OWN PC.
     signal if_pc_c : std_logic_vector(31 downto 0);
-    signal if_pc_r1 : std_logic_vector(31 downto 0);
     signal dispatch : std_logic;
     signal event_ack_0 : std_logic;
     signal ex : pipeline_ex_t;
@@ -200,20 +198,10 @@ begin
         end if;
     end process;
     delay_slot <= delay_slot_r;
-    -- if_pc_c is op-aligned (from decode_core, holds across multi-cycle ops); one
-    -- slot-gated register brings it to the pipeline_r.ex1 (EX) stage that drives
-    -- num_x/reg, so ex_if_pc is the PC of the instruction launching the MA access.
-    process(clk, rst)
-    begin
-        if rst = '1' then
-            if_pc_r1 <= (others => '0');
-        elsif (clk = '1' and clk'event) then
-            if slot = '1' then
-                if_pc_r1 <= if_pc_c;
-            end if;
-        end if;
-    end process;
-    ex_if_pc <= if_pc_r1;
+    -- if_pc_c is already EX-aligned: decode_core registers the fetch VA twice
+    -- (op-latch + one slot-gated stage) INSIDE decode_core, MMU_ARCH-gated so the
+    -- whole per-instruction-PC chain prunes on non-MMU (j1/j2). Just pass it out.
+    ex_if_pc <= if_pc_c;
     -- assign outputs
     func.alu.inx_sel <= pipeline_r.ex1.aluinx_sel;
     func.alu.iny_sel <= pipeline_r.ex1.aluiny_sel;

@@ -4,7 +4,7 @@ import "testing"
 
 func TestVariantsTable(t *testing.T) {
 	vs := Variants()
-	if len(vs) != 3 || vs[0].Name != "J2" || vs[1].Name != "J1" || vs[2].Name != "J4" {
+	if len(vs) != 4 || vs[0].Name != "J2" || vs[1].Name != "J1" || vs[2].Name != "J4" || vs[3].Name != "J2A" {
 		t.Fatalf("unexpected variants: %+v", vs)
 	}
 	if len(vs[2].Overlays) != 1 {
@@ -47,5 +47,20 @@ func TestLoadVariantJ4OverlayCount(t *testing.T) {
 	}
 	if len(is.Order) <= 154 {
 		t.Fatalf("J4 overlay did not add instructions: expected > 154, got %d", len(is.Order))
+	}
+}
+
+func TestJ2AVariantRegistered(t *testing.T) {
+	var found bool
+	for _, v := range Variants() {
+		if v.Name == "J2A" {
+			found = true
+			if len(v.Overlays) != 1 || v.Overlays[0] != "sh2a" {
+				t.Errorf("J2A overlays = %v", v.Overlays)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("J2A variant not registered")
 	}
 }

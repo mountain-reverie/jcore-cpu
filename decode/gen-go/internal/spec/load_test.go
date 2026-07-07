@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/BurntSushi/toml"
 )
 
 func TestLoadAppliesDefaults(t *testing.T) {
@@ -72,5 +74,30 @@ func mustWrite(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestOpcode2RoundTrip(t *testing.T) {
+	const doc = `
+[[instr]]
+  name = "MOV.L @(disp12,Rm),Rn"
+  format = "nmd"
+  opcode = "0011 nnnn mmmm 0001"
+  opcode2 = "0110 dddd dddd dddd"
+  operation = "(disp12+Rm)->Rn"
+  [[instr.slots]]
+    pc = "INC"
+`
+	var f struct {
+		Instr []Instr `toml:"instr"`
+	}
+	if _, err := toml.Decode(doc, &f); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Instr) != 1 {
+		t.Fatalf("want 1 instr, got %d", len(f.Instr))
+	}
+	if got := f.Instr[0].Opcode2; got != "0110 dddd dddd dddd" {
+		t.Errorf("Opcode2 = %q, want %q", got, "0110 dddd dddd dddd")
 	}
 }

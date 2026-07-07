@@ -321,7 +321,7 @@ begin
 
 	-- On the precise auto-increment restore cycle the EX write data is the
 	-- captured pre-increment base (tlb_restore_val); otherwise the normal z path.
-	gpf_zwd <= this'register.tlb_restore_val when (MMU_ARCH and restore_fire = '1')
+	gpf_zwd <= this'register.tlb_restore_val when ((MMU_ARCH or PAGE_FAULT_ARCH) and restore_fire = '1')
 	           else pc when pc_ctrl.wrpr = '1' else zbus;
 	-- mem_autoupd: marks the memory-access slot of a post-increment load @Rm+.
 	-- In j-core a post-increment is a two-slot op: slot0 commits Rm := Rm+size on
@@ -331,7 +331,7 @@ begin
 	-- zbus_sel=Y; @(disp,Rm) and indexed loads use ADD; pre-decrement @-Rn is a
 	-- WRITE). The faulting VA equals Rm-size = the original pre-increment base, so
 	-- restoring Rm := tlb_fault_va undoes slot0's early bump. MMU_ARCH only.
-	mem_autoupd <= '1' when MMU_ARCH and mem.issue = '1' and mem.wr = '0'
+	mem_autoupd <= '1' when (MMU_ARCH or PAGE_FAULT_ARCH) and mem.issue = '1' and mem.wr = '0'
 	                        and mem.addr_sel = SEL_ZBUS and func.arith.func = SUB
 	               else '0';
 	-- mem_predec: marks the memory-access slot of a pre-decrement store @-Rn
@@ -356,7 +356,7 @@ begin
 	-- SAME register being addressed) and routed through the base-restore path:
 	-- the faulting VA equals the original Rm (ma_addy=XBUS), so restoring
 	-- Rm := tlb_fault_va undoes the early bump exactly like mem_autoupd.
-	mem_autoinc1 <= '1' when MMU_ARCH and mem.issue = '1' and mem.wr = '0'
+	mem_autoinc1 <= '1' when (MMU_ARCH or PAGE_FAULT_ARCH) and mem.issue = '1' and mem.wr = '0'
 	                         and mem.addr_sel = SEL_XBUS
 	                         and reg.wr_z = '1' and buses.z_sel = SEL_ARITH
 	                         and func.arith.func = ADD and num_z_r = num_x_r
@@ -365,13 +365,13 @@ begin
 	-- the microcode itself is not driving the z-write port (reg.wr_z='0'): this is
 	-- clear of the exception entry's slot0/slot1 SPC(21)/SSR(22) saves, so the two
 	-- never collide on the shared EX write port.
-	restore_fire <= '1' when MMU_ARCH and this'register.tlb_restore_pend = '1'
+	restore_fire <= '1' when (MMU_ARCH or PAGE_FAULT_ARCH) and this'register.tlb_restore_pend = '1'
 	                         and reg.wr_z = '0' and slot_o = '1'
 	                else '0';
 	-- SH-4 register-bank remap on the four address ports; pass-through on J2.
 	num_x_r <= bank_remap(reg.num_x, sr.md, sr.rb) when PRIV_ARCH else reg.num_x;
 	num_y_r <= bank_remap(reg.num_y, sr.md, sr.rb) when PRIV_ARCH else reg.num_y;
-	num_z_r <= this'register.tlb_fault_zreg when (MMU_ARCH and restore_fire = '1')
+	num_z_r <= this'register.tlb_fault_zreg when ((MMU_ARCH or PAGE_FAULT_ARCH) and restore_fire = '1')
 	           else bank_remap(reg.num_z, sr.md, sr.rb) when PRIV_ARCH else reg.num_z;
 	num_w_r <= bank_remap(reg.num_w, sr.md, sr.rb) when PRIV_ARCH else reg.num_w;
 	-- Bank-remap the dedicated R0-index read port too (drives dout_0); pass-through
@@ -425,8 +425,8 @@ begin
 	-- we_ex squash at all) and the exposure window is only 1-2 slots.
 	reg_wr_z_g <= ((reg.wr_z and (not this'register.tlb_squash
 	                              or (num_z_r(4) and not num_z_r(3))))
-	               or restore_fire) when MMU_ARCH else reg.wr_z;
-	reg_wr_w_g <= reg.wr_w and not this'register.tlb_squash when MMU_ARCH else reg.wr_w;
+	               or restore_fire) when (MMU_ARCH or PAGE_FAULT_ARCH) else reg.wr_z;
+	reg_wr_w_g <= reg.wr_w and not this'register.tlb_squash when (MMU_ARCH or PAGE_FAULT_ARCH) else reg.wr_w;
 	-- J1 early-read addresses (architecture(ebr) reads on rising edge); zero on J2/J4.
 	num_x_early_r <= reg.num_x_early when EARLY_REGFILE_READ else (others => '0');
 	num_y_early_r <= reg.num_y_early when EARLY_REGFILE_READ else (others => '0');
@@ -570,17 +570,26 @@ begin
           -- every cycle would latch the second fetch's VA (e.g. 0x1002) instead
           -- of the faulting instruction's VA (0x1000). The flag clears as soon as
           -- tlb_exc_pend deasserts, re-arming for the next fault.
-          if MMU_ARCH and tlb_exc_pend = '1' and this.tlb_exc_captured = '0' then
-            this.mmu.tea                := tlb_fault_va;
-            -- PTEH captures the 4 KB-granular VPN on a miss: VA[31:12]. 4 KB is
-            -- the finest supported page size (PageMask 0); the actual page size
-            -- is unknown at miss time and is resolved by software at LDTLB, which
-            -- masks coarser if needed. A coarser capture (e.g. 16 KB, VA[31:14])
-            -- aliases pages differing only in VA[13:12], so the walker installs
-            -- the wrong page and the access re-faults forever; the TSB tag match
-            -- also needs the full 4 KB VPN.
-            this.mmu.pteh(31 downto 12) := tlb_fault_va(31 downto 12);
-            this.mmu.pteh(11 downto 0)  := (others => '0');
+          -- Shared D-fault capture for the J4 MMU (MMU_ARCH) and the base-J1
+          -- external page fault (PAGE_FAULT_ARCH). The restart-PC derivation,
+          -- SR capture, and @Rm+/@-Rn base-restore arming below are IDENTICAL for
+          -- both -- Page Fault D's base-stack microcode restarts at TLBPC-2, which
+          -- equals the MMU's net tlb_exc_pc-2 resume, so the same tlb_exc_pc feeds
+          -- both. Only the MMU register side-effects (TEA/PTEH/TSBPTR) are gated
+          -- MMU-only inside; PAGE_FAULT_ARCH has no MMU register file.
+          if (MMU_ARCH or PAGE_FAULT_ARCH) and tlb_exc_pend = '1' and this.tlb_exc_captured = '0' then
+            if MMU_ARCH then
+              this.mmu.tea                := tlb_fault_va;
+              -- PTEH captures the 4 KB-granular VPN on a miss: VA[31:12]. 4 KB is
+              -- the finest supported page size (PageMask 0); the actual page size
+              -- is unknown at miss time and is resolved by software at LDTLB, which
+              -- masks coarser if needed. A coarser capture (e.g. 16 KB, VA[31:14])
+              -- aliases pages differing only in VA[13:12], so the walker installs
+              -- the wrong page and the access re-faults forever; the TSB tag match
+              -- also needs the full 4 KB VPN.
+              this.mmu.pteh(31 downto 12) := tlb_fault_va(31 downto 12);
+              this.mmu.pteh(11 downto 0)  := (others => '0');
+            end if;
             this.tlb_exc_captured       := '1';
             -- Latch the faulting instruction's restart PC (D-side faults only).
             -- ma_pc still holds the faulting access's launch PC: any following
@@ -641,35 +650,37 @@ begin
             -- pre-decrement stores restore the captured pre-decrement base
             -- (ma_base) since their faulting VA is the ALREADY-decremented
             -- address. Both retarget the same shadowed base register (ma_numz).
-            if MMU_ARCH and this.ma_predec = '1' then
+            if (MMU_ARCH or PAGE_FAULT_ARCH) and this.ma_predec = '1' then
               this.tlb_restore_val  := this.ma_base;
               this.tlb_restore_pend := '1';
             else
               this.tlb_restore_val  := tlb_fault_va;
               this.tlb_restore_pend := this.ma_autoupd;
             end if;
-            -- TSB pointer assist (hardware-spec §2.8): compute the address of
-            -- the TSB slot for the faulting VPN and latch it into TSBPTR (read-
-            -- only via STC TSBPTR / MMIO 0xFF00001C).
-            --   vpn    = faulting_VA[31:12]               (4 KB page number)
-            --   hash   = HASH_MODE=1 ? vpn xor (vpn >> HASH_SHIFT) : vpn
-            --   mask   = (1 << TSB_SIZE_LOG) - 1
-            --   TSBPTR = (TSBBR and not 0xF) or ((hash and mask) << 4)
-            -- TSBBR[N+3:4] are reserved-0 so clearing the low nibble and ORing
-            -- the 16-byte-scaled index suffices (no variable base mask needed).
-            v_vpn   := x"000" & unsigned(tlb_fault_va(31 downto 12));
-            v_shift := to_integer(unsigned(this.mmu.tsbcfg(7 downto 4)));
-            v_size  := to_integer(unsigned(this.mmu.tsbbr(3 downto 0)));
-            if this.mmu.tsbcfg(3 downto 0) = x"1" then
-              v_hash := v_vpn xor shift_right(v_vpn, v_shift);
-            else
-              v_hash := v_vpn;
+            if MMU_ARCH then
+              -- TSB pointer assist (hardware-spec §2.8): compute the address of
+              -- the TSB slot for the faulting VPN and latch it into TSBPTR (read-
+              -- only via STC TSBPTR / MMIO 0xFF00001C).
+              --   vpn    = faulting_VA[31:12]               (4 KB page number)
+              --   hash   = HASH_MODE=1 ? vpn xor (vpn >> HASH_SHIFT) : vpn
+              --   mask   = (1 << TSB_SIZE_LOG) - 1
+              --   TSBPTR = (TSBBR and not 0xF) or ((hash and mask) << 4)
+              -- TSBBR[N+3:4] are reserved-0 so clearing the low nibble and ORing
+              -- the 16-byte-scaled index suffices (no variable base mask needed).
+              v_vpn   := x"000" & unsigned(tlb_fault_va(31 downto 12));
+              v_shift := to_integer(unsigned(this.mmu.tsbcfg(7 downto 4)));
+              v_size  := to_integer(unsigned(this.mmu.tsbbr(3 downto 0)));
+              if this.mmu.tsbcfg(3 downto 0) = x"1" then
+                v_hash := v_vpn xor shift_right(v_vpn, v_shift);
+              else
+                v_hash := v_vpn;
+              end if;
+              v_mask := shift_left(to_unsigned(1, 32), v_size) - 1;
+              v_idx  := (v_hash and v_mask);
+              this.mmu.tsbptr :=
+                (this.mmu.tsbbr and x"FFFFFFF0")
+                or std_logic_vector(shift_left(v_idx, 4));
             end if;
-            v_mask := shift_left(to_unsigned(1, 32), v_size) - 1;
-            v_idx  := (v_hash and v_mask);
-            this.mmu.tsbptr :=
-              (this.mmu.tsbbr and x"FFFFFFF0")
-              or std_logic_vector(shift_left(v_idx, 4));
             -- EXPEVT is NOT written here: the fault cause is latched via a
             -- slot-gated sr="EXPEVT" microcode write in the TLB exception
             -- handler microcode (exceptions.toml), mirroring TRAPA/Error, so
@@ -678,13 +689,6 @@ begin
           end if;
           if (MMU_ARCH or PAGE_FAULT_ARCH) and tlb_exc_pend = '0' then
             this.tlb_exc_captured := '0';
-          end if;
-          -- PAGE_FAULT_ARCH minimal restart-PC capture (no TEA/PTEH/SSR/@Rn+
-          -- restore): latch the faulting instruction's PC from ma_pc on the first
-          -- fault cycle, for the Page Fault D entry's xbus=TLBPC restart.
-          if PAGE_FAULT_ARCH and tlb_exc_pend = '1' and this.tlb_exc_captured = '0' then
-            this.tlb_exc_captured := '1';
-            this.tlb_exc_pc := std_logic_vector(unsigned(this.ma_pc) - 2);
           end if;
 
           -- Precise-exception squash window. Arm on the first fault cycle; hold
@@ -701,11 +705,26 @@ begin
             elsif tlb_exc_pend = '1' then
               this.tlb_squash := '1';
             end if;
+          elsif PAGE_FAULT_ARCH then
+            -- Base J1 has no SR.RB "in handler" indicator (the Page Fault D entry
+            -- uses the SH stack model, not RB banking). tlb_exc_pend is held by
+            -- decode from fault-detect until the exception op dispatches (texc_ack),
+            -- which is exactly the shadow window: every instruction retiring while
+            -- pend='1' was issued AFTER the faulting access. pend drops at dispatch,
+            -- BEFORE the entry microcode's own R15 pushes (slot1/slot2), so those
+            -- are never squashed. Suppress younger GPR writebacks across this window
+            -- so a shadow write cannot clobber the faulting load's base before the
+            -- RTE-restart re-runs it.
+            if tlb_exc_pend = '1' then
+              this.tlb_squash := '1';
+            else
+              this.tlb_squash := '0';
+            end if;
           end if;
 
           -- One-shot: once the base restore has been driven onto the EX write
           -- port (restore_fire), disarm so it commits exactly once.
-          if MMU_ARCH and restore_fire = '1' then
+          if (MMU_ARCH or PAGE_FAULT_ARCH) and restore_fire = '1' then
             this.tlb_restore_pend := '0';
           end if;
 
@@ -759,7 +778,7 @@ begin
             -- valid here (NULLed just below). Taken before any branch redirect, so
             -- a delay-slot load carries its true PC (=branch+2), not the run-ahead
             -- fetch PC. Rides with if_dr_next -> if_dr -> out to decode.
-            if MMU_ARCH then
+            if MMU_ARCH or PAGE_FAULT_ARCH then
               this.if_pc_next := this.inst_o.a & '0';
             end if;
             this.if_en      := '1';
@@ -819,7 +838,7 @@ begin
             end if;
             if this.if_en = '1' then
               this.if_dr := this.if_dr_next;
-              if MMU_ARCH then
+              if MMU_ARCH or PAGE_FAULT_ARCH then
                 this.if_pc := this.if_pc_next;  -- carry the fetch VA with if_dr
               end if;
               this.illegal_delay_slot := check_illegal_delay_slot(this.if_dr);
@@ -912,13 +931,10 @@ begin
                 -- the faulting instruction's PC, independent of how far the fetch
                 -- pointer has since advanced. (J4+MMU_ARCH only.)
                 if MMU_ARCH or PAGE_FAULT_ARCH then
-                  -- Restart-PC shadow, needed by the D-side fault entry. This is
-                  -- the ONLY ma_pc-latch piece PAGE_FAULT_ARCH extracts; the @Rn+
-                  -- base-restore shadows below stay MMU-only (v1 flash D-faults are
-                  -- PC-relative displacement loads, no base writeback).
+                  -- Restart-PC shadow, needed by the D-side fault entry.
                   this.ma_pc := this.pc;
                 end if;
-                if MMU_ARCH then
+                if MMU_ARCH or PAGE_FAULT_ARCH then
                   -- Shadow the (bank-remapped) base register (Rm = num_x in the
                   -- @Rm+ access slot) and the post-increment marker of the
                   -- instruction launching this access, at the same fixed pipeline
@@ -1091,7 +1107,7 @@ begin
 	end process;
 
 	pc <= this'register.pc;
-	tlb_exc_pc         <= this'register.tlb_exc_pc when MMU_ARCH else (others => '0');
+	tlb_exc_pc         <= this'register.tlb_exc_pc when (MMU_ARCH or PAGE_FAULT_ARCH) else (others => '0');
 	tlb_exc_sr_r       <= this'register.tlb_exc_sr;
 	sr <= this'register.sr;
 	priv_regs <= this'register.priv;
@@ -1120,7 +1136,7 @@ begin
         inst_o <= this'register.inst_o;
         if_dr <= this'register.if_dr;
         if_dr_next <= this'register.if_dr_next;
-        if_pc <= this'register.if_pc when MMU_ARCH else (others => '0');
+        if_pc <= this'register.if_pc when (MMU_ARCH or PAGE_FAULT_ARCH) else (others => '0');
         illegal_delay_slot <= this'register.illegal_delay_slot;
         illegal_instr <= this'register.illegal_instr;
         cop_o.rna <= copreg(7 downto 4);

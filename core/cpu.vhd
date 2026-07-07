@@ -382,23 +382,32 @@ begin
 
   g_no_mmu : if not MMU_ARCH generate
     mmu_o        <= NULL_MMU_O;
-    tlb_fault_va <= (others => '0');
     tlb_exc_expevt <= (others => '0');
-    tlb_exc_is_i <= '0';   -- tie off so J1/J2 datapath sees a constant, not a float
     -- External page fault (PAGE_FAULT_ARCH): the SoC drives page_fault_i.en/kind
     -- combinationally during the faulting access. Feed the same internal
     -- tlb_exc_* signals the MMU path uses, so decode's texc_req hold/dispatch and
-    -- the datapath ma_pc capture are reused unchanged. PF_IFETCH -> IMISS (restart
-    -- PC-2), PF_DREAD -> DMISS_R (restart via ma_pc latch).
+    -- the datapath's shared D-fault capture (restart PC via ma_if_pc, @Rm+ base-
+    -- restore) are reused unchanged. PF_IFETCH -> IMISS (Page Fault I restarts at
+    -- live PC-2), PF_DREAD -> DMISS_R (Page Fault D restarts at TLBPC-2 = the
+    -- faulting instruction's PC, delay-slot aware, with @Rm+ base-restore).
     g_pf : if PAGE_FAULT_ARCH generate
       tlb_exc_en   <= page_fault_i.en;
       tlb_exc_kind <= IMISS when page_fault_i.kind = PF_IFETCH else DMISS_R;
       tlb_exc_pend <= page_fault_i.en;
+      tlb_exc_is_i <= '1' when page_fault_i.kind = PF_IFETCH else '0';
+      -- Faulting VA for the D-side @Rm+ base-restore (the pre-increment base = the
+      -- read address on the bus). During a PF_DREAD the data bus carries the
+      -- faulting read address, captured into tlb_exc_pc's companion tlb_fault_va on
+      -- the first-fault cycle; the restore rewrites Rm := tlb_fault_va so RTE
+      -- re-increments exactly once. I-faults ignore tlb_fault_va (live-PC restart).
+      tlb_fault_va <= sig_db_o.a;
     end generate g_pf;
     g_no_pf : if not PAGE_FAULT_ARCH generate
       tlb_exc_en   <= '0';
       tlb_exc_kind <= IMISS;
       tlb_exc_pend <= '0';
+      tlb_exc_is_i <= '0';   -- tie off so J1/J2 datapath sees a constant, not a float
+      tlb_fault_va <= (others => '0');
     end generate g_no_pf;
   end generate g_no_mmu;
 

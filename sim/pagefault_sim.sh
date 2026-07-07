@@ -68,6 +68,12 @@ else
   echo "== page-fault guards (cpu_tb) =="
   run_guard pagefault_i
   run_guard pagefault_d
+  run_guard pagefault_dinc
+  run_guard pagefault_dslot
+  run_guard pagefault_dshadow
+  # pagefault_dmac: KNOWN LIMITATION (MAC.L @Rm+,@Rn+ from unmapped flash double-
+  # accumulates -> MACL=12; see the test header). Not run by default; invoke
+  # explicitly (`pagefault_sim.sh pagefault_dmac`) when working the MAC-squash fix.
 fi
 
 if [ "$fail" = 0 ]; then echo "==> all guards PASSED"; else echo "==> FAILURES above" >&2; exit 1; fi

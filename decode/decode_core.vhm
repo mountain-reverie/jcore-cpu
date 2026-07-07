@@ -177,7 +177,7 @@ begin
 
   maskint <= this'register.maskint;
   delay_slot <= this'register.delay_slot;
-  delay_slot_o <= delay_slot when MMU_ARCH else '0';
+  delay_slot_o <= delay_slot when (MMU_ARCH or PAGE_FAULT_ARCH) else '0';
   -- if_pc pipeline: MMU_ARCH ONLY. Wrapped in a generate so the flops are simply
   -- absent on non-MMU (j1/j2) -- a plain `if MMU_ARCH then` inside the clocked
   -- process leaves if_pc_r1 assigned only in reset when MMU_ARCH=false, which
@@ -187,7 +187,7 @@ begin
   -- (if_pc_r1) is one more slot-gated register to reach the pipeline_r.ex1 (EX)
   -- alignment that drives num_x/reg at the MA-launch (this second register
   -- previously lived in decode.vhd, where it had no MMU_ARCH generic to gate on).
-  g_if_pc : if MMU_ARCH generate
+  g_if_pc : if MMU_ARCH or PAGE_FAULT_ARCH generate
     signal if_pc_op : std_logic_vector(31 downto 0);
     signal if_pc_r1 : std_logic_vector(31 downto 0);
   begin
@@ -208,7 +208,7 @@ begin
     end process;
     if_pc_o <= if_pc_r1;
   end generate g_if_pc;
-  g_if_pc_off : if not MMU_ARCH generate
+  g_if_pc_off : if not (MMU_ARCH or PAGE_FAULT_ARCH) generate
     if_pc_o <= (others => '0');
   end generate g_if_pc_off;
   ilevel <= this'register.ilevel;

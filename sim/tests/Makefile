@@ -62,6 +62,7 @@ mmustr2.elf: mmustr2.o
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+sh2a_movl12.elf: sh2a_movl12.o
 mmurun.elf: mmurun.o tlbwalk.o
 mmuirun.elf: mmuirun.o tlbwalk.o
 mmuainc.elf: mmuainc.o tlbwalk.o

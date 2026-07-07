@@ -66,9 +66,14 @@ end;
 
 architecture arch of decode_core is
 
-  -- Per-instruction fetch-PC latched in lockstep with `op` (holds across a
-  -- multi-cycle op). See if_pc/if_pc_o ports.
+  -- Per-instruction fetch-PC pipeline. if_pc_op latches in lockstep with `op`
+  -- (holds across a multi-cycle op); if_pc_r1 is one slot-gated register further
+  -- to reach the pipeline_r.ex1 (EX) stage that launches the MA access. Both are
+  -- MMU_ARCH-gated so the whole chain is ABSENT on non-MMU (j1/j2): the loads
+  -- never fire, the registers stay constant 0 and synthesis prunes them (same
+  -- pattern as texc_req). See if_pc/if_pc_o ports.
   signal if_pc_op : std_logic_vector(31 downto 0);
+  signal if_pc_r1 : std_logic_vector(31 downto 0);
   signal mac_stall : std_logic;
   -- Stage 2 read-ahead microcode address (full-cycle ROM read) intermediates.
   signal ra_base, ra_v : std_logic_vector(DEC_ADDR_BITS-1 downto 0);
@@ -173,21 +178,32 @@ begin
   maskint <= this'register.maskint;
   delay_slot <= this'register.delay_slot;
   delay_slot_o <= delay_slot;
-  -- Latch if_pc EXACTLY when `op` is latched (the instruction boundary:
-  -- id_stall='0' and instr_seq_zero='1', slot-gated), so if_pc_op tracks the op
-  -- being dispatched and HOLDS across a multi-cycle op just like op does.
-  if_pc_op_reg : process(clk, rst)
+  -- if_pc pipeline (MMU_ARCH only; the whole block prunes on non-MMU because the
+  -- loads are gated on MMU_ARCH -> if_pc_op/if_pc_r1 are constant 0 -> pruned,
+  -- exactly like texc_req). Stage 1 latches if_pc when `op` is latched (the
+  -- instruction boundary id_stall='0' and instr_seq_zero='1', slot-gated) so it
+  -- HOLDS across a multi-cycle op just like op. Stage 2 (if_pc_r1) is one more
+  -- slot-gated register to reach the pipeline_r.ex1 (EX) alignment that drives
+  -- num_x/reg at the MA-launch (previously this second register lived in
+  -- decode.vhd, where it could not be MMU-gated and so was not pruned on j1/j2).
+  if_pc_reg : process(clk, rst)
   begin
     if rst = '1' then
       if_pc_op <= (others => '0');
+      if_pc_r1 <= (others => '0');
     elsif clk = '1' and clk'event then
-      if slot = '1' and this'register.id_stall = '0'
-                    and this'register.instr_seq_zero = '1' then
-        if_pc_op <= if_pc;
+      if MMU_ARCH then
+        if slot = '1' and this'register.id_stall = '0'
+                      and this'register.instr_seq_zero = '1' then
+          if_pc_op <= if_pc;
+        end if;
+        if slot = '1' then
+          if_pc_r1 <= if_pc_op;
+        end if;
       end if;
     end if;
   end process;
-  if_pc_o <= if_pc_op;
+  if_pc_o <= if_pc_r1;
   ilevel <= this'register.ilevel;
 
   mac_stall <= mac_stall_sense and (p.wb1.mac_busy or p.wb2.mac_busy or

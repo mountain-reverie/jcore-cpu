@@ -1074,7 +1074,7 @@ begin
 	end process;
 
 	pc <= this'register.pc;
-	tlb_exc_pc         <= this'register.tlb_exc_pc;
+	tlb_exc_pc         <= this'register.tlb_exc_pc when MMU_ARCH else (others => '0');
 	tlb_exc_sr_r       <= this'register.tlb_exc_sr;
 	sr <= this'register.sr;
 	priv_regs <= this'register.priv;

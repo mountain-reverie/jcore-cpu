@@ -17,6 +17,7 @@ func Variants() []Variant {
 		{Name: "J2"},
 		{Name: "J1"},
 		{Name: "J4", Overlays: []string{"sh4"}, Group: "System Control Instructions"},
+		{Name: "J2A", Overlays: []string{"sh2a"}},
 	}
 }
 

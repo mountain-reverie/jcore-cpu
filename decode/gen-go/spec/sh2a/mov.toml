@@ -1,0 +1,8 @@
+# SH-2A overlay: MOV instruction extensions.
+# Currently empty of new instructions; defaults mirror spec/mov.toml.
+# Phase 1 tasks will add the first real SH-2A MOV instructions here.
+
+[defaults]
+  pc = "INC"
+  if_issue = "NO"
+  sr = "HOLD"

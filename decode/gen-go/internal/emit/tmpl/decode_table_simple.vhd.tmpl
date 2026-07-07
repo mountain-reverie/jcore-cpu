@@ -78,11 +78,11 @@ begin
         event_ack_0 <= '0';
         slp <= '0';
         mac_s_latch <= '0';
-        ex_stall <= ('0', '0', '0', '0', SEL_ARITH, SEL_PREV, SEL_CLEAR, SEL_XBUS, SEL_ZBUS, '0', '0', '0', LOGIC, '0', NOP, SEL_XBUS, SEL_YBUS);
+        ex_stall <= ({{ resetAggregate .Package "pipeline_ex_stall_t" }});
         debug <= '0';
-        wb_stall <= ('0', '0', '0', '0', '0', SEL_XBUS, SEL_YBUS, NOP, DBUS);
+        wb_stall <= ({{ resetAggregate .Package "pipeline_wb_stall_t" }});
         delay_jump <= '0';
-        id <= ('0', '0', '0');
+        id <= ({{ resetAggregate .Package "pipeline_id_t" }});
         maskint_next <= '0';
         ex.arith_func <= ADD;
         ex.aluinx_sel <= SEL_XBUS;

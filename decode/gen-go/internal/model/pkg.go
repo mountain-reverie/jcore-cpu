@@ -56,6 +56,22 @@ type RecordType struct {
 type RecordField struct {
 	Names []string // e.g. ["wrmach", "wrmacl"] or ["plane"]
 	Type  string   // e.g. "std_logic" or "instruction_plane_t"
+
+	// Default is the VHDL literal (e.g. "'0'", "SEL_ARITH") used for
+	// this field when the record is reset to its default value in
+	// decode_table_simple.vhd's per-cycle default-assignment block
+	// (ex_stall/wb_stall/id). Empty means "no default is emitted for
+	// this field, or any field after it, in the reset aggregate" —
+	// the emit-side reset aggregate stops at the first field lacking
+	// a Default, matching decode_table_simple.vhd.tmpl's positional
+	// aggregate semantics (VHDL record aggregates cannot skip a
+	// middle field, so a Default gap can only be reproduced as a
+	// truncation of the aggregate, not an omission of one element).
+	// Only pipeline_ex_stall_t, pipeline_wb_stall_t, and pipeline_id_t
+	// populate this; it is otherwise unused (empty) for every other
+	// record, which is harmless since only those three feed the
+	// resetAggregate template func.
+	Default string
 }
 
 // ComponentDecl represents one VHDL component declaration.
@@ -238,22 +254,28 @@ func newStaticPackage() *Package {
 			{
 				Name: "pipeline_ex_stall_t",
 				Fields: []RecordField{
-					{Names: []string{"wrpc_z"}, Type: "std_logic"},
-					{Names: []string{"wrsr_z"}, Type: "std_logic"},
-					{Names: []string{"ma_issue"}, Type: "std_logic"},
-					{Names: []string{"wrpr_pc"}, Type: "std_logic"},
-					{Names: []string{"zbus_sel"}, Type: "zbus_sel_t"},
-					{Names: []string{"sr_sel"}, Type: "sr_sel_t"},
-					{Names: []string{"t_sel"}, Type: "t_sel_t"},
-					{Names: []string{"mem_addr_sel"}, Type: "mem_addr_sel_t"},
-					{Names: []string{"mem_wdata_sel"}, Type: "mem_wdata_sel_t"},
-					{Names: []string{"wrreg_z"}, Type: "std_logic"},
-					{Names: []string{"wrmach", "wrmacl"}, Type: "std_logic"},
-					{Names: []string{"shiftfunc"}, Type: "shiftfunc_t"},
-					{Names: []string{"mulcom1"}, Type: "std_logic"},
-					{Names: []string{"mulcom2"}, Type: "mult_state_t"},
-					{Names: []string{"macsel1"}, Type: "macin1_sel_t"},
-					{Names: []string{"macsel2"}, Type: "macin2_sel_t"},
+					{Names: []string{"wrpc_z"}, Type: "std_logic", Default: "'0'"},
+					{Names: []string{"wrsr_z"}, Type: "std_logic", Default: "'0'"},
+					{Names: []string{"ma_issue"}, Type: "std_logic", Default: "'0'"},
+					{Names: []string{"wrpr_pc"}, Type: "std_logic", Default: "'0'"},
+					{Names: []string{"zbus_sel"}, Type: "zbus_sel_t", Default: "SEL_ARITH"},
+					{Names: []string{"sr_sel"}, Type: "sr_sel_t", Default: "SEL_PREV"},
+					{Names: []string{"t_sel"}, Type: "t_sel_t", Default: "SEL_CLEAR"},
+					{Names: []string{"mem_addr_sel"}, Type: "mem_addr_sel_t", Default: "SEL_XBUS"},
+					{Names: []string{"mem_wdata_sel"}, Type: "mem_wdata_sel_t", Default: "SEL_ZBUS"},
+					{Names: []string{"wrreg_z"}, Type: "std_logic", Default: "'0'"},
+					{Names: []string{"wrmach", "wrmacl"}, Type: "std_logic", Default: "'0'"},
+					{Names: []string{"shiftfunc"}, Type: "shiftfunc_t", Default: "LOGIC"},
+					{Names: []string{"mulcom1"}, Type: "std_logic", Default: "'0'"},
+					{Names: []string{"mulcom2"}, Type: "mult_state_t", Default: "NOP"},
+					{Names: []string{"macsel1"}, Type: "macin1_sel_t", Default: "SEL_XBUS"},
+					{Names: []string{"macsel2"}, Type: "macin2_sel_t", Default: "SEL_YBUS"},
+					// mmu_reg_wr, mmu_reg_sel, tlb_wr intentionally have NO
+					// Default: decode_table_simple.vhd's golden reset
+					// aggregate has never assigned these three (added to
+					// the record by the MMU work without a matching reset
+					// update; a pre-existing latent gap, out of scope for
+					// this refactor — preserved here for byte-identity).
 					{Names: []string{"mmu_reg_wr"}, Type: "std_logic"},
 					{Names: []string{"mmu_reg_sel"}, Type: "mmu_reg_sel_t"},
 					{Names: []string{"tlb_wr"}, Type: "std_logic"},
@@ -285,21 +307,21 @@ func newStaticPackage() *Package {
 			{
 				Name: "pipeline_id_t",
 				Fields: []RecordField{
-					{Names: []string{"incpc"}, Type: "std_logic"},
-					{Names: []string{"if_issue"}, Type: "std_logic"},
-					{Names: []string{"ifadsel"}, Type: "std_logic"},
+					{Names: []string{"incpc"}, Type: "std_logic", Default: "'0'"},
+					{Names: []string{"if_issue"}, Type: "std_logic", Default: "'0'"},
+					{Names: []string{"ifadsel"}, Type: "std_logic", Default: "'0'"},
 				},
 			},
 			{
 				Name: "pipeline_wb_stall_t",
 				Fields: []RecordField{
-					{Names: []string{"mulcom1"}, Type: "std_logic"},
-					{Names: []string{"wrmach", "wrmacl"}, Type: "std_logic"},
-					{Names: []string{"wrreg_w", "wrsr_w"}, Type: "std_logic"},
-					{Names: []string{"macsel1"}, Type: "macin1_sel_t"},
-					{Names: []string{"macsel2"}, Type: "macin2_sel_t"},
-					{Names: []string{"mulcom2"}, Type: "mult_state_t"},
-					{Names: []string{"cpu_data_mux"}, Type: "cpu_data_mux_t"},
+					{Names: []string{"mulcom1"}, Type: "std_logic", Default: "'0'"},
+					{Names: []string{"wrmach", "wrmacl"}, Type: "std_logic", Default: "'0'"},
+					{Names: []string{"wrreg_w", "wrsr_w"}, Type: "std_logic", Default: "'0'"},
+					{Names: []string{"macsel1"}, Type: "macin1_sel_t", Default: "SEL_XBUS"},
+					{Names: []string{"macsel2"}, Type: "macin2_sel_t", Default: "SEL_YBUS"},
+					{Names: []string{"mulcom2"}, Type: "mult_state_t", Default: "NOP"},
+					{Names: []string{"cpu_data_mux"}, Type: "cpu_data_mux_t", Default: "DBUS"},
 				},
 			},
 			{

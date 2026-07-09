@@ -1,6 +1,5 @@
-! Isolating test: movml.l r0,@-r15 (m=0) = single store of R0, NO loop.
-! If this passes with only the seed (no decode_core loop hardware), the DIRECT
-! decoder emits the store correctly and the loop is the only remaining work.
+! Reference: plain MOV.L R0,@-R15 then MOV.L @R15+,R1, NO nops between.
+! Does the BASE pipeline interlock the R15 dependency, or need nops like movml?
 #include "sim_instr.h"
         .section .vect
         .long start
@@ -19,16 +18,10 @@ _sim_instr_end: .long 0
         .text
         .global start
 start:
-        mov.l   p_val, r0        ! r0 = 0xABCD1234
+        mov.l   p_val, r0
         nop
-        .word   0x40F1           ! movml.l r0,@-r15  (m=0: one store of R0)
-        nop
-        nop
-        nop
-        nop
-        nop
-        nop
-        mov.l   @r15+, r1        ! pop it back
+        mov.l   r0, @-r15        ! push r0
+        mov.l   @r15+, r1        ! pop immediately (no nops) -> tests base interlock
         nop
         mov.l   p_val, r2
         cmp/eq  r1, r2
@@ -37,14 +30,12 @@ start:
         nop
         .align 2
 p_val:  .long 0xABCD1234
-_done:
-        mov.l   p_res, r0
+_done:  mov.l   p_res, r0
         mov     #0, r9
         mov.l   r9, @r0
         bra     _done
         nop
-_fail:
-        mov.l   p_res, r0
+_fail:  mov.l   p_res, r0
         mov     #1, r9
         mov.l   r9, @r0
         bra     _fail

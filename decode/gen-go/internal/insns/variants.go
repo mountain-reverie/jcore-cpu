@@ -43,7 +43,7 @@ func LoadVariant(specDir string, v Variant) (*InstrSet, error) {
 		if in.Plane == "system" {
 			continue
 		}
-		k, ok := KeyOf(in.Opcode)
+		k, ok := keyOfInstr(in)
 		if !ok {
 			return nil, fmt.Errorf("%s: unparseable opcode %q on %q", v.Name, in.Opcode, in.Name)
 		}

@@ -275,3 +275,37 @@ func TestSyncAppendedRowMarksAllVariants(t *testing.T) {
 		t.Fatal("J4.issue should be present")
 	}
 }
+
+// TestSyncTwoWordMatch: a two-word (Opcode2) spec instruction must MATCH the
+// existing two-word insns.json row (set its variant column), not append a
+// duplicate. Regression for the disp12 mov J2A-column sync.
+func TestSyncTwoWordMatch(t *testing.T) {
+	doc := &Doc{}
+	row := &Row{}
+	row.Set("group", "Data Transfer Instructions")
+	row.Set("format", "mov.l\t@(disp12,Rm),Rn")
+	row.Set("code", "0011nnnnmmmm0001 0110dddddddddddd")
+	doc.Rows = append(doc.Rows, row)
+
+	in := spec.Instr{Name: "MOV.L @(disp12,Rm),Rn", Opcode: "0011 nnnn mmmm 0001", Opcode2: "0110 dddd dddd dddd"}
+	k, ok := keyOfInstr(in)
+	if !ok {
+		t.Fatal("keyOfInstr failed for two-word instr")
+	}
+	set := &InstrSet{ByKey: map[Key]spec.Instr{k: in}, Order: []spec.Instr{in}}
+	vd := VariantData{Variant: Variant{Name: "J2A"}, Set: set, Tab: &Table{}}
+
+	rep, err := Sync(doc, []VariantData{vd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Appended) != 0 {
+		t.Fatalf("expected no appended rows, got %v", rep.Appended)
+	}
+	if len(doc.Rows) != 1 {
+		t.Fatalf("expected 1 row (matched in place), got %d", len(doc.Rows))
+	}
+	if v, _ := doc.Rows[0].Get("J2A"); v != true {
+		t.Errorf("existing two-word row J2A = %v, want true", v)
+	}
+}

@@ -32,8 +32,6 @@ start:
 
         ! push R2,R1,R0 (R15 -= 12)
         .word   0x42F1
-        nop
-        nop
 
         ! clobber so the pop genuinely reads memory
         mov     #0, r0
@@ -43,8 +41,6 @@ start:
 
         ! --- instruction under test: MOVML.L @r15+,r2 (pop R0..R2) ---
         .word   0x42F5
-        nop
-        nop
 
         mov.l   p_s0, r7
         cmp/eq  r0, r7

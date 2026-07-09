@@ -45,8 +45,6 @@ start:
 
         ! --- instruction under test: MOVML.L r4,@-r15 (push R4,R3,R2,R1,R0) ---
         .word   0x44F1
-        nop
-        nop
 
         ! Clobber R0..R4 so the pop-back genuinely reads memory.
         mov     #0, r0

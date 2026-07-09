@@ -53,6 +53,13 @@ func TestParseImmToml(t *testing.T) {
 		{"d8", "U*4", ImmVal{Kind: ImmUnsigned, W: 8, S: 2}, true},
 		// d12 + S*2 → [s 12 1]
 		{"d12", "S*2", ImmVal{Kind: ImmSigned, W: 12, S: 1}, true},
+		// High-nibble unsigned immediate: "UH"/"UH*N" -> op.code(11:8), width
+		// fixed at 4 regardless of instruction format (SH-2A movml.l pop).
+		{"nmd", "UH", ImmVal{Kind: ImmUnsignedHi, W: 4, S: 0}, true},
+		{"n", "UH", ImmVal{Kind: ImmUnsignedHi, W: 4, S: 0}, true},
+		{"n", "UH*4", ImmVal{Kind: ImmUnsignedHi, W: 4, S: 2}, true},
+		{"n", "UH*2", ImmVal{Kind: ImmUnsignedHi, W: 4, S: 1}, true},
+		{"n", "UHx", ImmVal{}, false}, // malformed suffix (missing '*')
 		// Register name → not an immediate
 		{"n", "Rn", ImmVal{}, false},
 		{"n", "GBR", ImmVal{}, false},
@@ -77,6 +84,7 @@ func TestImmValLiteral(t *testing.T) {
 		"IMM_N16":    {Kind: ImmNumeric, N: -16},
 		"IMM_U_8_2":  {Kind: ImmUnsigned, W: 8, S: 2},
 		"IMM_S_12_1": {Kind: ImmSigned, W: 12, S: 1},
+		"IMM_U_H4_2": {Kind: ImmUnsignedHi, W: 4, S: 2},
 	}
 	for want, in := range cases {
 		if got := in.Literal(); got != want {
@@ -110,6 +118,9 @@ func TestImmLiteralToVHDL(t *testing.T) {
 		{"IMM_U_8_0", `x"000000" & op.code(7 downto 0)`},
 		{"IMM_U_8_1", `"00000000000000000000000" & op.code(7 downto 0) & "0"`},
 		{"IMM_U_8_2", `"0000000000000000000000" & op.code(7 downto 0) & "00"`},
+		// High-nibble unsigned opcode-field extraction (SH-2A movml.l pop):
+		// op.code(11:8) << 2 == 26 zeros & op.code(11 downto 8) & "00".
+		{"IMM_U_H4_2", `"00000000000000000000000000" & op.code(11 downto 8) & "00"`},
 		// Sign-extended named signals.
 		{"IMM_S_8_0", "imms_8_0"},
 		{"IMM_S_8_1", "imms_8_1"},

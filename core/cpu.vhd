@@ -395,12 +395,25 @@ begin
       tlb_exc_kind <= IMISS when page_fault_i.kind = PF_IFETCH else DMISS_R;
       tlb_exc_pend <= page_fault_i.en;
       tlb_exc_is_i <= '1' when page_fault_i.kind = PF_IFETCH else '0';
-      -- Faulting VA for the D-side @Rm+ base-restore (the pre-increment base = the
-      -- read address on the bus). During a PF_DREAD the data bus carries the
-      -- faulting read address, captured into tlb_exc_pc's companion tlb_fault_va on
-      -- the first-fault cycle; the restore rewrites Rm := tlb_fault_va so RTE
-      -- re-increments exactly once. I-faults ignore tlb_fault_va (live-PC restart).
-      tlb_fault_va <= sig_db_o.a;
+      -- Faulting VA feeding tlb_fault_va, which the datapath uses for TWO
+      -- distinct purposes depending on the fault kind (see datapath.vhm's
+      -- shared D-fault capture): the I-fetch restart PC and the D-side @Rm+
+      -- base-restore. The correct source therefore differs by kind and MUST be
+      -- selected on kind here:
+      --   * PF_IFETCH: the datapath sets tlb_exc_pc := tlb_fault_va (the restart
+      --     PC that RTE resumes at), so tlb_fault_va MUST be the faulting
+      --     INSTRUCTION-fetch VA = sig_inst_o.a & '0'. Sourcing it from the data
+      --     bus (sig_db_o.a) is wrong: during an instruction-fetch fault the data
+      --     master is idle, so sig_db_o.a is stale/'U' and the saved SPC (hence
+      --     the post-RTE PC) is undefined -> the CPU wanders after the handler
+      --     RTEs. (This is the Task-7 end-to-end failure: the page-in handler
+      --     ran and filled the frame, but RTE resumed at 'U' instead of the
+      --     faulting window address.)
+      --   * PF_DREAD: the faulting read address IS on the data bus, and the @Rm+
+      --     base-restore rewrites Rm := tlb_fault_va so RTE re-increments exactly
+      --     once, so the data-bus address is the right source there.
+      tlb_fault_va <= (sig_inst_o.a & '0') when page_fault_i.kind = PF_IFETCH
+                      else sig_db_o.a;
     end generate g_pf;
     g_no_pf : if not PAGE_FAULT_ARCH generate
       tlb_exc_en   <= '0';

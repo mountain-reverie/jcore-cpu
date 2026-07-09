@@ -97,10 +97,12 @@
 # unchanged R15).
 #
 #   slot0 (repeated by the loop for idx = 0..n): address = R15 + idx*4
-#     (IMM_U_4_2 reads op.code(3:0)=idx, overridden by decode_core), loaded
-#     data -> R(idx) (wbus=Rn, op.code(11:8)=idx overridden). W-port only.
+#     (alu_y="UH*4"/IMM_U_H4_2 = op.code(11:8)<<2, op.code(11:8)=idx overridden
+#     by decode_core), loaded data -> R(idx) (wbus=Rn, same op.code(11:8)=idx).
+#     W-port only. (disp rides op.code(11:8), NOT op.code(3:0), which is the
+#     fixed "0101" opcode discriminant -- see the format comment below.)
 #   slot1 (terminal, once): R15 := R15 + (n+1)*4. disp=(n+1) supplied by
-#     decode_core on op.code(3:0). Z-port only -> no clash.
+#     decode_core on op.code(11:8). Z-port only -> no clash.
 [[instr]]
   name = "MOVML.L @R15+,Rn"
   # format "n": Rn = op.code(11:8) (the wbus dest = the loaded register). The

@@ -264,17 +264,13 @@ begin
   -- decremented value. movml_hold releases (=> op.addr advances to the dispatch
   -- terminator) on the idx=0 cycle, after R0's store commits. Each iteration is
   -- gated by next_id_stall_a, so the existing reg_conf R15 read-after-write
-  -- interlock naturally paces the loop; verified in sim (m=0/2/4 push+pop).
-  --
-  -- KNOWN LIMITATION (feasibility spike): the interlock that paces iterations
-  -- WITHIN the loop does not extend to the instruction IMMEDIATELY following the
-  -- loop -- an instruction reading R15 back-to-back after movml.l (no intervening
-  -- instruction touching R15) can see a stale/mis-forwarded R15 (sim exposes a
-  -- misaligned store). Plain MOV.L @-Rn/@Rn+ does interlock its follower; movml.l
-  -- does not yet. Real (compiler) code separates the movml.l from the next R15
-  -- use, so this does not block the mechanism proof, but it MUST be fixed (make
-  -- the loop's final R15 writeback drive reg_conf for the next instruction)
-  -- before movml.l is promoted past spike status. See sim/tests/sh2a_movml_b2b.S.
+  -- interlock naturally paces the loop; verified in sim (m=0/2/4 push+pop, and
+  -- a back-to-back movml.l -> mov.l @r15+ with no nops: sh2a_movml_b2b.S).
+  -- NOTE: id.if_issue and id.incpc are suppressed by movml_hold (see the incpc/
+  -- if_issue assignments below), so the PC advances / the next instruction is
+  -- fetched exactly ONCE at loop exit -- otherwise each re-executed store slot
+  -- (which carries the instruction's own if_issue/incpc) would fetch past and
+  -- skip the m instructions following movml.l.
   g_movml : if SH2A_ARCH generate
     signal is_movml     : std_logic;
     signal idx_eff      : std_logic_vector(3 downto 0);

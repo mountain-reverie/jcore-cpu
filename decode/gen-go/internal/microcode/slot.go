@@ -1235,6 +1235,19 @@ func isConstStr(v string) bool {
 	if up == "U" || up == "S" {
 		return true
 	}
+	// High-nibble unsigned: "UH" or "UH*N".
+	if strings.HasPrefix(up, "UH") {
+		rest := up[2:]
+		if rest == "" {
+			return true
+		}
+		if strings.HasPrefix(rest, "*") {
+			if _, err := strconv.Atoi(rest[1:]); err == nil {
+				return true
+			}
+		}
+		return false
+	}
 	// "U*N" or "S*N"
 	for _, prefix := range []string{"U*", "S*"} {
 		if strings.HasPrefix(up, prefix) {

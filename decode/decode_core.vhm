@@ -95,6 +95,14 @@ architecture arch of decode_core is
   signal op_addr_next_i : std_logic_vector(DEC_ADDR_BITS-1 downto 0);
   signal mispredict : std_logic;
 
+  -- SH-2A movml.l Rm,@-R15 counted store loop. All SH2A_ARCH-gated; on non-J2A
+  -- builds movml_active/movml_hold are tied '0' (g_movml_off) so the op.code
+  -- override and the sequencer hold constant-fold away -- base byte-identical.
+  signal op_i         : operation_t;                  -- base op before the movml index override
+  signal movml_active : std_logic;                    -- '1' while re-presenting the movml store slot
+  signal movml_hold   : std_logic;                    -- '1' to hold op.addr / suppress dispatch (loop)
+  signal movml_idx    : std_logic_vector(3 downto 0); -- store-data register index nibble (m, m-1, ..., 0)
+
   -- TLB miss/protection exception request hold (MMU_ARCH). A TLB fault is
   -- discovered combinationally during the offending memory access (tlb_exc_en
   -- pulses for a single access cycle), but the decode op-mux can only latch a
@@ -158,7 +166,7 @@ architecture arch of decode_core is
   end;
 begin
 
-  decode_core : process(this,next_id_stall_a,ilevel_cap,dispatch,maskint_next,delay_jump,event_i,next_op,slot)
+  decode_core : process(this,next_id_stall_a,ilevel_cap,dispatch,maskint_next,delay_jump,event_i,next_op,slot,movml_hold)
     register this when clk='1' and clk'event reset when rst='1';
   begin
     if slot='1' then
@@ -172,8 +180,16 @@ begin
       this.id_stall := next_id_stall_a;
       if next_id_stall_a = '0' then
         this.delay_slot := delay_jump;
-        this.instr_seq_zero := dispatch;
-        this.op.addr := std_logic_vector(unsigned(this.op.addr) + 1);
+        -- movml_hold: force instr_seq_zero := '0' (hold op mid-instruction) WITHOUT
+        -- advancing op.addr, so the single movml store slot re-executes for each
+        -- pushed register. Constant '0' on non-J2A builds -> the else branch is the
+        -- original (dispatch + op.addr advance), so base is byte-identical.
+        if movml_hold = '1' then
+          this.instr_seq_zero := '0';
+        else
+          this.instr_seq_zero := dispatch;
+          this.op.addr := std_logic_vector(unsigned(this.op.addr) + 1);
+        end if;
       end if;
     end if;
   end process;
@@ -238,6 +254,54 @@ begin
   g_ext_word_off : if not SH2A_ARCH generate
     ext_word_o <= (others => '0');
   end generate g_ext_word_off;
+
+  -- SH-2A movml.l Rm,@-R15 counted store loop (SH2A_ARCH only). The seed is a
+  -- single store slot (spec/sh2a: xbus=R15, ybus=Rn=op.code(11:8)=store-data reg,
+  -- SUB 4 -> R15 writeback, ma WRITE). This block re-presents that same store
+  -- slot m+1 times by holding op.addr (movml_hold), while walking the store-data
+  -- register index op.code(11:8) from m down to 0 (movml_idx overrides op.code
+  -- above). idx_eff = m on the entry cycle (from op.code directly), then the registered
+  -- decremented value. movml_hold releases (=> op.addr advances to the dispatch
+  -- terminator) on the idx=0 cycle, after R0's store commits. Each iteration is
+  -- gated by next_id_stall_a, so the existing reg_conf R15 read-after-write
+  -- interlock (if it fires) naturally paces the loop; verified in sim.
+  g_movml : if SH2A_ARCH generate
+    signal is_movml     : std_logic;
+    signal idx_eff      : std_logic_vector(3 downto 0);
+    signal movml_loop_r : std_logic;
+    signal movml_idx_r  : std_logic_vector(3 downto 0);
+  begin
+    is_movml <= '1' when op_i.code(15 downto 12) = "0100"
+                         and op_i.code(7 downto 0) = "11110001"
+                else '0';
+    idx_eff <= op_i.code(11 downto 8) when (is_movml = '1' and movml_loop_r = '0')
+               else movml_idx_r;
+    movml_active <= is_movml;
+    movml_idx    <= idx_eff;
+    movml_hold   <= '1' when is_movml = '1' and idx_eff /= "0000" else '0';
+
+    movml_reg : process(clk, rst)
+    begin
+      if rst = '1' then
+        movml_loop_r <= '0';
+        movml_idx_r  <= (others => '0');
+      elsif clk = '1' and clk'event then
+        if slot = '1' and next_id_stall_a = '0' then
+          if is_movml = '1' and idx_eff /= "0000" then
+            movml_idx_r  <= std_logic_vector(unsigned(idx_eff) - 1);
+            movml_loop_r <= '1';
+          else
+            movml_loop_r <= '0';
+          end if;
+        end if;
+      end if;
+    end process;
+  end generate g_movml;
+  g_movml_off : if not SH2A_ARCH generate
+    movml_active <= '0';
+    movml_hold   <= '0';
+    movml_idx    <= (others => '0');
+  end generate g_movml_off;
   ilevel <= this'register.ilevel;
 
   mac_stall <= mac_stall_sense and (p.wb1.mac_busy or p.wb2.mac_busy or
@@ -336,8 +400,16 @@ begin
 
     event_ack <= '1' when slot = '1' and (event_ack_0 = '1' or (event_i.en = '1' and event_i.cmd = BREAK and debug = '1') ) else '0';
 
-    op <= this'register.op when this'register.id_stall = '1' or this'register.instr_seq_zero = '0'
-          else next_op;
+    op_i <= this'register.op when this'register.id_stall = '1' or this'register.instr_seq_zero = '0'
+            else next_op;
+    -- movml.l store-register index override: replace op.code(11 downto 8) with the
+    -- running index (m, m-1, ..., 0) while the loop re-presents the store slot, so
+    -- the store data (ybus=Rn=op.code(11:8)) walks R(m)..R(0). SH2A_ARCH only:
+    -- movml_active is constant '0' otherwise, so op.code == op_i.code on base.
+    op.plane <= op_i.plane;
+    op.addr  <= op_i.addr;
+    op.code  <= op_i.code(15 downto 12) & movml_idx & op_i.code(7 downto 0)
+                  when movml_active = '1' else op_i.code;
 
     -- Stage 2: read-ahead microcode address for the full-cycle (rising-edge)
     -- ROM read -- the op.addr the sequencer will use NEXT cycle, mirroring the

@@ -80,3 +80,32 @@
     ybus = "Rn"
     zbus = "R15"
     zbus_sel = "ARITH"
+
+# SH-2A MOVML.L @R15+,Rn (pop, n+1 longs). Single load seed slot; the n+1
+# repetition is driven in decode_core.vhm (SH2A_ARCH), the same substrate as
+# the push but counting the index UP 0..n. Single-slot post-increment load
+# modeled on LDS.L @Rm+,MACH (ma_addy=XBUS reads @R15 while the EX z-port
+# writes R15+4):
+#   xbus = R15   -> read address (ma_addy=XBUS) + ALU x-input
+#   zbus = R15+4 -> R15 writeback (EX z-port), from ALU ADD 4
+#   wbus = Rn(=op.code(11:8), overridden by the decode_core index) -> loaded
+#          data into R(idx) (WB w-port). Two distinct register write ports let
+#          R15 and R(idx) both update in one cycle.
+[[instr]]
+  name = "MOVML.L @R15+,Rn"
+  format = "n"
+  opcode = "0100 nnnn 1111 0101"
+  operation = "R15->R(0..n), R15+4*(n+1)->R15"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    alu_y = "4"
+    arith = "ADD"
+    ma_addy = "XBUS"
+    ma_op = "READ"
+    ma_size = "32"
+    pc = "INC"
+    wbus = "Rn"
+    xbus = "R15"
+    zbus = "R15"
+    zbus_sel = "ARITH"

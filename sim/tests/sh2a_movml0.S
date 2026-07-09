@@ -22,14 +22,7 @@ start:
         mov.l   p_val, r0        ! r0 = 0xABCD1234
         nop
         .word   0x40F1           ! movml.l r0,@-r15  (m=0: one store of R0)
-        nop
-        nop
-        nop
-        nop
-        nop
-        nop
         mov.l   @r15+, r1        ! pop it back
-        nop
         mov.l   p_val, r2
         cmp/eq  r1, r2
         bf      _fail

@@ -155,8 +155,6 @@ ENTRY(start)
         ! The handler maps page 1 and RTEs with hardware-captured SPC still
         ! pointing at THIS instruction, so it restarts from load 0.
         .word   0x44F5
-        nop
-        nop
 
         ! ---- Verify every popped register against its sentinel. ----
         mov.l   p_s0, r7

@@ -66,6 +66,7 @@ sh2a_movl12.elf: sh2a_movl12.o
 sh2a_movml0.elf: sh2a_movml0.o
 sh2a_movml.elf: sh2a_movml.o
 sh2a_movml_b2b.elf: sh2a_movml_b2b.o
+sh2a_movml_pop.elf: sh2a_movml_pop.o
 mmurun.elf: mmurun.o tlbwalk.o
 mmuirun.elf: mmuirun.o tlbwalk.o
 mmuainc.elf: mmuainc.o tlbwalk.o

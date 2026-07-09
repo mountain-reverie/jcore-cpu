@@ -81,31 +81,59 @@
     zbus = "R15"
     zbus_sel = "ARITH"
 
-# SH-2A MOVML.L @R15+,Rn (pop, n+1 longs). Single load seed slot; the n+1
-# repetition is driven in decode_core.vhm (SH2A_ARCH), the same substrate as
-# the push but counting the index UP 0..n. Single-slot post-increment load
-# modeled on LDS.L @Rm+,MACH (ma_addy=XBUS reads @R15 while the EX z-port
-# writes R15+4):
-#   xbus = R15   -> read address (ma_addy=XBUS) + ALU x-input
-#   zbus = R15+4 -> R15 writeback (EX z-port), from ALU ADD 4
-#   wbus = Rn(=op.code(11:8), overridden by the decode_core index) -> loaded
-#          data into R(idx) (WB w-port). Two distinct register write ports let
-#          R15 and R(idx) both update in one cycle.
+# SH-2A MOVML.L @R15+,Rn (pop, n+1 longs). TWO microcode slots; the n+1
+# repetition of slot0 is driven in decode_core.vhm (SH2A_ARCH), the same
+# substrate as the push but counting the index UP 0..n, followed by ONE
+# terminal slot1 that updates R15.
+#
+# Restart-safe indexed-load design (see docs/superpowers/specs/
+# 2026-07-09-j2a-group4-movml-pop-design.md §2/§3). The register file has a
+# single physical write-commit port: if a slot writes both R15 (Z-bus) and
+# R(idx) (W-bus) in the same cycle the Z-write wins and the loaded data is
+# silently dropped ("Write clash"). So each per-element load writes ONLY the
+# W-port (no zbus GPR write); R15 is left pristine through the whole loop and
+# advanced EXACTLY ONCE in the terminal slot -- which also makes a mid-load
+# memory-fault restart idempotent (re-reads the same addresses from the
+# unchanged R15).
+#
+#   slot0 (repeated by the loop for idx = 0..n): address = R15 + idx*4
+#     (IMM_U_4_2 reads op.code(3:0)=idx, overridden by decode_core), loaded
+#     data -> R(idx) (wbus=Rn, op.code(11:8)=idx overridden). W-port only.
+#   slot1 (terminal, once): R15 := R15 + (n+1)*4. disp=(n+1) supplied by
+#     decode_core on op.code(3:0). Z-port only -> no clash.
 [[instr]]
   name = "MOVML.L @R15+,Rn"
+  # format "n": Rn = op.code(11:8) (the wbus dest = the loaded register). The
+  # per-element displacement also rides in op.code(11:8) via alu_y="UH*4"
+  # (IMM_U_H4_2 = op.code(11:8) << 2), NOT op.code(3:0): decode_core overrides
+  # op.code(11:8) with the running index, and op.code(3:0)="0101" is a fixed
+  # opcode discriminant (vs push "0001") that must NOT be repurposed -- the
+  # simple/direct decoders re-match the full opcode every cycle.
   format = "n"
   opcode = "0100 nnnn 1111 0101"
   operation = "R15->R(0..n), R15+4*(n+1)->R15"
   table_ref = "SH-2A"
 
+  # slot0 -- indexed load, repeated by the decode_core loop for idx = 0..n.
+  # address = R15 + idx*4; loaded data -> R(idx). W-port write ONLY (no zbus
+  # GPR write) -> no register-file write-commit clash.
   [[instr.slots]]
-    alu_y = "4"
+    alu_y = "UH*4"      # IMM_U_H4_2 = op.code(11:8) << 2 = idx*4
     arith = "ADD"
-    ma_addy = "XBUS"
+    ma_addy = "ZBUS"    # address = R15 + idx*4
     ma_op = "READ"
     ma_size = "32"
-    pc = "INC"
-    wbus = "Rn"
+    pc = "HOLD"         # PC does not advance until the terminal slot
+    wbus = "Rn"         # loaded data -> R(op.code[11:8]) = R(idx)  (W-port)
     xbus = "R15"
-    zbus = "R15"
+    zbus_sel = "ARITH"
+
+  # slot1 -- terminal, runs ONCE after the loop. R15 := R15 + (n+1)*4. Z-port
+  # only -> no clash. decode_core drives op.code(11:8) := (n+1) for this slot.
+  [[instr.slots]]
+    alu_y = "UH*4"      # IMM_U_H4_2 = op.code(11:8) << 2 = (n+1)*4
+    arith = "ADD"
+    pc = "INC"
+    xbus = "R15"
+    zbus = "R15"        # R15 writeback (Z-port)
     zbus_sel = "ARITH"

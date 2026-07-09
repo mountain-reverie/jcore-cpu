@@ -37,6 +37,13 @@ const (
 	ImmNumeric ImmKind = iota
 	ImmUnsigned
 	ImmSigned
+	// ImmUnsignedHi is an unsigned immediate sourced from the HIGH register
+	// nibble op.code(11:8) (rather than the low bits like ImmUnsigned).
+	// Needed by SH-2A movml.l pop, whose per-element displacement rides in
+	// op.code(11:8) -- the wildcard register nibble that decode_core overrides
+	// with the running index -- because op.code(3:0) is a fixed opcode
+	// discriminant there and cannot be repurposed as a disp field.
+	ImmUnsignedHi
 )
 
 // ImmLiteralToVHDL translates an immval_t enum literal name to the
@@ -80,6 +87,8 @@ func ImmLiteralToVHDL(lit string) string {
 		return `"00000000000000000000000" & op.code(7 downto 0) & "0"`
 	case "IMM_U_8_2":
 		return `"0000000000000000000000" & op.code(7 downto 0) & "00"`
+	case "IMM_U_H4_2":
+		return `"00000000000000000000000000" & op.code(11 downto 8) & "00"`
 	case "IMM_S_8_0":
 		return "imms_8_0"
 	case "IMM_S_8_1":
@@ -127,6 +136,8 @@ func (i ImmVal) Literal() string {
 		return fmt.Sprintf("IMM_U_%d_%d", i.W, i.S)
 	case ImmSigned:
 		return fmt.Sprintf("IMM_S_%d_%d", i.W, i.S)
+	case ImmUnsignedHi:
+		return fmt.Sprintf("IMM_U_H%d_%d", i.W, i.S)
 	}
 	return ""
 }
@@ -217,8 +228,25 @@ func ParseImmToml(format, v string) (ImmVal, bool) {
 	if n, err := strconv.Atoi(v); err == nil {
 		return ImmVal{Kind: ImmNumeric, N: n}, true
 	}
-	// TOML structured immediate: "U", "S", "U*N", "S*N"
 	up := strings.ToUpper(v)
+	// High-nibble unsigned immediate: "UH", "UH*N" -> op.code(11:8) << log2(N).
+	// Width is fixed at 4 (the nibble), independent of the instruction format.
+	if strings.HasPrefix(up, "UH") {
+		rest := up[2:]
+		mult := 1
+		if rest != "" {
+			if !strings.HasPrefix(rest, "*") {
+				return ImmVal{}, false
+			}
+			n, err := strconv.Atoi(rest[1:])
+			if err != nil {
+				return ImmVal{}, false
+			}
+			mult = n
+		}
+		return ImmVal{Kind: ImmUnsignedHi, W: 4, S: multToShift(mult)}, true
+	}
+	// TOML structured immediate: "U", "S", "U*N", "S*N"
 	var kind ImmKind
 	var rest string
 	if strings.HasPrefix(up, "U") {

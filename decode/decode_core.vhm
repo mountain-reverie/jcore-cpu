@@ -101,7 +101,7 @@ architecture arch of decode_core is
   signal op_i         : operation_t;                  -- base op before the movml index override
   signal movml_active : std_logic;                    -- '1' while re-presenting the movml store slot
   signal movml_hold   : std_logic;                    -- '1' to hold op.addr / suppress dispatch (loop)
-  signal movml_idx    : std_logic_vector(3 downto 0); -- store-data register index nibble (m, m-1, ..., 0)
+  signal movml_idx    : std_logic_vector(3 downto 0); -- op.code[11:8] override: push m..0 / pop load 0..n / pop terminal n+1
 
   -- TLB miss/protection exception request hold (MMU_ARCH). A TLB fault is
   -- discovered combinationally during the offending memory access (tlb_exc_en
@@ -255,48 +255,111 @@ begin
     ext_word_o <= (others => '0');
   end generate g_ext_word_off;
 
-  -- SH-2A movml.l Rm,@-R15 counted store loop (SH2A_ARCH only). The seed is a
-  -- single store slot (spec/sh2a: xbus=R15, ybus=Rn=op.code(11:8)=store-data reg,
-  -- SUB 4 -> R15 writeback, ma WRITE). This block re-presents that same store
-  -- slot m+1 times by holding op.addr (movml_hold), while walking the store-data
-  -- register index op.code(11:8) from m down to 0 (movml_idx overrides op.code
-  -- above). idx_eff = m on the entry cycle (from op.code directly), then the registered
-  -- decremented value. movml_hold releases (=> op.addr advances to the dispatch
-  -- terminator) on the idx=0 cycle, after R0's store commits. Each iteration is
-  -- gated by next_id_stall_a, so the existing reg_conf R15 read-after-write
-  -- interlock naturally paces the loop; verified in sim (m=0/2/4 push+pop, and
-  -- a back-to-back movml.l -> mov.l @r15+ with no nops: sh2a_movml_b2b.S).
-  -- NOTE: id.if_issue and id.incpc are suppressed by movml_hold (see the incpc/
-  -- if_issue assignments below), so the PC advances / the next instruction is
-  -- fetched exactly ONCE at loop exit -- otherwise each re-executed store slot
-  -- (which carries the instruction's own if_issue/incpc) would fetch past and
-  -- skip the m instructions following movml.l.
+  -- SH-2A movml.l counted-loop sequencer (SH2A_ARCH only), both directions:
+  --
+  --   push  Rm,@-R15  (0100 mmmm 1111 0001) -- ONE store slot re-presented m+1
+  --         times by holding op.addr (movml_hold), walking the store-data
+  --         register index op.code(11:8) DOWN m..0 (movml_idx override).
+  --         idx=m on the entry cycle (from op.code directly), then the
+  --         registered decremented value; the store slot IS the dispatch slot
+  --         so movml_hold releases (=> op.addr advances, dispatch, PC/fetch
+  --         advance once) on the idx=0 cycle after R0's store commits.
+  --
+  --   pop   @R15+,Rn  (0100 nnnn 1111 0101) -- TWO slots (spec/sh2a mov.toml):
+  --         slot0 = indexed W-port-only load, repeated n+1 times counting the
+  --         index UP 0..n; slot1 = terminal Z-port-only R15 += (n+1)*4. ONLY
+  --         op.code(11:8) is overridden (movml_idx) -- it is the wildcard
+  --         register nibble, so the opcode match is unaffected, and it feeds
+  --         BOTH the wbus dest R(idx) AND the address disp (alu_y=UH*4 =
+  --         op.code(11:8)<<2 = idx*4). op.code(3:0)="0101" is a fixed opcode
+  --         discriminant (vs push "0001") and must NOT be touched, since the
+  --         simple/direct decoders re-match the full opcode each cycle. No new
+  --         decode->datapath port. movml_hold holds slot0 while idx/=n; on the
+  --         idx=n load it releases so op.addr advances to slot1 (movml_term_r
+  --         set). In the terminal slot movml_idx := n+1 so R15 += (n+1)*4.
+  --         slot0 has pc=HOLD and is not the last slot, so id.incpc/id.if_issue
+  --         are 0 through the whole load loop; only slot1 (pc=INC, auto
+  --         if_issue+dispatch) advances the PC / fetches -- exactly once.
+  --
+  -- Each iteration is gated by next_id_stall_a, so memory readiness (if_stall)
+  -- and the existing reg_conf R15 interlock naturally pace the loop; verified
+  -- in sim (push m=0/2/4, pop n=0/2/4 round-trip, back-to-back push->pop).
+  -- NOTE: id.if_issue and id.incpc are ALSO suppressed by movml_hold (see the
+  -- incpc/if_issue assignments below); required for push (whose store slot
+  -- carries if_issue/incpc every iteration), harmless for pop (slot0 carries
+  -- neither). g_movml_off ties the movml signals to '0' on base builds.
   g_movml : if SH2A_ARCH generate
-    signal is_movml     : std_logic;
+    signal is_push      : std_logic; -- movml.l Rm,@-R15 (0100 mmmm 1111 0001)
+    signal is_pop       : std_logic; -- movml.l @R15+,Rn (0100 nnnn 1111 0101)
+    signal is_movml     : std_logic; -- either direction
+    signal target       : std_logic_vector(3 downto 0); -- loop-terminator index
     signal idx_eff      : std_logic_vector(3 downto 0);
-    signal movml_loop_r : std_logic;
+    signal idx_next     : std_logic_vector(3 downto 0);
+    signal movml_loop_r : std_logic; -- '1' once past the entry cycle
+    signal movml_term_r : std_logic; -- '1' in the pop terminal slot (slot1)
     signal movml_idx_r  : std_logic_vector(3 downto 0);
   begin
-    is_movml <= '1' when op_i.code(15 downto 12) = "0100"
+    is_push <= '1' when op_i.code(15 downto 12) = "0100"
                          and op_i.code(7 downto 0) = "11110001"
                 else '0';
-    idx_eff <= op_i.code(11 downto 8) when (is_movml = '1' and movml_loop_r = '0')
+    is_pop  <= '1' when op_i.code(15 downto 12) = "0100"
+                         and op_i.code(7 downto 0) = "11110101"
+                else '0';
+    is_movml <= is_push or is_pop;
+
+    -- Push seeds idx = m = op.code(11:8), counts DOWN, terminates at 0.
+    -- Pop seeds idx = 0, counts UP, terminates at n = op.code(11:8).
+    -- idx_eff = seed on the entry cycle (loop_r='0', term_r='0'), else the
+    -- registered stepped value. op_i is held throughout the loop, so
+    -- op.code(11:8) stays the original m/n.
+    target <= "0000" when is_push = '1' else op_i.code(11 downto 8);
+
+    idx_eff <= op_i.code(11 downto 8)
+                 when (is_push = '1' and movml_loop_r = '0' and movml_term_r = '0')
+               else "0000"
+                 when (is_pop = '1' and movml_loop_r = '0' and movml_term_r = '0')
                else movml_idx_r;
+
+    idx_next <= std_logic_vector(unsigned(idx_eff) - 1) when is_push = '1'
+                else std_logic_vector(unsigned(idx_eff) + 1);
+
     movml_active <= is_movml;
-    movml_idx    <= idx_eff;
-    movml_hold   <= '1' when is_movml = '1' and idx_eff /= "0000" else '0';
+    -- op.code(11:8) override (movml_idx). This is the ONLY nibble overridden:
+    -- it is the wildcard register field (matching-safe) and it feeds both the
+    -- register dest (wbus=Rn / ybus=Rn) AND, for pop, the displacement
+    -- (alu_y=UH*4 = op.code(11:8) << 2 = idx*4). Push / pop load loop: the
+    -- running index. Pop terminal slot: n+1, so R15 += (n+1)*4.
+    movml_idx    <= std_logic_vector(unsigned(op_i.code(11 downto 8)) + 1)
+                      when (is_pop = '1' and movml_term_r = '1')
+                    else idx_eff;
+    -- Hold the (re-presented) load/store slot while idx has not reached the
+    -- terminator; never hold the pop terminal slot.
+    movml_hold   <= '1' when (is_movml = '1' and movml_term_r = '0'
+                              and idx_eff /= target)
+                    else '0';
 
     movml_reg : process(clk, rst)
     begin
       if rst = '1' then
         movml_loop_r <= '0';
+        movml_term_r <= '0';
         movml_idx_r  <= (others => '0');
       elsif clk = '1' and clk'event then
         if slot = '1' and next_id_stall_a = '0' then
-          if is_movml = '1' and idx_eff /= "0000" then
-            movml_idx_r  <= std_logic_vector(unsigned(idx_eff) - 1);
+          if movml_term_r = '1' then
+            -- terminal slot completes -> back to idle
+            movml_term_r <= '0';
+            movml_loop_r <= '0';
+          elsif is_movml = '1' and idx_eff /= target then
+            -- still looping (load/store this iteration)
+            movml_idx_r  <= idx_next;
             movml_loop_r <= '1';
+          elsif is_pop = '1' then
+            -- pop: last load committed; next cycle is the terminal R15 slot
+            movml_term_r <= '1';
+            movml_loop_r <= '0';
           else
+            -- push: last store IS the dispatch slot -> done
             movml_loop_r <= '0';
           end if;
         end if;
@@ -416,10 +479,13 @@ begin
 
     op_i <= this'register.op when this'register.id_stall = '1' or this'register.instr_seq_zero = '0'
             else next_op;
-    -- movml.l store-register index override: replace op.code(11 downto 8) with the
-    -- running index (m, m-1, ..., 0) while the loop re-presents the store slot, so
-    -- the store data (ybus=Rn=op.code(11:8)) walks R(m)..R(0). SH2A_ARCH only:
-    -- movml_active is constant '0' otherwise, so op.code == op_i.code on base.
+    -- movml.l register index override while the loop re-presents the seed slot.
+    -- Only op.code(11:8) is overridden (the wildcard register nibble, so the
+    -- opcode match is unaffected). Push: it walks m..0 (store data ybus=Rn).
+    -- Pop: it walks 0..n during the loads (wbus dest R(idx) AND, via alu_y=UH*4
+    -- = op.code(11:8)<<2, the address disp idx*4) and becomes n+1 in the
+    -- terminal slot (R15 += (n+1)*4). SH2A_ARCH only: movml_active is constant
+    -- '0' otherwise, so op.code == op_i.code on base.
     op.plane <= op_i.plane;
     op.addr  <= op_i.addr;
     op.code  <= op_i.code(15 downto 12) & movml_idx & op_i.code(7 downto 0)

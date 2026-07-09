@@ -3,9 +3,35 @@ package insns
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/j-core/jcore-cpu/decode/gen-go/internal/spec"
 )
+
+// keyOfCode keys an insns.json "code" field, handling both single-word (16-bit)
+// and two-word SH-2A (32-bit) codes. Two-word codes are keyed by BOTH words so
+// the several @(disp12) movs -- which all share the first word 0011nnnnmmmm0001
+// and differ only in the second -- stay distinct rows.
+func keyOfCode(code string) (Key, bool) {
+	s := strings.ReplaceAll(strings.TrimSpace(code), " ", "")
+	switch len(s) {
+	case 16:
+		return KeyOf(s)
+	case 32:
+		return KeyOf2(s[:16], s[16:])
+	}
+	return Key{}, false
+}
+
+// keyOfInstr keys a spec instruction, two-word when it carries an extension
+// word (Opcode2), so it matches the corresponding two-word insns.json row
+// instead of being appended as a duplicate.
+func keyOfInstr(in spec.Instr) (Key, bool) {
+	if in.Opcode2 != "" {
+		return KeyOf2(in.Opcode, in.Opcode2)
+	}
+	return KeyOf(in.Opcode)
+}
 
 type VariantData struct {
 	Variant Variant
@@ -28,7 +54,7 @@ func Sync(d *Doc, vds []VariantData) (*Report, error) {
 			continue
 		}
 		code, _ := cv.(string)
-		if k, ok := KeyOf(code); ok {
+		if k, ok := keyOfCode(code); ok {
 			byKey[k] = append(byKey[k], r)
 		}
 	}
@@ -54,7 +80,7 @@ func Sync(d *Doc, vds []VariantData) (*Report, error) {
 
 	for _, vd := range vds {
 		for _, in := range vd.Set.Order {
-			k, _ := KeyOf(in.Opcode)
+			k, _ := keyOfInstr(in)
 			cands := byKey[k]
 			if len(cands) == 0 {
 				if !seenKey[k] {
@@ -115,7 +141,7 @@ func annotateCollides(d *Doc) {
 	for _, r := range d.Rows {
 		if cv, ok := r.Get("code"); ok {
 			if code, ok := cv.(string); ok {
-				if k, ok := KeyOf(code); ok {
+				if k, ok := keyOfCode(code); ok {
 					byKey[k] = append(byKey[k], r)
 				}
 			}
@@ -124,7 +150,7 @@ func annotateCollides(d *Doc) {
 	for _, r := range d.Rows {
 		cv, _ := r.Get("code")
 		code, _ := cv.(string)
-		k, ok := KeyOf(code)
+		k, ok := keyOfCode(code)
 		if !ok {
 			continue
 		}

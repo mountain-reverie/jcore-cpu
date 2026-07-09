@@ -48,3 +48,35 @@
     zbus_sel = "ARITH"
 
   [[instr.slots]]
+
+# SH-2A MOVML.L Rm,@-R15 : push R0..Rm (m+1 longs) onto the R15 stack, Rm at
+# the highest address, R0 at the lowest. This is ONE store microcode slot;
+# the repetition is driven ENTIRELY in decode_core.vhm (SH2A_ARCH-gated), which
+# detects the movml opcode (0100 mmmm 1111 0001), HOLDS op.addr and re-presents
+# this same slot m+1 times while overriding op.code(11:8) with the running
+# index m, m-1, ..., 0. Structurally the single-slot "MOV.L Rm,@-Rn" store with
+# Rn hard-wired to R15:
+#   xbus = R15  -> address base; zbus = R15 - 4 (ALU SUB) -> store address
+#   ybus = Rn(=op.code(11:8)) -> store data = R(index); the ONLY op.code-derived
+#         field, so the decode_core index override selects the register.
+#   zbus = R15  -> writeback R15 := R15-4 EACH committing iteration, so m+1
+#         stores decrement R15 by 4*(m+1) total.
+[[instr]]
+  name = "MOVML.L Rm,@-R15"
+  format = "n"
+  opcode = "0100 nnnn 1111 0001"
+  operation = "R15-4*(m+1)->R15, R(m..0)->(R15..)"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    alu_y = "4"
+    arith = "SUB"
+    ma_addy = "ZBUS"
+    ma_data = "YBUS"
+    ma_op = "WRITE"
+    ma_size = "32"
+    pc = "INC"
+    xbus = "R15"
+    ybus = "Rn"
+    zbus = "R15"
+    zbus_sel = "ARITH"

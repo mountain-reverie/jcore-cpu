@@ -690,6 +690,7 @@ var csvInstrOrder = []string{
 	// SH-2A two-word overlay (spec/sh2a, generate-j2a only): ignored by
 	// base J2 and J4 generation (not in their specs).
 	"MOV.L @(disp12,Rm),Rn",
+	"MOVML.L Rm,@-R15",
 	// System-plane instructions (at end, in CSV row order):
 	"General Illegal",
 	"Slot Illegal",

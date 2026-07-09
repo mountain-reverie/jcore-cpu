@@ -1,6 +1,6 @@
-! Post-loop interlock test: movml.l r2,@-r15 immediately followed by a
+! Post-loop regression: movml.l immediately followed by a mov.l @r15+ that
 ! mov.l @r15+ that READS R15 with NO nops. If the movml's final R15 writeback
-! doesn't interlock the following R15 read, this reads stale R15 -> fail.
+! READS R15 with NO nops. Exercises the fix that suppresses if_issue/incpc during
 #include "sim_instr.h"
         .section .vect
         .long start

@@ -366,13 +366,21 @@ begin
   next_id_stall_a <= reg_conf or if_stall or mac_stall or mispredict;
   next_id_stall <= next_id_stall_a;
 
-  incpc <= id.incpc and not(next_id_stall_a);
+  -- movml_hold also suppresses incpc/if_issue: the movml.l store slot is the
+  -- instruction's dispatch slot (id.if_issue = id.incpc = '1'), so WITHOUT this
+  -- gate every re-executed loop iteration would advance the PC and fetch another
+  -- word, skipping the m instructions following movml.l. Held here so the PC
+  -- advances (and one instruction is fetched) exactly ONCE, on the loop-exit
+  -- (idx=0) cycle when movml_hold releases -- like any single-word instruction.
+  -- movml_hold is constant '0' on non-J2A builds, so base is byte-identical.
+  incpc <= id.incpc and not(next_id_stall_a) and not(movml_hold);
 
   ifadsel <= id.ifadsel;
   -- On a mispredict the current ROM line is the speculatively-read (wrong) word,
   -- so its fetch-issue control must not be acted on -- suppress it for the
   -- one-cycle squash bubble (the corrected line drives the fetch next cycle).
-  if_issue <= id.if_issue and not(reg_conf) and not(mac_stall) and not(mispredict);
+  if_issue <= id.if_issue and not(reg_conf) and not(mac_stall) and not(mispredict)
+              and not(movml_hold);
 
   -- Detect Exception Events
   next_op <=

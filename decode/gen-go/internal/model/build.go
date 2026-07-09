@@ -691,6 +691,7 @@ var csvInstrOrder = []string{
 	// base J2 and J4 generation (not in their specs).
 	"MOV.L @(disp12,Rm),Rn",
 	"MOVML.L Rm,@-R15",
+	"MOVML.L @R15+,Rn",
 	// System-plane instructions (at end, in CSV row order):
 	"General Illegal",
 	"Slot Illegal",

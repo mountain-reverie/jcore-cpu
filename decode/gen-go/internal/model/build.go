@@ -719,6 +719,8 @@ var csvInstrOrder = []string{
 	"MOV.L Rm,@(disp12,Rn)",
 	"MOV.B @(disp12,Rm),Rn",
 	"MOV.W @(disp12,Rm),Rn",
+	"MOVU.B @(disp12,Rm),Rn",
+	"MOVU.W @(disp12,Rm),Rn",
 	"MOV.B Rm,@(disp12,Rn)",
 	"MOV.W Rm,@(disp12,Rn)",
 	"MOVML.L Rm,@-R15",

@@ -35,6 +35,19 @@ configuration cpu_cache_timing_j4_priv of cpu_cache_timing_top is
   end for;
 end configuration;
 
+-- J2A+cache asic/ecp5/timing: SH-2A core (cpu_synth_j2a + SH2A_ARCH=>true) wrapped
+-- with the same cache as j2c. Identical to cpu_cache_timing_j2 except u_cpu binds
+-- cpu_synth_j2a generic map(SH2A_ARCH=>true), as cpu_timing_j2a does for bare cpu.
+configuration cpu_cache_timing_j2a of cpu_cache_timing_top is
+  for timing
+    for u_cpu : cpu use configuration work.cpu_synth_j2a
+      generic map (SH2A_ARCH => true);
+    end for;
+    for u_icache : icache_adapter use configuration work.icache_adapter_fpga; end for;
+    for u_dcache : dcache_adapter use configuration work.dcache_adapter_fpga; end for;
+  end for;
+end configuration;
+
 -- M3: J4+cache asic/ecp5 area build with PRIV_ARCH=true AND MMU_ARCH=true (real
 -- SH-4 MMU: TLB/CAM, D-store fault squash, MMU control-register file, VIPT seam).
 -- Identical to cpu_cache_timing_j4_priv except u_cpu also sets MMU_ARCH => true,

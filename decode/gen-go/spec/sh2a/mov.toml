@@ -146,6 +146,66 @@
 
   [[instr.slots]]
 
+# SH-2A MOVU.B @(disp12,Rm),Rn / MOVU.W @(disp12,Rm),Rn -- unsigned (zero-
+# extending) byte/word load counterparts of MOV.B/MOV.W @(disp12,Rm),Rn
+# above. Same word1 discrimination ("0011 nnnn mmmm 0001"), distinguished
+# by ext_word[15:12] (ubyte=1000, uword=1001). Zero-extension on load uses
+# the new UBYTE/UWORD mem_size_t values (core/components_pkg.vhd), handled
+# by the UBYTE/UWORD arms added to align_read_data in core/datapath.vhm.
+[[instr]]
+  name = "MOVU.B @(disp12,Rm),Rn"
+  format = "nmd12"
+  opcode = "0011 nnnn mmmm 0001"
+  opcode2 = "1000 dddd dddd dddd"
+  operation = "(disp12 + Rm) -> zero_extend(byte) -> Rn"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    latch_ext = "1"
+    pc = "INC"
+    if_issue = "YES"
+
+  [[instr.slots]]
+    imm_from_ext = "1"
+    alu_y = "U*1"
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "UBYTE"
+    pc = "INC"
+    wbus = "Rn"
+    xbus = "Rm"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+
+[[instr]]
+  name = "MOVU.W @(disp12,Rm),Rn"
+  format = "nmd12"
+  opcode = "0011 nnnn mmmm 0001"
+  opcode2 = "1001 dddd dddd dddd"
+  operation = "(disp12*2 + Rm) -> zero_extend(word) -> Rn"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    latch_ext = "1"
+    pc = "INC"
+    if_issue = "YES"
+
+  [[instr.slots]]
+    imm_from_ext = "1"
+    alu_y = "U*2"
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "UWORD"
+    pc = "INC"
+    wbus = "Rn"
+    xbus = "Rm"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+
 # SH-2A MOV.B Rm,@(disp12,Rn) / MOV.W Rm,@(disp12,Rn) -- byte/word store
 # counterparts of MOV.L Rm,@(disp12,Rn) above. Same discrimination scheme;
 # ext_word[15:12]: byte=0000, word=0001.

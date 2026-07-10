@@ -84,7 +84,7 @@ type tlb_array_t is array(0 to 31) of tlb_entry_t;
 type tlb_exc_kind_t is (IMISS, DMISS_R, DMISS_W, IPROT, DPROT_R, DPROT_W);
 
 -- if size becomes part of the bus, mem_size_t will move into cpu2j0_pack
-type mem_size_t is (BYTE, WORD, LONG);
+type mem_size_t is (BYTE, WORD, LONG, UBYTE, UWORD);
 
 type debug_state_t is ( RUN, READY, AWAIT_IF, AWAIT_BREAK );
 

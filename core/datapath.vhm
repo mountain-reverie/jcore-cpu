@@ -240,11 +240,11 @@ architecture stru of datapath is
               case mem.size is
                 when LONG =>
                   r.d := data;          r.we := "1111";
-                when WORD =>
-                  if addr(1) = '0' then r.we := "1100"; 
+                when WORD | UWORD =>
+                  if addr(1) = '0' then r.we := "1100";
                   else                  r.we := "0011"; end if;
                   r.d := data(15 downto 0) & data(15 downto 0);
-                when BYTE =>
+                when BYTE | UBYTE =>
                   -- TODO: Use shift or rotate operator instead of case?
                   case addr(1 downto 0) is
                     when "00" =>        r.we := "1000";
@@ -291,6 +291,18 @@ architecture stru of datapath is
               case bus_o.a(1) is
                 when '0'    => r := to_slv(d(31), 16) & d(31 downto 16);
                 when others => r := to_slv(d(15), 16) & d(15 downto  0);
+              end case;
+            when UBYTE =>
+              case bus_o.a(1 downto 0) is
+                when "00"   => r := to_slv('0', 24) & d(31 downto 24);
+                when "01"   => r := to_slv('0', 24) & d(23 downto 16);
+                when "10"   => r := to_slv('0', 24) & d(15 downto  8);
+                when others => r := to_slv('0', 24) & d( 7 downto  0);
+              end case;
+            when UWORD =>
+              case bus_o.a(1) is
+                when '0'    => r := to_slv('0', 16) & d(31 downto 16);
+                when others => r := to_slv('0', 16) & d(15 downto  0);
               end case;
             when others =>     r := d;
           end case;

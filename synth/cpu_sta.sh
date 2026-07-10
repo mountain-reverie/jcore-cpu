@@ -23,8 +23,9 @@ PERIOD_NS="$(awk -v m="$TARGET_MHZ" 'BEGIN{printf "%.4f", 1000.0/m}')"
 # it and the bare cpu expose a single `clk` port.
 SYNTH_VARIANT="${SYNTH_VARIANT:-j2}"
 case "$SYNTH_VARIANT" in
-  j2c|j4c) STA_TOP="cpu_cache_timing_top" ;;
-  *)       STA_TOP="cpu" ;;
+  j2c|j4c|j2ac) STA_TOP="cpu_cache_timing_top" ;;
+  j2a)          STA_TOP="cpu_j2a_top" ;;
+  *)            STA_TOP="cpu" ;;
 esac
 
 if [ ! -f "$OUT/cpu_asic.v" ]; then

@@ -212,9 +212,28 @@ type datapath_reg_t is record
    -- pipeline of inserted values to override y-bus. Values go in at 'left and
    -- move downto 'right
    ybus_override : ybus_val_pipeline_t;
+   -- SH2A_ARCH only: scratch pointer for the restart-safe MOVML.L Rm,@-R15
+   -- (multi-register) push, held constant (= R15-4*(m+1)) across the store
+   -- loop so R15 itself stays pristine until the terminal commit. Captured
+   -- and consumed via datapath signature classification (core/datapath.vhm,
+   -- "push_ptr" store/init classifiers), not a dedicated control port --
+   -- see docs/superpowers/specs/2026-07-09-j2a-restart-safe-push-design.md
+   -- §3. Always present in the record (mirrors the MMU shadow fields above)
+   -- but only ever written when SH2A_ARCH, so it is inert (constant 0,
+   -- optimized away) on J1/J2/J4.
+   push_ptr : std_logic_vector(31 downto 0);
+   -- SH2A_ARCH only: '1' while a restart-safe MOVML.L Rm,@-R15 push is in
+   -- flight (set at the init slot that captures push_ptr, cleared at the
+   -- terminal R15-commit slot). It qualifies the store-address substitution
+   -- so it is uniform across ALL m+1 store slots -- including the last one,
+   -- where the loop releases pc-hold and pc_ctrl.inc glitches to '1' -- and
+   -- so it distinguishes the push store loop from an ordinary
+   -- MOV.L Rm,@(disp,R15) (which is datapath-identical to a store slot but
+   -- never runs inside a push). Inert (constant 0) on J1/J2/J4.
+   push_active : std_logic;
 end record;
 
-constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, tlb_exc_captured => '0', ma_pc => (others => '0'), tlb_exc_pc => (others => '0'), tlb_exc_sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), tlb_squash => '0', ma_numz => (others => '0'), ma_autoupd => '0', ma_predec => '0', ma_base => (others => '0'), ma_dslot => '0', if_pc_next => (others => '0'), if_pc => (others => '0'), ma_if_pc => (others => '0'), tlb_fault_zreg => (others => '0'), tlb_restore_val => (others => '0'), tlb_restore_pend => '0', mac_s => '0', data_o_size => BYTE, data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
+constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, tlb_exc_captured => '0', ma_pc => (others => '0'), tlb_exc_pc => (others => '0'), tlb_exc_sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), tlb_squash => '0', ma_numz => (others => '0'), ma_autoupd => '0', ma_predec => '0', ma_base => (others => '0'), ma_dslot => '0', if_pc_next => (others => '0'), if_pc => (others => '0'), ma_if_pc => (others => '0'), tlb_fault_zreg => (others => '0'), tlb_restore_val => (others => '0'), tlb_restore_pend => '0', mac_s => '0', data_o_size => BYTE, data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET), push_ptr => (others => '0'), push_active => '0');
 
 subtype regnum_t is std_logic_vector(4 downto 0);
 component register_file is

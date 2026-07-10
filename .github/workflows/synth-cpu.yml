@@ -37,7 +37,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [j1, j2, j4, j2c, j4c]   # *c = cpu+cache (ASIC dual-clock)
+        variant: [j1, j2, j4, j2a, j2c, j4c, j2ac]   # *c = cpu+cache (ASIC dual-clock); j2a/j2ac = SH-2A
     env:
       SKY130_LIB: /opt/sky130/sky130_fd_sc_hd__tt_025C_1v80.lib
       IHP_LIB: /opt/ihp-sg13g2/sg13g2_stdcell_typ_1p20V_25C.lib
@@ -73,7 +73,7 @@ jobs:
         # byte-identical to the historical J2-only invocation.
         run: SYNTH_VARIANT=${{ matrix.variant }} synth/cpu_synth.sh asic
       - name: Assert no negedge FFs (single-clock cache)
-        if: matrix.variant == 'j2c' || matrix.variant == 'j4c'
+        if: matrix.variant == 'j2c' || matrix.variant == 'j4c' || matrix.variant == 'j2ac'
         run: |
           set -euo pipefail
           # The single-clock cache CDC must be all-posedge (Part B reclock). A
@@ -183,7 +183,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [j1, j2, j4, j2c, j4c]   # *c = cpu+cache (FPGA single-clock)
+        variant: [j1, j2, j4, j2a, j2c, j4c, j2ac]   # *c = cpu+cache (FPGA single-clock); j2a/j2ac = SH-2A
     steps:
       - name: Checkout jcore-cpu
         uses: actions/checkout@v4
@@ -332,7 +332,7 @@ jobs:
             j4)  floor=35 ;;                    # J4 == J2 core today (margin vs ~42-43 noisy Fmax)
             j2c) floor=18 ;;                    # cpu+cache, single-clock CDC-limited
             j4c) floor=18 ;;
-            *)   floor=18 ;;
+            *)   floor=18 ;;                    # j2a/j2ac: report-only (no floor gate)
           esac
           fmax=$(grep -oE "Max frequency for clock '[^']*': [0-9.]+ MHz" build/nextpnr_timing.log \
                  | tail -1 | grep -oE '[0-9.]+ MHz' | grep -oE '[0-9.]+' || true)
@@ -462,7 +462,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [j2c, j4c, j1, j2, j4]   # j2c/j4c first: primary interest
+        variant: [j2c, j4c, j2ac, j1, j2, j4, j2a]   # j2c/j4c first: primary interest; j2a/j2ac second
         pdk:
           - { id: sky130A,     target: asic-sky130-pnr }
           - { id: ihp-sg13g2,  target: asic-ihp-sg13g2-pnr }
@@ -484,8 +484,8 @@ jobs:
         run: |
           set -uo pipefail
           case "${{ matrix.variant }}" in
-            j2c|j4c) export OL_DESIGN=cpu_cache_timing_top ;;
-            *)       export OL_DESIGN=cpu ;;
+            j2c|j4c|j2ac) export OL_DESIGN=cpu_cache_timing_top ;;
+            *)            export OL_DESIGN=cpu ;;
           esac
           synth/openlane/run.sh
           python3 synth/metrics.py --target "${{ matrix.pdk.target }}" \

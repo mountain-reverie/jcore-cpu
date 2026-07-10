@@ -11,12 +11,17 @@ window.__SPEED__ = null;
 // to its cpu: j2c = pastel blue, j4c = pastel green.
 var VARIANT_COLOR = {
   j1: "#e6b800", j2: "#1f77b4", j4: "#2ca02c",
+  j2a: "#ff7f0e", j2ac: "#fdd0a2",
   j2c: "#9ecae1", j4c: "#a1d99b"
 };
-var VARIANT_LABEL = { j1: "J1", j2: "J2", j4: "J4", j2c: "J2+cache", j4c: "J4+cache" };
+var VARIANT_LABEL = { j1: "J1", j2: "J2", j4: "J4",
+  j2a: "J2A", j2ac: "J2A+cache",
+  j2c: "J2+cache", j4c: "J4+cache" };
 
 function variantOf(extra) {
   var e = (extra || "").toLowerCase();
+  if (e.indexOf("j2ac") >= 0) return "j2ac";
+  if (e.indexOf("j2a") >= 0) return "j2a";
   if (e.indexOf("j2c") >= 0) return "j2c";  // before j2/j4 (j4c contains "j4")
   if (e.indexOf("j4c") >= 0) return "j4c";
   if (e.indexOf("j1") >= 0) return "j1";
@@ -30,8 +35,9 @@ function variantOf(extra) {
 // (falling back to `extra` for historical bare-J2 points) and groups on the
 // suffix-stripped base name, so all five variants overlay on one chart.
 function variantOfBench(name, extra) {
-  var m = /\s\[(j[124])\]$/.exec(name || "");
+  var m = /\s\[(j[124]|j2a)\]$/.exec(name || "");
   if (m) return m[1];
+  if (/\s\[J2A\+cache\]$/.test(name || "")) return "j2ac";
   if (/\s\[J2\+cache\]$/.test(name || "")) return "j2c";
   if (/\s\[J4\+cache\]$/.test(name || "")) return "j4c";
   return variantOf(extra);
@@ -39,7 +45,7 @@ function variantOfBench(name, extra) {
 function baseName(name) {
   // Strip the variant suffix (incl. the cpu+cache labels) so all five variants
   // group onto one chart per base metric.
-  return (name || "").replace(/\s\[(j[124]|J2\+cache|J4\+cache)\]$/, "");
+  return (name || "").replace(/\s\[(j[124]|j2a|J2A\+cache|J2\+cache|J4\+cache)\]$/, "");
 }
 
 // Load a script that assigns window.BENCHMARK_DATA; resolve with that value

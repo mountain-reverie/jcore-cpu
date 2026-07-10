@@ -157,9 +157,14 @@ architecture stru of datapath is
 	-- the same UH*4-shaped constant/immediate but always commit R15 in the
 	-- same slot, so wr_z='0' excludes them) -- see the design doc + task
 	-- report for the full collision analysis.
-	signal push_ptr_init  : std_logic;
-	signal push_ptr_store : std_logic;
-	signal push_ptr_term  : std_logic;
+	--
+	-- NOTE: push_ptr_init/push_ptr_store/push_ptr_term are declared LOCAL to the
+	-- SH2A_ARCH generate (g_push) below, NOT at architecture scope. Even driven
+	-- to a constant '0' and read only inside a non-elaborated generate, their
+	-- mere presence as architecture-level signals perturbs the J4 datapath
+	-- techmap by ~+196 LUT4 (datapath's assert-derived `keep` prevents the
+	-- optimizer from collapsing them). Keeping them generate-local means non-SH2A
+	-- variants (J1/J2/J4) carry no push signals at all -> J4 returns to baseline.
 
         signal div1_arith_func : arith_func_t;
         signal arith_func : arith_func_t;
@@ -334,7 +339,12 @@ begin
 	-- PR-store never match (they commit R15 in the same slot, wr_z='1');
 	-- pop loads are ma_op=READ, so unaffected. Inert on J1/J2/J4.
 	with buses.x_sel select xbus_mux  <= reg_x when SEL_REG, pc when SEL_PC, tlb_exc_pc when SEL_TLBPC, buses.imm_val when others;
-	xbus <= this'register.push_ptr when (SH2A_ARCH and push_ptr_store = '1') else xbus_mux;
+	-- xbus is driven in the g_push/g_push_off generate below. The push logic is a
+	-- GENERATE (not a `when SH2A_ARCH and ...` concurrent mux) so on non-SH2A the
+	-- push_ptr/push_active reads are removed at elaboration; otherwise the
+	-- datapath's assert-derived `keep` blocks yosys from pruning the (reset-only)
+	-- push_ptr/push_active record fields + push comparators, spilling ~209 LUT4
+	-- into J4 (measured, PR #110 benchmark alert).
 	with buses.y_sel select ybus_temp <= reg_y when SEL_REG, pc when SEL_PC, mach when SEL_MACH, macl when SEL_MACL, to_slv(sr) when SEL_SR,
 	                                     (x"00000" & priv_regs.expevt) when SEL_EXPEVT,
 	                                     (x"00000" & priv_regs.intevt) when SEL_INTEVT,
@@ -397,38 +407,77 @@ begin
 	-- computes push_ptr := R15-(m+1)*4 (SUB, xbus=R15, UH*4 immediate,
 	-- pc HELD, no memory access, no GPR commit). See the signal declaration
 	-- above for the full collision analysis.
-	push_ptr_init <= '1' when SH2A_ARCH and func.alu.iny_sel = SEL_IMM
+	g_push : if SH2A_ARCH generate
+	  signal push_ptr_init  : std_logic;
+	  signal push_ptr_store : std_logic;
+	  signal push_ptr_term  : std_logic;
+	  signal push_ptr_r     : std_logic_vector(31 downto 0) := (others => '0');
+	  signal push_active_r  : std_logic := '0';
+begin
+	-- push_ptr_init: the once-per-instruction MOVML.L Rm,@-R15 push slot that
+	-- computes push_ptr := R15-(m+1)*4 (SUB, xbus=R15, UH*4 immediate, pc HELD,
+	-- no memory access, no GPR commit).
+	  push_ptr_init <= '1' when func.alu.iny_sel = SEL_IMM
 	                          and func.arith.func = SUB and mem.issue = '0'
 	                          and reg.wr_z = '0' and pc_ctrl.inc = '0'
 	                          and buses.x_sel = SEL_REG and num_x_r = "01111"
 	                 else '0';
-	-- push_ptr_store: each MOVML.L Rm,@-R15 store-loop slot (R(idx) @
-	-- push_ptr+idx*4: ADD, xbus=R15, UH*4 immediate, memory WRITE, no GPR
-	-- commit). Qualified by push_active (set at the init slot, cleared at the
-	-- terminal) instead of pc_ctrl.inc='0': the address signature alone is
-	-- identical to an ordinary MOV.L Rm,@(disp,R15), AND on the LAST store the
-	-- decode_core loop releases pc-hold so pc_ctrl.inc glitches to '1' (the
-	-- previous pc_ctrl.inc='0' guard dropped push_ptr on exactly that store,
-	-- landing Rm at R15+m*4 instead of push_ptr+m*4). push_active is uniform
-	-- across all m+1 stores and is only ever set inside a push, so it excludes
-	-- ordinary SP-relative stores. See the signal declaration for the full
-	-- collision analysis.
-	push_ptr_store <= '1' when SH2A_ARCH and func.alu.iny_sel = SEL_IMM
-	                           and func.arith.func = ADD and mem.issue = '1'
-	                           and mem.wr = '1' and reg.wr_z = '0'
-	                           and this'register.push_active = '1'
-	                           and buses.x_sel = SEL_REG and num_x_r = "01111"
-	                  else '0';
-	-- push_ptr_term: the once-per-instruction MOVML.L Rm,@-R15 terminal slot
-	-- that commits R15 := R15-(m+1)*4 (SUB, xbus=R15, UH*4 immediate, no mem,
-	-- GPR write of R15). Same shape as push_ptr_init but reg.wr_z='1' (init is
-	-- '0'); the pop terminal uses ADD, so SUB+wr_z+R15 is unique to the push
-	-- terminal. Clears push_active. SH2A_ARCH only.
-	push_ptr_term <= '1' when SH2A_ARCH and func.alu.iny_sel = SEL_IMM
+	-- push_ptr_term: the once-per-instruction MOVML.L Rm,@-R15 terminal slot that
+	-- commits R15 := R15-(m+1)*4 (SUB, xbus=R15, UH*4 immediate, no mem, GPR write
+	-- of R15). Same shape as push_ptr_init but reg.wr_z='1' (init is '0'); the pop
+	-- terminal uses ADD, so SUB+wr_z+R15 is unique to the push terminal.
+	  push_ptr_term <= '1' when func.alu.iny_sel = SEL_IMM
 	                          and func.arith.func = SUB and mem.issue = '0'
 	                          and reg.wr_z = '1'
 	                          and buses.x_sel = SEL_REG and num_x_r = "01111"
 	                 else '0';
+	  process(clk, rst)
+	  begin
+	    if rst = '1' then
+	      push_ptr_r    <= (others => '0');
+	      push_active_r <= '0';
+	    elsif clk = '1' and clk'event then
+	      if slot_o = '1' then
+	        -- Capture push_ptr := R15-(m+1)*4 at the init slot (push_ptr_init is a
+	        -- signature classification, mirrors mem_predec/restore_fire).
+	        if push_ptr_init = '1' then
+	          push_ptr_r <= arith_out(31 downto 0);
+	        end if;
+	        -- Track in-flight push: set at init, cleared at the terminal R15
+	        -- commit; else (a committing slot that is neither init, store, nor
+	        -- terminal) clear as the abnormal-exit guard -- a push abandoned
+	        -- mid-store by an exception/interrupt redirect would otherwise leak
+	        -- push_active_r='1' into the handler and misroute its SP-relative
+	        -- store. Set wins if init and term somehow coincide.
+	        if push_ptr_init = '1' then
+	          push_active_r <= '1';
+	        elsif push_ptr_term = '1' then
+	          push_active_r <= '0';
+	        elsif push_ptr_store = '0' then
+	          push_active_r <= '0';
+	        end if;
+	      end if;
+	    end if;
+	  end process;
+	-- push_ptr_store: each MOVML.L Rm,@-R15 store-loop slot (R(idx) @ push_ptr+
+	-- idx*4: ADD, xbus=R15, UH*4 immediate, memory WRITE, no GPR commit). Qualified
+	-- by push_active_r (set at init, cleared at the terminal) instead of
+	-- pc_ctrl.inc='0': the address signature alone is identical to an ordinary
+	-- MOV.L Rm,@(disp,R15), AND on the LAST store the decode_core loop releases
+	-- pc-hold so pc_ctrl.inc glitches to '1'. push_active_r is uniform across all
+	-- m+1 stores and is only ever set inside a push, so it excludes ordinary
+	-- SP-relative stores.
+	  push_ptr_store <= '1' when func.alu.iny_sel = SEL_IMM
+	                           and func.arith.func = ADD and mem.issue = '1'
+	                           and mem.wr = '1' and reg.wr_z = '0'
+	                           and push_active_r = '1'
+	                           and buses.x_sel = SEL_REG and num_x_r = "01111"
+	                  else '0';
+	  xbus <= push_ptr_r when push_ptr_store = '1' else xbus_mux;
+end generate;
+g_push_off : if not SH2A_ARCH generate
+	  xbus <= xbus_mux;
+end generate;
 	-- SH-4 register-bank remap on the four address ports; pass-through on J2.
 	num_x_r <= bank_remap(reg.num_x, sr.md, sr.rb) when PRIV_ARCH else reg.num_x;
 	num_y_r <= bank_remap(reg.num_y, sr.md, sr.rb) when PRIV_ARCH else reg.num_y;
@@ -600,7 +649,7 @@ begin
 
 	ibit <= sr.int_mask;
 
-	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, tlb_fault_va, tlb_exc_expevt, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, push_ptr_init, push_ptr_store, push_ptr_term, delay_slot, tlb_exc_is_i, ex_if_pc)
+	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, tlb_fault_va, tlb_exc_expevt, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, tlb_exc_is_i, ex_if_pc)
 	  register this when clk='1' and clk'event reset when rst='1';
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
@@ -1027,43 +1076,11 @@ begin
             if pc_ctrl.wr_z = '1' then this.pc := zbus;
             elsif pc_ctrl.inc  = '1' then this.pc := this.pc_inc; end if;
 
-            -- SH2A_ARCH only: capture the restart-safe MOVML.L Rm,@-R15 push
-            -- init result (push_ptr := R15-(m+1)*4) into the datapath-
-            -- internal push_ptr scratch reg. push_ptr_init is a signature
-            -- classification (mirrors mem_predec/restore_fire above); see its
-            -- declaration for the collision analysis. Inert on J1/J2/J4.
-            if SH2A_ARCH and push_ptr_init = '1' then
-              this.push_ptr := arith_out(31 downto 0);
-            end if;
-            -- Track whether a restart-safe push is in flight so the store-
-            -- address substitution is uniform across all m+1 stores (the last
-            -- store releases pc-hold, so a pc_ctrl.inc-based qualifier would
-            -- drop it). Set at the init slot, cleared at the terminal R15
-            -- commit; set wins if they somehow coincide. Inert on J1/J2/J4.
-            if SH2A_ARCH then
-              if push_ptr_init = '1' then
-                this.push_active := '1';
-              elsif push_ptr_term = '1' then
-                this.push_active := '0';
-              elsif push_ptr_store = '0' then
-                -- Abnormal-exit clear (restart-safety leak fix). This block runs
-                -- on every committing slot (this.slot='1'). Inside a live push
-                -- every committing slot is the init (set above), a store
-                -- (push_ptr_store='1', keep), or the terminal (clear above), so
-                -- reaching here means the push is no longer in flight: it either
-                -- completed (term already cleared) or was ABANDONED mid-store by
-                -- an exception/interrupt redirect. In the abandoned case the
-                -- terminal never runs, so without this push_active would stay
-                -- '1' into the handler and misroute the handler's ordinary
-                -- SP-relative MOV.L store to push_ptr, and a restarted MOVML.L
-                -- would inherit a stale push_active. The redirect's first
-                -- committing slot is an exception-prologue @-Rn push (SUB, not
-                -- push_ptr_store) or any non-store op, so push_ptr_store='0'
-                -- fires here BEFORE any handler displacement store. This is the
-                -- datapath mirror of clearing movml_pushinit_r in decode_core.
-                this.push_active := '0';
-              end if;
-            end if;
+            -- NOTE: SH2A restart-safe MOVML.L Rm,@-R15 push scratch state
+            -- (push_ptr/push_active capture + in-flight tracking) is registered
+            -- in the SH2A_ARCH generate g_push below (NOT in this shared
+            -- process / the shared datapath_reg_t record), so non-SH2A variants
+            -- carry zero push state and the J4 combinational spillover is gone.
 
             -- update SR
             case sr_ctrl.sel is

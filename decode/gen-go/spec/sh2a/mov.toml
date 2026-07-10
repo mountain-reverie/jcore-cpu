@@ -139,3 +139,91 @@
     xbus = "R15"
     zbus = "R15"        # R15 writeback (Z-port)
     zbus_sel = "ARITH"
+
+# SH-2A MOVMU.L Rm,@-R15 : push PR and R0..Rm. PR at the highest address (stored
+# first), then Rm..R0 descending; R15 -= 4*(m+2). Incremental-R15 (matches movml
+# push; NOT restart-safe, by design). TWO slots: slot0 stores PR once, slot1 is
+# the movml register-store loop (decode_core re-presents it m+1x, op.code(11:8)
+# override m..0). See docs/superpowers/specs/2026-07-09-j2a-movmu-design.md.
+[[instr]]
+  name = "MOVMU.L Rm,@-R15"
+  format = "n"
+  opcode = "0100 nnnn 1111 0000"
+  operation = "R15-4*(m+2)->R15, PR->(top), R(m..0)->(...)"
+  table_ref = "SH-2A"
+
+  # slot0 (once): PR store at R15-4 (highest), R15 := R15-4. ybus=PR (as STS.L PR).
+  [[instr.slots]]
+    alu_y = "4"
+    arith = "SUB"
+    ma_addy = "ZBUS"
+    ma_data = "YBUS"
+    ma_op = "WRITE"
+    ma_size = "32"
+    pc = "HOLD"
+    xbus = "R15"
+    ybus = "PR"
+    zbus = "R15"
+    zbus_sel = "ARITH"
+
+  # slot1 (looped m+1x by decode_core): register store, R(idx) at R15-4, R15 -= 4.
+  # Identical to the movml push store slot; op.code(11:8) override selects R(idx).
+  [[instr.slots]]
+    alu_y = "4"
+    arith = "SUB"
+    ma_addy = "ZBUS"
+    ma_data = "YBUS"
+    ma_op = "WRITE"
+    ma_size = "32"
+    pc = "INC"
+    xbus = "R15"
+    ybus = "Rn"
+    zbus = "R15"
+    zbus_sel = "ARITH"
+
+# SH-2A MOVMU.L @R15+,Rn : pop R0..Rn and PR (PR from the highest address,
+# R15+4*(n+1)); R15 += 4*(n+2). Restart-safe (R15 pristine until the terminal;
+# loads idempotent). THREE slots: slot0 = register-load loop (decode_core
+# re-presents it n+1x, idx 0..n), slot1 = PR load (op.code(11:8):=n+1), slot2 =
+# terminal R15 update (op.code(11:8):=n+2). disp rides op.code(11:8) via UH*4.
+[[instr]]
+  name = "MOVMU.L @R15+,Rn"
+  format = "n"
+  opcode = "0100 nnnn 1111 0100"
+  operation = "R15->R(0..n), (R15+4*(n+1))->PR, R15+4*(n+2)->R15"
+  table_ref = "SH-2A"
+
+  # slot0 (looped n+1x): register load @ R15+idx*4 -> R(idx). W-port only.
+  [[instr.slots]]
+    alu_y = "UH*4"      # IMM_U_H4_2 = op.code(11:8) << 2 = idx*4
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "32"
+    pc = "HOLD"
+    wbus = "Rn"
+    xbus = "R15"
+    zbus_sel = "ARITH"
+
+  # slot1 (once): PR load @ R15+(n+1)*4 -> PR. decode_core drives op.code(11:8):=n+1.
+  # W-port (PR) only; R15 still not written.
+  [[instr.slots]]
+    alu_y = "UH*4"      # = (n+1)*4
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "32"
+    pc = "HOLD"
+    wbus = "PR"
+    xbus = "R15"
+    zbus_sel = "ARITH"
+
+  # slot2 (terminal, once): R15 += (n+2)*4. decode_core drives op.code(11:8):=n+2.
+  # Z-port only -> no clash.
+  [[instr.slots]]
+    alu_y = "UH*4"      # = (n+2)*4
+    arith = "ADD"
+    pc = "INC"
+    xbus = "R15"
+    zbus = "R15"
+    zbus_sel = "ARITH"

@@ -1,15 +1,36 @@
+-- Synth-local copy of cpu_decode_direct_sh2a (defined in core/cpu_config.vhd,
+-- which is NOT in the synth FILES list to keep the byte-identical committed
+-- configs untouched). Mirrors the base cpu_decode_direct config in
+-- decode/decode_table_direct_config.vhd but adds SH2A_ARCH => true, which binds
+-- decode_core(arch) with its SH-2A control hardware (ext_word register,
+-- movml/movmu FSM) ENABLED. Without this, the J2A synth would compile the
+-- SH-2A decode tables but leave decode_core's SH-2A logic gated off.
+configuration cpu_decode_direct_sh2a of decode is
+  for arch
+    for core : decode_core
+      use entity work.decode_core(arch)
+        generic map (
+          decode_type => DIRECT,
+          reset_vector => DEC_CORE_RESET,
+          SH2A_ARCH => true);
+    end for;
+    for table : decode_table
+      use entity work.decode_table(direct_logic);
+    end for;
+  end for;
+end configuration;
+
 -- J2A synth: J2 baseline core + the SH-2A overlay decoder tables (generated
--- transiently into decode/ by `make -C decode generate-j2a`, bound here via
--- the same cpu_decode_direct config name the base decoder uses) and
--- SH2A_ARCH=>true. Identical to cpu_synth_direct (synth/cpu_synth_config.vhd)
--- except the decode/*.vhd files in the FILES list are the SH-2A overlay
--- variant (ext_word/movml/movmu logic) at synth time. The SH2A_ARCH cpu
--- generic (datapath side) is injected by the wrapper below / by the
--- timing+cache harness configs.
+-- transiently into decode/ by `make -C decode generate-j2a`) with decode_core's
+-- SH-2A logic ENABLED via the synth-local cpu_decode_direct_sh2a config above,
+-- and SH2A_ARCH=>true on the cpu/datapath side. Identical to cpu_synth_direct
+-- (synth/cpu_synth_config.vhd) except for the SH-2A decode binding. The
+-- SH2A_ARCH cpu generic (datapath side) is injected by the wrapper below / by
+-- the timing+cache harness configs.
 configuration cpu_synth_j2a of cpu is
   for stru
     for u_mult : mult use entity work.mult(stru); end for;
-    for u_decode : decode use configuration work.cpu_decode_direct; end for;
+    for u_decode : decode use configuration work.cpu_decode_direct_sh2a; end for;
     for u_datapath : datapath use entity work.datapath(stru);
       for stru
         for u_regfile : register_file use entity work.register_file(two_bank); end for;

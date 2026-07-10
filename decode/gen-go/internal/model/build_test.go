@@ -230,8 +230,13 @@ func TestJ2AOverlayAddsLatchExtFieldsAndSeedSlot0(t *testing.T) {
 	}
 	var seed *SimpleInstr
 	for i := range d.Simple.Instructions {
-		if d.Simple.Instructions[i].Name == "MOV.L @(disp12,Rm),Rn" {
-			seed = &d.Simple.Instructions[i]
+		instr := &d.Simple.Instructions[i]
+		// This word1 ("0011 nnnn mmmm 0001") also carries the SH-2A store
+		// counterpart "MOV.L Rm,@(disp12,Rn)", so BuildSimple merges the
+		// two into one arm (see mergeSimpleGroup); the load's name shows
+		// up in GroupNames rather than Name once merged.
+		if instr.Name == "MOV.L @(disp12,Rm),Rn" || hasName(instr.GroupNames, "MOV.L @(disp12,Rm),Rn") {
+			seed = instr
 		}
 	}
 	if seed == nil {

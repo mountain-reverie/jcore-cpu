@@ -230,26 +230,26 @@ begin
   g_if_pc_off : if not MMU_ARCH generate
     if_pc_o <= (others => '0');
   end generate g_if_pc_off;
-  -- ext_word pipeline: SH2A_ARCH ONLY. Same generate-wrap rationale as g_if_pc
-  -- (a plain `if SH2A_ARCH then` in the clocked process infers a latch on
-  -- non-J2A). Latches the prefetched second word (if_dr_next) at the instruction
-  -- boundary (slot-gated, not stalled, instr_seq_zero) so it holds across the
-  -- two-word op's slots exactly as op does.
+  -- ext_word: SH2A_ARCH ONLY. The second (extension) word of a two-word SH-2A
+  -- instruction is decoded and consumed exclusively in the op's SECOND slot (the
+  -- imm_from_ext slot: decode_table's IMM_U_12_* mux and the ext_word[15:12] op
+  -- discrimination). During slot0 the fetch unit presents word1 on if_dr; during
+  -- slot1 it presents word2 (the extension word) on if_dr. Sourcing ext_word_o
+  -- combinationally from if_dr therefore delivers the extension word exactly in
+  -- the cycle decode_table needs it, and is ROBUST to the instruction-fetch
+  -- prefetch depth. The previous design latched if_dr_next at the slot0 boundary,
+  -- which assumed the prefetch was always one word ahead. A preceding memory
+  -- WRITE (e.g. a two-word store) leaves the prefetch one word behind, so at the
+  -- following two-word LOAD's slot0 boundary if_dr_next still held word1 (== if_dr)
+  -- -- the extension word had not been fetched yet -- and the load latched word1
+  -- as its "disp", corrupting both the disp12 immediate AND the ext_word[15:12]
+  -- load/store discrimination (store->load address corruption / bus exception).
+  -- if_dr in the second slot always holds word2 regardless of prefetch state
+  -- (and holds across a slot1 stall, since the fetch freezes too). Wrapped in a
+  -- generate so the logic is simply absent on non-J2A builds (byte-identical).
   g_ext_word : if SH2A_ARCH generate
-    signal ext_word_op : std_logic_vector(15 downto 0);
   begin
-    ext_word_reg : process(clk, rst)
-    begin
-      if rst = '1' then
-        ext_word_op <= (others => '0');
-      elsif clk = '1' and clk'event then
-        if slot = '1' and this'register.id_stall = '0'
-                      and this'register.instr_seq_zero = '1' then
-          ext_word_op <= if_dr_next;
-        end if;
-      end if;
-    end process;
-    ext_word_o <= ext_word_op;
+    ext_word_o <= if_dr;
   end generate g_ext_word;
   g_ext_word_off : if not SH2A_ARCH generate
     ext_word_o <= (others => '0');

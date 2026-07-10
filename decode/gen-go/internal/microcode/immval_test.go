@@ -202,8 +202,24 @@ func TestExtWordImmVHDL(t *testing.T) {
 	if got := ImmLiteralToVHDL("IMM_U_12_0"); got != `x"00000" & ext_word(11 downto 0)` {
 		t.Errorf("disp12 VHDL = %q", got)
 	}
+	// IMM_U_12_1: disp12*2 (nmd12 format, "U*2"). 19 zero bits + the
+	// 12-bit ext_word disp field + one trailing zero bit = 32 bits,
+	// equivalent to zero-extending ext_word(11 downto 0) then <<1.
+	got := ImmLiteralToVHDL("IMM_U_12_1")
+	want := `"0000000000000000000" & ext_word(11 downto 0) & "0"`
+	if got != want {
+		t.Errorf("IMM_U_12_1 VHDL = %q, want %q", got, want)
+	}
+	zeros, _, _ := strings.Cut(got, ` & ext_word`)
+	zeros = strings.Trim(zeros, `"`)
+	if width := len(zeros) + 12 + 1; width != 32 {
+		t.Errorf("IMM_U_12_1 total width = %d, want 32 (19 zeros + 12-bit disp + 1 trailing zero)", width)
+	}
+	if len(zeros) != 19 {
+		t.Errorf("IMM_U_12_1 leading zero-field width = %d, want 19", len(zeros))
+	}
 	// movi20: imm20 = op.code(11..8) (high 4) & ext_word(15..0) (low 16), sign-extended from bit 19
-	got := ImmLiteralToVHDL("IMM_S_20_0")
+	got = ImmLiteralToVHDL("IMM_S_20_0")
 	if !strings.Contains(got, "op.code(11 downto 8)") || !strings.Contains(got, "ext_word(15 downto 0)") {
 		t.Errorf("imm20 VHDL = %q", got)
 	}

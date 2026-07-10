@@ -107,13 +107,30 @@ begin
         -- set control signals for each opcode
 {{- range $i, $instr := .Simple.Instructions }}
         {{ if $i }}elsif{{ else }}if{{ end }} std_match(cond, "{{ $instr.StdMatchPattern }}") then
+{{- if $instr.GroupNames }}
+{{- range $n := $instr.GroupNames }}
+            -- {{ $n }} [{{ opcodeComment $instr.OpcodeHex }}]
+{{- end }}
+{{- else }}
             -- {{ $instr.Name }} [{{ opcodeComment $instr.OpcodeHex }}]
+{{- end }}
             -- {{ $instr.Operation }}
             case op.addr(3 downto 0) is
 {{- range $s := $instr.Slots }}
                 when x"{{ slotHex $s.Index }}" =>
 {{- range $a := $s.Assignments }}
                     {{ $a.LHS }} <= {{ $a.RHS }};
+{{- end }}
+{{- if $s.ExtCases }}
+                    case ext_word(15 downto 12) is
+{{- range $ec := $s.ExtCases }}
+                        when x"{{ $ec.Nibble }}" =>
+{{- range $a := $ec.Assignments }}
+                            {{ $a.LHS }} <= {{ $a.RHS }};
+{{- end }}
+{{- end }}
+                        when others =>
+                    end case;
 {{- end }}
 
 {{- end }}

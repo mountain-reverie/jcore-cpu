@@ -97,6 +97,8 @@ func ImmLiteralToVHDL(lit string) string {
 		return "imms_12_1"
 	case "IMM_U_12_0":
 		return `x"00000" & ext_word(11 downto 0)`
+	case "IMM_U_12_1":
+		return `"0000000000000000000" & ext_word(11 downto 0) & "0"`
 	case "IMM_U_12_2":
 		return `"000000000000000000" & ext_word(11 downto 0) & "00"`
 	case "IMM_S_20_0":

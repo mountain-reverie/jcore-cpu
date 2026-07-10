@@ -53,14 +53,36 @@
 # the highest address, R0 at the lowest. This is ONE store microcode slot;
 # the repetition is driven ENTIRELY in decode_core.vhm (SH2A_ARCH-gated), which
 # detects the movml opcode (0100 mmmm 1111 0001), HOLDS op.addr and re-presents
-# this same slot m+1 times while overriding op.code(11:8) with the running
-# index m, m-1, ..., 0. Structurally the single-slot "MOV.L Rm,@-Rn" store with
-# Rn hard-wired to R15:
-#   xbus = R15  -> address base; zbus = R15 - 4 (ALU SUB) -> store address
-#   ybus = Rn(=op.code(11:8)) -> store data = R(index); the ONLY op.code-derived
-#         field, so the decode_core index override selects the register.
-#   zbus = R15  -> writeback R15 := R15-4 EACH committing iteration, so m+1
-#         stores decrement R15 by 4*(m+1) total.
+# these slots while overriding op.code(11:8) with a running index.
+#
+# Restart-safe design (docs/superpowers/specs/2026-07-09-j2a-restart-safe-
+# push-design.md §1/§2): a scratch pointer push_ptr = R15-4*(m+1) (the
+# post-push SP) is held CONSTANT across the store loop -- R15 itself is
+# NEVER written mid-instruction -- so a mid-store memory fault + restart
+# re-derives push_ptr from the still-pristine R15 and re-stores idempotently.
+# push_ptr lives in the datapath (core/components_pkg.vhd) and is captured/
+# consumed via SH2A_ARCH-gated signature classification in core/datapath.vhm
+# (NO generator change, NO new control field/enum -- see the design doc §3
+# and §5 for the collision analysis / byte-identity argument). THREE slots:
+#
+#   slot0 (init, once): push_ptr := R15-(m+1)*4. xbus=R15, alu_y=UH*4 with
+#     decode_core driving op.code(11:8):=m+1 -> (m+1)*4, arith=SUB, no mem
+#     access, no zbus write (wr_z=0) so pc HELD. The datapath's init
+#     classifier captures the ALU result into push_ptr (the SUB direction +
+#     no-mem + no-commit combination is what distinguishes it from slot2).
+#   slot1 (store loop, repeated m+1x for idx=0..m): store R(idx) @
+#     push_ptr+idx*4. alu_y=UH*4 with op.code(11:8):=idx (the SAME field
+#     that also selects ybus=Rn=R(idx), the coincidence that made the
+#     restart-safe pop clean too), arith=ADD, ma_op=WRITE, no zbus write, pc
+#     HELD. The datapath's store classifier (WRITE direction) substitutes
+#     push_ptr for the xbus address base; the spec-level xbus="R15" here is
+#     a don't-care placeholder (always overridden).
+#   slot2 (terminal, once): R15 := R15-(m+1)*4, RECOMPUTED from the still-
+#     pristine R15 (NOT read from push_ptr -- this is the same computation
+#     as slot0 but with zbus=R15/wr_z=1, which is exactly what keeps it out
+#     of both signature classifiers). xbus=R15, alu_y=UH*4 with
+#     op.code(11:8):=m+1, arith=SUB, zbus=R15, pc=INC (the only PC advance
+#     for the whole instruction).
 [[instr]]
   name = "MOVML.L Rm,@-R15"
   format = "n"
@@ -68,16 +90,40 @@
   operation = "R15-4*(m+1)->R15, R(m..0)->(R15..)"
   table_ref = "SH-2A"
 
+  # slot0 -- init (once): push_ptr := R15-(m+1)*4. decode_core drives
+  # op.code(11:8):=m+1. No zbus write -> the datapath init classifier
+  # captures the ALU result into push_ptr instead of dropping it.
   [[instr.slots]]
-    alu_y = "4"
+    alu_y = "UH*4"      # IMM_U_H4_2 = op.code(11:8) << 2 = (m+1)*4
     arith = "SUB"
+    pc = "HOLD"
+    xbus = "R15"
+    zbus_sel = "ARITH"
+
+  # slot1 -- store loop (repeated m+1x by decode_core, idx = 0..m): store
+  # R(idx) @ push_ptr+idx*4. xbus="R15" is a don't-care placeholder; the
+  # datapath store classifier substitutes push_ptr as the address base.
+  [[instr.slots]]
+    alu_y = "UH*4"      # IMM_U_H4_2 = op.code(11:8) << 2 = idx*4
+    arith = "ADD"
     ma_addy = "ZBUS"
     ma_data = "YBUS"
     ma_op = "WRITE"
     ma_size = "32"
-    pc = "INC"
+    pc = "HOLD"
     xbus = "R15"
     ybus = "Rn"
+    zbus_sel = "ARITH"
+
+  # slot2 -- terminal (once): R15 := R15-(m+1)*4, recomputed from the
+  # still-pristine R15 (NOT read from push_ptr). decode_core drives
+  # op.code(11:8):=m+1. zbus=R15 (wr_z=1) is what keeps this OUT of both
+  # push_ptr signature classifiers.
+  [[instr.slots]]
+    alu_y = "UH*4"      # IMM_U_H4_2 = op.code(11:8) << 2 = (m+1)*4
+    arith = "SUB"
+    pc = "INC"
+    xbus = "R15"
     zbus = "R15"
     zbus_sel = "ARITH"
 

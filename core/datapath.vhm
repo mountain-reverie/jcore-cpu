@@ -98,7 +98,7 @@ end entity datapath;
 
 architecture stru of datapath is
 	subtype reg_t is std_logic_vector(31 downto 0);
-	signal gpf_zwd, pc, reg_x, reg_y, reg_0, xbus, ybus, ybus_temp, zbus, wbus : std_logic_vector(31 downto 0);
+	signal gpf_zwd, pc, reg_x, reg_y, reg_0, xbus, xbus_mux, ybus, ybus_temp, zbus, wbus : std_logic_vector(31 downto 0);
 	-- zbus as the multiplier operand mux (macin1/macin2) sees it: identical to
 	-- zbus except the SEL_SHIFT (shifter) source is a don't-care (see below).
 	signal zbus_mac : std_logic_vector(31 downto 0);
@@ -139,6 +139,27 @@ architecture stru of datapath is
 	signal mem_autoinc1 : std_logic;
 	signal mem_predec   : std_logic;
 	signal restore_fire : std_logic;
+	-- SH2A_ARCH only: signature classification for the restart-safe MOVML.L
+	-- Rm,@-R15 push (docs/superpowers/specs/2026-07-09-j2a-restart-safe-push-
+	-- design.md §3). push_ptr_init marks the once-per-instruction slot that
+	-- computes push_ptr := R15-(m+1)*4 (captured, not written back to R15);
+	-- push_ptr_store marks each store-loop slot (R(idx) @ push_ptr+idx*4),
+	-- whose xbus address base is substituted with push_ptr. Both signatures
+	-- key off the J2A-exclusive IMM_U_H4_2 ("UH*4") immediate operand
+	-- (func.alu.iny_sel = SEL_IMM) combined with xbus=R15, no GPR commit
+	-- (reg.wr_z='0') and pc HELD (pc_ctrl.inc='0', i.e. not yet the terminal
+	-- slot); push_ptr_init is further keyed on the SUB direction (vs ADD for
+	-- the store address) and no memory access, push_ptr_store on a WRITE
+	-- memory access. Checked against every base+SH2A spec slot (base
+	-- MOV.L Rm,@(disp,Rn) with n=15 numerically collides on the immediate
+	-- value alone but is single-slot / pc_ctrl.inc='1', so the pc-held
+	-- qualifier excludes it; exception-frame pushes and movmu push/pop use
+	-- the same UH*4-shaped constant/immediate but always commit R15 in the
+	-- same slot, so wr_z='0' excludes them) -- see the design doc + task
+	-- report for the full collision analysis.
+	signal push_ptr_init  : std_logic;
+	signal push_ptr_store : std_logic;
+	signal push_ptr_term  : std_logic;
 
         signal div1_arith_func : arith_func_t;
         signal arith_func : arith_func_t;
@@ -306,7 +327,14 @@ begin
 	-- (possibly stalled, re-evaluated) cycle of that slot sees the same value.
 	-- I-fetch faults keep SEL_PC (live PC). tlb_exc_pc is 0 on a non-MMU build
 	-- and SEL_TLBPC never appears there, so J1/J2 are unaffected.
-	with buses.x_sel select xbus      <= reg_x when SEL_REG, pc when SEL_PC, tlb_exc_pc when SEL_TLBPC, buses.imm_val when others;
+	-- push_ptr_store (SH2A_ARCH only, see the signal declaration above):
+	-- substitutes the datapath-internal push_ptr as the store address base
+	-- for a restart-safe MOVML.L Rm,@-R15 store-loop slot, overriding the
+	-- normal xbus mux. Register stores and the (untouched, Task 2) movmu
+	-- PR-store never match (they commit R15 in the same slot, wr_z='1');
+	-- pop loads are ma_op=READ, so unaffected. Inert on J1/J2/J4.
+	with buses.x_sel select xbus_mux  <= reg_x when SEL_REG, pc when SEL_PC, tlb_exc_pc when SEL_TLBPC, buses.imm_val when others;
+	xbus <= this'register.push_ptr when (SH2A_ARCH and push_ptr_store = '1') else xbus_mux;
 	with buses.y_sel select ybus_temp <= reg_y when SEL_REG, pc when SEL_PC, mach when SEL_MACH, macl when SEL_MACL, to_slv(sr) when SEL_SR,
 	                                     (x"00000" & priv_regs.expevt) when SEL_EXPEVT,
 	                                     (x"00000" & priv_regs.intevt) when SEL_INTEVT,
@@ -365,6 +393,42 @@ begin
 	restore_fire <= '1' when MMU_ARCH and this'register.tlb_restore_pend = '1'
 	                         and reg.wr_z = '0' and slot_o = '1'
 	                else '0';
+	-- push_ptr_init: the once-per-instruction MOVML.L Rm,@-R15 push slot that
+	-- computes push_ptr := R15-(m+1)*4 (SUB, xbus=R15, UH*4 immediate,
+	-- pc HELD, no memory access, no GPR commit). See the signal declaration
+	-- above for the full collision analysis.
+	push_ptr_init <= '1' when SH2A_ARCH and func.alu.iny_sel = SEL_IMM
+	                          and func.arith.func = SUB and mem.issue = '0'
+	                          and reg.wr_z = '0' and pc_ctrl.inc = '0'
+	                          and buses.x_sel = SEL_REG and num_x_r = "01111"
+	                 else '0';
+	-- push_ptr_store: each MOVML.L Rm,@-R15 store-loop slot (R(idx) @
+	-- push_ptr+idx*4: ADD, xbus=R15, UH*4 immediate, memory WRITE, no GPR
+	-- commit). Qualified by push_active (set at the init slot, cleared at the
+	-- terminal) instead of pc_ctrl.inc='0': the address signature alone is
+	-- identical to an ordinary MOV.L Rm,@(disp,R15), AND on the LAST store the
+	-- decode_core loop releases pc-hold so pc_ctrl.inc glitches to '1' (the
+	-- previous pc_ctrl.inc='0' guard dropped push_ptr on exactly that store,
+	-- landing Rm at R15+m*4 instead of push_ptr+m*4). push_active is uniform
+	-- across all m+1 stores and is only ever set inside a push, so it excludes
+	-- ordinary SP-relative stores. See the signal declaration for the full
+	-- collision analysis.
+	push_ptr_store <= '1' when SH2A_ARCH and func.alu.iny_sel = SEL_IMM
+	                           and func.arith.func = ADD and mem.issue = '1'
+	                           and mem.wr = '1' and reg.wr_z = '0'
+	                           and this'register.push_active = '1'
+	                           and buses.x_sel = SEL_REG and num_x_r = "01111"
+	                  else '0';
+	-- push_ptr_term: the once-per-instruction MOVML.L Rm,@-R15 terminal slot
+	-- that commits R15 := R15-(m+1)*4 (SUB, xbus=R15, UH*4 immediate, no mem,
+	-- GPR write of R15). Same shape as push_ptr_init but reg.wr_z='1' (init is
+	-- '0'); the pop terminal uses ADD, so SUB+wr_z+R15 is unique to the push
+	-- terminal. Clears push_active. SH2A_ARCH only.
+	push_ptr_term <= '1' when SH2A_ARCH and func.alu.iny_sel = SEL_IMM
+	                          and func.arith.func = SUB and mem.issue = '0'
+	                          and reg.wr_z = '1'
+	                          and buses.x_sel = SEL_REG and num_x_r = "01111"
+	                 else '0';
 	-- SH-4 register-bank remap on the four address ports; pass-through on J2.
 	num_x_r <= bank_remap(reg.num_x, sr.md, sr.rb) when PRIV_ARCH else reg.num_x;
 	num_y_r <= bank_remap(reg.num_y, sr.md, sr.rb) when PRIV_ARCH else reg.num_y;
@@ -536,7 +600,7 @@ begin
 
 	ibit <= sr.int_mask;
 
-	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, tlb_fault_va, tlb_exc_expevt, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, tlb_exc_is_i, ex_if_pc)
+	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, tlb_fault_va, tlb_exc_expevt, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, push_ptr_init, push_ptr_term, delay_slot, tlb_exc_is_i, ex_if_pc)
 	  register this when clk='1' and clk'event reset when rst='1';
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
@@ -962,6 +1026,27 @@ begin
             -- update PC
             if pc_ctrl.wr_z = '1' then this.pc := zbus;
             elsif pc_ctrl.inc  = '1' then this.pc := this.pc_inc; end if;
+
+            -- SH2A_ARCH only: capture the restart-safe MOVML.L Rm,@-R15 push
+            -- init result (push_ptr := R15-(m+1)*4) into the datapath-
+            -- internal push_ptr scratch reg. push_ptr_init is a signature
+            -- classification (mirrors mem_predec/restore_fire above); see its
+            -- declaration for the collision analysis. Inert on J1/J2/J4.
+            if SH2A_ARCH and push_ptr_init = '1' then
+              this.push_ptr := arith_out(31 downto 0);
+            end if;
+            -- Track whether a restart-safe push is in flight so the store-
+            -- address substitution is uniform across all m+1 stores (the last
+            -- store releases pc-hold, so a pc_ctrl.inc-based qualifier would
+            -- drop it). Set at the init slot, cleared at the terminal R15
+            -- commit; set wins if they somehow coincide. Inert on J1/J2/J4.
+            if SH2A_ARCH then
+              if push_ptr_init = '1' then
+                this.push_active := '1';
+              elsif push_ptr_term = '1' then
+                this.push_active := '0';
+              end if;
+            end if;
 
             -- update SR
             case sr_ctrl.sel is

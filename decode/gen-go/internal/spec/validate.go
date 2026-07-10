@@ -15,11 +15,18 @@ func Validate(s *Spec) error {
 		if _, _, err := opcode.Parse(instr.Opcode); err != nil {
 			return fmt.Errorf("%s: %w", instr.Name, err)
 		}
-		if prev, dup := seenOpcodes[instr.Opcode]; dup {
+		// Two-word instructions (Opcode2 set) are keyed on (word1, word2):
+		// several two-word instructions legitimately share word1 and are
+		// disambiguated only by the extension word's high nibble
+		// (ext_word[15:12], see internal/model discrimination). Single-word
+		// instructions (Opcode2 == "") stay keyed on word1 alone, same as
+		// before.
+		dupKey := instr.Opcode + "\x00" + instr.Opcode2
+		if prev, dup := seenOpcodes[dupKey]; dup {
 			return fmt.Errorf("duplicate opcode %q: %q and %q",
 				instr.Opcode, prev, instr.Name)
 		}
-		seenOpcodes[instr.Opcode] = instr.Name
+		seenOpcodes[dupKey] = instr.Name
 		for i, slot := range instr.Slots {
 			for field := range slot {
 				if !KnownFields[field] {

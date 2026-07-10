@@ -64,6 +64,8 @@ mmusmep.elf: mmusmep.o
 	$(CC) $(CFLAGS) -c $< -o $@
 
 sh2a_movl12.elf: sh2a_movl12.o
+sh2a_disp12s.elf: sh2a_disp12s.o
+sh2a_disp12mix.elf: sh2a_disp12mix.o
 sh2a_movml0.elf: sh2a_movml0.o
 sh2a_movml.elf: sh2a_movml.o
 sh2a_movml_b2b.elf: sh2a_movml_b2b.o

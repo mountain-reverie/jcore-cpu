@@ -49,6 +49,42 @@
 
   [[instr.slots]]
 
+# SH-2A MOV.L Rm,@(disp12,Rn) -- store counterpart of the load above. Shares
+# word1 "0011 nnnn mmmm 0001" with MOV.L @(disp12,Rm),Rn; the two are
+# distinguished ONLY by the extension word's high nibble (ext_word[15:12]):
+# load = 0110, store = 0010. This is the first two-word instruction pair in
+# the spec that collides on word1, proving the generator's ext_word[15:12]
+# discrimination (internal/model + all three decode_table emit templates).
+[[instr]]
+  name = "MOV.L Rm,@(disp12,Rn)"
+  format = "nmd12"
+  opcode = "0011 nnnn mmmm 0001"
+  opcode2 = "0010 dddd dddd dddd"
+  operation = "Rm -> (disp12*4 + Rn)"
+  table_ref = "SH-2A"
+
+  # slot0: latch ext word (identical to mov.l load's slot0).
+  [[instr.slots]]
+    latch_ext = "1"
+    pc = "INC"
+    if_issue = "YES"
+
+  # slot1: store Rm @ Rn + disp12*4.
+  [[instr.slots]]
+    imm_from_ext = "1"
+    alu_y = "U*4"
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_data = "YBUS"
+    ma_op = "WRITE"
+    ma_size = "32"
+    pc = "INC"
+    xbus = "Rn"
+    ybus = "Rm"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+
 # SH-2A MOVML.L Rm,@-R15 : push R0..Rm (m+1 longs) onto the R15 stack, Rm at
 # the highest address, R0 at the lowest. This is ONE store microcode slot;
 # the repetition is driven ENTIRELY in decode_core.vhm (SH2A_ARCH-gated), which

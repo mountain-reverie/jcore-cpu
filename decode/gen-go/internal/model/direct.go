@@ -112,6 +112,96 @@ func BuildDirect(s *spec.Spec, instrLogic map[string]logic.LogicMap,
 	}
 	grouped := map[sigVal][]logic.LogicMap{}
 
+	// Two-word instructions (spec.Instr.Opcode2 set) may share word1 with
+	// other two-word instructions and are disambiguated only by the
+	// extension word's high nibble (ext_word[15:12], SigBit{Sig:"e", Bit:
+	// 12..15}). Fold that nibble into every slot's logic map exactly like
+	// the "s" (slot-index) bits above: QMC then naturally reduces across
+	// it like any other opcode/plane/slot bit, producing an
+	// ext_word-conditioned boolean expression only where two-word
+	// instructions actually collide on word1. Single-word instructions
+	// (Opcode2 == "") get no "e" bits at all, so their output expressions
+	// stay independent of ext_word -- this is what keeps base (non-SH2A)
+	// builds byte-identical: the base spec has no Opcode2 instructions, so
+	// extNibbleBits is empty and BuildDirect's behavior is unchanged.
+	// Only instructions that actually COLLIDE with another two-word
+	// instruction on word1 need ext_word[15:12] gating. Gating a
+	// non-colliding two-word instruction's slots (e.g. slot0, which
+	// LATCHES the extension word and runs identically regardless of the
+	// nibble) is not just redundant -- for signals where no other
+	// instruction shares the (signal, value) group, QMC has nothing to
+	// combine the ext_word literal against and it survives verbatim in
+	// the output expression, artificially gating that slot's behavior on
+	// ext_word[15:12] matching one exact instruction's nibble. That is
+	// wrong at slot0 specifically: slot0's job is to capture ext_word,
+	// and gating its own if_issue/latch_ext pulse on ext_word's value
+	// reintroduces the pre-fix "spurious decode of the extension word"
+	// PC-desync bug (see the MOV.L @(disp12,Rm),Rn slot0 comment in
+	// spec/sh2a/mov.toml). So we only fold "e" bits in for names that
+	// genuinely need disambiguation.
+	// Even within a genuinely colliding pair, a slot whose assignments are
+	// IDENTICAL across every colliding instruction (e.g. the shared
+	// latch_ext slot0 of the disp12 load/store pair) must NOT be gated:
+	// gating a slot that produces the same microcode either way just
+	// pins that slot's behavior to one specific instruction's nibble for
+	// no functional reason, and -- worse -- slot0 is the slot that
+	// CAPTURES ext_word, so referencing ext_word's value to decide
+	// whether slot0 itself fires is circular/wrongly-timed and
+	// reproduces the pre-fix PC-desync bug (see the slot0 comment on
+	// MOV.L @(disp12,Rm),Rn in spec/sh2a/mov.toml). So "e" bits are only
+	// folded into (name, slotIdx) pairs where the slot's assignments
+	// actually differ from at least one other colliding instruction's
+	// same-index slot.
+	word1Group := make(map[string][]string) // word1 opcode -> instr names
+	for _, si := range s.Instrs {
+		if si.Opcode2 == "" {
+			continue
+		}
+		word1Group[si.Opcode] = append(word1Group[si.Opcode], si.Name)
+	}
+	extNibbleBits := make(map[string]logic.LogicMap)         // name -> nibble bits
+	extNibbleSlots := make(map[string]map[int]bool)          // name -> slotIdx -> needs gating
+	for opc, group := range word1Group {
+		if len(group) < 2 {
+			continue
+		}
+		_ = opc
+		// Compare each member's slots pairwise; a slotIdx needs gating
+		// for a member if ANY other member's same-index slot differs
+		// (or is absent, i.e. differing slot counts).
+		for _, name := range group {
+			ams := slotAssigns[name]
+			needs := make(map[int]bool, len(ams))
+			for slotIdx, am := range ams {
+				for _, other := range group {
+					if other == name {
+						continue
+					}
+					otherAms := slotAssigns[other]
+					if slotIdx >= len(otherAms) || !maps.Equal(am, otherAms[slotIdx]) {
+						needs[slotIdx] = true
+						break
+					}
+				}
+			}
+			if len(needs) > 0 {
+				extNibbleSlots[name] = needs
+			}
+		}
+	}
+	for _, si := range s.Instrs {
+		if si.Opcode2 == "" {
+			continue
+		}
+		if extNibbleSlots[si.Name] == nil {
+			continue
+		}
+		nibble := extWordNibbleBits(si.Opcode2)
+		if nibble != nil {
+			extNibbleBits[si.Name] = nibble
+		}
+	}
+
 	// Process instructions in sorted order for determinism.
 	var names []string
 	for name := range slotAssigns {
@@ -150,6 +240,14 @@ func BuildDirect(s *spec.Spec, instrLogic map[string]logic.LogicMap,
 			for b := 0; b < seqBits; b++ {
 				bitVal := (slotIdx >> b) & 1
 				slotMap[logic.SigBit{Sig: "s", Bit: b}] = bitVal
+			}
+			// Fold in the ext_word[15:12] discriminant bits, but only for
+			// slots that actually need disambiguation (see
+			// extNibbleSlots above).
+			if extNibbleSlots[name][slotIdx] {
+				for k, v := range extNibbleBits[name] {
+					slotMap[k] = v
+				}
 			}
 
 			// Build the effective assignment map for this slot by
@@ -246,7 +344,7 @@ func BuildDirect(s *spec.Spec, instrLogic map[string]logic.LogicMap,
 	sort.Strings(impKeys)
 
 	impByKey := map[string]string{} // canon key → imp_bit_N name
-	sigs := map[string]string{"i": "op.code", "p": "p", "s": "op.addr"}
+	sigs := map[string]string{"i": "op.code", "p": "p", "s": "op.addr", "e": "ext_word"}
 	for i, k := range impKeys {
 		name := fmt.Sprintf("imp_bit_%d", i)
 		impByKey[k] = name
@@ -481,5 +579,33 @@ func directValue(sig microcode.Signal, val string) string {
 // totalPrimeCount returns the number of primes (for sorting).
 func totalPrimeCount(primes []logic.LogicMap) int {
 	return len(primes)
+}
+
+// extWordNibbleBits parses a two-word instruction's opcode2 field (e.g.
+// "0010 dddd dddd dddd") into fixed SigBit{Sig:"e", Bit:12..15} entries for
+// its high nibble (ext_word[15:12]), the discriminant that distinguishes
+// two-word instructions sharing the same word1. Returns nil if the high
+// nibble is not fully fixed (any of the first 4 non-space characters is not
+// '0'/'1') -- such an opcode2 cannot participate in ext_word discrimination
+// and the caller leaves it undiscriminated (matching pre-discrimination
+// behavior, which is a validate-time concern, not this function's).
+func extWordNibbleBits(opcode2 string) logic.LogicMap {
+	clean := strings.ReplaceAll(opcode2, " ", "")
+	if len(clean) < 4 {
+		return nil
+	}
+	out := make(logic.LogicMap, 4)
+	for i := 0; i < 4; i++ {
+		bit := 15 - i // leftmost char is bit 15, down to bit 12
+		switch clean[i] {
+		case '0':
+			out[logic.SigBit{Sig: "e", Bit: bit}] = 0
+		case '1':
+			out[logic.SigBit{Sig: "e", Bit: bit}] = 1
+		default:
+			return nil
+		}
+	}
+	return out
 }
 

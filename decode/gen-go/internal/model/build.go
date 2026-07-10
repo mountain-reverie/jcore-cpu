@@ -310,6 +310,32 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 	// latch_ext is set by slot0 of a two-word instr). Base J1/J2/J4 builds
 	// leave these components untouched (byte-identical decode_pkg.vhd).
 	d.HasTwoWord = usesLatchExt
+
+	// Detect two-word instructions (Opcode2 set) that share a word1 pattern
+	// (identical Opcode). They are discriminated only by ext_word[15:12];
+	// the ROM predecode path (predecode_rom_addr, word1-only) cannot tell
+	// them apart, so a ROM decoder build must refuse rather than silently
+	// shadow. Recorded here for CheckROMTwoWord (gated in the -decoder rom
+	// path); the direct/simple decoders handle the discrimination and are
+	// unaffected. Base J1/J2/J4 (no two-word instrs) leaves this empty.
+	{
+		word1Group := make(map[string][]string) // word1 opcode -> two-word instr names
+		for _, si := range s.Instrs {
+			if si.Opcode2 == "" {
+				continue
+			}
+			word1Group[si.Opcode] = append(word1Group[si.Opcode], si.Name)
+		}
+		var collisions []string
+		for opc, group := range word1Group {
+			if len(group) >= 2 {
+				collisions = append(collisions, opc)
+			}
+		}
+		sort.Strings(collisions)
+		d.TwoWordWord1Collisions = collisions
+	}
+
 	if d.HasTwoWord {
 		for ci := range pkg.Components {
 			switch pkg.Components[ci].Name {

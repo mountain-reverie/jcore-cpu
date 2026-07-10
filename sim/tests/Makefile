@@ -72,6 +72,8 @@ sh2a_movml_pop2.elf: sh2a_movml_pop2.o
 sh2a_movml_pop_b2b.elf: sh2a_movml_pop_b2b.o
 sh2a_movml_pop_restart.elf: sh2a_movml_pop_restart.o
 sh2a_movmu.elf: sh2a_movmu.o
+sh2a_movmu_b2b.elf: sh2a_movmu_b2b.o
+sh2a_movmu_pop_restart.elf: sh2a_movmu_pop_restart.o
 mmurun.elf: mmurun.o tlbwalk.o
 mmuirun.elf: mmuirun.o tlbwalk.o
 mmuainc.elf: mmuainc.o tlbwalk.o

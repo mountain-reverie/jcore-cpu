@@ -600,7 +600,7 @@ begin
 
 	ibit <= sr.int_mask;
 
-	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, tlb_fault_va, tlb_exc_expevt, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, push_ptr_init, push_ptr_term, delay_slot, tlb_exc_is_i, ex_if_pc)
+	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, tlb_fault_va, tlb_exc_expevt, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, push_ptr_init, push_ptr_store, push_ptr_term, delay_slot, tlb_exc_is_i, ex_if_pc)
 	  register this when clk='1' and clk'event reset when rst='1';
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
@@ -1044,6 +1044,23 @@ begin
               if push_ptr_init = '1' then
                 this.push_active := '1';
               elsif push_ptr_term = '1' then
+                this.push_active := '0';
+              elsif push_ptr_store = '0' then
+                -- Abnormal-exit clear (restart-safety leak fix). This block runs
+                -- on every committing slot (this.slot='1'). Inside a live push
+                -- every committing slot is the init (set above), a store
+                -- (push_ptr_store='1', keep), or the terminal (clear above), so
+                -- reaching here means the push is no longer in flight: it either
+                -- completed (term already cleared) or was ABANDONED mid-store by
+                -- an exception/interrupt redirect. In the abandoned case the
+                -- terminal never runs, so without this push_active would stay
+                -- '1' into the handler and misroute the handler's ordinary
+                -- SP-relative MOV.L store to push_ptr, and a restarted MOVML.L
+                -- would inherit a stale push_active. The redirect's first
+                -- committing slot is an exception-prologue @-Rn push (SUB, not
+                -- push_ptr_store) or any non-store op, so push_ptr_store='0'
+                -- fires here BEFORE any handler displacement store. This is the
+                -- datapath mirror of clearing movml_pushinit_r in decode_core.
                 this.push_active := '0';
               end if;
             end if;

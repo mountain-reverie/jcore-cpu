@@ -471,9 +471,24 @@ begin
             movml_term_r <= '1';
             movml_loop_r <= '0';
           else
-            -- mupush: last store IS the dispatch slot -> done (unchanged)
-            movml_loop_r   <= '0';
-            movml_prpush_r <= '0';
+            -- Two cases reach here:
+            --   (a) mupush: last store IS the dispatch slot -> done (unchanged).
+            --   (b) the MOVML.L was abandoned mid-flight -- an exception or
+            --       interrupt redirected fetch to the vector, so is_movml (and
+            --       is_push) dropped to '0' before the terminal slot ran. In
+            --       that case movml_pushinit_r may still be '1' (a restart-safe
+            --       push was in its store loop). Clear ALL the FSM latches so
+            --       the handler runs clean and, on RTE, the restarted MOVML.L
+            --       re-enters its init slot with pushinit_r='0' (otherwise the
+            --       idx_eff / movml_idx / movml_hold guards see stale state and
+            --       mis-sequence the restarted push). Mirrors the terminal and
+            --       rst clears. (movml_loop_r/term_r/pr_r are already '0' mid
+            --       store-loop; pushinit_r is the one that leaks.)
+            movml_loop_r     <= '0';
+            movml_term_r     <= '0';
+            movml_pr_r       <= '0';
+            movml_prpush_r   <= '0';
+            movml_pushinit_r <= '0';
           end if;
         end if;
       end if;

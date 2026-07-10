@@ -312,8 +312,15 @@ begin
   --
   -- movmu.l push Rm,@-R15 (0100 mmmm 1111 0000) -- a fixed PR store slot
   -- ahead of the register store loop: on the entry cycle (movml_prpush_r
-  -- ='0') the PR slot is re-presented once; it has pc=HOLD so hold=0
-  -- there (idx_eff falls to movml_idx_r=0=target) does NOT itself fire
+  -- ='0') the PR slot is re-presented once; idx_eff is force-seeded "0000"
+  -- there (=target). However idx_eff/=target alone is NOT sufficient to
+  -- guarantee hold=0 on this slot: a preceding pop-family insn (movml.l
+  -- or movmu.l pop with n>0) leaves movml_idx_r=n stale from its own loop,
+  -- and while idx_eff is force-seeded "0000" here, other-slot fall-through
+  -- ordering subtleties are fragile, so movml_hold carries an explicit
+  -- guard `not(is_mupush='1' and movml_prpush_r='0')` that unconditionally
+  -- forces hold=0 on the mupush PR-entry slot regardless of movml_idx_r's
+  -- stale value. It has pc=HOLD so hold=0 there does NOT itself fire
   -- if_issue/incpc, it just advances into the register loop. Once
   -- movml_prpush_r latches '1' the register store loop re-presents
   -- exactly like movml push, counting op.code(11:8) DOWN m..0, terminating
@@ -369,6 +376,8 @@ begin
                else op_i.code(11 downto 8)
                  when (is_mupush = '1' and movml_prpush_r = '1' and movml_loop_r = '0')
                else "0000"
+                 when (is_mupush = '1' and movml_prpush_r = '0')
+               else "0000"
                  when (is_popfam = '1' and movml_loop_r = '0' and movml_term_r = '0'
                        and movml_pr_r = '0')
                else movml_idx_r;
@@ -392,7 +401,9 @@ begin
     -- Hold the (re-presented) load/store slot while idx has not reached the
     -- terminator; never hold the terminal slot or the mupop PR-load slot.
     movml_hold   <= '1' when (is_movml = '1' and movml_term_r = '0'
-                              and movml_pr_r = '0' and idx_eff /= target)
+                              and movml_pr_r = '0'
+                              and not (is_mupush = '1' and movml_prpush_r = '0')
+                              and idx_eff /= target)
                     else '0';
 
     movml_reg : process(clk, rst)

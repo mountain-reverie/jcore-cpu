@@ -1,5 +1,10 @@
 package model
 
+import (
+	"fmt"
+	"strings"
+)
+
 // Instruction is the per-opcode view used by sh2instr.c emission.
 type Instruction struct {
 	Name      string // e.g. "ADD Rm, Rn", "BSRF Rm"
@@ -72,4 +77,32 @@ type Decoder struct {
 	// ports in Package.Components. False (and thus byte-identical to base)
 	// for the base J1/J2/J4 builds.
 	HasTwoWord bool
+
+	// TwoWordWord1Collisions lists the word1 opcode patterns (e.g.
+	// "0011nnnnmmmm0001") shared by two or more two-word instructions
+	// (Opcode2 set). Such instructions are discriminated only by
+	// ext_word[15:12], which the simple/direct decoders handle but the ROM
+	// predecode path (predecode_rom_addr takes word1 only) cannot: they
+	// would collide on the same predecode address, silently shadowing each
+	// other. Sorted for deterministic output. Empty for base J1/J2/J4.
+	TwoWordWord1Collisions []string
+}
+
+// CheckROMTwoWord reports an error if the spec contains two-word
+// instructions that share a word1 pattern (see TwoWordWord1Collisions).
+// The ROM predecode path (predecode_rom_addr) is indexed by word1 only and
+// cannot discriminate such instructions by ext_word[15:12], so building the
+// ROM decoder would emit a colliding/shadowing table. Callers building the
+// ROM decoder as a real target must gate on this rather than silently
+// produce a wrong ROM. ROM + SH-2A two-word ops is unsupported; use the
+// direct (or simple) decoder instead. Returns nil for base and any spec
+// without a collision.
+func (d *Decoder) CheckROMTwoWord() error {
+	if len(d.TwoWordWord1Collisions) == 0 {
+		return nil
+	}
+	return fmt.Errorf(
+		"decode_table_rom cannot discriminate two-word instructions sharing "+
+			"word1 %s; ROM decoder + SH-2A two-word ops is unsupported -- use "+
+			"the direct decoder", strings.Join(d.TwoWordWord1Collisions, ", "))
 }

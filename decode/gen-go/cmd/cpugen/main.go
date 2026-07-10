@@ -81,6 +81,10 @@ func main() {
 	width := flag.Int("w", 72, "ROM width: 64 or 72")
 	outDir := flag.String("o", "", "output directory; if empty, validate only and exit")
 	overlay := flag.String("overlay", "", "optional overlay spec dir (additive, for ISA variants)")
+	decoder := flag.String("decoder", "all", "target decoder for guard checks: all|rom|direct|simple. "+
+		"'all' (default) emits every table (the sim selects one via decode_config). "+
+		"'rom' additionally guards against two-word instructions sharing word1, which the "+
+		"word1-only ROM predecode cannot discriminate (ROM + SH-2A two-word ops is unsupported).")
 	flag.Parse()
 
 	var s *spec.Spec
@@ -107,6 +111,12 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "build:", err)
 		os.Exit(1)
+	}
+	if *decoder == "rom" {
+		if err := d.CheckROMTwoWord(); err != nil {
+			fmt.Fprintln(os.Stderr, "build:", err)
+			os.Exit(1)
+		}
 	}
 	if err := emit.All(d, *outDir); err != nil {
 		fmt.Fprintln(os.Stderr, "emit:", err)

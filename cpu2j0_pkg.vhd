@@ -150,7 +150,10 @@ package cpu2j0_pack is
   component cpu is generic (
       copro_decode : boolean := true;
       priv_arch    : boolean := false;
-      mmu_arch     : boolean := false
+      mmu_arch     : boolean := false;
+      -- Elaboration tag distinguishing per-instance nested regfile configs (see
+      -- cpu entity). No functional effect.
+      core_id      : integer := 0
     );
     port (
       clk     : in    std_logic;

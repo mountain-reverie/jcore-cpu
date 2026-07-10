@@ -96,6 +96,18 @@ case "$SYNTH_VARIANT" in
     TOP="cpu_synth_direct"; TIMING_TOP="cpu_timing_j2"
     FILES+=(synth/cpu_timing_top.vhd synth/cpu_timing_config.vhd)
     ;;
+  j2a)
+    # SH-2A bare CPU. Regenerate the SH-2A decoder as a synth-time transient
+    # (committed base tables untouched; CI's decoder gate runs in a separate job),
+    # exactly as j4c does for the J4 overlay.
+    echo "cpu_synth.sh: regenerating SH-2A overlay decoder for j2a (transient)" >&2
+    make -C decode generate-j2a >&2
+    TOP="cpu_synth_j2a"; TIMING_TOP="cpu_timing_j2a"
+    # asic/ecp5 area backends elaborate the wrapper (SH2A_ARCH=>true via config).
+    AREA_TOP="cpu_synth_j2a_sh2a"; AREA_CPUTOP="cpu_j2a_top"
+    FILES+=(synth/cpu_synth_j2a_config.vhd)
+    FILES+=(synth/cpu_timing_top.vhd synth/cpu_timing_config.vhd)
+    ;;
   j1)
     # J1 binds the ROM decoder (cpu_synth_j1_config.vhd -> cpu_decode_rom), so the
     # rom microcode table + its config must be in the file list (like the j4-rom
@@ -131,25 +143,34 @@ case "$SYNTH_VARIANT" in
     AREA_TOP="cpu_synth_j4_priv"; AREA_CPUTOP="cpu_j4_priv_top"
     FILES+=(synth/cpu_timing_top.vhd synth/cpu_timing_config.vhd)
     ;;
-  j2c|j4c)
+  j2c|j4c|j2ac)
     CACHE=1; CPUTOP="cpu_cache_timing_top"; TIMINGCELL="cpu_cache_timing_top"
     SYN_BINDING="--syn-binding"
-    if [ "$SYNTH_VARIANT" = j4c ]; then
-      TOP="cpu_cache_timing_j4"
-      # M3: for j4c asic/ecp5, use the PRIV_ARCH=true + MMU_ARCH=true variant of
-      # the cache timing top (cpu_cache_timing_j4_priv_mmu in
-      # cpu_cache_timing_config.vhd) so the real J4+MMU+cache core is synthesized.
-      AREA_TOP="cpu_cache_timing_j4_priv_mmu"
-      # The MMU build needs the J4 overlay decoder (mmu_reg_* control signals)
-      # which lives only in the generate-j4 tables. Regenerate them as a SYNTH-
-      # TIME TRANSIENT (the committed base tables stay untouched: CI's decoder
-      # gate compares the committed tables against a clean `make generate`, run
-      # in a separate job). j1/j2/j4/j2c keep the base decoder unchanged.
-      echo "cpu_synth.sh: regenerating J4 overlay decoder for j4c (transient)" >&2
-      make -C decode generate-j4 >&2
-    else
-      TOP="cpu_cache_timing_j2"
-    fi
+    case "$SYNTH_VARIANT" in
+      j4c)
+        TOP="cpu_cache_timing_j4"
+        # M3: for j4c asic/ecp5, use the PRIV_ARCH=true + MMU_ARCH=true variant of
+        # the cache timing top (cpu_cache_timing_j4_priv_mmu in
+        # cpu_cache_timing_config.vhd) so the real J4+MMU+cache core is synthesized.
+        AREA_TOP="cpu_cache_timing_j4_priv_mmu"
+        # The MMU build needs the J4 overlay decoder (mmu_reg_* control signals)
+        # which lives only in the generate-j4 tables. Regenerate them as a SYNTH-
+        # TIME TRANSIENT (the committed base tables stay untouched: CI's decoder
+        # gate compares the committed tables against a clean `make generate`, run
+        # in a separate job). j1/j2/j4/j2c keep the base decoder unchanged.
+        echo "cpu_synth.sh: regenerating J4 overlay decoder for j4c (transient)" >&2
+        make -C decode generate-j4 >&2
+        ;;
+      j2ac)
+        TOP="cpu_cache_timing_j2a"
+        echo "cpu_synth.sh: regenerating SH-2A overlay decoder for j2ac (transient)" >&2
+        make -C decode generate-j2a >&2
+        FILES+=(synth/cpu_synth_j2a_config.vhd)   # cpu_cache_timing_j2a references it
+        ;;
+      *)  # j2c
+        TOP="cpu_cache_timing_j2"
+        ;;
+    esac
     TIMING_TOP="$TOP"
     # Cache CDC form = the cache_clkmode package constant (no generic, so ghdl
     # bakes it and yosys sees no parametric cache module). We use the SINGLE-CLOCK
@@ -199,7 +220,7 @@ case "$SYNTH_VARIANT" in
       synth/cpu_cache_timing_config.vhd
     )
     ;;
-  *) echo "ERROR: unknown SYNTH_VARIANT '$SYNTH_VARIANT' (want j1|j2|j4|j2c|j4c)" >&2; exit 1 ;;
+  *) echo "ERROR: unknown SYNTH_VARIANT '$SYNTH_VARIANT' (want j1|j2|j4|j2a|j2c|j4c|j2ac)" >&2; exit 1 ;;
 esac
 
 # Resolve asic/ecp5 area elaboration top: use AREA_TOP if set (j4/j4c with

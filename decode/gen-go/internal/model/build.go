@@ -717,6 +717,10 @@ var csvInstrOrder = []string{
 	// base J2 and J4 generation (not in their specs).
 	"MOV.L @(disp12,Rm),Rn",
 	"MOV.L Rm,@(disp12,Rn)",
+	"MOV.B @(disp12,Rm),Rn",
+	"MOV.W @(disp12,Rm),Rn",
+	"MOV.B Rm,@(disp12,Rn)",
+	"MOV.W Rm,@(disp12,Rn)",
 	"MOVML.L Rm,@-R15",
 	"MOVML.L @R15+,Rn",
 	"MOVMU.L Rm,@-R15",

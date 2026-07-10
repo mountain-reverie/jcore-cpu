@@ -11,7 +11,14 @@ entity cpu is
    COPRO_DECODE : boolean := true;
    PRIV_ARCH    : boolean := false;
    MMU_ARCH     : boolean := false;  -- MMU control-register file (subordinate to PRIV_ARCH)
-   SH2A_ARCH    : boolean := false);  -- SH-2A extensions (inert plumbing only)
+   SH2A_ARCH    : boolean := false;  -- SH-2A extensions (inert plumbing only)
+   -- Elaboration tag: distinguishes two cpu instances that share this entity/
+   -- arch/generics but whose nested register-file architecture is bound
+   -- differently per instance by the enclosing cpus configuration (e.g. core0=
+   -- register_file(ebr), core1=register_file(two_bank)). Without a differing
+   -- generic the ghdl->yosys frontend hashes both to one module name and errors
+   -- with "Re-definition of module". No functional effect.
+   CORE_ID      : integer := 0);
  port (
    clk          : in  std_logic;
    rst          : in  std_logic;

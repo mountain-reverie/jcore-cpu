@@ -489,3 +489,50 @@
     xbus = "R15"
     zbus = "R15"
     zbus_sel = "ARITH"
+
+[[instr]]
+  name = "MOVI20 #imm20,Rn"
+  format = "ni20"
+  opcode = "0000 nnnn iiii 0000"
+  opcode2 = "iiii iiii iiii iiii"
+  operation = "sign_extend(imm20) → Rn"
+  table_ref = "SH-2A"
+  # slot0: latch the second opcode word (imm[15:0]) and pulse if_issue to
+  # advance the fetch-ahead buffer one word (same as the disp12 family).
+  [[instr.slots]]
+    latch_ext = "1"
+    pc = "INC"
+    if_issue = "YES"
+  # slot1 (held): 0 + imm20 -> Rn. alu_x=zero (SEL_ZERO), alu_y="S" (signed,
+  # width 20 from format, shift 0 -> IMM_S_20_0) sourced from the latched
+  # ext_word via imm_from_ext; zbus=ARITH sum -> Rn.
+  [[instr.slots]]
+    imm_from_ext = "1"
+    alu_x = "zero"
+    alu_y = "S"
+    arith = "ADD"
+    pc = "INC"
+    zbus_sel = "ARITH"
+    zbus = "Rn"
+
+[[instr]]
+  name = "MOVI20S #imm20,Rn"
+  format = "ni20"
+  opcode = "0000 nnnn iiii 0001"
+  opcode2 = "iiii iiii iiii iiii"
+  operation = "sign_extend(imm20) << 8 → Rn"
+  table_ref = "SH-2A"
+  [[instr.slots]]
+    latch_ext = "1"
+    pc = "INC"
+    if_issue = "YES"
+  # slot1 (held): (sign_extend(imm20) << 8) -> Rn. alu_y="S*256" (signed,
+  # width 20, shift 8 -> IMM_S_20_8).
+  [[instr.slots]]
+    imm_from_ext = "1"
+    alu_x = "zero"
+    alu_y = "S*256"
+    arith = "ADD"
+    pc = "INC"
+    zbus_sel = "ARITH"
+    zbus = "Rn"

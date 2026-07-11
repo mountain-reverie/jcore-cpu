@@ -102,7 +102,11 @@ func ImmLiteralToVHDL(lit string) string {
 	case "IMM_U_12_2":
 		return `"000000000000000000" & ext_word(11 downto 0) & "00"`
 	case "IMM_S_20_0":
-		return `op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11) & op.code(11 downto 8) & ext_word(15 downto 0)`
+		// SH-2A movi20: sign(op.code(7)) ×12 & op.code(7 downto 4) & ext_word(15 downto 0).
+		return `op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7 downto 4) & ext_word(15 downto 0)`
+	case "IMM_S_20_8":
+		// SH-2A movi20s: sign_extend32(imm20) << 8.
+		return `op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7 downto 4) & ext_word(15 downto 0) & "00000000"`
 	}
 	// General numeric constants: IMM_P<N> / IMM_N<N> for any N. The
 	// explicit cases above are kept for low-churn review, but this
@@ -187,6 +191,7 @@ func ParseImm(v string) (ImmVal, bool) {
 //	md, nd4, nmd → 4 bits
 //	d8, nd8, i8, ni → 8 bits
 //	d12 → 12 bits
+//	ni20 → 20 bits
 //
 // Returns 0 for formats with no immediate field (e.g., "0", "n", "nm", "m").
 func formatBitWidth(format string) int {
@@ -197,6 +202,8 @@ func formatBitWidth(format string) int {
 		return 8
 	case "d12", "nmd12":
 		return 12
+	case "ni20":
+		return 20
 	default:
 		return 0
 	}

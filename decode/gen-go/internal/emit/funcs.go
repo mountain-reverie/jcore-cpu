@@ -179,7 +179,7 @@ func registerArgs(in model.Instruction) string {
 // the format doesn't carry that register.
 func registerExpr(format, reg string) string {
 	switch format {
-	case "n", "nd8", "ni":
+	case "n", "nd8", "ni", "ni20":
 		if reg == "Rn" {
 			return "(instr >> 8) & 0xF"
 		}

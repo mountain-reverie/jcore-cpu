@@ -1193,7 +1193,7 @@ func RegnumVHDL(tag string) string {
 
 func rnRegister(format string) string {
 	switch format {
-	case "n", "nd8", "ni", "nm", "nmd", "nmd12", "mn":
+	case "n", "nd8", "ni", "ni20", "nm", "nmd", "nmd12", "mn":
 		return "RA"
 	case "nd4":
 		return "RB"

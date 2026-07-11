@@ -63,6 +63,7 @@ mmusmep.elf: mmusmep.o
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+sh2a_movi20.elf: sh2a_movi20.o
 sh2a_movl12.elf: sh2a_movl12.o
 sh2a_disp12s.elf: sh2a_disp12s.o
 sh2a_disp12mix.elf: sh2a_disp12mix.o

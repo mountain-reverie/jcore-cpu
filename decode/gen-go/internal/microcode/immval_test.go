@@ -218,9 +218,23 @@ func TestExtWordImmVHDL(t *testing.T) {
 	if len(zeros) != 19 {
 		t.Errorf("IMM_U_12_1 leading zero-field width = %d, want 19", len(zeros))
 	}
-	// movi20: imm20 = op.code(11..8) (high 4) & ext_word(15..0) (low 16), sign-extended from bit 19
+	// movi20: imm20 = op.code(7) sign-extended (12 copies) & op.code(7..4) & ext_word(15..0).
+	// Rn = op.code(11..8).
 	got = ImmLiteralToVHDL("IMM_S_20_0")
-	if !strings.Contains(got, "op.code(11 downto 8)") || !strings.Contains(got, "ext_word(15 downto 0)") {
-		t.Errorf("imm20 VHDL = %q", got)
+	want = `op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7 downto 4) & ext_word(15 downto 0)`
+	if got != want {
+		t.Errorf("IMM_S_20_0 VHDL = %q, want %q", got, want)
+	}
+	// movi20s: sign_extend32(imm20) << 8 = 4 copies of op.code(7) & op.code(7..4) & ext_word(15..0) & 8 zeros.
+	got = ImmLiteralToVHDL("IMM_S_20_8")
+	want = `op.code(7) & op.code(7) & op.code(7) & op.code(7) & op.code(7 downto 4) & ext_word(15 downto 0) & "00000000"`
+	if got != want {
+		t.Errorf("IMM_S_20_8 VHDL = %q, want %q", got, want)
+	}
+}
+
+func TestFormatBitWidthNi20(t *testing.T) {
+	if got := formatBitWidth("ni20"); got != 20 {
+		t.Errorf("formatBitWidth(\"ni20\") = %d, want 20", got)
 	}
 }

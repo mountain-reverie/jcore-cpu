@@ -727,6 +727,8 @@ var csvInstrOrder = []string{
 	"MOVML.L @R15+,Rn",
 	"MOVMU.L Rm,@-R15",
 	"MOVMU.L @R15+,Rn",
+	"MOVI20 #imm20,Rn",
+	"MOVI20S #imm20,Rn",
 	// System-plane instructions (at end, in CSV row order):
 	"General Illegal",
 	"Slot Illegal",

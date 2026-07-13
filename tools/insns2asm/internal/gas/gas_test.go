@@ -43,7 +43,7 @@ func TestEmitDeltaArgsAndArch(t *testing.T) {
 	if !strings.Contains(out, "A_IMM") || !strings.Contains(out, "A_REG_N") {
 		t.Errorf("missing arg codes:\n%s", out)
 	}
-	if !strings.Contains(out, "arch_j_core") {
+	if !strings.Contains(out, "arch_j2_up") {
 		t.Errorf("missing arch mask:\n%s", out)
 	}
 }
@@ -79,8 +79,8 @@ func TestEmitDeltaLowercaseAndHexMacros(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantCas := `{"cas.l",{A_REG_M,A_REG_N,A_IND_0,0},{HEX_2,REG_N,REG_M,HEX_3},arch_j_core},`
-	wantBgnd := `{"bgnd",{0},{HEX_0,HEX_0,HEX_3,HEX_B},arch_j_core},`
+	wantCas := `{"cas.l",{A_REG_M,A_REG_N,A_IND_0,0},{HEX_2,REG_N,REG_M,HEX_3},arch_j2_up},`
+	wantBgnd := `{"bgnd",{0},{HEX_0,HEX_0,HEX_3,HEX_B},arch_j2_up},`
 	if !strings.Contains(out, wantCas) {
 		t.Errorf("cas.l line wrong.\n got: %s\nwant substr: %s", out, wantCas)
 	}
@@ -116,11 +116,11 @@ func TestEmitDeltaLowercasesMnemonic(t *testing.T) {
 
 func TestEmitDeltaMMUForms(t *testing.T) {
 	insns, err := ir.Build([]loader.RawInsn{
-		{Group: "System Control Instructions", Format: "STC PTEH, Rn", Code: "0000nnnn01010011", J2: true},
-		{Group: "System Control Instructions", Format: "STC PTEL, Rn", Code: "0000nnnn01100011", J2: true},
-		{Group: "System Control Instructions", Format: "STC ASIDR, Rn", Code: "0000nnnn01110011", J2: true},
-		{Group: "System Control Instructions", Format: "STC TSBPTR, Rn", Code: "0000nnnn01000011", J2: true},
-		{Group: "System Control Instructions", Format: "LDTLB.RN", Code: "0000000001111000", J2: true},
+		{Group: "System Control Instructions", Format: "STC PTEH, Rn", Code: "0000nnnn01010011", J4: true},
+		{Group: "System Control Instructions", Format: "STC PTEL, Rn", Code: "0000nnnn01100011", J4: true},
+		{Group: "System Control Instructions", Format: "STC ASIDR, Rn", Code: "0000nnnn01110011", J4: true},
+		{Group: "System Control Instructions", Format: "STC TSBPTR, Rn", Code: "0000nnnn01000011", J4: true},
+		{Group: "System Control Instructions", Format: "LDTLB.RN", Code: "0000000001111000", J4: true},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -130,11 +130,11 @@ func TestEmitDeltaMMUForms(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{
-		`{"stc",{A_PTEH,A_REG_N,0},{HEX_0,REG_N,HEX_5,HEX_3},arch_j_core},`,
-		`{"stc",{A_PTEL,A_REG_N,0},{HEX_0,REG_N,HEX_6,HEX_3},arch_j_core},`,
-		`{"stc",{A_ASIDR,A_REG_N,0},{HEX_0,REG_N,HEX_7,HEX_3},arch_j_core},`,
-		`{"stc",{A_TSBPTR,A_REG_N,0},{HEX_0,REG_N,HEX_4,HEX_3},arch_j_core},`,
-		`{"ldtlb.rn",{0},{HEX_0,HEX_0,HEX_7,HEX_8},arch_j_core},`,
+		`{"stc",{A_PTEH,A_REG_N,0},{HEX_0,REG_N,HEX_5,HEX_3},arch_j4_up},`,
+		`{"stc",{A_PTEL,A_REG_N,0},{HEX_0,REG_N,HEX_6,HEX_3},arch_j4_up},`,
+		`{"stc",{A_ASIDR,A_REG_N,0},{HEX_0,REG_N,HEX_7,HEX_3},arch_j4_up},`,
+		`{"stc",{A_TSBPTR,A_REG_N,0},{HEX_0,REG_N,HEX_4,HEX_3},arch_j4_up},`,
+		`{"ldtlb.rn",{0},{HEX_0,HEX_0,HEX_7,HEX_8},arch_j4_up},`,
 	}
 	for _, w := range want {
 		if !strings.Contains(out, w) {

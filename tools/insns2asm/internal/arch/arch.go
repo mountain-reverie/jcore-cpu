@@ -37,8 +37,18 @@ func (s Set) GASMask() string {
 		return "arch_sh4_up"
 	case s.SH4A:
 		return "arch_sh4a_up"
-	case s.anyJ():
-		return "arch_j_core"
+	case s.J2, s.J1:
+		// Shared J-core base ISA: valid on both the J2 and J4 gas
+		// targets (e.g. cas.l). arch_j2_up == arch_j2 | arch_j4_up in
+		// sh-opc.h, so this is the "lowest" j-core mask, matching the
+		// SH "_up" convention above. J1 has no known J1-only insns
+		// today (verified against insns.json); fold it in here so a
+		// J1 flag never silently regresses to no arch tag.
+		return "arch_j2_up"
+	case s.J4:
+		// J4-only extension (MMU/privileged-mode insns, e.g.
+		// ldtlb.rn): valid on the J4 gas target only, NOT J2.
+		return "arch_j4_up"
 	}
 	return "arch_sh1_up"
 }

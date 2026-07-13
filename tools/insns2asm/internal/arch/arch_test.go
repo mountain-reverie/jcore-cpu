@@ -27,6 +27,18 @@ func TestIsSharedJ4Augment(t *testing.T) {
 	if (Set{J2: true, J4: true}).IsSharedJ4Augment() {
 		t.Error("J2+J4 with no SH tag is jcore-only, not an augmentation")
 	}
+	if !(Set{SH2A: true, SH3: true, SH4: true, SH4A: true, J1: true, J2: true, J4: true}).IsSharedJ4Augment() {
+		t.Error("shld/shad-like SH2A+SH3+SH4+SH4A+J1+J2+J4 should need a J4 augmentation")
+	}
+	if (Set{SH2: true, J4: true}).IsSharedJ4Augment() {
+		t.Error("base SH2 insn already valid under j4 (arch_sh2_up) must NOT be augmented")
+	}
+	if (Set{SH2: true, SH4: true, J4: true}).IsSharedJ4Augment() {
+		t.Error("SH2+SH4+J4 already valid under j4 via arch_sh2_up must NOT be augmented")
+	}
+	if (Set{SH3: true, SH4: true}).IsSharedJ4Augment() {
+		t.Error("pure SH insn with no J4 is not an augmentation candidate")
+	}
 }
 
 func TestGASMask(t *testing.T) {

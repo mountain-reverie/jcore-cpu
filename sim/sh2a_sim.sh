@@ -20,19 +20,21 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
 TOOLS_DIR="${TOOLS_DIR:-/home/cedric/work/jcore/jcore-soc/tools}"
 [ -d "$TOOLS_DIR" ] || { echo "ERROR: TOOLS_DIR not found at $TOOLS_DIR" >&2; exit 1; }
 
+if [ -z "${SH2A_SIM_INNER:-}" ]; then
+  # Re-exec the whole script body under synth/with_overlay_decoder.sh, which
+  # regenerates the J2A overlay decoder (SH-2A instructions), runs the build
+  # + sim below, and ALWAYS restores the committed base decoder on exit
+  # (committed decode/*.vhd must stay base; never commit the J2A overlay
+  # tables).
+  export SH2A_SIM_INNER=1
+  exec "$ROOT/synth/with_overlay_decoder.sh" sh2a -- "$0" "$@"
+fi
+
 BUILD=1
 if [ "${1:-}" = "-n" ]; then BUILD=0; shift; fi
 
 TEST="${1:-sh2a_movl12}"
 STOP="${2:-40us}"
-
-# Always restore the committed base decoder on exit (generate-j2a overwrites
-# the tracked decode/*.vhd + sh2instr.c with the J2A overlay).
-restore_base() { make -C "$ROOT/decode" generate >/dev/null 2>&1 || true; }
-trap restore_base EXIT
-
-echo "== generate-j2a (J2A overlay decoder: SH-2A instructions) =="
-make -C decode generate-j2a >/dev/null
 
 if [ "$BUILD" = 1 ]; then
   echo "== build SH2A-on cosim (cpu_ctb + cpu_tb) =="
@@ -55,10 +57,5 @@ make CONFIG_SH2A_ARCH=1 -C tests $TEST.img
 echo "== run: cpu_ctb --stop-time=$STOP -i tests/$TEST.img =="
 ./cpu_ctb --stop-time="$STOP" -i tests/$TEST.img --ieee-asserts=disable
 rc=$?
-
-echo "== restoring base decoder =="
-# (also happens via the EXIT trap; explicit call here just for visible log
-# ordering before the final status line)
-make -C "$ROOT/decode" generate >/dev/null
 
 exit $rc

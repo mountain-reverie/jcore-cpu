@@ -1,4 +1,5 @@
-! mmusmep.S -- SMEP: kernel fetch of a user-executable page must IPROT.
+! mmusmep.S -- SMEP: kernel fetch of a user-executable page must IPROT,
+!              and a USER-mode fetch of the same kind of page must NOT.
 !
 ! J4 + MMU_ARCH + PRIV_ARCH. Installs a TLB entry, identity-mapped, for a
 ! page (_user_page below) with PTEL U=1 (user page), X=1 (executable),
@@ -18,15 +19,28 @@
 ! see the mmu_sim.sh gotcha: a non-fault RED path that instead runs off
 ! into space must still resolve to a clean FAIL, not a hang/crash.
 !
-! Modeled on sim/tests/mmufault.S (its IPROT sub-test, and its page-0
-! identity map needed to keep executing once AT is enabled) and the
-! .vect/SIM_INSTR_MAGIC/_done/_fail/r9 result pattern in
-! sim/tests/mmurun.S.
+! Negative control (proves SMEP does not over-fire): after the kernel-mode
+! sub-test above, the test drops to USER mode (SR.MD=0) and fetches/
+! executes a SEPARATE identity-mapped U=1,X=1,W=0,C=1 page (_user_ok_page).
+! This must be ALLOWED (no IPROT) -- it proves the RTL predicate is exactly
+! `entry.u='1' AND md='1'`, not a broader `entry.u='1'`. The user-mode code
+! sets a marker register (r10, unbanked by the RB swap on exception entry)
+! and then executes TRAPA to trap back into the kernel (VBR+0x100), which
+! records the marker, forces SSR.MD=1, and RTEs back. The kernel then
+! checks the marker was actually set -- a positive, non-vacuous assertion
+! that the user-mode fetch/execution really happened.
+!
+! Modeled on sim/tests/mmufault.S (its IPROT sub-test and user-mode MD=0
+! drop, and its page-0 identity map needed to keep executing once AT is
+! enabled) and the .vect/SIM_INSTR_MAGIC/_done/_fail/r9 result pattern in
+! sim/tests/mmurun.S. The TRAPA round-trip machinery mirrors
+! sim/tests/trapatest.S.
 !
 ! PTEL flag bit layout (core/tlb.vhd, see mmufault.S comment):
 !   bit7=W  bit6=X  bit5=U  bit4=D  bit3=C
-!   SMEP target page: X|U|C = 0x68  (W=0; forbidden to a kernel fetch
-!   because it is a USER page, not because it's non-executable)
+!   SMEP target pages: X|U|C = 0x68  (W=0; forbidden to a KERNEL fetch
+!   because it is a USER page, not because it's non-executable; allowed
+!   to a USER fetch)
 !
 ! J4 overlay opcodes (same encodings as mmufault.S):
 !   LDC r0,PTEH=0x405E  LDC r0,PTEL=0x406E  LDC r0,ASIDR=0x407E
@@ -39,6 +53,11 @@
 !   1  no exception taken (SMEP not enforced -- the RED-state failure)
 !   2  EXPEVT != 0x0A0 (IPROT)
 !   3  TEA != &_user_page
+!   4  negative control: unexpected IPROT in user mode (SMEP over-fired
+!      for MD=0, i.e. enforced on U=1 alone instead of U=1 AND MD=1)
+!   5  negative control: user-mode code never trapped back (TRAPA lost)
+!   6  negative control: marker not set (user-mode fetch/exec did not
+!      actually run before trapping back)
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -134,6 +153,111 @@ ENTRY(start)
         bra     _fail
         nop
 ENTRY(after)
+        ! _v_ifetch disabled AT on entry (kernel-mode sub-test above); re-enable
+        ! it so the negative-control sub-test below actually exercises the MMU.
+        mov.l   p_mmucr, r0
+        mov     #1, r1
+        mov.l   r1, @r0                 ! MMUCR = 1 (AT=1)
+
+        ! ==============================================================
+        ! Negative control: a USER-mode (MD=0) fetch/execution of a
+        ! U=1,X=1 page must be ALLOWED (no IPROT). Uses a SEPARATE
+        ! identity-mapped page (_user_ok_page) that runs a marker then
+        ! TRAPAs back -- _user_page's stub above unconditionally fails
+        ! and must not be reused here.
+        ! ==============================================================
+        ! ---- Map _user_ok_page: identity, user-executable, X|U|C = 0x68. ----
+        mov.l   p_userok_page_addr, r0
+        .word   0x405E                  ! LDC r0, PTEH (VPN=&_user_ok_page, ASID=0)
+        mov.l   p_ptel_userok, r0
+        .word   0x406E                  ! LDC r0, PTEL = &_user_ok_page | 0x68
+        mov     #0, r0
+        .word   0x407E                  ! LDC r0, ASIDR
+        .word   0x0038                  ! LDTLB
+
+        ! Any IPROT landing at _v_ifetch during this sub-test IS the
+        ! failure under test (SMEP over-firing in user mode): force a
+        ! guaranteed EXPEVT mismatch so it falls straight through to a
+        ! distinct fail code instead of comparing against the stale
+        ! kernel-mode sub-test's expectations.
+        mov.l   p_g_exp_expevt, r0
+        mov.l   c_bogus_expevt, r1
+        mov.l   r1, @r0                  ! g_exp_expevt = impossible value
+        mov.l   p_g_bad_expevt, r0
+        mov     #4, r1
+        mov.l   r1, @r0                  ! unexpected IPROT -> result 4
+
+        ! Clear the marker the user-mode code is expected to set.
+        mov.l   p_g_user_marker, r0
+        mov     #0, r1
+        mov.l   r1, @r0
+
+        ! Drop to user mode (clear SR.MD = bit 30 = 0x40000000).
+        stc     sr, r3
+        mov.l   p_mdmask, r4
+        and     r4, r3
+        ldc     r3, sr                  ! MD=0 after this
+        nop
+        nop
+        nop
+        nop
+
+        mov     #5, r9                  ! sentinel: user code never trapped back
+        mov.l   p_userok_page_addr, r0
+        jmp     @r0                     ! ALLOWED: user fetch of U=1,X=1 page
+        nop
+        bra     _fail
+        nop
+
+ENTRY(after_ok)
+        ! Positive, non-vacuous assertion: the user-mode code actually
+        ! ran and set the marker before trapping back.
+        mov.l   p_g_user_marker, r0
+        mov.l   @r0, r1
+        mov.l   c_marker_expect, r2
+        cmp/eq  r2, r1
+        bt      after_ok_pass
+        mov     #6, r9                  ! marker not set -> user code didn't run
+        bra     _fail
+        nop
+after_ok_pass:
+        bra     _done
+        nop
+
+        ! ================================================================
+        ! Pointer/constant literal pool for the main test body above. Kept
+        ! close to it (rather than down by the vector handlers) since the
+        ! mov.l @(disp,PC) encoding has a limited (+-1020 byte) reach.
+        ! ================================================================
+        .balign 4
+p_rbclear:       .long 0xDFFFFFFF       ! clear SR.RB (bit 29)
+p_mdmask:        .long 0xBFFFFFFF       ! clear SR.MD (bit 30) -> user mode
+p_vbr_val:       .long _v_ifetch - 0x400
+p_mmucr:         .long 0xFF000010
+p_ptel_userx:    .long _user_page + 0x68  ! identity PPN | X|U|C, W=0
+c_iprot:         .long 0x000000A0        ! EXPEVT IPROT
+c_bogus_expevt:  .long 0xFFFFFFFF        ! guaranteed EXPEVT mismatch sentinel
+c_marker_expect: .long 0x0000005A        ! expected _g_user_marker value
+p_g_exp_expevt:  .long _g_exp_expevt
+p_g_exp_tea:     .long _g_exp_tea
+p_g_bad_expevt:  .long _g_bad_expevt
+p_g_bad_tea:     .long _g_bad_tea
+p_g_resume:      .long _g_resume
+p_g_user_marker: .long _g_user_marker
+p_after:         .long after
+p_user_page_addr: .long _user_page
+p_userok_page_addr: .long _user_ok_page
+p_ptel_userok:   .long _user_ok_page + 0x68  ! identity PPN | X|U|C, W=0
+p_start_addr:    .long start
+p_pagemask:      .long 0xFFFFF000
+p_ownpage_flags: .long 0x000000E8       ! W|X|U|C -- must be U=1: the negative-
+                                         ! control sub-test's MD-drop sequence
+                                         ! (stc/and/ldc sr + nops + jmp) executes
+                                         ! FROM this page, and once MD flips to 0
+                                         ! mid-sequence a U=0 mapping here would
+                                         ! itself fault (user access to a
+                                         ! supervisor-only page) before ever
+                                         ! reaching _user_ok_page.
 
 #endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 
@@ -152,6 +276,38 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+
+        ! ================================================================
+        ! TRAPA handler at VBR+0x100 (_v_trapa), used only by the negative-
+        ! control sub-test's user-mode->kernel round trip. Records the
+        ! marker set by the user-mode code (r10, unbanked -- only R0-R7
+        ! are RB-swapped on exception entry), forces SSR.MD=1 so RTE
+        ! resumes in KERNEL mode, and resumes at after_ok.
+        !
+        ! Placed exactly 0x300 bytes before _v_ifetch (VBR+0x400) so a
+        ! single VBR value (p_vbr_val = _v_ifetch - 0x400) covers both
+        ! fixed vectors.
+        ! ================================================================
+        .balign 4
+_v_trapa:                              ! = VBR + 0x100 = _v_ifetch - 0x300
+        mov.l   Htrapa_marker, r0
+        mov.l   r10, @r0                ! g_user_marker = r10 (set by user code)
+        .word   0x0132                  ! STC SSR, r1
+        mov.l   Htrapa_mdbit, r2
+        or      r2, r1
+        .word   0x413E                  ! LDC r1, SSR  (force MD=1 -> kernel on RTE)
+        mov.l   Htrapa_resume, r0
+        mov.l   @r0, r0                 ! r0 = after_ok address
+        .word   0x404E                  ! LDC r0, SPC
+        rte
+        nop
+
+        .balign 4
+Htrapa_marker:  .long _g_user_marker
+Htrapa_mdbit:   .long 0x40000000        ! SR.MD bit, forced onto SSR before RTE
+Htrapa_resume:  .long after_ok
+
+        .space  0x300 - (. - _v_trapa), 0
 
         ! ================================================================
         ! Single vector handler at VBR+0x400 (_v_ifetch). Disable AT,
@@ -209,24 +365,7 @@ _g_exp_tea:     .long 0
 _g_resume:      .long 0
 _g_bad_expevt:  .long 0
 _g_bad_tea:     .long 0
-
-        .balign 4
-p_rbclear:       .long 0xDFFFFFFF       ! clear SR.RB (bit 29)
-p_vbr_val:       .long _v_ifetch - 0x400
-p_mmucr:         .long 0xFF000010
-p_ptel_page0:    .long 0x000000E8       ! W|X|U|C
-p_ptel_userx:    .long _user_page + 0x68  ! identity PPN | X|U|C, W=0
-c_iprot:         .long 0x000000A0        ! EXPEVT IPROT
-p_g_exp_expevt:  .long _g_exp_expevt
-p_g_exp_tea:     .long _g_exp_tea
-p_g_bad_expevt:  .long _g_bad_expevt
-p_g_bad_tea:     .long _g_bad_tea
-p_g_resume:      .long _g_resume
-p_after:         .long after
-p_user_page_addr: .long _user_page
-p_start_addr:    .long start
-p_pagemask:      .long 0xFFFFF000
-p_ownpage_flags: .long 0x000000C8       ! W|X|C, no U (kernel-only)
+_g_user_marker: .long 0                 ! set by _user_ok_page, checked by after_ok
 
         ! ================================================================
         ! Identity-mapped "user" page. In the GREEN (SMEP-enforced) case
@@ -239,6 +378,21 @@ p_ownpage_flags: .long 0x000000C8       ! W|X|C, no U (kernel-only)
 _user_page:
         mov     #1, r9
         bra     _fail
+        nop
+
+        ! ================================================================
+        ! Identity-mapped "user-ok" page: same U=1,X=1,W=0,C=1 permissions,
+        ! but used ONLY by the negative-control sub-test, executed in USER
+        ! mode (MD=0), where this fetch must be ALLOWED. Sets a marker
+        ! register (r10) then traps back to the kernel via TRAPA. The
+        ! trailing self-loop is a safety net only -- TRAPA unconditionally
+        ! traps, so it should never be reached.
+        ! ================================================================
+        .balign 4096
+_user_ok_page:
+        mov     #0x5A, r10              ! marker: prove this fetch/exec ran
+        trapa   #1                      ! -> VBR+0x100 (_v_trapa)
+1:      bra     1b
         nop
 
 #endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH

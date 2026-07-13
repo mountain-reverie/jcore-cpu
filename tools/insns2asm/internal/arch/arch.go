@@ -25,16 +25,16 @@ func (s Set) IsJCoreOnly() bool { return s.anyJ() && !s.anySH() }
 //
 // The base SH ISA (mov, add, cmp/eq, ...) is tagged SH1+J4 (it runs on every
 // SH generation AND on J4) — that is NOT what this reports: those already
-// carry the lowest SH arch ("arch_sh_up"/"arch_sh1_up"), which already
-// dominates arch_j4_up, so augmenting them would be a no-op at best and
-// scope creep at worst. What genuinely needs augmenting is the small set of
-// SH-3-and-later privileged-mode reg-reg forms (SSR/SPC/Rn_BANK) that J4
-// shares with SH-3/SH-4/SH-4A specifically and with NO earlier SH generation
-// and no J1/J2. The .l memory forms and SGR are not J4 and must not match.
+// carry the lowest SH arch ("arch_sh_up"/"arch_sh1_up"/"arch_sh2_up"), which
+// already dominates arch_j4_up, so augmenting them would be a no-op at best
+// and scope creep at worst. What genuinely needs augmenting is any J4
+// instruction whose lowest matching SH tag sits ABOVE the SH1/SH2 base line
+// (e.g. the SH-3-and-later privileged-mode reg-reg forms SSR/SPC/Rn_BANK,
+// but also shared insns like shld/shad tagged SH2A+SH3+SH4+SH4A): those are
+// NOT already covered by arch_j4_up's baked-in arch_sh2_up, so gas rejects
+// them under the j4 target unless augmented.
 func (s Set) IsSharedJ4Augment() bool {
-	return s.J4 && s.SH3 && s.SH4 && s.SH4A &&
-		!s.SH1 && !s.SH2 && !s.SH2E && !s.SH3E && !s.SH2A &&
-		!s.J1 && !s.J2
+	return s.J4 && s.anySH() && !s.SH1 && !s.SH2
 }
 
 // GASMask returns the upstream-style arch mask for the lowest-numbered SH that

@@ -78,7 +78,7 @@ architecture arch of decode is
     signal pipeline_r : pipeline_t;
     signal wb : pipeline_wb_t;
     signal wb_stall : pipeline_wb_stall_t;
-    constant STAGE_EX_RESET : pipeline_ex_t := (imm_val => x"00000000", xbus_sel => SEL_IMM, ybus_sel => SEL_IMM, mmu_reg_sel => SEL_PTEH, regnum_z => "00000", regnum_x => "00000", regnum_y => "00000", alumanip => SWAP_BYTE, aluinx_sel => SEL_XBUS, aluiny_sel => SEL_YBUS, arith_func => ADD, arith_ci_en => '0', arith_sr_func => ZERO, logic_func => LOGIC_NOT, logic_sr_func => ZERO, mac_busy => '0', ma_wr => '0', mem_lock => '0', mem_size => BYTE, coproc_cmd => NOP);
+    constant STAGE_EX_RESET : pipeline_ex_t := (imm_val => x"00000000", xbus_sel => SEL_IMM, ybus_sel => SEL_IMM, mmu_reg_sel => SEL_PTEH, regnum_z => "00000", regnum_x => "00000", regnum_y => "00000", alumanip => SWAP_BYTE, aluinx_sel => SEL_XBUS, aluiny_sel => SEL_YBUS, arith_func => ADD, arith_ci_en => '0', arith_sr_func => ZERO, logic_func => LOGIC_NOT, logic_sr_func => ZERO, mac_busy => '0', ma_wr => '0', mem_lock => '0', mem_unsigned => '0', mem_size => BYTE, coproc_cmd => NOP);
     constant STAGE_WB_RESET : pipeline_wb_t := (regnum_w => "00000", mac_busy => '0');
     constant STAGE_EX_STALL_RESET : pipeline_ex_stall_t := (wrpc_z => '0', wrsr_z => '0', ma_issue => '0', wrpr_pc => '0', zbus_sel => SEL_ARITH, sr_sel => SEL_PREV, t_sel => SEL_CLEAR, mem_addr_sel => SEL_XBUS, mem_wdata_sel => SEL_ZBUS, wrreg_z => '0', wrmach => '0', wrmacl => '0', shiftfunc => LOGIC, mulcom1 => '0', mulcom2 => NOP, macsel1 => SEL_XBUS, macsel2 => SEL_YBUS, mmu_reg_wr => '0', mmu_reg_sel => SEL_PTEH, tlb_wr => '0');
     constant STAGE_WB_STALL_RESET : pipeline_wb_stall_t := (mulcom1 => '0', wrmach => '0', wrmacl => '0', wrreg_w => '0', wrsr_w => '0', macsel1 => SEL_XBUS, macsel2 => SEL_YBUS, mulcom2 => NOP, cpu_data_mux => DBUS);
@@ -214,6 +214,7 @@ begin
     func.logic_sr <= pipeline_r.ex1.logic_sr_func;
     mem.wr <= pipeline_r.ex1.ma_wr;
     mem.lock <= pipeline_r.ex1.mem_lock;
+    mem.mem_unsigned <= pipeline_r.ex1.mem_unsigned;
     mem.size <= pipeline_r.ex1.mem_size;
     reg.num_w <= pipeline_r.wb3.regnum_w;
     reg.num_x <= pipeline_r.ex1.regnum_x;

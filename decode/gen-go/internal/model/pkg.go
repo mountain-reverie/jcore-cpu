@@ -214,6 +214,7 @@ func newStaticPackage() *Package {
 					{Names: []string{"issue"}, Type: "std_logic"},
 					{Names: []string{"wr"}, Type: "std_logic"},
 					{Names: []string{"lock"}, Type: "std_logic"},
+					{Names: []string{"mem_unsigned"}, Type: "std_logic"},
 					{Names: []string{"size"}, Type: "mem_size_t"},
 					{Names: []string{"addr_sel"}, Type: "mem_addr_sel_t"},
 					{Names: []string{"wdata_sel"}, Type: "mem_wdata_sel_t"},

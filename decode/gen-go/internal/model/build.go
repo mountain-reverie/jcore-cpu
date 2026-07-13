@@ -164,22 +164,6 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 		}
 	}
 
-	// Synthetic overlay-illegal entries (spec.InjectOverlayIllegals, run
-	// before model.Build) are appended to s.Instrs at load time and have no
-	// fixed CSV row -- they don't exist in the original spreadsheet. They
-	// are always system-plane and named "Illegal <overlay-instr-name>".
-	// Admit them here (in spec order, at the end of the system-plane
-	// group) instead of requiring csvInstrOrder to enumerate every overlay
-	// opcode by hand, which would need updating every time an overlay
-	// spec file changes.
-	for i := range s.Instrs {
-		si := &s.Instrs[i]
-		if si.Plane == "system" && strings.HasPrefix(si.Name, "Illegal ") && !csvNames[si.Name] {
-			csvNames[si.Name] = true
-			systemInstrs = append(systemInstrs, si)
-		}
-	}
-
 	// Loudly catch the case where a TOML instruction is missing from
 	// csvInstrOrder: the disassembler (Lines) would include it but the
 	// ROM would silently drop it. If it happens, csvInstrOrder must be
@@ -234,17 +218,6 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 			resolvedFormat[name] = prevFormat
 		}
 	}
-	// Synthetic overlay-illegal entries (see above) have no CSV row and thus
-	// never pass through the loop above; they always set a concrete,
-	// non-empty Format (cloned from General Illegal), so resolve directly.
-	for _, si := range systemInstrs {
-		if strings.HasPrefix(si.Name, "Illegal ") {
-			if _, ok := resolvedFormat[si.Name]; !ok {
-				resolvedFormat[si.Name] = si.Format
-			}
-		}
-	}
-
 	for instrIdx, si := range allInstrs {
 		// Collect only non-empty slots. The TOML format uses an empty
 		// [[instr.slots]] entry (len==0) as an optional cycle-terminator
@@ -488,7 +461,17 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 			}
 		}
 	}
-	d.Body = BuildBody(instrAddrs, instrLogicNormal, writesPC, privileged, addrBits)
+	// Excluded overlay opcodes (spec.InjectOverlayIllegals) never become
+	// dispatched microcode -- they only feed check_illegal_instruction so
+	// they trap via the existing General-Illegal exception path instead of
+	// being cloned into the decode tables' minterm reduction (see
+	// internal/spec/overlay_illegal.go for the bisection that found this).
+	excludedIllegal := make(map[string]logic.LogicMap, len(s.ExcludedIllegal))
+	for _, ei := range s.ExcludedIllegal {
+		excludedIllegal[ei.Name] = logic.OpToLogicMap("0", ei.Opcode)
+	}
+
+	d.Body = BuildBody(instrAddrs, instrLogicNormal, writesPC, privileged, addrBits, excludedIllegal)
 	d.Simple = BuildSimple(s, instrLogicAll, slotAssigns)
 	d.Direct = BuildDirect(s, instrLogicAll, slotAssigns)
 	d.Entity = BuildEntity(d.Package)

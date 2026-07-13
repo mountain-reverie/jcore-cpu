@@ -46,4 +46,11 @@ type Spec struct {
 	Instrs   []Instr
 	// Source records the file each instruction came from, for error reporting.
 	Source map[string]string // key = Instr.Name → filename
+	// ExcludedIllegal holds overlay opcodes NOT part of this build (see
+	// InjectOverlayIllegals in overlay_illegal.go). These are never
+	// dispatched microcode -- they only drive check_illegal_instruction so
+	// excluded overlay encodings trap via the existing exception path
+	// instead of silently NOPing or (as an earlier mechanism did) being
+	// cloned into the decode tables' minterm reduction.
+	ExcludedIllegal []Instr
 }

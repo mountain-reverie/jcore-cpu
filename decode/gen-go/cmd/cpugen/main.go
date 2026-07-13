@@ -102,6 +102,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "validate:", err)
 		os.Exit(1)
 	}
+	if err := spec.InjectOverlayIllegals(s, *specDir, []string{"sh2a", "sh4"}); err != nil {
+		fmt.Fprintln(os.Stderr, "inject overlay illegals:", err)
+		os.Exit(1)
+	}
 	if *outDir == "" {
 		fmt.Fprintf(os.Stderr, "loaded %d instructions from %s (no -o given; nothing emitted)\n",
 			len(s.Instrs), *specDir)

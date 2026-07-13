@@ -163,6 +163,23 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 			normalInstrs = append(normalInstrs, si)
 		}
 	}
+
+	// Synthetic overlay-illegal entries (spec.InjectOverlayIllegals, run
+	// before model.Build) are appended to s.Instrs at load time and have no
+	// fixed CSV row -- they don't exist in the original spreadsheet. They
+	// are always system-plane and named "Illegal <overlay-instr-name>".
+	// Admit them here (in spec order, at the end of the system-plane
+	// group) instead of requiring csvInstrOrder to enumerate every overlay
+	// opcode by hand, which would need updating every time an overlay
+	// spec file changes.
+	for i := range s.Instrs {
+		si := &s.Instrs[i]
+		if si.Plane == "system" && strings.HasPrefix(si.Name, "Illegal ") && !csvNames[si.Name] {
+			csvNames[si.Name] = true
+			systemInstrs = append(systemInstrs, si)
+		}
+	}
+
 	// Loudly catch the case where a TOML instruction is missing from
 	// csvInstrOrder: the disassembler (Lines) would include it but the
 	// ROM would silently drop it. If it happens, csvInstrOrder must be
@@ -215,6 +232,16 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 			prevFormat = si.Format
 		} else {
 			resolvedFormat[name] = prevFormat
+		}
+	}
+	// Synthetic overlay-illegal entries (see above) have no CSV row and thus
+	// never pass through the loop above; they always set a concrete,
+	// non-empty Format (cloned from General Illegal), so resolve directly.
+	for _, si := range systemInstrs {
+		if strings.HasPrefix(si.Name, "Illegal ") {
+			if _, ok := resolvedFormat[si.Name]; !ok {
+				resolvedFormat[si.Name] = si.Format
+			}
 		}
 	}
 

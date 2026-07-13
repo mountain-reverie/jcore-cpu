@@ -396,8 +396,17 @@ func TestDecoderDifferential(t *testing.T) {
 					expFormatted := stripStdLogicQuotes(signalRHS(sig, rawExp))
 					gotFormatted, gotPresent := got[sig]
 					if !gotPresent {
-						// Direct decoder emitted nothing for this LHS.  For signals
-						// that should be driven, this is a bug.
+						// Direct decoder emitted nothing for this LHS. If the
+						// expected value is exactly the signal's own default
+						// (e.g. mem_unsigned, which no base instruction ever
+						// sets to '1'), the QMC reducer legitimately prunes
+						// the signal out of the base decoder entirely — that
+						// is the intended area-saving behavior, not a bug.
+						// For any other expected value, an absent LHS means
+						// a signal that should be driven isn't.
+						if def, ok := microcode.SignalDefault(sig); ok && stripStdLogicQuotes(signalRHS(sig, def)) == expFormatted {
+							continue
+						}
 						t.Errorf("signal %s: expected %q, direct decoder produced no value", sig, expFormatted)
 						continue
 					}

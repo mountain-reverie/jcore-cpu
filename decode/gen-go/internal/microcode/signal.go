@@ -57,6 +57,7 @@ const (
 	SigMemAddrSel  Signal = "mem_addr_sel"
 	SigMemWdataSel Signal = "mem_wdata_sel"
 	SigMemLock     Signal = "mem_lock"
+	SigMemUnsigned Signal = "mem_unsigned"
 
 	// MAC
 	SigExWrmach    Signal = "ex_wrmach"
@@ -118,7 +119,7 @@ const (
 func (s Signal) IsStdLogic() bool {
 	switch s {
 	case SigWrregZ, SigWrregW, SigWrpcZ, SigWrprPC, SigWrsrW, SigWrsrZ,
-		SigArithCiEn, SigMaIssue, SigMaWr, SigMemLock,
+		SigArithCiEn, SigMaIssue, SigMaWr, SigMemLock, SigMemUnsigned,
 		SigExWrmach, SigWbWrmach, SigExWrmacl, SigWbWrmacl,
 		SigExMulcom1, SigWbMulcom1,
 		SigMacStallSns, SigMacSLatch,
@@ -251,6 +252,7 @@ var SignalVHDLPath = map[Signal]string{
 	SigMemAddrSel:  "ex_stall.mem_addr_sel",
 	SigMemWdataSel: "ex_stall.mem_wdata_sel",
 	SigMemLock:     "ex.mem_lock",
+	SigMemUnsigned: "ex.mem_unsigned",
 	SigExWrmach:    "ex_stall.wrmach",
 	SigWbWrmach:    "wb_stall.wrmach",
 	SigExWrmacl:    "ex_stall.wrmacl",
@@ -299,7 +301,7 @@ var AllSignals = []Signal{
 	SigArithFunc, SigArithSrFn, SigArithCiEn,
 	SigLogicFunc, SigLogicSrFn, SigShiftFunc,
 	SigSrSel, SigTSel,
-	SigMaIssue, SigMaWr, SigMemSize, SigMemAddrSel, SigMemWdataSel, SigMemLock,
+	SigMaIssue, SigMaWr, SigMemSize, SigMemAddrSel, SigMemWdataSel, SigMemLock, SigMemUnsigned,
 	SigExWrmach, SigWbWrmach, SigExWrmacl, SigWbWrmacl,
 	SigExMulcom1, SigWbMulcom1, SigExMulcom2, SigWbMulcom2,
 	SigExMacsel1, SigWbMacsel1, SigExMacsel2, SigWbMacsel2,

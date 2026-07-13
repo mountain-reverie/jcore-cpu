@@ -732,9 +732,11 @@ func assignMA(slot spec.Slot, out AssignMap) error {
 	case "32":
 		out[SigMemSize] = "LONG"
 	case "UBYTE":
-		out[SigMemSize] = "UBYTE"
+		out[SigMemSize] = "BYTE"
+		out[SigMemUnsigned] = "1"
 	case "UWORD":
-		out[SigMemSize] = "UWORD"
+		out[SigMemSize] = "WORD"
+		out[SigMemUnsigned] = "1"
 	default:
 		if size != "" {
 			return fmt.Errorf("ma_size: unrecognized value %q", size)

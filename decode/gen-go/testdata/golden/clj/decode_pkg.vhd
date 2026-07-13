@@ -161,6 +161,7 @@ package decode_pack is
             mac_busy : std_logic;
             ma_wr : std_logic;
             mem_lock : std_logic;
+            mem_unsigned : std_logic;
             mem_size : mem_size_t;
             coproc_cmd : coproc_cmd_t;
         end record;

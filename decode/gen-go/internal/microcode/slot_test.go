@@ -196,6 +196,46 @@ func TestAssignSlotMARead(t *testing.T) {
 	}
 }
 
+// TestMaSizeUnsignedDecouples verifies UBYTE/UWORD ma_size values decompose
+// into mem_size (BYTE/WORD) + mem_unsigned='1', while plain 8/16/32 leave
+// mem_unsigned unset (defaults to '0' in emission).
+func TestMaSizeUnsignedDecouples(t *testing.T) {
+	instr := spec.Instr{Name: "MOVU.B @Rm,Rn", Format: "nm"}
+
+	slotUByte := spec.Slot{"ma_op": "READ", "ma_size": "UBYTE", "ma_addy": "ZBUS", "pc": "INC", "if_issue": "NO"}
+	out, err := AssignSlot(instr, slotUByte)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out[SigMemSize] != "BYTE" {
+		t.Errorf("UBYTE: mem_size=%q, want BYTE", out[SigMemSize])
+	}
+	if out[SigMemUnsigned] != "1" {
+		t.Errorf("UBYTE: mem_unsigned=%q, want 1", out[SigMemUnsigned])
+	}
+
+	slotUWord := spec.Slot{"ma_op": "READ", "ma_size": "UWORD", "ma_addy": "ZBUS", "pc": "INC", "if_issue": "NO"}
+	out2, err := AssignSlot(instr, slotUWord)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out2[SigMemSize] != "WORD" || out2[SigMemUnsigned] != "1" {
+		t.Errorf("UWORD: got size=%q unsigned=%q, want WORD/1", out2[SigMemSize], out2[SigMemUnsigned])
+	}
+
+	slotByte := spec.Slot{"ma_op": "READ", "ma_size": "8", "ma_addy": "ZBUS", "pc": "INC", "if_issue": "NO"}
+	out3, err := AssignSlot(instr, slotByte)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out3[SigMemSize] != "BYTE" {
+		t.Errorf("8: mem_size=%q, want BYTE", out3[SigMemSize])
+	}
+	if _, set := out3[SigMemUnsigned]; set {
+		t.Errorf("8: mem_unsigned should be unset, got %q", out3[SigMemUnsigned])
+	}
+}
+
 // TestAssignSlotDispatch tests dispatch=YES.
 func TestAssignSlotDispatch(t *testing.T) {
 	instr := spec.Instr{Name: "RTS", Format: "0"}

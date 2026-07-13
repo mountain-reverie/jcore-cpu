@@ -57,14 +57,48 @@ type PredecodeBitAssign struct {
 //
 // writesPC is the set of instruction names that write PC (branches);
 // drives check_illegal_delay_slot.
-func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, writesPC map[string]bool, privileged map[string]bool, addrBits int) *Body {
+func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, writesPC map[string]bool, privileged map[string]bool, addrBits int, excludedIllegal map[string]logic.LogicMap) *Body {
 	body := &Body{}
 	body.Predecode = buildPredecode(instrAddrs, instrLogic, addrBits)
 	body.IllegalSlot = buildIllegalSlot(instrLogic, writesPC)
-	body.IllegalInstr = `code(15 downto 8) = x"ff"`
+	body.IllegalInstr = buildIllegalInstr(excludedIllegal)
 	body.Privileged = buildPrivileged(instrLogic, privileged)
 	body.AddrSentinel = addrLit((1<<addrBits)-1, addrBits)
 	return body
+}
+
+// buildIllegalInstr produces the boolean expression for
+// check_illegal_instruction: the hardcoded 0xffxx stub (kept for backward
+// compatibility) OR'd with the QMC-reduced set of opcodes excluded from this
+// build by InjectOverlayIllegals (sh2a/sh4 encodings absent from the loaded
+// spec). This function is independent of the decode tables' per-field
+// minterm reduction -- it only drives the illegal_instr signal, which the
+// existing exception path (datapath -> decode_core) already dispatches into
+// the real "General Illegal" microcode entry. Returns just the stub when
+// there are no excluded opcodes (e.g. a build that loaded every overlay).
+func buildIllegalInstr(excluded map[string]logic.LogicMap) string {
+	const stub = `code(15 downto 8) = x"ff"`
+	names := make([]string, 0, len(excluded))
+	for n := range excluded {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	var maps []logic.LogicMap
+	for _, n := range names {
+		stripped := logic.LogicMap{}
+		for k, v := range excluded[n] {
+			if k.Sig != "p" {
+				stripped[k] = v
+			}
+		}
+		maps = append(maps, stripped)
+	}
+	reduced := logic.ReduceImplicants(maps)
+	expr := orJoin(reduced, map[string]string{"i": "code"})
+	if expr == "" {
+		return stub
+	}
+	return "(" + stub + ") or ((" + expr + ") = '1')"
 }
 
 // buildPrivileged produces the boolean expression for the privileged()

@@ -7,22 +7,26 @@ func TestInjectOverlayIllegals_BaseGetsBothOverlays(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before := len(s.Instrs)
+	instrsBefore := len(s.Instrs)
 	if err := InjectOverlayIllegals(s, "../../spec", []string{"sh2a", "sh4"}); err != nil {
 		t.Fatal(err)
 	}
-	// disp12 word1 0x3nm1 -> "0011nnnnmmmm0001" must now be present as illegal.
+	// The recorded set is NOT dispatched microcode: s.Instrs must be untouched.
+	if len(s.Instrs) != instrsBefore {
+		t.Fatalf("InjectOverlayIllegals must not mutate s.Instrs; got %d, want %d", len(s.Instrs), instrsBefore)
+	}
+	// disp12 word1 0x3nm1 -> "0011nnnnmmmm0001" must now be recorded as excluded.
 	found := false
-	for _, in := range s.Instrs[before:] {
+	for _, in := range s.ExcludedIllegal {
 		if normalizeDashes(in.Opcode) == normalizeDashes("0011 nnnn mmmm 0001") {
 			found = true
 			if in.Plane != "system" {
-				t.Errorf("injected illegal not system-plane: %q", in.Name)
+				t.Errorf("excluded illegal not system-plane: %q", in.Name)
 			}
 		}
 	}
 	if !found {
-		t.Fatalf("expected injected illegal entry for disp12 word1 0x3nm1")
+		t.Fatalf("expected excluded illegal entry for disp12 word1 0x3nm1")
 	}
 }
 
@@ -31,14 +35,13 @@ func TestInjectOverlayIllegals_SkipsPresentOverlay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before := len(s.Instrs)
 	if err := InjectOverlayIllegals(s, "../../spec", []string{"sh2a", "sh4"}); err != nil {
 		t.Fatal(err)
 	}
-	// sh2a opcodes are real here -> NOT re-injected as illegal; sh4 IS injected.
-	for _, in := range s.Instrs[before:] {
+	// sh2a opcodes are real here -> NOT recorded as excluded; sh4 IS recorded.
+	for _, in := range s.ExcludedIllegal {
 		if normalizeDashes(in.Opcode) == normalizeDashes("0011 nnnn mmmm 0001") {
-			t.Fatalf("sh2a op re-injected as illegal despite being present (real)")
+			t.Fatalf("sh2a op recorded as excluded illegal despite being present (real)")
 		}
 	}
 }

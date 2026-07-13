@@ -91,6 +91,7 @@ package decode_pack is
             issue : std_logic;
             wr : std_logic;
             lock : std_logic;
+            mem_unsigned : std_logic;
             size : mem_size_t;
             addr_sel : mem_addr_sel_t;
             wdata_sel : mem_wdata_sel_t;

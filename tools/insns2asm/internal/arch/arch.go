@@ -17,6 +17,26 @@ func (s Set) anyJ() bool { return s.J1 || s.J2 || s.J4 }
 // IsJCoreOnly reports an instruction present on J-core but on no SH variant.
 func (s Set) IsJCoreOnly() bool { return s.anyJ() && !s.anySH() }
 
+// IsSharedJ4Augment reports an instruction that already exists upstream on an
+// SH variant (so it is NOT emitted as a gas delta line) but is ALSO
+// implemented on J4 (e.g. the reg-reg forms ldc Rm,SSR / stc SSR,Rn shared
+// with SH-3/SH-4/SH-4A). Its upstream sh-opc.h arch mask needs augmenting
+// with arch_j4_up so the instruction is recognized under the J4 gas target.
+//
+// The base SH ISA (mov, add, cmp/eq, ...) is tagged SH1+J4 (it runs on every
+// SH generation AND on J4) — that is NOT what this reports: those already
+// carry the lowest SH arch ("arch_sh_up"/"arch_sh1_up"), which already
+// dominates arch_j4_up, so augmenting them would be a no-op at best and
+// scope creep at worst. What genuinely needs augmenting is the small set of
+// SH-3-and-later privileged-mode reg-reg forms (SSR/SPC/Rn_BANK) that J4
+// shares with SH-3/SH-4/SH-4A specifically and with NO earlier SH generation
+// and no J1/J2. The .l memory forms and SGR are not J4 and must not match.
+func (s Set) IsSharedJ4Augment() bool {
+	return s.J4 && s.SH3 && s.SH4 && s.SH4A &&
+		!s.SH1 && !s.SH2 && !s.SH2E && !s.SH3E && !s.SH2A &&
+		!s.J1 && !s.J2
+}
+
 // GASMask returns the upstream-style arch mask for the lowest-numbered SH that
 // has the instruction (SH "_up" inclusive masks). J-core-only uses a placeholder.
 func (s Set) GASMask() string {

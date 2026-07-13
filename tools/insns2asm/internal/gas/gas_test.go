@@ -143,6 +143,123 @@ func TestEmitDeltaMMUForms(t *testing.T) {
 	}
 }
 
+func TestAugmentationsSharedJ4RegRegForms(t *testing.T) {
+	insns, err := ir.Build([]loader.RawInsn{
+		{Group: "System Control Instructions", Format: "ldc\tRm,SSR", Code: "0100mmmm00111110", SH3: true, SH4: true, SH4A: true, J4: true},
+		{Group: "System Control Instructions", Format: "stc\tSSR,Rn", Code: "0000nnnn00110010", SH3: true, SH4: true, SH4A: true, J4: true},
+		{Group: "System Control Instructions", Format: "ldc\tRm,Rn_BANK", Code: "0100mmmm1nnn1110", SH3: true, SH4: true, SH4A: true, J4: true},
+		{Group: "System Control Instructions", Format: "stc\tRm_BANK,Rn", Code: "0000nnnn1mmm0010", SH3: true, SH4: true, SH4A: true, J4: true},
+		// .l memory form: NOT J4, must not produce an augmentation.
+		{Group: "System Control Instructions", Format: "ldc.l\t@Rm+,SSR", Code: "0100mmmm00110111", SH3: true, SH4: true, SH4A: true},
+		// SGR: NOT J4, must not produce an augmentation.
+		{Group: "System Control Instructions", Format: "stc\tSGR,Rn", Code: "0000nnnn00111010", SH4: true, SH4A: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	augs, err := Augmentations(insns)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(augs) != 4 {
+		t.Fatalf("expected 4 augmentations (SSR/BANK reg-reg ldc+stc), got %d: %+v", len(augs), augs)
+	}
+	for _, a := range augs {
+		if a.Flag != "arch_j4_up" {
+			t.Errorf("unexpected flag %q", a.Flag)
+		}
+		if a.Mnemonic == "ldc.l" || a.Mnemonic == "stc.l" {
+			t.Errorf(".l form must not be augmented: %+v", a)
+		}
+	}
+}
+
+func TestApplyAugmentationsIsIdempotentAndOrsFlag(t *testing.T) {
+	src := `const sh_opcode_info sh_table[] =
+{
+/* 0100nnnn00111110 ldc <REG_N>,SSR */{"ldc",{A_REG_N,A_SSR},{HEX_4,REG_N,HEX_3,HEX_E}, arch_sh3_nommu_up},
+/* 0000nnnn00110010 stc SSR,<REG_N> */{"stc",{A_SSR,A_REG_N},{HEX_0,REG_N,HEX_3,HEX_2}, arch_sh3_nommu_up},
+};
+`
+	augs := []Augmentation{
+		{Mnemonic: "ldc", Nibbles: "HEX_4,REG_N,HEX_3,HEX_E", Flag: "arch_j4_up"},
+		{Mnemonic: "stc", Nibbles: "HEX_0,REG_N,HEX_3,HEX_2", Flag: "arch_j4_up"},
+	}
+	out, changed, err := ApplyAugmentations(src, augs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed != 2 {
+		t.Fatalf("expected 2 lines changed, got %d", changed)
+	}
+	if !strings.Contains(out, "arch_sh3_nommu_up|arch_j4_up},") {
+		t.Errorf("arch mask not OR'd correctly:\n%s", out)
+	}
+	// Re-applying must be a no-op (idempotent).
+	out2, changed2, err := ApplyAugmentations(out, augs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed2 != 0 {
+		t.Errorf("re-applying augmentations should change 0 lines, changed %d", changed2)
+	}
+	if out2 != out {
+		t.Errorf("re-applying augmentations should be a no-op")
+	}
+}
+
+func TestApplyAugmentationsIgnoresRegisterNibbleLetter(t *testing.T) {
+	// Upstream sh-opc.h conventionally names the sole register-field nibble
+	// of ldc-to-control-register forms REG_N even when insns.json's mnemonic
+	// calls the operand Rm (e.g. "ldc Rm,SSR"); the augmentation must still
+	// match this line.
+	src := `/* 0100mmmm00111110 ldc <REG_N>,SSR */{"ldc",{A_REG_N,A_SSR},{HEX_4,REG_N,HEX_3,HEX_E}, arch_sh3_nommu_up},
+`
+	augs := []Augmentation{{Mnemonic: "ldc", Nibbles: "HEX_4,REG_M,HEX_3,HEX_E", Flag: "arch_j4_up"}}
+	out, changed, err := ApplyAugmentations(src, augs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed != 1 {
+		t.Fatalf("expected 1 line changed, got %d:\n%s", changed, out)
+	}
+	if !strings.Contains(out, "arch_sh3_nommu_up|arch_j4_up") {
+		t.Errorf("flag not applied:\n%s", out)
+	}
+}
+
+func TestApplyAugmentationsUnmatchedIsError(t *testing.T) {
+	src := "const sh_opcode_info sh_table[] =\n{\n};\n"
+	_, _, err := ApplyAugmentations(src, []Augmentation{{Mnemonic: "ldc", Nibbles: "HEX_4,REG_N,HEX_3,HEX_E", Flag: "arch_j4_up"}})
+	if err == nil {
+		t.Error("expected error for unmatched augmentation")
+	}
+}
+
+func TestEmitDeltaOrderingKeepsMnemonicGroupsContiguous(t *testing.T) {
+	// Regression for the bug where a distinct mnemonic (ldtlb.rn) ended up
+	// interleaved between stc entries once spliced into upstream sh-opc.h.
+	insns, err := ir.Build([]loader.RawInsn{
+		{Group: "System Control Instructions", Format: "STC PTEH, Rn", Code: "0000nnnn01010011", J4: true},
+		{Group: "System Control Instructions", Format: "LDTLB.RN", Code: "0000000001111000", J4: true},
+		{Group: "System Control Instructions", Format: "STC PTEL, Rn", Code: "0000nnnn01100011", J4: true},
+		{Group: "System Control Instructions", Format: "STC ASIDR, Rn", Code: "0000nnnn01110011", J4: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := EmitDelta(insns)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stcFirst := strings.Index(out, `"stc"`)
+	stcLast := strings.LastIndex(out, `"stc"`)
+	ldtlbIdx := strings.Index(out, `"ldtlb.rn"`)
+	if ldtlbIdx > stcFirst && ldtlbIdx < stcLast {
+		t.Errorf("ldtlb.rn interleaved inside the stc group:\n%s", out)
+	}
+}
+
 func TestArgCodeBranchAndSystemClasses(t *testing.T) {
 	cases := []struct {
 		o    operand.Operand

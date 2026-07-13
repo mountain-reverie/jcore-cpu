@@ -14,6 +14,21 @@ func TestIsJCoreOnly(t *testing.T) {
 	}
 }
 
+func TestIsSharedJ4Augment(t *testing.T) {
+	if !(Set{SH3: true, SH4: true, SH4A: true, J4: true}).IsSharedJ4Augment() {
+		t.Error("SH3+SH4+SH4A+J4 reg-reg form should need a J4 augmentation")
+	}
+	if (Set{SH3: true, SH4: true, SH4A: true}).IsSharedJ4Augment() {
+		t.Error("SH-only (no J4) should not be an augmentation candidate")
+	}
+	if (Set{J4: true}).IsSharedJ4Augment() {
+		t.Error("J4-only (no SH) is a jcore-only delta line, not an augmentation")
+	}
+	if (Set{J2: true, J4: true}).IsSharedJ4Augment() {
+		t.Error("J2+J4 with no SH tag is jcore-only, not an augmentation")
+	}
+}
+
 func TestGASMask(t *testing.T) {
 	if got := (Set{SH1: true, SH2: true}).GASMask(); got != "arch_sh1_up" {
 		t.Errorf("GASMask = %q", got)

@@ -12,7 +12,7 @@ CONFIG_SH2A_ARCH ?= 0
 CFLAGS = -m2 -g -Os -Wall -Iinclude -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -DCONFIG_SH2A_ARCH=$(CONFIG_SH2A_ARCH)
 LDFLAGS = -T sh32.x -Map main.map
 
-all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img rteredir.img mmureg.img mmuguard.img mmuxlate.img mmufault.img mmudslot.img mmurte.img mmustore.img mmuimiss.img mmusr.img mmuicolor.img mmudcbit.img mmuldtlbr.img mmutsb.img mmurun.img mmuidx.img mmustres.img mmustr2.img mmusmep.img mmuirun.img mmuainc.img mmuainc2.img mmureloc.img mmurelocif.img mmurelocbp.img mmustale.img mmuasid.img mmupage4k.img mmupagereloc16k.img mmupage16k.img mmupage64k.img mmupage1m.img mmupagemix.img mmupagemix2.img mmupagewalk.img m8_smoke.img m8_dside.img m8_ifetch_0.img m8_ifetch_1.img m8_ifetch_2.img m8_macarith.img m8_macseq.img
+all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img rteredir.img mmureg.img mmuguard.img mmuxlate.img mmufault.img mmudslot.img mmurte.img mmustore.img mmuimiss.img mmusr.img mmuicolor.img mmudcbit.img mmuldtlbr.img mmutsb.img mmurun.img mmuidx.img mmustres.img mmustr2.img mmusmep.img mmuirun.img mmuainc.img mmuainc2.img mmureloc.img mmurelocif.img mmurelocbp.img mmustale.img mmuasid.img mmupage4k.img mmupagereloc16k.img mmupage16k.img mmupage64k.img mmupage1m.img mmupagemix.img mmupagemix2.img mmupagewalk.img m8_smoke.img m8_dside.img m8_ifetch_0.img m8_ifetch_1.img m8_ifetch_2.img m8_macarith.img m8_macseq.img j4_illegal_trap.img
 
 m8_macarith.elf: m8_macarith.o
 interrupts.elf: interrupts.o
@@ -83,6 +83,7 @@ sh2a_movmu.elf: sh2a_movmu.o
 sh2a_movmu_b2b.elf: sh2a_movmu_b2b.o
 sh2a_movmu_pop_restart.elf: sh2a_movmu_pop_restart.o
 sh2a_movmu_pop_push.elf: sh2a_movmu_pop_push.o
+j4_illegal_trap.elf: j4_illegal_trap.o
 mmurun.elf: mmurun.o tlbwalk.o
 mmuirun.elf: mmuirun.o tlbwalk.o
 mmuainc.elf: mmuainc.o tlbwalk.o

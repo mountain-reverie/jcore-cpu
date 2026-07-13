@@ -114,7 +114,7 @@ ENTRY(start)
 
         .align 2
 p_rbclear:   .long 0xDFFFFFFF
-p_ptel_p0:   .long 0x000000E8   ! page 0: PA=0x0 | W|X|U|C
+p_ptel_p0:   .long 0x000000C8   ! page 0: PA=0x0 | W|X|C, U cleared: kernel code, SMEP
 p_p2_base:   .long 0xA0010000   ! P2 alias of PA 0x10000
 p_p2_sub:    .long 0xA0011000   ! P2 alias of PA 0x11000
 k_vbr:       .long _v_store - 0x440

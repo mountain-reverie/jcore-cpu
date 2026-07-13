@@ -105,7 +105,7 @@ ENTRY(start)
 p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_imiss - 0x400
 p_mmucr:        .long 0xFF000010
-p_ptel_page0:   .long 0x000000E8        ! W|X|U|C
+p_ptel_page0:   .long 0x000000C8        ! W|X|C (U cleared: kernel code, SMEP)
 p_pteh_page1:   .long 0x00001000        ! VPN = 1
 p_ptel_nx:      .long 0x000000A8        ! W|U|C  (X=0 -> IPROT on fetch)
 p_pio:          .long 0xABCD0000        ! PIO/LED marker port
@@ -155,7 +155,7 @@ _v_imiss:                               ! = VBR + 0x400
 
         .balign 4
 Hpteh1:         .long 0x00001000        ! VPN = 1
-Hptel1:         .long 0x000010E8        ! PA 0x1000 (identity) | W|X|U|C
+Hptel1:         .long 0x000010C8        ! PA 0x1000 (identity) | W|X|C (kernel-fetched delay slot, SMEP)
 
         ! CORRECT landing: the branch target, on PAGE 0 (always mapped). Reached
         ! only if the branch is (re-)taken after the delay-slot fault is serviced.

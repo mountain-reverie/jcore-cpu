@@ -254,7 +254,7 @@ p_rbclear: .long 0xDFFFFFFF
 k_pgd:     .long 0x80002000
 k_pgd0:    .long 0x80002401
 k_pte:     .long 0x80002800           ! PTE table[idx(0x00100000)=0x100] = 0x80002400+0x400
-v_pte:     .long 0x001000F1           ! identity PTE: PA(==VA) | flags 0x0F1 (incl EXEC; bits[11:8]=0 → pm=0)
+v_pte:     .long 0x001000D1           ! identity PTE: PA(==VA) | flags 0x0D1 (U cleared: kernel code, SMEP)
 k_pteData: .long 0x80002808           ! PTE table[idx(0x00102000)=0x102] = 0x80002400+0x408
 v_pteData: .long 0x001020F1           ! identity PTE for data page (same flags; bits[11:8]=0 → pm=0)
 k_bkData:  .long 0x00102000           ! identity backing == data VA (seed direct, AT off)

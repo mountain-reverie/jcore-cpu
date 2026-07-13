@@ -44,7 +44,19 @@ cd "$ROOT"
 JCORE_SOC="${JCORE_SOC:-$ROOT/jcore-soc}"
 
 OUT="$ROOT/build"; mkdir -p "$OUT"
-WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
+WORK="$(mktemp -d)"
+# The j2a/j2ac/j4c legs below regenerate an overlay decoder transiently (via
+# `make -C decode generate-<overlay>`, kept inline since this synth staging
+# continues in the same script rather than invoking a child command, unlike
+# sim/sh2a_sim.sh + sim/mmu_sim.sh which wrap via synth/with_overlay_decoder.sh).
+# Guarantee the committed base decoder is restored on any exit path (success,
+# error, or signal) regardless of which variant ran; a no-op if the base
+# decoder was never touched (e.g. j1/j2/j4/j2c).
+cleanup() {
+  rm -rf "$WORK"
+  make -C "$ROOT/decode" generate >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
 
 # Fail early with a helpful message if preconditions are unmet.
 for f in core/mult.vhd core/datapath.vhd decode/decode_core.vhd \

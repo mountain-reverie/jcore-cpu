@@ -25,19 +25,21 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
 export JCORE_SOC="${JCORE_SOC:-$ROOT/../jcore-soc}"
 [ -d "$JCORE_SOC" ] || { echo "ERROR: JCORE_SOC not found at $JCORE_SOC" >&2; exit 1; }
 
+if [ -z "${MMU_SIM_INNER:-}" ]; then
+  # Re-exec the whole script body under synth/with_overlay_decoder.sh, which
+  # regenerates the J4 overlay decoder (PRIV_ARCH + MMU instructions), runs
+  # the build + guards below, and ALWAYS restores the committed base decoder
+  # on exit (committed tables must stay base; committing J4-overlay tables is
+  # a known Fmax regression -- see jcore-base-decoder-j4-overlay-regression).
+  export MMU_SIM_INNER=1
+  exec "$ROOT/synth/with_overlay_decoder.sh" sh4 -- "$0" "$@"
+fi
+
 BUILD=1
 if [ "${1:-}" = "-n" ]; then BUILD=0; shift; fi
 
-# Always restore the committed base decoder on exit (generate-j4 overwrites the
-# tracked decode/*.vhd + sh2instr.c with the J4 overlay).
-restore_base() { make -C "$ROOT/decode" generate >/dev/null 2>&1 || true; }
-trap restore_base EXIT
-
-# ALWAYS make the J4 decoder + cache .vhd cores present on disk: the mcode cosim
-# RE-ANALYSES the VHDL sources at run time, so the decoder active here must be J4
-# for the MMU instructions to exist in the run. Cheap (Go + perl, a few seconds).
-echo "== generate-j4 (J4 overlay decoder: PRIV_ARCH + MMU instructions) =="
-make -C decode generate-j4 >/dev/null
+# ALWAYS make the cache .vhd cores present on disk: the mcode cosim
+# RE-ANALYSES the VHDL sources at run time. Cheap (perl, a few seconds).
 echo "== preprocess dcache/icache .vhm cores -> .vhd =="
 for f in cache/dcache_ccl cache/dcache_mcl cache/icache_ccl cache/icache_mcl; do
   LD_LIBRARY_PATH='' perl "$JCORE_SOC/tools/v2p" < "$f.vhm" > "$f.vhd"

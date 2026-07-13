@@ -18,8 +18,17 @@ func TestGASMask(t *testing.T) {
 	if got := (Set{SH1: true, SH2: true}).GASMask(); got != "arch_sh1_up" {
 		t.Errorf("GASMask = %q", got)
 	}
-	if got := (Set{J2: true}).GASMask(); got != "arch_j_core" {
-		t.Errorf("jcore GASMask = %q", got)
+	if got := (Set{J2: true}).GASMask(); got != "arch_j2_up" {
+		t.Errorf("J2 GASMask = %q", got)
+	}
+	if got := (Set{J4: true}).GASMask(); got != "arch_j4_up" {
+		t.Errorf("J4-only GASMask = %q", got)
+	}
+	if got := (Set{J2: true, J4: true}).GASMask(); got != "arch_j2_up" {
+		t.Errorf("J2+J4 (shared) GASMask = %q", got)
+	}
+	if got := (Set{J1: true}).GASMask(); got != "arch_j2_up" {
+		t.Errorf("J1-only GASMask = %q", got)
 	}
 	if got := (Set{SH2E: true}).GASMask(); got != "arch_sh2e_up" {
 		t.Errorf("SH2E GASMask = %q", got)

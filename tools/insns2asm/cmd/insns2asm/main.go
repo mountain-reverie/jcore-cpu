@@ -33,6 +33,7 @@ func run(args []string, stdout io.Writer) error {
 	out := fs.String("out", "", "output file (default stdout)")
 	only := fs.String("only", "", "emit only instructions whose mnemonic contains this substring")
 	class := fs.String("class", "", "instruction class filter: simple")
+	shopc := fs.String("shopc", "", "path to an upstream opcodes/sh-opc.h to patch in place (gas-augment mode)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -92,6 +93,27 @@ func run(args []string, stdout io.Writer) error {
 		}
 		_, err = io.WriteString(w, out)
 		return err
+	case "gas-augment":
+		if *shopc == "" {
+			return fmt.Errorf("gas-augment: -shopc <path-to-sh-opc.h> is required")
+		}
+		augs, err := gas.Augmentations(insns)
+		if err != nil {
+			return err
+		}
+		src, err := os.ReadFile(*shopc)
+		if err != nil {
+			return err
+		}
+		patched, changed, err := gas.ApplyAugmentations(string(src), augs)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(*shopc, []byte(patched), 0644); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "insns2asm: applied %d/%d J4 arch augmentations to %s\n", changed, len(augs), *shopc)
+		return nil
 	case "llvm":
 		_, err = io.WriteString(w, llvm.EmitInstrInfo(insns))
 		return err

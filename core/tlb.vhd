@@ -69,7 +69,9 @@ begin
   -- match requires VALID and not-STALE and VPN match and (GLOBAL or ASID match)
   -- -- the isolation predicate (docs/architecture/tlb.md §3). On a hit, an
   -- instruction fetch is a protection violation when the page is non-executable
-  -- (X=0) OR it is a supervisor page (U=0) accessed from user mode (MD=0).
+  -- (X=0) OR it is a supervisor page (U=0) accessed from user mode (MD=0) OR
+  -- (SMEP) it is a user page (U=1) fetched from kernel mode (MD=1) -- a
+  -- kernel is never permitted to execute user-controlled code.
   -- Note: on a multi-hit the last (highest-index) match wins; software must not
   -- install duplicate VPN+ASID entries.
   process(ram, i_va, asid, md)
@@ -94,7 +96,8 @@ begin
         hit_pa12      := entry.ppn(12);            -- PA[12] (PIPT relocation, mmurelocif)
         hit_page_mask := entry.page_mask;
         hit_c         := entry.c;
-        if entry.x = '0' or (entry.u = '0' and md = '0') then  -- X / user-on-super (mmufault)
+        if entry.x = '0' or (entry.u = '0' and md = '0')  -- X / user-on-super (mmufault)
+           or (entry.u = '1' and md = '1') then            -- SMEP: kernel fetch of user page (mmusmep)
           prot := '1';
         end if;
       end if;

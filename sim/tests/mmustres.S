@@ -111,7 +111,7 @@ p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_store - 0x440
 p_mmucr:        .long 0xFF000010
 p_pteh_code:    .long start
-p_ptel_code:    .long start + 0x000000E8
+p_ptel_code:    .long start + 0x000000C8        ! U cleared: kernel code, SMEP
 c_ctrl_va:      .long _ctrl_word
 c_ctrl_val:     .long 0xC0DEC0DE
 c_fault_va:     .long _fault_word

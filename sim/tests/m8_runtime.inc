@@ -155,9 +155,9 @@ p_rbclear: .long 0xDFFFFFFF
 k_pgd:     .long 0x80002000
 k_pgd0:    .long 0x80002401
 k_pteA:    .long 0x80002800
-v_pteA:    .long 0x001000F1    ! identity PTE: PA(==VA) | flags 0x0F1 (W,X,U,D,V; bits[11:8]=0 → pm=0)
+v_pteA:    .long 0x001000D1    ! identity PTE: PA(==VA) | flags 0x0D1 (U cleared: kernel code, SMEP)
 k_pteB:    .long 0x80002804    ! pte_tab[0x101] (= 0x80002400 + 0x101*4)
-v_pteB:    .long 0x001010F1    ! identity PTE for VA 0x00101000 (PA in PTEL[31:10])
+v_pteB:    .long 0x001010D1    ! identity PTE for VA 0x00101000, U cleared: kernel code, SMEP
 k_tsb:     .long 0x80002C00
 k_vbr:     .long 0x80000000 + _vbase
 k_tsbbr_a: .long 0xFF000014

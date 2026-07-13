@@ -109,7 +109,7 @@ p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_load - 0x420
 p_mmucr:        .long 0xFF000010
 p_pteh_code:    .long start                     ! code page base (4KB-aligned), ASID=0
-p_ptel_code:    .long start + 0x000000E8        ! identity PPN | (W+X+U+C)
+p_ptel_code:    .long start + 0x000000C8        ! identity PPN | (W+X+C) U cleared: kernel code, SMEP
 c_sentinel_va:  .long _sentinel
 c_sentinel_val: .long SENTINEL
 

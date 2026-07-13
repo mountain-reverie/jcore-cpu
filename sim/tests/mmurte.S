@@ -88,7 +88,7 @@ pr_test_result: .long TEST_RESULT_ADDRESS
 p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_load - 0x420
 p_mmucr:        .long 0xFF000010
-p_ptel_page0:   .long 0x000000E8
+p_ptel_page0:   .long 0x000000C8
 c_page1_va:     .long 0x00001000
 
 #endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH

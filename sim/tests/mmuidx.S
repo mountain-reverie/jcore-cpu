@@ -169,7 +169,7 @@ _fail_at:
 p_rbclear:    .long 0xDFFFFFFF
 p_vbr_val:    .long _v_load - 0x420
 p_mmucr:      .long 0xFF000010
-p_ptel_page0: .long 0x000000E8
+p_ptel_page0: .long 0x000000C8        ! U cleared: kernel code, SMEP
 p_data_base:  .long 0x00010000
 p_idx:        .long 0x00000400
 p_val_plain:  .long 0xAA11AA11

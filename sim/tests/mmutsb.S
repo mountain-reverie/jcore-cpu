@@ -100,7 +100,7 @@ ENTRY(start)
 p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_load - 0x420
 p_pteh_code:    .long start
-p_ptel_code:    .long start + 0x000000E8
+p_ptel_code:    .long start + 0x000000C8        ! U cleared: kernel code, SMEP
 p_mmucr:        .long 0xFF000010
 p_tsbbr_addr:   .long 0xFF000014
 p_tsbbr_val:    .long 0x00010006

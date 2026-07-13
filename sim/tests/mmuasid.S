@@ -114,7 +114,7 @@ _silent_spin:
 p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_load - 0x420
 p_mmucr:        .long 0xFF000010
-p_ptel_page0:   .long 0x000000EC        ! W|X|U|C|G (global code page)
+p_ptel_page0:   .long 0x000000CC        ! W|X|C|G, U cleared (kernel global code page, SMEP)
 p_pteh_p4:      .long 0x00004000
 p_ptel_p4:      .long 0x000040E8        ! PA 0x4000 | W|X|U|C (non-global)
 p_asid_a:       .long 0x00000011

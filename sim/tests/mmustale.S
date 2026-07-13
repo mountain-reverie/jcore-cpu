@@ -89,7 +89,7 @@ _silent_spin:
 p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_load - 0x420
 p_mmucr:        .long 0xFF000010
-p_ptel_page0:   .long 0x000000E8
+p_ptel_page0:   .long 0x000000C8        ! U cleared: kernel code, SMEP
 p_pteh_p4:      .long 0x00004000
 p_ptel_stale:   .long 0x000040EA        ! PA 0x4000 | W|X|U|C|STALE (bit1)
 c_page4_va:     .long 0x00004000

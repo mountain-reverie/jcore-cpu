@@ -300,6 +300,7 @@ func newStaticPackage() *Package {
 					{Names: []string{"mac_busy"}, Type: "std_logic"},
 					{Names: []string{"ma_wr"}, Type: "std_logic"},
 					{Names: []string{"mem_lock"}, Type: "std_logic"},
+					{Names: []string{"mem_unsigned"}, Type: "std_logic"},
 					{Names: []string{"mem_size"}, Type: "mem_size_t"},
 					{Names: []string{"coproc_cmd"}, Type: "coproc_cmd_t"},
 				},

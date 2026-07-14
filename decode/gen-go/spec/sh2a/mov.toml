@@ -722,3 +722,51 @@
     wbus = "R0"
     xbus = "Rm"
     zbus_sel = "ARITH"
+
+# SH-2A MOVRT Rn: ~T -> Rn (writes the INVERTED T bit into Rn; does not
+# affect T itself). Base MOVT Rn (spec/mov.toml) extracts T via a LOGIC
+# path (logic=AND, xbus="1", ybus=SR -> masks SR down to just bit0=T). That
+# path can't cleanly invert: XOR-ing the masked bit against 1 only flips
+# bit0, but AND(1,SR) is only correct BEFORE the mask; there's no
+# mask-then-invert composition available in a single logic slot, and
+# LOGIC_NOT bitwise-complements the full operand (wrong -- would produce
+# ~SR's other bits too, not just ~T zero-extended).
+#
+# A single-slot ARITH carry-in idea (xbus="1", ybus="0", carryin_en="1" ->
+# 1-0-T) was tried and REJECTED: xbus_sel/ybus_sel share ONE imm_enum
+# register per slot (see NEG/NEGC: only one operand can be SEL_IMM at a
+# time), so xbus="1" and ybus="0" collide onto the same immediate value
+# (both got IMM_P1 in the generated table -- confirmed by inspecting
+# decode_table_simple.vhd and re-running the cosim, which failed case 1).
+#
+# Fix: TWO slots (same idiom as MOVML/MOV @Rn+ -- write a register in one
+# slot, read it back next slot), each using only ONE immediate:
+#   slot0: logic=AND, xbus="1", ybus="SR" -> Rn (exactly MOVT's extraction;
+#     zbus=Rn, zbus_sel=LOGIC, pc HELD). Rn := T.
+#   slot1: logic=XOR, xbus="Rn" (reads back the just-committed T), ybus="1"
+#     -> Rn (zbus=Rn, zbus_sel=LOGIC, pc INC). Rn := T xor 1 = ~T.
+# No new datapath/enum; sr stays HOLD throughout (MOVRT does not affect T).
+[[instr]]
+  name = "MOVRT Rn"
+  format = "n"
+  opcode = "0000 nnnn 0011 1001"
+  operation = "~T -> Rn"
+  table_ref = "SH-2A"
+
+  # slot0: Rn := T (identical extraction to MOVT Rn).
+  [[instr.slots]]
+    logic = "AND"
+    pc = "HOLD"
+    xbus = "1"
+    ybus = "SR"
+    zbus = "Rn"
+    zbus_sel = "LOGIC"
+
+  # slot1: Rn := Rn xor 1 = ~T.
+  [[instr.slots]]
+    logic = "XOR"
+    pc = "INC"
+    xbus = "Rn"
+    ybus = "1"
+    zbus = "Rn"
+    zbus_sel = "LOGIC"

@@ -86,6 +86,7 @@ sh2a_movmu_pop_restart.elf: sh2a_movmu_pop_restart.o
 sh2a_movmu_pop_push.elf: sh2a_movmu_pop_push.o
 sh2a_bitreg.elf: sh2a_bitreg.o
 sh2a_movincdec.elf: sh2a_movincdec.o
+sh2a_movrt_nott.elf: sh2a_movrt_nott.o
 j4_illegal_trap.elf: j4_illegal_trap.o
 mmurun.elf: mmurun.o tlbwalk.o
 mmuirun.elf: mmuirun.o tlbwalk.o

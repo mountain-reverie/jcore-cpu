@@ -89,7 +89,7 @@
 #include <asm/pgtable-bits-jcore.h>
 #define ENTRY(name) .globl name; .balign 4; name:
 
-        .section .vect
+        .section .vect,"a"
         .long start
         .long 0x00007000
         .long start
@@ -104,19 +104,17 @@
         .long CMD_ENABLE_TEST_RESULT
 _sim_instr_end: .long 0
 
-        .text
+        .section .textlo,"ax"
 ENTRY(start)
-        ! ---- Relocate SP into P1 and jump to the P1 alias of kmain, so
-        ! ALL harness code/stack/page-table accesses are untranslated once
-        ! MMUCR.AT is enabled below (mirrors mmurun.S's kmain trampoline). --
-        mov.l   p_sp,    r15           ! r15 = 0x80030F00 (P1 stack)
-        mov.l   p_kmain, r0            ! r0  = 0x80000000 + kmain
+        mov.l   p_sp,    r15
+        mov.l   p_kmain, r0
         jmp     @r0
         nop
         .align 2
 p_sp:    .long 0x80030F00
-p_kmain: .long 0x80000000 + kmain
+p_kmain: .long kmain
 
+        .text
 kmain:
         ! ---- Ensure RB=0 (keep MD=1). ----
         stc     sr, r0
@@ -327,7 +325,7 @@ k_tsb:          .long 0x80028000
 k_backing:      .long 0x80040000
 v_seed:         .long 0xC0FFEE00
 k_ttb_a:        .long 0xFF000008        ! MMU_TTB
-k_vbr:          .long 0x80000000 + jcore_vbr_base
+k_vbr:          .long jcore_vbr_base
 k_tsbbr_a:      .long 0xFF000014        ! TSBBR
 v_tsbbr:        .long 0x80028004
 k_tsbcfg_a:     .long 0xFF000018        ! TSBCFG

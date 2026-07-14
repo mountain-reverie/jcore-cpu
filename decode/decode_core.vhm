@@ -578,10 +578,18 @@ begin
            ( event_i.cmd = ERROR or event_i.cmd = RESET_CPU or event_i.cmd = BREAK ) ) else
     -- Slot Illegal Instruction
     system_op(SLOT_ILLEGAL)
-      when delay_slot = '1' and (illegal_delay_slot or illegal_instr) = '1' else
+      when delay_slot = '1' and (illegal_delay_slot or illegal_instr) = '1'
+           -- An I-side TLB fault's returned word is not a valid instruction
+           -- (may alias an illegal encoding, e.g. 0x0000); yield to TLB_IMISS/IPROT.
+           and not (MMU_ARCH and texc_req = '1'
+                    and (texc_kind_held = IMISS or texc_kind_held = IPROT)) else
     -- General Illegal Instruction
     system_op(GENERAL_ILLEGAL)
-      when illegal_instr = '1' else
+      when illegal_instr = '1'
+           -- An I-side TLB fault's returned word is not a valid instruction
+           -- (may alias an illegal encoding, e.g. 0x0000); yield to TLB_IMISS/IPROT.
+           and not (MMU_ARCH and texc_req = '1'
+                    and (texc_kind_held = IMISS or texc_kind_held = IPROT)) else
     -- TLB miss/protection exceptions (MMU_ARCH). Driven by the held request so
     -- the system op is stable across the memory-access stall until it can be
     -- latched at the next instruction boundary.

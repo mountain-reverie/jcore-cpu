@@ -44,10 +44,15 @@ mechanisms. J2A is a build-time variant: `make -C decode generate-j2a`,
 - **Group 7 — single-word misc** (PR #118, merged):
   `movrt Rn` (¬T → Rn) and `nott` (invert T).
 
+- **Group 8 PR-A — arithmetic clips/clipu** (PR open, branch feat/j2a-group8-clips):
+  `clips.b/w Rn`, `clipu.b/w Rn` (saturate Rn to signed/unsigned byte/word
+  range). Pending: `mulr` (PR-B), `divs`/`divu` (PR-C).
+
 ### Instructions live in J2A today
 `mov.l @(disp12,Rm),Rn`, `movml.l Rm,@-R15`, `mov.{b,w,l} R0,@Rn+`,
 `mov.{b,w,l} @-Rm,R0`, `bclr #imm3,Rn`, `bset #imm3,Rn`, `bld #imm3,Rn`,
-`bst #imm3,Rn`, `movrt Rn`, `nott`.
+`bst #imm3,Rn`, `movrt Rn`, `nott`, `clips.b Rn`, `clips.w Rn`, `clipu.b Rn`,
+`clipu.w Rn`.
 
 ---
 
@@ -130,11 +135,11 @@ Single-word; bit op on a register selected by `#imm3`. Straightforward microcode
 
 ### Group 8 — arithmetic  — effort M
 Single-word but each needs a new ALU behavior.
-- `mulr R0,Rn`  (Rn ← R0 × Rn; reuse the multiplier, result to Rn)
-- `clips.b/w Rn`, `clipu.b/w Rn`  (saturate Rn to signed/unsigned byte/word
-  range — new saturation logic in the ALU/manip unit)
+- ✅ `clips.b/w Rn`, `clipu.b/w Rn`  (saturate Rn to signed/unsigned byte/word
+  range — new saturation logic in the ALU/manip unit) — **PR-A done**
+- `mulr R0,Rn`  (Rn ← R0 × Rn; reuse the multiplier, result to Rn) — **PR-B pending**
 - `divs R0,Rn`, `divu R0,Rn`  (SH-2A signed/unsigned divide — verify semantics
-  vs the existing DIV0/DIV1 step machinery; these may be multi-cycle)
+  vs the existing DIV0/DIV1 step machinery; these may be multi-cycle) — **PR-C pending**
 
 ### Group 9 — delay-slot-less branches  — effort M
 SH-2A branches that do NOT execute a delay slot — a distinct branch microcode

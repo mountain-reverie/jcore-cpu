@@ -4511,9 +4511,9 @@
       "J4": false,
       "J4.issue": 0,
       "J4.latency": 0,
-      "J2A": false,
-      "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A": true,
+      "J2A.issue": 1,
+      "J2A.latency": 1
     },
     {
       "group": "Arithmetic Operation Instructions",
@@ -4559,9 +4559,9 @@
       "J4": false,
       "J4.issue": 0,
       "J4.latency": 0,
-      "J2A": false,
-      "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A": true,
+      "J2A.issue": 1,
+      "J2A.latency": 1
     },
     {
       "group": "Arithmetic Operation Instructions",
@@ -4607,9 +4607,9 @@
       "J4": false,
       "J4.issue": 0,
       "J4.latency": 0,
-      "J2A": false,
-      "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A": true,
+      "J2A.issue": 1,
+      "J2A.latency": 1
     },
     {
       "group": "Arithmetic Operation Instructions",
@@ -4655,9 +4655,9 @@
       "J4": false,
       "J4.issue": 0,
       "J4.latency": 0,
-      "J2A": false,
-      "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A": true,
+      "J2A.issue": 1,
+      "J2A.latency": 1
     },
     {
       "group": "Arithmetic Operation Instructions",

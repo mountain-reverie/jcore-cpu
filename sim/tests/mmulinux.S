@@ -65,14 +65,25 @@
 !   r9=4  TSB slot data (PTEL image) != the expected PTEL encoding (wrong
 !         data installed -- proves jcore_pte_to_ptel() ran, not just "some
 !         install happened")
+!   r9=5  scenario 2 (warm TSB hit): resumed load's value != harness seed
+!         after a TI flush + re-touch (translation lost/corrupted)
+!   r9=6  scenario 2: walker-invocation counter changed across the warm
+!         re-touch (the TSB-hit fast path should have installed via
+!         LDTLB.RN directly -- __jcore_tlb_walk() must NOT have run)
+!   r9=7  scenario 3 (ASID isolation): resumed load's value != harness seed
+!         after switching ASIDR and re-walking under the new ASID
+!   r9=8  scenario 3: walker-invocation counter did NOT increment across
+!         the ASID switch (a cross-ASID TSB hit would wrongly skip the
+!         walker -- tag_lo must be checked against the live ASIDR)
 !   r9=99 do_page_fault() was reached (the walker treated our present,
 !         valid pte as not-present -- a real fault when none was expected)
 !
 ! do_page_fault() itself is stubbed for Task 1 (a fixed record+halt); Task 3
 ! fills in its real pt_regs-based body for the true-fault scenarios.
-! jcore_tlb_walk_mark_accessed() is NOT stubbed here: it is a __weak symbol
-! in tlb-jcore.o whose default body (set_pte()) is already fully resolved
-! (no extra undefined symbols) -- overriding it buys nothing for scenario 1.
+! jcore_tlb_walk_mark_accessed() IS stubbed from Task 2 on: a STRONG
+! definition near the bottom of this file shadows tlb-jcore.o's __weak
+! default so scenarios 2-3 get a walker-invocation counter (see that
+! function's comment for why this gives an unambiguous signal).
 
 #include "sim_instr.h"
 #include <asm/pgtable-bits-jcore.h>
@@ -149,12 +160,19 @@ kmain:
         mov     #0, r9
         mov     #0, r10
 
-        ! ---- ASIDR = 0 (single context; TSB tag_lo / walker's pteh_tag
-        ! arg is expected 0 throughout). ----
+        ! ---- ASIDR = 0 (single context for scenarios 1-2; scenario 3
+        ! switches ASIDR itself). ----
         mov     #0, r0
         ldc     r0, asidr
         nop
         nop
+
+        ! ---- Zero the walker-invocation counter (bumped by our own
+        ! strong jcore_tlb_walk_mark_accessed() override below, which
+        ! shadows tlb-jcore.o's __weak default). ----
+        mov.l   k_wcnt, r0
+        mov     #0, r1
+        mov.l   r1, @r0
 
         ! ---- Build pgd[0] -> pte table (P1 pointer, page-aligned; this is
         ! EXACTLY what pmd_page_vaddr()/pte_offset_kernel() expect -- a raw
@@ -237,6 +255,63 @@ kmain:
         mov.l   v_ptel_expect, r1
         cmp/eq  r1, r2 ; mov #4, r9 ; bf _fail
 
+        ! ================= SCENARIO 2: warm TSB hit (no re-walk) =================
+        ! Scenario 1's walk already wrote the ACCESSED bit into k_pte's live
+        ! image (mark_accessed override below always fires when it sees the
+        ! bit unset -- see the override's comment). Clear it again here so
+        ! that IF the TLB miss wrongly falls to the slow path this time, the
+        ! walker will unconditionally re-set it and our counter will catch
+        ! it; a genuine TSB hit never looks at this pte at all, so clearing
+        ! it is a no-op for the expected (hit) outcome. ----
+        mov.l   k_pte, r0
+        mov.l   @r0, r1
+        mov.l   v_accessed_clr, r2
+        and     r2, r1
+        mov.l   r1, @r0
+
+        ! ---- Flush the TLB (TI), keep AT on -- TSB stays warm. ----
+        mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0
+
+        mov.l   va_A, r0
+        mov.l   @r0, r8                 ! re-touch: TLB miss -> ex.S inlined
+                                         ! JCORE_TLB_FASTPATH TSB probe HITS
+                                         ! (VPN+ASID_TAG match) -> LDTLB.RN
+                                         ! directly, __jcore_tlb_walk() never
+                                         ! called this time.
+
+        mov.l   k_mmucr, r0 ; mov #0, r1 ; mov.l r1, @r0
+
+        mov.l   v_seed, r1 ; cmp/eq r1, r8 ; mov #5, r9 ; bf _fail   ! translation still correct
+
+        mov.l   k_wcnt, r0 ; mov.l @r0, r2 ; mov #1, r3
+        cmp/eq  r3, r2 ; mov #6, r9 ; bf _fail                       ! walker must NOT have run
+
+        ! ================= SCENARIO 3: ASID isolation =================
+        ! va_A's TSB slot currently carries tag_lo (ASID_TAG) == 0, the
+        ! ASIDR value scenarios 1-2 ran under ("ASID A"). Switch to a
+        ! different ASID ("ASID B"), flush the TLB, and touch va_A again:
+        ! the TSB tag_lo compare must MISS (no cross-ASID hit), forcing a
+        ! real re-walk under the new ASID_TAG.
+        mov     #1, r0
+        ldc     r0, asidr
+        nop                             ! ASIDR write-to-use hazard
+        nop                             ! (scenario-1 finding: 2-nop workaround)
+
+        mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0   ! flush TLB, AT stays on
+
+        mov.l   va_A, r0
+        mov.l   @r0, r8                 ! TSB tag_lo(0) != ASIDR(1) -> fast
+                                         ! path misses -> jcore_tlb_miss_slow
+                                         ! -> __jcore_tlb_walk() re-walks and
+                                         ! reinstalls under the new ASID_TAG.
+
+        mov.l   k_mmucr, r0 ; mov #0, r1 ; mov.l r1, @r0
+
+        mov.l   v_seed, r1 ; cmp/eq r1, r8 ; mov #7, r9 ; bf _fail   ! same PA, still readable
+
+        mov.l   k_wcnt, r0 ; mov.l @r0, r2 ; mov #2, r3
+        cmp/eq  r3, r2 ; mov #8, r9 ; bf _fail                       ! walker MUST have re-run
+
         mov     #0, r9
         bra     _done
         nop
@@ -260,6 +335,8 @@ v_tsbcfg:       .long 0x00000061
 k_mmucr:        .long 0xFF000010        ! MMUCR
 va_A:           .long 0x00100000
 v_ptel_expect:  .long 0x000401B9        ! PFN(0x00040000)|PageMask(16K,0x100)|V|C|U|W|D
+k_wcnt:         .long 0x80029000        ! walker_calls counter (past TSB/before stack)
+v_accessed_clr: .long 0xFFFFFEFF        ! ~_PAGE_ACCESSED (0x100), see pgtable-bits-jcore.h
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -309,3 +386,27 @@ ENTRY(arch_local_save_flags)
         mov     #0, r0
         rts
         nop
+
+! jcore_tlb_walk_mark_accessed(pte_t *ptep, pte_t entry) -- Task 2: this
+! STRONG definition shadows tlb-jcore.o's __weak default (mmulinux.o links
+! first, see sim/tests/Makefile) so scenarios 2-3 get an unambiguous
+! walker-invocation counter: __jcore_tlb_walk() only calls this when it
+! finds the pte's _PAGE_ACCESSED bit unset (tlb-jcore.c comment), so the
+! harness clears that bit by hand before each "must re-walk" check to make
+! every real walker invocation observable here, and leaves it alone before
+! each "must NOT re-walk" (TSB-hit) check, where a genuine hit never reaches
+! this function at all. r4 = ptep, r5 = entry (32-bit scalar pte_t, non-PAE).
+ENTRY(jcore_tlb_walk_mark_accessed)
+        mov.l   p_wcnt, r0
+        mov.l   @r0, r1
+        add     #1, r1
+        mov.l   r1, @r0
+        mov.l   r5, @r4                 ! set_pte(ptep, entry)
+        rts
+        nop
+        .align 2
+p_wcnt: .long 0x80029000               ! same address as k_wcnt below --
+                                        ! duplicated locally because mov.l
+                                        ! is PC-relative-forward-only and
+                                        ! k_wcnt's data-section slot is
+                                        ! behind (earlier than) this function

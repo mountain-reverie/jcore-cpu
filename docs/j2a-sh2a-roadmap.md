@@ -32,17 +32,16 @@ mechanisms. J2A is a build-time variant: `make -C decode generate-j2a`,
 - **insns.json two-word sync fix** (PR #105): the `insns` tool now matches
   two-word rows by both words (`keyOfCode`/`keyOfInstr`), no duplicate rows.
 
-### Done, in review
-- **Mechanism B — multi-register counted loop** proven (PR #106, open vs master):
+- **Mechanism B — multi-register counted loop** proven (PR #106, merged):
   `movml.l Rm,@-R15` (push R0..Rm) + a back-to-back regression. Includes the
   fetch-skip fix (see gotchas).
-
-- **Group 5 — single-word mov extras** (branch feat/j2a-groups-567-singleword):
+- **Group 5 — single-word mov extras** (PR #118, merged):
   `mov.{b,w,l} R0,@Rn+` (post-increment store) and `mov.{b,w,l} @-Rm,R0`
   (pre-decrement load).
-- **Group 6 — bit-manip register forms** (branch feat/j2a-groups-567-singleword):
-  `bclr #imm3,Rn`, `bset #imm3,Rn`, `bld #imm3,Rn`, `bst #imm3,Rn`.
-- **Group 7 — single-word misc** (branch feat/j2a-groups-567-singleword):
+- **Group 6 — bit-manip register forms** (PR #118, merged):
+  `bclr #imm3,Rn`, `bset #imm3,Rn`, `bld #imm3,Rn`, `bst #imm3,Rn`
+  (new `ni3` format; BST via `BITSET` alumanip + `sr.t` into `manip()`).
+- **Group 7 — single-word misc** (PR #118, merged):
   `movrt Rn` (¬T → Rn) and `nott` (invert T).
 
 ### Instructions live in J2A today

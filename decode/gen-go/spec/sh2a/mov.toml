@@ -536,3 +536,189 @@
     pc = "INC"
     zbus_sel = "ARITH"
     zbus = "Rn"
+
+# SH-2A mov extras (Group 5): the two Rn-addressing combos base SH-2 lacks --
+# post-inc STORE and pre-dec LOAD -- with R0 fixed as the data register (base
+# SH-2 only has post-inc/pre-dec for the Rm<->Rn family, plus separate
+# GBR-relative R0 forms). No new format token, no new datapath: R0 is wired
+# as a fixed ybus/wbus operand exactly like the base "MOV.B R0, @(disp, Rn)"
+# / "MOV.B @(disp, Rm), R0" rows do.
+#
+# MOV.x R0,@Rn+ (post-inc store) mirrors base "MOV.B/W/L @Rm+, Rn" (spec/
+# mov.toml) but with WRITE instead of READ and ybus=R0 instead of wbus=Rn:
+# slot0 computes Rn+size and commits it to Rn (zbus=Rn, pc=HOLD) FIRST, then
+# slot1 recomputes Rn-size from the already-updated Rn to recover the OLD
+# address, and writes R0 there (ma_addy=ZBUS, no zbus register commit this
+# slot). This ordering -- increment before write, using the reversible
+# arithmetic to regenerate the old address -- is exactly the trick the base
+# post-inc LOAD already uses, just with the write/read direction flipped.
+[[instr]]
+  name = "MOV.B R0,@Rn+"
+  format = "n"
+  opcode = "0100 nnnn 1000 1011"
+  operation = "R0 -> (Rn), Rn + 1 -> Rn"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    alu_y = "1"
+    arith = "ADD"
+    pc = "HOLD"
+    xbus = "Rn"
+    zbus = "Rn"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+    alu_y = "1"
+    arith = "SUB"
+    ma_addy = "ZBUS"
+    ma_data = "YBUS"
+    ma_op = "WRITE"
+    ma_size = "8"
+    pc = "INC"
+    xbus = "Rn"
+    ybus = "R0"
+    zbus_sel = "ARITH"
+
+[[instr]]
+  name = "MOV.W R0,@Rn+"
+  format = "n"
+  opcode = "0100 nnnn 1001 1011"
+  operation = "R0 -> (Rn), Rn + 2 -> Rn"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    alu_y = "2"
+    arith = "ADD"
+    pc = "HOLD"
+    xbus = "Rn"
+    zbus = "Rn"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+    alu_y = "2"
+    arith = "SUB"
+    ma_addy = "ZBUS"
+    ma_data = "YBUS"
+    ma_op = "WRITE"
+    ma_size = "16"
+    pc = "INC"
+    xbus = "Rn"
+    ybus = "R0"
+    zbus_sel = "ARITH"
+
+[[instr]]
+  name = "MOV.L R0,@Rn+"
+  format = "n"
+  opcode = "0100 nnnn 1010 1011"
+  operation = "R0 -> (Rn), Rn + 4 -> Rn"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    alu_y = "4"
+    arith = "ADD"
+    pc = "HOLD"
+    xbus = "Rn"
+    zbus = "Rn"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+    alu_y = "4"
+    arith = "SUB"
+    ma_addy = "ZBUS"
+    ma_data = "YBUS"
+    ma_op = "WRITE"
+    ma_size = "32"
+    pc = "INC"
+    xbus = "Rn"
+    ybus = "R0"
+    zbus_sel = "ARITH"
+
+# MOV.x @-Rm,R0 (pre-dec load) mirrors base "MOV.B/W/L Rm,@-Rn" (spec/
+# mov.toml) but with READ instead of WRITE and wbus=R0 instead of ybus=Rm --
+# EXCEPT it cannot use the base store's single-slot shape: the register file
+# has a single physical write-commit port, so a slot that writes both the
+# Z-bus (zbus=Rm, the decremented pointer) and the W-bus (wbus=R0, the loaded
+# data) in the same cycle clashes -- the Z-bus write wins and the W-bus load
+# is silently dropped (same gotcha as the SH-2A MOVML/MOVMU pop design; see
+# docs/superpowers/specs/2026-07-09-j2a-group4-movml-pop-design.md). So this
+# is TWO slots, mirroring the base post-inc LOAD's split instead: slot0
+# commits Rm := Rm-size via the Z-bus alone (pc=HOLD, no mem access), then
+# slot1 reads from the already-decremented Rm (alu_y=0, so ma_addy=ZBUS is
+# just Rm+0) into R0 via the W-bus alone (no zbus target this slot).
+[[instr]]
+  name = "MOV.B @-Rm,R0"
+  format = "m"
+  opcode = "0100 mmmm 1100 1011"
+  operation = "Rm - 1 -> Rm, (Rm) -> sign extension -> R0"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    alu_y = "1"
+    arith = "SUB"
+    pc = "HOLD"
+    xbus = "Rm"
+    zbus = "Rm"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+    alu_y = "0"
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "8"
+    pc = "INC"
+    wbus = "R0"
+    xbus = "Rm"
+    zbus_sel = "ARITH"
+
+[[instr]]
+  name = "MOV.W @-Rm,R0"
+  format = "m"
+  opcode = "0100 mmmm 1101 1011"
+  operation = "Rm - 2 -> Rm, (Rm) -> sign extension -> R0"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    alu_y = "2"
+    arith = "SUB"
+    pc = "HOLD"
+    xbus = "Rm"
+    zbus = "Rm"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+    alu_y = "0"
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "16"
+    pc = "INC"
+    wbus = "R0"
+    xbus = "Rm"
+    zbus_sel = "ARITH"
+
+[[instr]]
+  name = "MOV.L @-Rm,R0"
+  format = "m"
+  opcode = "0100 mmmm 1110 1011"
+  operation = "Rm - 4 -> Rm, (Rm) -> R0"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    alu_y = "4"
+    arith = "SUB"
+    pc = "HOLD"
+    xbus = "Rm"
+    zbus = "Rm"
+    zbus_sel = "ARITH"
+
+  [[instr.slots]]
+    alu_y = "0"
+    arith = "ADD"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "32"
+    pc = "INC"
+    wbus = "R0"
+    xbus = "Rm"
+    zbus_sel = "ARITH"

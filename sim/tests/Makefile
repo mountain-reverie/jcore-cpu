@@ -22,6 +22,39 @@ all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img t
 # sim/mmu_sim.sh builds each of these explicitly by target name ($t.img).
 j4-guards: j4_illegal_trap.img
 
+# ---------------------------------------------------------------------------
+# SP2 mmulinux: harness driving the REAL linux@jcore MMU objects (built by
+# LINUX_SRC's kbuild) through the cosim. Both the harness .S and the three
+# linux@jcore objects use real J4-only mnemonics (LDTLB, LDC/STC
+# PTEH/PTEL/ASIDR/TSBPTR/VBR) that only the WIP J4 gas/ld
+# (binutils-gdb/build-sh2) understand -- the system sh2-elf-gas/ld choke on
+# them (unknown opcode / EM:42 "wrong format" respectively; see
+# sim/linux_sim.sh and the SP2 Task 0 report). Defaults assume the standard
+# jcore-workspace sibling-checkout layout from sim/tests/.
+# ---------------------------------------------------------------------------
+LINUX_SRC ?= ../../../linux
+J4GAS ?= ../../../binutils-gdb/build-sh2/gas/as-new
+J4LD ?= ../../../binutils-gdb/build-sh2/ld/ld-new
+# The system sh2-elf-objcopy also chokes on the J4 e_flags ("Unable to
+# recognise the format of the input file") -- use the objcopy built
+# alongside the same J4 gas/ld for mmulinux.elf -> mmulinux.img.
+J4OBJCOPY ?= ../../../binutils-gdb/build-sh2/binutils/objcopy
+J4BIN ?= /tmp/j4bin
+
+TLBJCORE_O := $(LINUX_SRC)/arch/sh/mm/tlb-jcore.o
+EX_O := $(LINUX_SRC)/arch/sh/kernel/cpu/jcore/ex.o
+ENTRY_O := $(LINUX_SRC)/arch/sh/kernel/cpu/jcore/entry.o
+
+mmulinux.o: mmulinux.S
+	mkdir -p $(J4BIN) && ln -sf $(abspath $(J4GAS)) $(J4BIN)/as
+	$(CC) $(CFLAGS) -D__ASSEMBLY__ -I$(LINUX_SRC)/arch/sh/include -B$(J4BIN) -Wa,--isa=any -c $< -o $@
+
+mmulinux.elf: mmulinux.o $(TLBJCORE_O) $(EX_O) $(ENTRY_O)
+	$(J4LD) -T sh32.x -Map main.map $^ $(LIBGCC) -o $@
+
+mmulinux.img: mmulinux.elf
+	$(J4OBJCOPY) -v -S -O binary --srec-forceS3 $< $@
+
 m8_macarith.elf: m8_macarith.o
 interrupts.elf: interrupts.o
 rte.elf: rte.o

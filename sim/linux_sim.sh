@@ -1,75 +1,96 @@
-#!/bin/bash
-# linux_sim.sh -- SP2: local runner for cosim'ing the REAL linux@jcore MMU
-# TLB-miss handler objects against the jcore-cpu GHDL testbench.
+#!/usr/bin/env bash
+# linux_sim.sh -- SP2: build + run the REAL linux@jcore MMU TLB-miss handler
+# (arch/sh/mm/tlb-jcore.c __jcore_tlb_walk(), arch/sh/kernel/cpu/jcore/{ex,
+# entry}.S) against the jcore-cpu GHDL cosim, via a bare-metal harness
+# (sim/tests/mmulinux.S) that links those real kbuild-produced objects.
 #
-# STATUS: WIP (Task 0 bring-up only). This script currently only captures
-# the Task-0 build+link recipe that was proven to work; it does not yet
-# drive the GHDL cosim (that lands in later SP2 tasks).
+# Mirrors sim/mmu_sim.sh (MMU-on cosim build/restore-base-decoder dance) plus
+# the two gotchas SP2 Task 0 de-risked:
 #
-# ---------------------------------------------------------------------------
-# Task 0 findings (object-build + link bring-up, de-risking ram@0 relocation)
-# ---------------------------------------------------------------------------
+#  1. kbuild reaches the WIP J4 gas (binutils-gdb/build-sh2/gas/as-new) via
+#     CC="sh2-elf-gcc -B<dir-with-as-symlink>" -- there is no clean AS=
+#     override that survives kbuild's .S dependency generation.
 #
-# LINUX_SRC   defaults to ../linux (branch "jcore")
-# J4GAS       ../binutils-gdb/build-sh2/gas/as-new
-# J4LD        ../binutils-gdb/build-sh2/ld/ld-new   <-- IMPORTANT, see below
+#  2. Anything that links those linux@jcore objects (both the Task 0 trial
+#     link and sim/tests/mmulinux.elf here) MUST use the J4-built ld
+#     (binutils-gdb/build-sh2/ld/ld-new), NOT the system sh2-elf-ld: the
+#     objects are assembled by the WIP J4 gas, which stamps a newer e_flags
+#     (0x1b) the system linker's older bfd doesn't recognise
+#     ("relocations in generic ELF (EM: 42)" / "file in wrong format" --
+#     toolchain version skew, not a real relocation problem).
 #
-# kbuild reaches the J4 gas via CC (kbuild has no clean AS= override path
-# that survives .S dependency generation), NOT via AS=:
+# Usage:
+#   sim/linux_sim.sh [name]      # build linux objects + cosim + run (default: mmulinux)
+#   sim/linux_sim.sh -n [name]   # reuse the existing cosim build + linux objects
 #
-#   mkdir -p /tmp/j4bin && ln -sf "$J4GAS" /tmp/j4bin/as
-#   cd "$LINUX_SRC"
-#   make ARCH=sh CROSS_COMPILE=sh2-elf- CC="sh2-elf-gcc -B/tmp/j4bin" jcore_defconfig
-#   make ARCH=sh CROSS_COMPILE=sh2-elf- CC="sh2-elf-gcc -B/tmp/j4bin" \
-#        arch/sh/mm/tlb-jcore.o arch/sh/kernel/cpu/jcore/ex.o arch/sh/kernel/cpu/jcore/entry.o
-#
-# Undefined-symbol stub set required by the three objects (cross-object
-# references only -- exact `sh2-elf-nm *.o | grep ' U '` output):
-#   tlb-jcore.o : arch_local_irq_restore, arch_local_save_flags
-#   ex.o        : exception_handler, jcore_tlb_fault_entry (resolves internally
-#                 from entry.o), __jcore_tlb_walk (resolves internally from
-#                 tlb-jcore.o)
-#   entry.o     : do_page_fault
-# -> harness stub set = { do_page_fault, exception_handler,
-#                          arch_local_irq_restore, arch_local_save_flags }
-#   (all four stubbed as trivial `rts; nop` in sim/tests/mmulinux_stub.S)
-#
-# GOTCHA (the actual checkpoint moment): the FIRST trial link, using the
-# system `sh2-elf-ld` (GNU ld 2.43.1), FAILED:
-#   sh2-elf-ld: .../tlb-jcore.o: relocations in generic ELF (EM: 42)
-#   sh2-elf-ld: .../tlb-jcore.o: error adding symbols: file in wrong format
-# Root cause: the linux objects were assembled by the WIP J4 gas
-# (2.46.50, this workspace's binutils-gdb build), which stamps a newer/
-# extended e_flags (0x1b, "unknown ISA" to old readelf) that the *system*
-# ld (2.43.1) does not understand. This is NOT a PAGE_OFFSET/absolute-
-# relocation problem -- it is a toolchain VERSION SKEW between assembler
-# and linker. Fix: link with the ld built alongside the same gas
-# (build-sh2/ld/ld-new, also 2.46.50) instead of the system sh2-elf-ld:
-#
-#   LX=../linux
-#   LD=../binutils-gdb/build-sh2/ld/ld-new
-#   sh2-elf-gcc -m2 -Iinclude -c sim/tests/mmulinux_stub.S -o /tmp/mmulinux_stub.o
-#   "$LD" -T sim/tests/sh32.x /tmp/mmulinux_stub.o \
-#      "$LX/arch/sh/mm/tlb-jcore.o" "$LX/arch/sh/kernel/cpu/jcore/ex.o" \
-#      "$LX/arch/sh/kernel/cpu/jcore/entry.o" \
-#      "$(sh2-elf-gcc -print-file-name=libgcc.a)" -o /tmp/mmulinux_stub.elf
-#
-# Result: LINKS CLEANLY at ram@0 (origin 0x0, sim/tests/sh32.x). No absolute
-# PAGE_OFFSET-style relocation was observed -- the ram@0 model is de-risked.
-# Resolved low addresses (objdump -t /tmp/mmulinux_stub.elf):
-#   jcore_vbr_base       0x000008e0
-#   jcore_tlb_miss       0x00000ce0
-#   __jcore_tlb_walk     0x00000140
-#   do_page_fault        0x0000012c  (stub)
-#   exception_handler    0x00000130  (stub)
-#   arch_local_irq_restore 0x00000134 (stub)
-#   arch_local_save_flags  0x00000138 (stub)
-#
-# NEXT (later SP2 tasks): replace the trivial stub with real scenario asm
-# driving jcore_tlb_miss end-to-end through the GHDL cosim, using J4LD
-# (not the system ld) for every link step involving linux@jcore objects.
+# Env: LINUX_SRC (default: sibling ../linux), JCORE_SOC (default: sibling
+# ../jcore-soc), J4GAS/J4LD (default: sibling ../binutils-gdb/build-sh2/...).
+set -uo pipefail
 
-set -euo pipefail
-echo "linux_sim.sh: WIP, see comments at top of this file for the Task 0" >&2
-echo "bring-up recipe. GHDL cosim driving not yet implemented." >&2
-exit 1
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
+export JCORE_SOC="${JCORE_SOC:-$ROOT/../jcore-soc}"
+LINUX_SRC="${LINUX_SRC:-$ROOT/../linux}"
+J4GAS="${J4GAS:-$ROOT/../binutils-gdb/build-sh2/gas/as-new}"
+J4LD="${J4LD:-$ROOT/../binutils-gdb/build-sh2/ld/ld-new}"
+J4BIN="${J4BIN:-/tmp/j4bin}"
+
+[ -d "$JCORE_SOC" ] || { echo "ERROR: JCORE_SOC not found at $JCORE_SOC" >&2; exit 1; }
+[ -d "$LINUX_SRC" ] || { echo "ERROR: LINUX_SRC not found at $LINUX_SRC" >&2; exit 1; }
+[ -x "$J4GAS" ] || { echo "ERROR: J4 gas not found/executable at $J4GAS" >&2; exit 1; }
+[ -x "$J4LD" ] || { echo "ERROR: J4 ld not found/executable at $J4LD" >&2; exit 1; }
+
+BUILD=1
+if [ "${1:-}" = "-n" ]; then BUILD=0; shift; fi
+
+name="${1:-mmulinux}"
+
+# Always restore the committed base decoder on exit (generate-j4 overwrites the
+# tracked decode/*.vhd + sh2instr.c with the J4 overlay).
+restore_base() { make -C "$ROOT/decode" generate >/dev/null 2>&1 || true; }
+trap restore_base EXIT
+
+if [ "$BUILD" = 1 ]; then
+  echo "== build linux@jcore objects (kbuild via the WIP J4 gas) =="
+  mkdir -p "$J4BIN"
+  ln -sf "$J4GAS" "$J4BIN/as"
+  (
+    cd "$LINUX_SRC"
+    make ARCH=sh CROSS_COMPILE=sh2-elf- CC="sh2-elf-gcc -B$J4BIN" jcore_defconfig >/dev/null
+    make ARCH=sh CROSS_COMPILE=sh2-elf- CC="sh2-elf-gcc -B$J4BIN" \
+         arch/sh/mm/tlb-jcore.o arch/sh/kernel/cpu/jcore/ex.o \
+         arch/sh/kernel/cpu/jcore/entry.o
+  ) || { echo "ERROR: linux@jcore object build failed" >&2; exit 1; }
+
+  echo "== generate-j4 (J4 overlay decoder: PRIV_ARCH + MMU instructions) =="
+  make -C decode generate-j4 >/dev/null
+  echo "== preprocess dcache/icache .vhm cores -> .vhd =="
+  for f in cache/dcache_ccl cache/dcache_mcl cache/icache_ccl cache/icache_mcl; do
+    LD_LIBRARY_PATH='' perl "$JCORE_SOC/tools/v2p" < "$f.vhm" > "$f.vhd"
+  done
+
+  echo "== build MMU-on cosim (cpu_ctb + cpu_tb) =="
+  cd sim
+  rm -f work-obj93.cf cpu_tb.vhh cpu_ctb
+  make CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 cpu_ctb cpu_tb cpu_tb.vhh work-obj93.cf >/dev/null
+  grep -q 'MMU_ARCH => true' cpu_tb.vhh \
+    || { echo "FAIL: build is not MMU-on (stale cpu_tb.vhh?)" >&2; exit 1; }
+  cd ..
+fi
+
+cd sim
+[ -x cpu_ctb ] || { echo "ERROR: cpu_ctb not built; run without -n first" >&2; exit 1; }
+
+echo "== build $name.img (real linux@jcore objects, J4-built ld) =="
+rm -f "tests/$name.img" "tests/$name.o" "tests/$name.elf"
+make -C tests LINUX_SRC="$LINUX_SRC" J4GAS="$J4GAS" J4LD="$J4LD" J4BIN="$J4BIN" \
+     CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 "$name.img"
+
+out="$(timeout 120 ./cpu_ctb --stop-time=200us -i "tests/$name.img" --ieee-asserts=disable 2>&1 || true)"
+echo "$out"
+if echo "$out" | grep -qi 'Test Passed'; then
+  echo "==> PASS $name"
+  exit 0
+else
+  echo "==> FAIL $name" >&2
+  exit 1
+fi

@@ -956,9 +956,9 @@
       "J4": false,
       "J4.issue": 0,
       "J4.latency": 0,
-      "J2A": false,
-      "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A": true,
+      "J2A.issue": 1,
+      "J2A.latency": 1
     },
     {
       "group": "Data Transfer Instructions",
@@ -1004,9 +1004,9 @@
       "J4": false,
       "J4.issue": 0,
       "J4.latency": 0,
-      "J2A": false,
-      "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A": true,
+      "J2A.issue": 1,
+      "J2A.latency": 1
     },
     {
       "group": "Data Transfer Instructions",
@@ -1052,9 +1052,9 @@
       "J4": false,
       "J4.issue": 0,
       "J4.latency": 0,
-      "J2A": false,
-      "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A": true,
+      "J2A.issue": 1,
+      "J2A.latency": 1
     },
     {
       "group": "Data Transfer Instructions",
@@ -1100,9 +1100,9 @@
       "J4": false,
       "J4.issue": 0,
       "J4.latency": 0,
-      "J2A": false,
-      "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A": true,
+      "J2A.issue": 1,
+      "J2A.latency": 1
     },
     {
       "group": "Data Transfer Instructions",
@@ -1148,9 +1148,9 @@
       "J4": false,
       "J4.issue": 0,
       "J4.latency": 0,
-      "J2A": false,
-      "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A": true,
+      "J2A.issue": 1,
+      "J2A.latency": 1
     },
     {
       "group": "Data Transfer Instructions",
@@ -1196,9 +1196,9 @@
       "J4": false,
       "J4.issue": 0,
       "J4.latency": 0,
-      "J2A": false,
-      "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A": true,
+      "J2A.issue": 1,
+      "J2A.latency": 1
     },
     {
       "group": "Data Transfer Instructions",
@@ -2926,9 +2926,9 @@
       "J4": false,
       "J4.issue": 0,
       "J4.latency": 0,
-      "J2A": false,
-      "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A": true,
+      "J2A.issue": 1,
+      "J2A.latency": 1
     },
     {
       "group": "Data Transfer Instructions",
@@ -3023,9 +3023,9 @@
       "J1.issue": 0,
       "J1.latency": 0,
       "collides": ["LDTLB.RN"],
-      "J2A": false,
-      "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A": true,
+      "J2A.issue": 1,
+      "J2A.latency": 1
     },
     {
       "group": "Data Transfer Instructions",
@@ -3359,9 +3359,9 @@
       "J4": false,
       "J4.issue": 0,
       "J4.latency": 0,
-      "J2A": false,
-      "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A": true,
+      "J2A.issue": 1,
+      "J2A.latency": 1
     },
     {
       "group": "Bit Manipulation Instructions",
@@ -3455,9 +3455,9 @@
       "J4": false,
       "J4.issue": 0,
       "J4.latency": 0,
-      "J2A": false,
-      "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A": true,
+      "J2A.issue": 1,
+      "J2A.latency": 1
     },
     {
       "group": "Bit Manipulation Instructions",
@@ -3695,9 +3695,9 @@
       "J4": false,
       "J4.issue": 0,
       "J4.latency": 0,
-      "J2A": false,
-      "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A": true,
+      "J2A.issue": 1,
+      "J2A.latency": 1
     },
     {
       "group": "Bit Manipulation Instructions",
@@ -3791,9 +3791,9 @@
       "J4": false,
       "J4.issue": 0,
       "J4.latency": 0,
-      "J2A": false,
-      "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A": true,
+      "J2A.issue": 1,
+      "J2A.latency": 1
     },
     {
       "group": "Bit Manipulation Instructions",

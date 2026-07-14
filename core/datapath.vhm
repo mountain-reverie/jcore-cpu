@@ -662,7 +662,7 @@ end generate;
           arith_out(31 downto 0)                           when SEL_ARITH,
           logic_out                                        when SEL_LOGIC,
           shift_y                                          when SEL_SHIFT,
-          manip(xbus, ybus, sr.t, func.alu.manip)          when SEL_MANIP,
+          manip(xbus, ybus, sr.t, func.alu.manip, SH2A_ARCH) when SEL_MANIP,
           ybus                                             when SEL_YBUS,
           wbus                                             when SEL_WBUS;
 
@@ -684,7 +684,7 @@ end generate;
           arith_out(31 downto 0)                           when SEL_ARITH,
           logic_out                                        when SEL_LOGIC,
           (others => '-')                                  when SEL_SHIFT,
-          manip(xbus, ybus, sr.t, func.alu.manip)          when SEL_MANIP,
+          manip(xbus, ybus, sr.t, func.alu.manip, SH2A_ARCH) when SEL_MANIP,
           ybus                                             when SEL_YBUS,
           wbus                                             when SEL_WBUS;
 

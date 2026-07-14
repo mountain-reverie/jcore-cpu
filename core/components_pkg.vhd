@@ -328,7 +328,7 @@ function page_offset_mask(pm : std_logic_vector(3 downto 0)) return std_logic_ve
 function vpn_compare_mask(pm : std_logic_vector(3 downto 0)) return std_logic_vector;
 
 function bshifter(a,b : std_logic_vector; c : std_logic; ops : shiftfunc_t) return std_logic_vector;
-function manip(x, y : std_logic_vector(31 downto 0); t : std_logic; func : alumanip_t)
+function manip(x, y : std_logic_vector(31 downto 0); t : std_logic; func : alumanip_t; sh2a : boolean)
   return std_logic_vector;
 function clip_saturated(x : std_logic_vector(31 downto 0); func : alumanip_t)
   return std_logic;
@@ -680,7 +680,7 @@ function bshifter(a,b : std_logic_vector; c : std_logic; ops : shiftfunc_t) retu
    return y;
 end function;
 
-function manip(x, y : std_logic_vector(31 downto 0); t : std_logic; func : alumanip_t)
+function manip(x, y : std_logic_vector(31 downto 0); t : std_logic; func : alumanip_t; sh2a : boolean)
   return std_logic_vector is
   variable b0, b1, b2, b3 : std_logic_vector(7 downto 0);
   variable sign_bit : std_logic;
@@ -697,34 +697,41 @@ begin
   end if;
 
   -- SH-2A CLIPS/CLIPU: saturate x to a signed/unsigned byte/word range.
-  -- y and t are unused for clip funcs. Only x is examined.
-  if func = CLIP_SB then
-    if signed(x) > 127 then
-      return x"0000007F";
-    elsif signed(x) < -128 then
-      return x"FFFFFF80";
-    else
-      return x;
-    end if;
-  elsif func = CLIP_SW then
-    if signed(x) > 32767 then
-      return x"00007FFF";
-    elsif signed(x) < -32768 then
-      return x"FFFF8000";
-    else
-      return x;
-    end if;
-  elsif func = CLIP_UB then
-    if unsigned(x) > 255 then
-      return x"000000FF";
-    else
-      return x;
-    end if;
-  elsif func = CLIP_UW then
-    if unsigned(x) > 65535 then
-      return x"0000FFFF";
-    else
-      return x;
+  -- y and t are unused for clip funcs; only x is examined. Guarded by the
+  -- compile-time `sh2a` argument: on a base build the caller passes false, so
+  -- ghdl drops this whole branch at elaboration and the (asic-expensive) 32-bit
+  -- magnitude comparators are never synthesized into the base datapath. func is
+  -- never CLIP_* on base anyway, but the synthesizer cannot prove that from the
+  -- alumanip_t type alone, so the constant guard is what keeps base neutral.
+  if sh2a then
+    if func = CLIP_SB then
+      if signed(x) > 127 then
+        return x"0000007F";
+      elsif signed(x) < -128 then
+        return x"FFFFFF80";
+      else
+        return x;
+      end if;
+    elsif func = CLIP_SW then
+      if signed(x) > 32767 then
+        return x"00007FFF";
+      elsif signed(x) < -32768 then
+        return x"FFFF8000";
+      else
+        return x;
+      end if;
+    elsif func = CLIP_UB then
+      if unsigned(x) > 255 then
+        return x"000000FF";
+      else
+        return x;
+      end if;
+    elsif func = CLIP_UW then
+      if unsigned(x) > 65535 then
+        return x"0000FFFF";
+      else
+        return x;
+      end if;
     end if;
   end if;
 

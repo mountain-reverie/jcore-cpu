@@ -50,7 +50,7 @@ mmulinux.o: mmulinux.S
 	$(CC) $(CFLAGS) -D__ASSEMBLY__ -I$(LINUX_SRC)/arch/sh/include -B$(J4BIN) -Wa,--isa=any -c $< -o $@
 
 mmulinux.elf: mmulinux.o $(TLBJCORE_O) $(EX_O) $(ENTRY_O)
-	$(J4LD) -T sh32.x -Map main.map $^ $(LIBGCC) -o $@
+	$(J4LD) -T sh32_p1.x -Map main.map $^ $(LIBGCC) -o $@
 
 mmulinux.img: mmulinux.elf
 	$(J4OBJCOPY) -v -S -O binary --srec-forceS3 $< $@

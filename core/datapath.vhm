@@ -275,14 +275,7 @@ architecture stru of datapath is
           return r;
         end to_inst_o;
 
-        -- unsigned_ld: SH2A_ARCH only (see caller). When '1', overrides the
-        -- sign-extended BYTE/WORD result below with a zero-extended one
-        -- (SH-2A MOVU.B/MOVU.W). Base builds (SH2A_ARCH=false) always pass
-        -- '0' here and the override is additionally gated on SH2A_ARCH
-        -- itself, so this parameter/branch is dead code eliminated in base
-        -- -- byte-identical to master's 2-arg form under synthesis.
-        function align_read_data(d : std_logic_vector(31 downto 0); bus_o : cpu_data_o_t; size : mem_size_t;
-                                  unsigned_ld : std_logic := '0')
+        function align_read_data(d : std_logic_vector(31 downto 0); bus_o : cpu_data_o_t; size : mem_size_t)
         return std_logic_vector is
           variable r : std_logic_vector(31 downto 0);
         begin
@@ -301,17 +294,6 @@ architecture stru of datapath is
               end case;
             when others =>     r := d;
           end case;
-          -- SH2A_ARCH only: MOVU.B/MOVU.W zero-extend. Clears the upper bits
-          -- the sign-extend case above already placed the aligned byte/word
-          -- into the low bits of r, so zeroing the sign-extended upper bits
-          -- is sufficient (no re-alignment needed).
-          if SH2A_ARCH and unsigned_ld = '1' then
-            case size is
-              when BYTE   => r(31 downto  8) := (others => '0');
-              when WORD   => r(31 downto 16) := (others => '0');
-              when others => null;
-            end case;
-          end if;
           return r;
         end align_read_data;
 
@@ -861,7 +843,18 @@ end generate;
           -- check if data bus transaction finished
           if this.data_o.en = '1' and db_i.ack = '1' then
             -- FIXME: Drop en, unless keep_cyc='1'
-            this.m_dr_next := align_read_data(db_i.d, this.data_o, this.data_o_size, this.data_o_unsigned);
+            this.m_dr_next := align_read_data(db_i.d, this.data_o, this.data_o_size);
+            -- SH2A_ARCH only: MOVU.B/MOVU.W zero-extend override, applied at the
+            -- call site (not inside align_read_data) so the base build's
+            -- align_read_data stays byte-identical to master. Dead-code-
+            -- eliminated on base (SH2A_ARCH=false, data_o_unsigned const-'0').
+            if SH2A_ARCH and this.data_o_unsigned = '1' then
+              case this.data_o_size is
+                when BYTE   => this.m_dr_next(31 downto  8) := (others => '0');
+                when WORD   => this.m_dr_next(31 downto 16) := (others => '0');
+                when others => null;
+              end case;
+            end if;
             this.m_en      := '1';
             this.data_o := NULL_DATA_O;
           end if;

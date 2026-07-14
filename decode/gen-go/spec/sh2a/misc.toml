@@ -1,0 +1,34 @@
+# SH-2A overlay: miscellaneous T-bit instruction.
+# Defaults mirror spec/system.toml.
+
+[defaults]
+  pc = "INC"
+  if_issue = "NO"
+  sr = "HOLD"
+
+# SH-2A NOTT: ~T -> T (inverts the T bit in SR in place).
+#
+# Base TST Rm,Rn (spec/logic.toml) shows the vocabulary for deriving T from
+# a LOGIC result: logic=AND, logic_sr="ZERO", sr="LOGIC" sets
+# T := is_zero(logic_out). Reusing MOVT's exact extraction slot (logic=AND,
+# xbus="1", ybus="SR" -> masks SR down to just bit0=T, zero elsewhere) as
+# the logic_out feeding that same ZERO rule gives EXACTLY the inversion:
+#   T=1 -> masked value = 1 (nonzero) -> is_zero=false -> new T=0
+#   T=0 -> masked value = 0            -> is_zero=true  -> new T=1
+# No new datapath/enum/sr-control value -- logic_sr="ZERO" was already
+# wired for TST/AND-style compares; only the (xbus, ybus) operands and
+# omission of a zbus register write are new here.
+[[instr]]
+  name = "NOTT"
+  format = "0"
+  opcode = "0000 0000 0110 1000"
+  operation = "~T -> T"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    logic = "AND"
+    logic_sr = "ZERO"
+    pc = "INC"
+    sr = "LOGIC"
+    xbus = "1"
+    ybus = "SR"

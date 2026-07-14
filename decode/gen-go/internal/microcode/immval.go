@@ -44,6 +44,14 @@ const (
 	// with the running index -- because op.code(3:0) is a fixed opcode
 	// discriminant there and cannot be repurposed as a disp field.
 	ImmUnsignedHi
+	// ImmBit3Mask is the one-hot 32-bit mask (1 << imm3) computed from the
+	// SH-2A register bit-op imm3 field (op.code(2:0)). Needed by BSET/BLD
+	// (mask isolates the target bit) -- see IMM_BIT3_MASK in
+	// ImmLiteralToVHDL.
+	ImmBit3Mask
+	// ImmBit3MaskInv is the bitwise complement of ImmBit3Mask (~(1 <<
+	// imm3)), used by BCLR to AND-clear the target bit in one cycle.
+	ImmBit3MaskInv
 )
 
 // ImmLiteralToVHDL translates an immval_t enum literal name to the
@@ -89,6 +97,19 @@ func ImmLiteralToVHDL(lit string) string {
 		return `"0000000000000000000000" & op.code(7 downto 0) & "00"`
 	case "IMM_U_H4_2":
 		return `"00000000000000000000000000" & op.code(11 downto 8) & "00"`
+	case "IMM_BIT3_MASK":
+		// SH-2A register bit-ops (BSET/BCLR/BLD/BST #imm3,Rn): one-hot
+		// 32-bit mask (1 << imm3), imm3 = op.code(2:0). Computed
+		// combinationally at decode time (imm3 is static per opcode
+		// encoding) rather than via the shared runtime barrel shifter,
+		// since the shifter has no idle slot to compute a throwaway
+		// mask without clobbering the datapath's single-ALU-op-per-slot
+		// budget within a single-word instruction. numeric_std
+		// SHIFT_LEFT/TO_UNSIGNED/TO_INTEGER are already used in this
+		// file (see TO_UNSIGNED above), so no new library dependency.
+		return `std_logic_vector(SHIFT_LEFT(TO_UNSIGNED(1, 32), TO_INTEGER(UNSIGNED(op.code(2 downto 0)))))`
+	case "IMM_BIT3_MASK_INV":
+		return `not std_logic_vector(SHIFT_LEFT(TO_UNSIGNED(1, 32), TO_INTEGER(UNSIGNED(op.code(2 downto 0)))))`
 	case "IMM_S_8_0":
 		return "imms_8_0"
 	case "IMM_S_8_1":
@@ -144,6 +165,10 @@ func (i ImmVal) Literal() string {
 		return fmt.Sprintf("IMM_S_%d_%d", i.W, i.S)
 	case ImmUnsignedHi:
 		return fmt.Sprintf("IMM_U_H%d_%d", i.W, i.S)
+	case ImmBit3Mask:
+		return "IMM_BIT3_MASK"
+	case ImmBit3MaskInv:
+		return "IMM_BIT3_MASK_INV"
 	}
 	return ""
 }
@@ -204,6 +229,8 @@ func formatBitWidth(format string) int {
 		return 12
 	case "ni20":
 		return 20
+	case "ni3":
+		return 3
 	default:
 		return 0
 	}
@@ -232,6 +259,15 @@ func ParseImmToml(format, v string) (ImmVal, bool) {
 	v = strings.TrimSpace(v)
 	if v == "" {
 		return ImmVal{}, false
+	}
+	// SH-2A register bit-op helpers: "MASK3" -> 1<<imm3, "MASK3INV" ->
+	// ~(1<<imm3), both computed from op.code(2:0) (see bit.toml BSET/
+	// BCLR/BLD/BST). Independent of format width.
+	switch strings.ToUpper(v) {
+	case "MASK3":
+		return ImmVal{Kind: ImmBit3Mask}, true
+	case "MASK3INV":
+		return ImmVal{Kind: ImmBit3MaskInv}, true
 	}
 	// Try integer first.
 	if n, err := strconv.Atoi(v); err == nil {

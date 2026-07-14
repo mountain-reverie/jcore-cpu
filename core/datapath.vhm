@@ -600,11 +600,17 @@ end generate;
 
         logic_out <= logic_unit(aluinx, aluiny, func.logic_func);
 
+        -- manip()'s "t" (sr.t) parameter feeds the SH-2A BST #imm3,Rn
+        -- BITSET alumanip_t case (single-cycle variable-position T-bit
+        -- insert; see core/components_pkg.vhd manip() and
+        -- decode/gen-go/spec/sh2a/bit.toml). Reuses the existing
+        -- zbus_sel=SEL_MANIP path -- no zbus_sel_t enum widening, so base
+        -- J1/J2/J4 decode_pkg.vhd output is unaffected.
         with buses.z_sel select zbus <=
           arith_out(31 downto 0)                           when SEL_ARITH,
           logic_out                                        when SEL_LOGIC,
           shift_y                                          when SEL_SHIFT,
-          manip(xbus, ybus, func.alu.manip)                when SEL_MANIP,
+          manip(xbus, ybus, sr.t, func.alu.manip)          when SEL_MANIP,
           ybus                                             when SEL_YBUS,
           wbus                                             when SEL_WBUS;
 
@@ -626,7 +632,7 @@ end generate;
           arith_out(31 downto 0)                           when SEL_ARITH,
           logic_out                                        when SEL_LOGIC,
           (others => '-')                                  when SEL_SHIFT,
-          manip(xbus, ybus, func.alu.manip)                when SEL_MANIP,
+          manip(xbus, ybus, sr.t, func.alu.manip)          when SEL_MANIP,
           ybus                                             when SEL_YBUS,
           wbus                                             when SEL_WBUS;
 

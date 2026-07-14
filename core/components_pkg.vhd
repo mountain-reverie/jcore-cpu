@@ -17,9 +17,21 @@ type arith_sr_func_t is (ZERO,
                          UGRTER, SGRTER,
                          DIV0S, DIV1);
 type logic_func_t is (LOGIC_NOT, LOGIC_AND, LOGIC_OR, LOGIC_XOR);
-type logic_sr_func_t is (ZERO, BYTE_EQ);
+-- NOT_ZERO: T := (value /= 0). Added for SH-2A BLD #imm3,Rn (single-slot
+-- register bit-load: AND Rn with the IMM_BIT3_MASK one-hot mask, then T is
+-- the isolated bit's value -- ZERO gives the inverse convention (T=1 when
+-- the bit is *clear*), which no existing instruction wants inverted, so a
+-- dedicated case is added rather than reusing/negating ZERO downstream.
+type logic_sr_func_t is (ZERO, BYTE_EQ, NOT_ZERO);
 type shiftfunc_t is (LOGIC, ARITH, ROTATE, ROTC);
-type alumanip_t is (SWAP_BYTE, SWAP_WORD, EXTEND_UBYTE, EXTEND_UWORD, EXTEND_SBYTE, EXTEND_SWORD, EXTRACT, SET_BIT_7);
+-- BITSET: SH-2A BST #imm3,Rn (register bit-op group, R1 de-risk fallback --
+-- see decode/gen-go/spec/sh2a/bit.toml). Single-cycle variable-position
+-- bit-insert of the T flag: y carries a decode-time one-hot mask (1 <<
+-- imm3), x carries Rn, and manip()'s new "t" parameter carries sr.t. This
+-- reuses the existing zbus_sel=SEL_MANIP path instead of widening
+-- zbus_sel_t (which is generated into decode_pkg.vhd and would otherwise
+-- change BASE J1/J2/J4 decoder output too).
+type alumanip_t is (SWAP_BYTE, SWAP_WORD, EXTEND_UBYTE, EXTEND_UWORD, EXTEND_SBYTE, EXTEND_SWORD, EXTRACT, SET_BIT_7, BITSET);
 
 type sr_t is record
    t, s, q, m : std_logic;
@@ -306,7 +318,7 @@ function page_offset_mask(pm : std_logic_vector(3 downto 0)) return std_logic_ve
 function vpn_compare_mask(pm : std_logic_vector(3 downto 0)) return std_logic_vector;
 
 function bshifter(a,b : std_logic_vector; c : std_logic; ops : shiftfunc_t) return std_logic_vector;
-function manip(x, y : std_logic_vector(31 downto 0); func : alumanip_t)
+function manip(x, y : std_logic_vector(31 downto 0); t : std_logic; func : alumanip_t)
   return std_logic_vector;
 
 component shifter is
@@ -538,6 +550,8 @@ begin
     when BYTE_EQ =>
       -- assumes the value is a xor b
       sr_out.t := or_reduce(xor_all(or_reduce_bytes(v, byte_width), '1'));
+    when NOT_ZERO =>
+      sr_out.t := not is_zero(v);
   end case;
   return sr_out;
 end;
@@ -654,12 +668,22 @@ function bshifter(a,b : std_logic_vector; c : std_logic; ops : shiftfunc_t) retu
    return y;
 end function;
 
-function manip(x, y : std_logic_vector(31 downto 0); func : alumanip_t)
+function manip(x, y : std_logic_vector(31 downto 0); t : std_logic; func : alumanip_t)
   return std_logic_vector is
   variable b0, b1, b2, b3 : std_logic_vector(7 downto 0);
   variable sign_bit : std_logic;
   variable sign_byte : std_logic_vector(7 downto 0);
+  variable tvec : std_logic_vector(31 downto 0);
 begin
+  if func = BITSET then
+    -- SH-2A BST #imm3,Rn: x = Rn, y = decode-time one-hot mask
+    -- (1 << imm3), t = sr.t. Insert t at whichever bit y's mask picks
+    -- out; all other bits of x pass through unchanged. Byte-lane logic
+    -- below (SWAP_BYTE/EXTEND_*/EXTRACT/SET_BIT_7) does not apply here.
+    tvec := (others => t);
+    return (x and not y) or (y and tvec);
+  end if;
+
   if func = EXTEND_SBYTE then
     sign_bit := y(7);
   else

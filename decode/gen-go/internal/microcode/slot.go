@@ -975,12 +975,14 @@ func logicFuncSel(v string) (string, error) {
 
 func logicSrSel(v string) (string, error) {
 	// Return values must be valid VHDL enum literals of logic_sr_func_t
-	// (core/components_pkg.vhd): ZERO, BYTE_EQ.
+	// (core/components_pkg.vhd): ZERO, BYTE_EQ, NOT_ZERO.
 	switch strings.ToUpper(v) {
 	case "BYTE_EQ", "BYTE =", "BYTE=":
 		return "BYTE_EQ", nil
 	case "ZERO":
 		return "ZERO", nil
+	case "NOT_ZERO":
+		return "NOT_ZERO", nil
 	default:
 		return "", fmt.Errorf("unrecognized value %q", v)
 	}
@@ -997,8 +999,20 @@ func logicSrSel(v string) (string, error) {
 func manipSel(v string) (string, error) {
 	// Return values must be valid VHDL enum literals of alumanip_t
 	// (core/components_pkg.vhd): SWAP_BYTE, SWAP_WORD, EXTEND_UBYTE,
-	// EXTEND_UWORD, EXTEND_SBYTE, EXTEND_SWORD, EXTRACT, SET_BIT_7.
+	// EXTEND_UWORD, EXTEND_SBYTE, EXTEND_SWORD, EXTRACT, SET_BIT_7,
+	// BITSET.
 	switch strings.ToLower(v) {
+	case "bitset":
+		// SH-2A BST #imm3,Rn (R1 de-risk fallback): reuses the existing
+		// zbus_sel=SEL_MANIP path (manip(xbus, ybus, sr.t, func)) rather
+		// than widening the generated zbus_sel_t enum (which would
+		// change decode_pkg.vhd's type declaration for BASE J1/J2/J4
+		// builds too, breaking `make -C decode diff` byte-identity --
+		// alumanip_t is hand-maintained in core/components_pkg.vhd, not
+		// part of the generated static package, so adding BITSET there
+		// is base-invisible). See manip() BITSET case in
+		// core/components_pkg.vhd.
+		return "BITSET", nil
 	case "xtract":
 		return "EXTRACT", nil
 	case "set b7":
@@ -1195,7 +1209,14 @@ func rnRegister(format string) string {
 	switch format {
 	case "n", "nd8", "ni", "ni20", "nm", "nmd", "nmd12", "mn":
 		return "RA"
-	case "nd4":
+	case "nd4", "ni3":
+		// ni3 (SH-2A register bit-ops BCLR/BSET/BST/BLD #imm3,Rn):
+		// opcode = "1000 011x nnnn xiii" -- Rn is encoded in bits 7:4
+		// (the "Rm" nibble position for other formats), NOT bits 11:8.
+		// imm3 occupies bits 2:0. Using RA here would silently decode
+		// the wrong register (caught via cosim sim/tests/sh2a_bitreg.S:
+		// BSET #3,r1 produced garbage because rn was read from op.code
+		// (11:8) instead of (7:4)).
 		return "RB"
 	default:
 		// "m", "md", "d8", "d12", "i8", "0", "" and any other → no Rn
@@ -1239,6 +1260,10 @@ func isConstStr(v string) bool {
 	// Structured: "U", "S", "U*N", "S*N", "N*U", "N*S"
 	up := strings.ToUpper(v)
 	if up == "U" || up == "S" {
+		return true
+	}
+	// SH-2A register bit-op decode-time masks (see ParseImmToml).
+	if up == "MASK3" || up == "MASK3INV" {
 		return true
 	}
 	// High-nibble unsigned: "UH" or "UH*N".

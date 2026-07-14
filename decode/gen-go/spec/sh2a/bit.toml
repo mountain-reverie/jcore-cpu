@@ -1,0 +1,90 @@
+# SH-2A overlay: register bit-manipulation instructions
+# (BCLR/BSET/BST/BLD #imm3,Rn). Defaults mirror spec/sh2a/mov.toml.
+#
+# All four are single-word, single-slot instructions. format = "ni3":
+# Rn = op.code(11:8), imm3 = op.code(2:0) (unsigned, 3 bits, no shift).
+#
+# BSET/BCLR/BLD use the IMM_BIT3_MASK / IMM_BIT3_MASK_INV decode-time
+# one-hot masks (1 << imm3 / ~(1 << imm3), see immval.go) -- imm3 is a
+# static per-opcode constant (part of the fixed 16-bit encoding), so the
+# mask is computed combinationally at decode time from op.code, not via
+# the shared runtime barrel shifter (which has no free slot to compute a
+# throwaway mask without a second microcycle -- see the R1 write-up in
+# .superpowers/sdd/task-1-report.md).
+#
+# BST needs to insert a *runtime* T-bit value at bit imm3, which the mask
+# trick alone can't do (T isn't known at decode time). Neither the shifter
+# (a multi-bit shift/rotate can only splice a carry-in at one fixed
+# boundary bit, not an arbitrary interior bit) nor the ORIGINAL shared
+# manip() function (x,y only, no sr.t input) could do a variable-position
+# bit-insert of a runtime scalar in one cycle. R1 fallback taken: manip()
+# gained a new BITSET alumanip_t case + an sr.t parameter (hand-maintained
+# in core/components_pkg.vhd), and BST reuses the EXISTING zbus_sel=MANIP
+# path -- this avoids widening the generated zbus_sel_t enum (which lives
+# in decode_pkg.vhd and would otherwise change BASE J1/J2/J4's generated
+# output too, breaking `make -C decode diff` byte-identity).
+
+[defaults]
+  pc = "INC"
+  if_issue = "NO"
+  sr = "HOLD"
+
+[[instr]]
+  name = "BCLR #imm3,Rn"
+  format = "ni3"
+  opcode = "1000 0110 nnnn 0iii"
+  operation = "0 → bit imm3 of Rn"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    logic = "AND"
+    pc = "INC"
+    xbus = "Rn"
+    ybus = "MASK3INV"
+    zbus = "Rn"
+    zbus_sel = "LOGIC"
+
+[[instr]]
+  name = "BSET #imm3,Rn"
+  format = "ni3"
+  opcode = "1000 0110 nnnn 1iii"
+  operation = "1 → bit imm3 of Rn"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    logic = "OR"
+    pc = "INC"
+    xbus = "Rn"
+    ybus = "MASK3"
+    zbus = "Rn"
+    zbus_sel = "LOGIC"
+
+[[instr]]
+  name = "BST #imm3,Rn"
+  format = "ni3"
+  opcode = "1000 0111 nnnn 0iii"
+  operation = "T → bit imm3 of Rn"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    manip = "bitset"
+    pc = "INC"
+    xbus = "Rn"
+    ybus = "MASK3"
+    zbus = "Rn"
+    zbus_sel = "MANIP"
+
+[[instr]]
+  name = "BLD #imm3,Rn"
+  format = "ni3"
+  opcode = "1000 0111 nnnn 1iii"
+  operation = "bit imm3 of Rn → T"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    logic = "AND"
+    logic_sr = "NOT_ZERO"
+    pc = "INC"
+    sr = "LOGIC"
+    xbus = "Rn"
+    ybus = "MASK3"

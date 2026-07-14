@@ -238,3 +238,9 @@ func TestFormatBitWidthNi20(t *testing.T) {
 		t.Errorf("formatBitWidth(\"ni20\") = %d, want 20", got)
 	}
 }
+
+func TestNi3FormatWidth(t *testing.T) {
+	if got := formatBitWidth("ni3"); got != 3 {
+		t.Errorf("formatBitWidth(\"ni3\") = %d, want 3", got)
+	}
+}

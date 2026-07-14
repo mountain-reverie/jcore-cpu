@@ -1,6 +1,8 @@
 package loader
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -104,5 +106,28 @@ func TestCoprocLoaded(t *testing.T) {
 	}
 	if dropped != 0 {
 		t.Errorf("want dropped=0, got %d", dropped)
+	}
+}
+
+// TestNoJ1OnlyInstructionsInRealData self-checks the invariant that
+// arch.Set.GASMask relies on when it folds J1 into arch_j2_up: it assumes
+// there are no J1-only (J1 && !J2) instructions in docs/insns.json. If a
+// future edit ever adds one, GASMask would silently misclassify it as
+// arch_j2_up instead of erroring, so this test locks the assumption against
+// the real data file rather than leaving it as a comment-only claim.
+func TestNoJ1OnlyInstructionsInRealData(t *testing.T) {
+	f, err := os.Open(filepath.Join("..", "..", "docs", "insns.json"))
+	if err != nil {
+		t.Skipf("docs/insns.json not found relative to package: %v", err)
+	}
+	defer f.Close()
+	insns, _, err := Load(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, in := range insns {
+		if in.J1 && !in.J2 {
+			t.Errorf("found J1-only instruction %q: GASMask's J1-folds-into-arch_j2_up invariant is violated", in.Format)
+		}
 	}
 }

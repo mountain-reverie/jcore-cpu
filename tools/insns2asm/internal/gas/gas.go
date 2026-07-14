@@ -151,25 +151,39 @@ func nibbles(in ir.Insn) (string, error) {
 			out[n] = fmt.Sprintf("HEX_%X", val)
 			continue
 		}
-		// Partially-fixed nibble (e.g. "1nnn"/"1mmm"): the banked-register
-		// field Rn_BANK/Rm_BANK, upstream nibble code REG_B, regardless of
-		// whether the variable bits are the n or m letter.
-		anyFixed := false
-		var letter byte
-		for k := 0; k < 4; k++ {
-			bit := w[hi+k]
-			if bit.Fixed {
-				anyFixed = true
-			} else if letter == 0 {
-				letter = bit.Letter
+		// Partially-fixed nibble: the ONLY shape this maps to is the
+		// banked-register field Rn_BANK/Rm_BANK ("1nnn"/"1mmm" - fixed
+		// MSB=1, low 3 bits variable), upstream nibble code REG_B,
+		// regardless of whether the variable bits are the n or m letter.
+		// Any OTHER partially-fixed shape is not a known upstream nibble
+		// code; rather than silently guessing REG_B (which would be
+		// silently wrong), report it as unhandled.
+		msb := w[hi]
+		isBankShape := msb.Fixed && msb.Val == 1
+		if isBankShape {
+			for k := 1; k < 4; k++ {
+				if w[hi+k].Fixed {
+					isBankShape = false
+					break
+				}
 			}
 		}
-		if anyFixed {
+		if isBankShape {
 			out[n] = "REG_B"
 			continue
 		}
+		anyFixed := false
+		for k := 0; k < 4; k++ {
+			if w[hi+k].Fixed {
+				anyFixed = true
+				break
+			}
+		}
+		if anyFixed {
+			return "", fmt.Errorf("gas: %s: nibble %d is partially-fixed but not the bank-register shape (fixed MSB=1, low 3 bits variable): %v", in.Mnemonic, n, w[hi:hi+4])
+		}
 		// Fully-variable operand nibble: render the upstream nibble code.
-		switch letter {
+		switch letter := w[hi].Letter; letter {
 		case 'n':
 			out[n] = "REG_N"
 		case 'm':
@@ -246,23 +260,39 @@ func ApplyAugmentations(src string, augs []Augmentation) (string, int, error) {
 		needle := "{" + normalizeNibbles(aug.Nibbles) + "}"
 		mnemonicNeedle := `"` + aug.Mnemonic + `"`
 		matched := false
+		// toPatch collects the indices of lines that genuinely need this
+		// augmentation applied (matched, but not already carrying Flag).
+		// Arity is checked against toPatch, NOT against every matching
+		// line: a line that already carries Flag needs no action, so a
+		// re-run over lines patched by a prior run must stay a silent
+		// no-op (idempotent) rather than tripping the collision check.
+		// Only genuine ambiguity - more than one line that WOULD be
+		// patched by this single augmentation - is an error.
+		var toPatch []int
 		for i, line := range lines {
 			if !strings.Contains(line, mnemonicNeedle) || !strings.Contains(normalizeNibbles(line), needle) {
 				continue
 			}
 			matched = true
 			if strings.Contains(line, aug.Flag) {
-				continue // already applied: idempotent no-op
+				continue // already applied: idempotent no-op, not counted
 			}
+			toPatch = append(toPatch, i)
+		}
+		if !matched {
+			return "", 0, fmt.Errorf("gas: augmentation %s/%s: no matching upstream sh_table line found", aug.Mnemonic, aug.Nibbles)
+		}
+		if len(toPatch) > 1 {
+			return "", 0, fmt.Errorf("gas: augmentation %s/%s matched %d lines, expected 1", aug.Mnemonic, aug.Nibbles, len(toPatch))
+		}
+		for _, i := range toPatch {
+			line := lines[i]
 			idx := strings.LastIndex(line, "},")
 			if idx < 0 {
 				return "", 0, fmt.Errorf("gas: augmentation %s/%s: line has no trailing \"},\": %q", aug.Mnemonic, aug.Nibbles, line)
 			}
 			lines[i] = line[:idx] + "|" + aug.Flag + line[idx:]
 			changed++
-		}
-		if !matched {
-			return "", 0, fmt.Errorf("gas: augmentation %s/%s: no matching upstream sh_table line found", aug.Mnemonic, aug.Nibbles)
 		}
 	}
 	return strings.Join(lines, "\n"), changed, nil

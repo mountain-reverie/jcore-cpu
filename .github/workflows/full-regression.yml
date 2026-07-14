@@ -181,6 +181,15 @@ jobs:
           ref: jcore
           path: linux
 
+      - name: Install kernel-build deps (bc/bison/flex)
+        # The kernel prepare stage needs bc (timeconst.h); bison/flex are the
+        # other classic kbuild prerequisites. Not in the base CI container.
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          apt-get install -y --no-install-recommends bc bison flex
+
       - name: Build linux@jcore MMU objects (kbuild via the WIP J4 gas)
         env:
           LINUX_SRC: ${{ github.workspace }}/linux

@@ -129,6 +129,71 @@ jobs:
           repository: mountain-reverie/jcore-soc
           path: jcore-soc
 
+      # mmulinux (SP2) drives the REAL linux@jcore MMU TLB-miss handler
+      # (arch/sh/mm/tlb-jcore.c, arch/sh/kernel/cpu/jcore/{ex,entry}.S)
+      # against the RTL. It needs kbuild's objects (from mountain-reverie/linux)
+      # plus a J4-aware gas/ld/objcopy (from mountain-reverie/binutils-gdb):
+      # the system sh2-elf-* toolchain's gas has no PRIV_ARCH/MMU insns, and
+      # its bfd rejects the newer e_flags the WIP J4 gas stamps ("relocations
+      # in generic ELF" / "file in wrong format" — toolchain skew, not a real
+      # relocation error). See sim/linux_sim.sh for the full rationale.
+      - name: Checkout binutils-gdb (J4 gas/ld/objcopy)
+        uses: actions/checkout@v4
+        with:
+          repository: mountain-reverie/binutils-gdb
+          ref: jcore
+          path: binutils-gdb
+
+      - name: Resolve binutils-gdb commit sha
+        id: binutils-sha
+        working-directory: binutils-gdb
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache J4 gas/ld/binutils build
+        id: binutils-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            binutils-gdb/build-sh2/gas/as-new
+            binutils-gdb/build-sh2/ld/ld-new
+            binutils-gdb/build-sh2/binutils/objdump
+            binutils-gdb/build-sh2/binutils/objcopy
+            binutils-gdb/build-sh2/binutils/nm-new
+            binutils-gdb/build-sh2/binutils/ar
+          key: binutils-sh2-${{ steps.binutils-sha.outputs.sha }}
+
+      - name: Build J4 gas/ld/binutils (build-sh2)
+        if: steps.binutils-cache.outputs.cache-hit != 'true'
+        working-directory: binutils-gdb
+        run: |
+          set -euo pipefail
+          mkdir -p build-sh2
+          cd build-sh2
+          ../configure --target=sh2-elf --disable-nls --disable-werror
+          make -j"$(nproc)" all-gas all-ld all-binutils
+
+      - name: Checkout linux@jcore (real MMU handler sources)
+        uses: actions/checkout@v4
+        with:
+          repository: mountain-reverie/linux
+          ref: jcore
+          path: linux
+
+      - name: Build linux@jcore MMU objects (kbuild via the WIP J4 gas)
+        env:
+          LINUX_SRC: ${{ github.workspace }}/linux
+          J4GAS: ${{ github.workspace }}/binutils-gdb/build-sh2/gas/as-new
+          J4BIN: ${{ github.workspace }}/j4bin
+        run: |
+          set -euo pipefail
+          mkdir -p "$J4BIN"
+          ln -sf "$J4GAS" "$J4BIN/as"
+          cd "$LINUX_SRC"
+          make ARCH=sh CROSS_COMPILE=sh2-elf- CC="sh2-elf-gcc -B$J4BIN" jcore_defconfig
+          make ARCH=sh CROSS_COMPILE=sh2-elf- CC="sh2-elf-gcc -B$J4BIN" \
+               arch/sh/mm/tlb-jcore.o arch/sh/kernel/cpu/jcore/ex.o \
+               arch/sh/kernel/cpu/jcore/entry.o
+
       - name: Build MMU-on co-sim + run all functional guards
         working-directory: jcore-cpu
         # The CI image runs container steps under `sh` (dash) by default, which
@@ -138,6 +203,10 @@ jobs:
         env:
           TOOLS_DIR: ${{ github.workspace }}/jcore-soc/tools
           JCORE_SOC: ${{ github.workspace }}/jcore-soc
+          LINUX_SRC: ${{ github.workspace }}/linux
+          J4GAS: ${{ github.workspace }}/binutils-gdb/build-sh2/gas/as-new
+          J4LD: ${{ github.workspace }}/binutils-gdb/build-sh2/ld/ld-new
+          J4BIN: ${{ github.workspace }}/j4bin
         run: |
           set -euo pipefail
           # J4 overlay decoder (PRIV_ARCH + MMU instructions).
@@ -233,5 +302,18 @@ jobs:
           run_guard m8_ifetch_1 "" 12ms 240
           run_guard m8_ifetch_2 "" 12ms 240
 
+          # SP2: mmulinux links the REAL linux@jcore MMU TLB-miss handler
+          # objects (built by kbuild above, via the WIP J4 gas/ld) against a
+          # bare-metal harness (sim/tests/mmulinux.S) covering scenarios 1-3
+          # (real __jcore_tlb_walk install, warm TSB hit, ASID isolation).
+          # LINUX_SRC/J4GAS/J4LD/J4BIN are exported above; sim/tests/Makefile's
+          # `?=` defaults pick them up. 200us matches sim/linux_sim.sh.
+          run_guard mmulinux "" 200us 120
+          # Scenarios 4-5 (deferred) and any exhaustive/slow mmulinux variant
+          # would run only on the nightly schedule, e.g.:
+          # if [ "${{ github.event_name }}" = "schedule" ]; then
+          #   run_guard mmulinux_exhaustive "" 400us 240
+          # fi
+
           [ "$fail" = 0 ] || { echo "==> functional guards FAILED" >&2; exit 1; }
-          echo "==> all 46 priv-arch + MMU functional guards PASSED"
+          echo "==> all 47 priv-arch + MMU functional guards PASSED"

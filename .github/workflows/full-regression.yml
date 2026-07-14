@@ -165,6 +165,8 @@ jobs:
       - name: Build J4 gas/ld/binutils (build-sh2)
         if: steps.binutils-cache.outputs.cache-hit != 'true'
         working-directory: binutils-gdb
+        # Container steps default to dash, which rejects `set -o pipefail`.
+        shell: bash
         run: |
           set -euo pipefail
           mkdir -p build-sh2
@@ -184,6 +186,8 @@ jobs:
           LINUX_SRC: ${{ github.workspace }}/linux
           J4GAS: ${{ github.workspace }}/binutils-gdb/build-sh2/gas/as-new
           J4BIN: ${{ github.workspace }}/j4bin
+        # Container steps default to dash, which rejects `set -o pipefail`.
+        shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$J4BIN"

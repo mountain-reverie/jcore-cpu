@@ -169,7 +169,7 @@ jobs:
           set -euo pipefail
           mkdir -p build-sh2
           cd build-sh2
-          ../configure --target=sh2-elf --disable-nls --disable-werror
+          ../configure --target=sh-elf --disable-gdb --disable-sim --disable-werror
           make -j"$(nproc)" all-gas all-ld all-binutils
 
       - name: Checkout linux@jcore (real MMU handler sources)

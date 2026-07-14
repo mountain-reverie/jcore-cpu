@@ -37,8 +37,18 @@ mechanisms. J2A is a build-time variant: `make -C decode generate-j2a`,
   `movml.l Rm,@-R15` (push R0..Rm) + a back-to-back regression. Includes the
   fetch-skip fix (see gotchas).
 
+- **Group 5 — single-word mov extras** (branch feat/j2a-groups-567-singleword):
+  `mov.{b,w,l} R0,@Rn+` (post-increment store) and `mov.{b,w,l} @-Rm,R0`
+  (pre-decrement load).
+- **Group 6 — bit-manip register forms** (branch feat/j2a-groups-567-singleword):
+  `bclr #imm3,Rn`, `bset #imm3,Rn`, `bld #imm3,Rn`, `bst #imm3,Rn`.
+- **Group 7 — single-word misc** (branch feat/j2a-groups-567-singleword):
+  `movrt Rn` (¬T → Rn) and `nott` (invert T).
+
 ### Instructions live in J2A today
-`mov.l @(disp12,Rm),Rn`, `movml.l Rm,@-R15`.
+`mov.l @(disp12,Rm),Rn`, `movml.l Rm,@-R15`, `mov.{b,w,l} R0,@Rn+`,
+`mov.{b,w,l} @-Rm,R0`, `bclr #imm3,Rn`, `bset #imm3,Rn`, `bld #imm3,Rn`,
+`bst #imm3,Rn`, `movrt Rn`, `nott`.
 
 ---
 

@@ -60,7 +60,7 @@ func TestRegisterArgs(t *testing.T) {
 }
 
 func TestRegisterExprNi3(t *testing.T) {
-	if got := registerExpr("ni3", "Rn"); got != "(instr >> 8) & 0xF" {
-		t.Errorf("registerExpr(\"ni3\",\"Rn\") = %q, want %q", got, "(instr >> 8) & 0xF")
+	if got := registerExpr("ni3", "Rn"); got != "(instr >> 4) & 0xF" {
+		t.Errorf("registerExpr(\"ni3\",\"Rn\") = %q, want %q", got, "(instr >> 4) & 0xF")
 	}
 }

@@ -11,7 +11,7 @@ architecture tb of manip_tap is
 begin
   process
     begin
-    test_plan(15,"test manip()");
+    test_plan(29,"test manip()");
     -- Existing manip cases ignore the t argument (only BITSET uses it); pass '0'.
     test_equal(manip(x"ffffffff", x"12345678", '0', SWAP_BYTE), x"12347856", "swap byte");
     test_equal(manip(x"ffffffff", x"12345678", '0', SWAP_WORD), x"56781234", "swap word");
@@ -30,6 +30,25 @@ begin
     test_equal(manip(x"ffffffff", x"00000008", '0', BITSET), x"fffffff7", "bitset clr bit3");
     test_equal(manip(x"abcd1234", x"00000080", '1', BITSET), x"abcd12b4", "bitset set bit7");
     test_equal(manip(x"abcd12b4", x"00000080", '0', BITSET), x"abcd1234", "bitset clr bit7");
+    -- SH-2A CLIPS/CLIPU saturation (manip() ignores y,t for CLIP_* funcs).
+    -- clips.b: signed clamp to [-128,127]
+    test_equal(manip(x"00000005", x"00000000", '0', CLIP_SB), x"00000005", "clips.b in-range");
+    test_equal(manip(x"000000FF", x"00000000", '0', CLIP_SB), x"0000007F", "clips.b sat hi"); -- 255 -> +127
+    test_equal(manip(x"FFFFFF00", x"00000000", '0', CLIP_SB), x"FFFFFF80", "clips.b sat lo"); -- -256 -> -128
+    test_equal((0 => clip_saturated(x"00000005", CLIP_SB)), "0", "clips.b flag in-range");
+    test_equal((0 => clip_saturated(x"000000FF", CLIP_SB)), "1", "clips.b flag sat");
+    -- clips.w: signed clamp to [-32768,32767]
+    test_equal(manip(x"00008000", x"00000000", '0', CLIP_SW), x"00007FFF", "clips.w sat hi"); -- 32768 -> 32767
+    test_equal(manip(x"FFFF7FFF", x"00000000", '0', CLIP_SW), x"FFFF8000", "clips.w sat lo"); -- -32769 -> -32768
+    test_equal((0 => clip_saturated(x"00001234", CLIP_SW)), "0", "clips.w flag in-range");
+    -- clipu.b: unsigned clamp [0,255], no lower bound
+    test_equal(manip(x"00000042", x"00000000", '0', CLIP_UB), x"00000042", "clipu.b in-range");
+    test_equal(manip(x"00000100", x"00000000", '0', CLIP_UB), x"000000FF", "clipu.b sat hi"); -- 256 -> 255
+    test_equal(manip(x"FFFFFFFF", x"00000000", '0', CLIP_UB), x"000000FF", "clipu.b neg sat"); -- large unsigned -> 255
+    test_equal((0 => clip_saturated(x"00000100", CLIP_UB)), "1", "clipu.b flag sat");
+    -- clipu.w: unsigned clamp [0,65535]
+    test_equal(manip(x"00010000", x"00000000", '0', CLIP_UW), x"0000FFFF", "clipu.w 65536 -> 65535");
+    test_equal((0 => clip_saturated(x"0000FFFF", CLIP_UW)), "0", "clipu.w 65535 no sat");
     test_finished("done");
     wait;
     end process;

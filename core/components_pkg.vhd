@@ -31,7 +31,7 @@ type shiftfunc_t is (LOGIC, ARITH, ROTATE, ROTC);
 -- reuses the existing zbus_sel=SEL_MANIP path instead of widening
 -- zbus_sel_t (which is generated into decode_pkg.vhd and would otherwise
 -- change BASE J1/J2/J4 decoder output too).
-type alumanip_t is (SWAP_BYTE, SWAP_WORD, EXTEND_UBYTE, EXTEND_UWORD, EXTEND_SBYTE, EXTEND_SWORD, EXTRACT, SET_BIT_7, BITSET);
+type alumanip_t is (SWAP_BYTE, SWAP_WORD, EXTEND_UBYTE, EXTEND_UWORD, EXTEND_SBYTE, EXTEND_SWORD, EXTRACT, SET_BIT_7, BITSET, CLIP_SB, CLIP_SW, CLIP_UB, CLIP_UW);
 
 type sr_t is record
    t, s, q, m : std_logic;
@@ -320,6 +320,8 @@ function vpn_compare_mask(pm : std_logic_vector(3 downto 0)) return std_logic_ve
 function bshifter(a,b : std_logic_vector; c : std_logic; ops : shiftfunc_t) return std_logic_vector;
 function manip(x, y : std_logic_vector(31 downto 0); t : std_logic; func : alumanip_t)
   return std_logic_vector;
+function clip_saturated(x : std_logic_vector(31 downto 0); func : alumanip_t)
+  return std_logic;
 
 component shifter is
   port (
@@ -684,6 +686,38 @@ begin
     return (x and not y) or (y and tvec);
   end if;
 
+  -- SH-2A CLIPS/CLIPU: saturate x to a signed/unsigned byte/word range.
+  -- y and t are unused for clip funcs. Only x is examined.
+  if func = CLIP_SB then
+    if signed(x) > 127 then
+      return x"0000007F";
+    elsif signed(x) < -128 then
+      return x"FFFFFF80";
+    else
+      return x;
+    end if;
+  elsif func = CLIP_SW then
+    if signed(x) > 32767 then
+      return x"00007FFF";
+    elsif signed(x) < -32768 then
+      return x"FFFF8000";
+    else
+      return x;
+    end if;
+  elsif func = CLIP_UB then
+    if unsigned(x) > 255 then
+      return x"000000FF";
+    else
+      return x;
+    end if;
+  elsif func = CLIP_UW then
+    if unsigned(x) > 65535 then
+      return x"0000FFFF";
+    else
+      return x;
+    end if;
+  end if;
+
   if func = EXTEND_SBYTE then
     sign_bit := y(7);
   else
@@ -735,6 +769,32 @@ begin
     when others       => b0 := x(23 downto 16);
   end case;
   return b3 & b2 & b1 & b0;
+end function;
+
+function clip_saturated(x : std_logic_vector(31 downto 0); func : alumanip_t)
+  return std_logic is
+begin
+  case func is
+    when CLIP_SB =>
+      if signed(x) > 127 or signed(x) < -128 then
+        return '1';
+      end if;
+    when CLIP_SW =>
+      if signed(x) > 32767 or signed(x) < -32768 then
+        return '1';
+      end if;
+    when CLIP_UB =>
+      if unsigned(x) > 255 then
+        return '1';
+      end if;
+    when CLIP_UW =>
+      if unsigned(x) > 65535 then
+        return '1';
+      end if;
+    when others =>
+      return '0';
+  end case;
+  return '0';
 end function;
 
 end cpu2j0_components_pack;

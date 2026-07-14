@@ -260,6 +260,74 @@ func TestEmitDeltaOrderingKeepsMnemonicGroupsContiguous(t *testing.T) {
 	}
 }
 
+func TestNibblesRejectsNonBankPartiallyFixedNibble(t *testing.T) {
+	// "n1nn" (fixed bit NOT at the MSB) is not the bank-register shape
+	// (fixed MSB=1, low 3 bits variable); nibbles must error rather than
+	// silently emit REG_B.
+	insns, err := ir.Build([]loader.RawInsn{
+		{Group: "System Control Instructions", Format: "bogus\tRn", Code: "0000n1nn00000000", J2: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = nibbles(insns[0])
+	if err == nil {
+		t.Fatal("expected error for non-bank partially-fixed nibble, got nil")
+	}
+}
+
+func TestNibblesAcceptsBankRegisterShape(t *testing.T) {
+	// "1nnn": fixed MSB=1, low 3 bits variable ('n') - the genuine
+	// bank-register shape - must still render REG_B.
+	insns, err := ir.Build([]loader.RawInsn{
+		{Group: "System Control Instructions", Format: "ldc\tRm,Rn_BANK", Code: "0100mmmm1nnn1110", SH3: true, SH4: true, SH4A: true, J4: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := nibbles(insns[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "REG_B") {
+		t.Errorf("expected REG_B in nibbles, got %q", got)
+	}
+}
+
+func TestApplyAugmentationsMultipleMatchesIsError(t *testing.T) {
+	src := `const sh_opcode_info sh_table[] =
+{
+/* dup1 */{"ldc",{A_REG_N,A_SSR},{HEX_4,REG_N,HEX_3,HEX_E}, arch_sh3_nommu_up},
+/* dup2 */{"ldc",{A_REG_N,A_SSR},{HEX_4,REG_N,HEX_3,HEX_E}, arch_sh3_nommu_up},
+};
+`
+	augs := []Augmentation{{Mnemonic: "ldc", Nibbles: "HEX_4,REG_N,HEX_3,HEX_E", Flag: "arch_j4_up"}}
+	_, _, err := ApplyAugmentations(src, augs)
+	if err == nil {
+		t.Fatal("expected error for augmentation matching more than one line")
+	}
+}
+
+func TestApplyAugmentationsAlreadyAppliedTwiceIsNotAnError(t *testing.T) {
+	// Two lines both already carrying the flag (e.g. a re-run after both
+	// were previously patched) must not trip the >1-match error: neither
+	// line needs patching, so this is a no-op, not a collision.
+	src := `const sh_opcode_info sh_table[] =
+{
+/* dup1 */{"ldc",{A_REG_N,A_SSR},{HEX_4,REG_N,HEX_3,HEX_E}, arch_sh3_nommu_up|arch_j4_up},
+/* dup2 */{"ldc",{A_REG_N,A_SSR},{HEX_4,REG_N,HEX_3,HEX_E}, arch_sh3_nommu_up|arch_j4_up},
+};
+`
+	augs := []Augmentation{{Mnemonic: "ldc", Nibbles: "HEX_4,REG_N,HEX_3,HEX_E", Flag: "arch_j4_up"}}
+	_, changed, err := ApplyAugmentations(src, augs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed != 0 {
+		t.Errorf("expected 0 changed, got %d", changed)
+	}
+}
+
 func TestArgCodeBranchAndSystemClasses(t *testing.T) {
 	cases := []struct {
 		o    operand.Operand

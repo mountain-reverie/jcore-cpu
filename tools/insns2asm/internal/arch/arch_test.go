@@ -39,6 +39,28 @@ func TestIsSharedJ4Augment(t *testing.T) {
 	if (Set{SH3: true, SH4: true}).IsSharedJ4Augment() {
 		t.Error("pure SH insn with no J4 is not an augmentation candidate")
 	}
+	// Right-branch lineage (SH2E/SH2A) with NO SH3/SH4 co-tag: still needs
+	// the J4 augment, since GASMask's arch_j4_up baked-in floor is
+	// arch_sh2_up, which does NOT dominate arch_sh2e_up/arch_sh2a_nofpu_up.
+	if !(Set{SH2E: true, J4: true}).IsSharedJ4Augment() {
+		t.Error("SH2E+J4 (right-branch lineage, no SH3/SH4) should need a J4 augmentation")
+	}
+	if !(Set{SH2A: true, J4: true}).IsSharedJ4Augment() {
+		t.Error("SH2A+J4 (right-branch lineage, no SH3/SH4) should need a J4 augmentation")
+	}
+}
+
+// TestJ1NeverJ2Only self-checks the invariant GASMask's J1 comment relies on:
+// no insns.json instruction is J1 but not J2. If this ever regresses, folding
+// J1 into arch_j2_up would silently misclassify a J1-only instruction.
+func TestJ1ImpliesJ2Invariant(t *testing.T) {
+	// Documented invariant (see GASMask's J-core case): today there are no
+	// known J1-only instructions. This test locks the assumption at the
+	// arch.Set level; a loader/data-level test iterating real insns.json
+	// would additionally catch a future J1-only entry being added there.
+	if (Set{J1: true}).GASMask() != "arch_j2_up" {
+		t.Error("J1-only must fold to arch_j2_up per the documented no-J1-only-insns invariant")
+	}
 }
 
 func TestGASMask(t *testing.T) {

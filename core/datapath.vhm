@@ -99,6 +99,12 @@ end entity datapath;
 architecture stru of datapath is
 	subtype reg_t is std_logic_vector(31 downto 0);
 	signal gpf_zwd, pc, reg_x, reg_y, reg_0, xbus, xbus_mux, ybus, ybus_temp, zbus, wbus : std_logic_vector(31 downto 0);
+	-- SH-2A CS (SR bit 2, CLIPS/CLIPU saturation), driven by g_cs/g_cs_off
+	-- below (mirrors the xbus g_push/g_push_off mux pattern: driven fully in
+	-- exactly one of the two mutually-exclusive generate branches). Tied to
+	-- '0' on a non-SH2A build. Deliberately NOT part of sr_t/datapath_reg_t
+	-- (see the note on sr_t in core/components_pkg.vhd).
+	signal sr_cs : std_logic;
 	-- zbus as the multiplier operand mux (macin1/macin2) sees it: identical to
 	-- zbus except the SEL_SHIFT (shifter) source is a don't-care (see below).
 	signal zbus_mac : std_logic_vector(31 downto 0);
@@ -190,6 +196,19 @@ architecture stru of datapath is
           if PRIV_ARCH then
             r(MD) := sr.md; r(RB) := sr.rb; r(BL) := sr.bl;
           end if;
+          return r;
+        end to_slv;
+        -- SH-2A CS (SR bit 2, CLIPS/CLIPU saturation) overload: cs lives OUTSIDE
+        -- sr_t/datapath_reg_t entirely (see the R1 note on sr_t in
+        -- core/components_pkg.vhd) -- it is a small generate-local register
+        -- (signal sr_cs, g_cs/g_cs_off below) muxed in here at the one STC SR
+        -- read site. On a non-SH2A build sr_cs is tied to '0' (g_cs_off), so
+        -- this is bit-identical to plain to_slv(sr).
+        function to_slv(sr : sr_t; cs_bit : std_logic) return std_logic_vector is
+          variable r : std_logic_vector(31 downto 0);
+        begin
+          r := to_slv(sr);
+          r(CS) := cs_bit;
           return r;
         end to_slv;
 
@@ -345,7 +364,7 @@ begin
 	-- datapath's assert-derived `keep` blocks yosys from pruning the (reset-only)
 	-- push_ptr/push_active record fields + push comparators, spilling ~209 LUT4
 	-- into J4 (measured, PR #110 benchmark alert).
-	with buses.y_sel select ybus_temp <= reg_y when SEL_REG, pc when SEL_PC, mach when SEL_MACH, macl when SEL_MACL, to_slv(sr) when SEL_SR,
+	with buses.y_sel select ybus_temp <= reg_y when SEL_REG, pc when SEL_PC, mach when SEL_MACH, macl when SEL_MACL, to_slv(sr, sr_cs) when SEL_SR,
 	                                     (x"00000" & priv_regs.expevt) when SEL_EXPEVT,
 	                                     (x"00000" & priv_regs.intevt) when SEL_INTEVT,
 	                                     (x"00000" & "00" & priv_regs.tra) when SEL_TRA,
@@ -477,6 +496,39 @@ begin
 end generate;
 g_push_off : if not SH2A_ARCH generate
 	  xbus <= xbus_mux;
+end generate;
+
+-- SH-2A CS (SR bit 2, CLIPS/CLIPU saturation, sticky-OR). Deliberately kept
+-- outside sr_t/datapath_reg_t ("this") -- see the note on sr_t in
+-- core/components_pkg.vhd and the push_ptr_init/store/term precedent above:
+-- widening the shared register-variable record perturbed the base J2
+-- techmap by ~+400 cells even though the added field was SH2A_ARCH-gated.
+-- This mirrors g_push/g_push_off's xbus mux instead: sr_cs is a small
+-- standalone register, muxed into the STC SR read value via to_slv(sr,cs).
+-- Updated on the committed slot (slot_o), same cadence as "this": LDC Rm,SR
+-- (sr_ctrl.sel=SEL_WBUS/SEL_ZBUS) loads bit CS verbatim; CLIPS/CLIPU (which
+-- use sr_ctrl.sel=SEL_PREV) OR in the saturation instead.
+g_cs : if SH2A_ARCH generate
+  process(clk, rst)
+  begin
+    if rst = '1' then
+      sr_cs <= '0';
+    elsif clk = '1' and clk'event then
+      if slot_o = '1' then
+        if sr_ctrl.sel = SEL_WBUS then
+          sr_cs <= wbus(CS);
+        elsif sr_ctrl.sel = SEL_ZBUS then
+          sr_cs <= zbus(CS);
+        elsif func.alu.manip = CLIP_SB or func.alu.manip = CLIP_SW or
+              func.alu.manip = CLIP_UB or func.alu.manip = CLIP_UW then
+          sr_cs <= sr_cs or clip_saturated(xbus, func.alu.manip);
+        end if;
+      end if;
+    end if;
+  end process;
+end generate;
+g_cs_off : if not SH2A_ARCH generate
+  sr_cs <= '0';
 end generate;
 	-- SH-4 register-bank remap on the four address ports; pass-through on J2.
 	num_x_r <= bank_remap(reg.num_x, sr.md, sr.rb) when PRIV_ARCH else reg.num_x;
@@ -1172,6 +1224,9 @@ end generate;
               when SEL_TRA =>
                 if PRIV_ARCH then this.priv.tra := buses.imm_val(9 downto 0); end if;
             end case;
+            -- SH-2A CS (CLIPS/CLIPU saturation, sticky) is NOT set here: it
+            -- lives outside sr_t/this.sr entirely -- see the g_cs generate
+            -- below and the note on sr_t in core/components_pkg.vhd.
 
             -- LDC Rm,PTEH/PTEL/ASIDR write path (J4+MMU_ARCH).
             -- When the decoder asserts mmu_reg_wr the zbus carries the source

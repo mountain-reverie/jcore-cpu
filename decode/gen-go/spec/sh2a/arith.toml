@@ -1,0 +1,71 @@
+# SH-2A overlay: CLIPS/CLIPU saturation instructions (Group 8 PR-A).
+# Clamp Rn to the signed/unsigned byte/word range; the datapath sets the
+# sticky CS bit (SR bit 2) from the clip alumanip case (see core/datapath.vhm).
+#
+# All four are single-word, single-slot "n"-format instructions:
+# Rn = op.code(11:8), read and written in place (xbus = Rn, zbus = Rn,
+# zbus_sel = "MANIP"). SR is left unchanged at the sr_ctrl_t level
+# (sr = "HOLD" / SEL_PREV) -- CS is derived purely from func.alu.manip in
+# the datapath, not via a new sr_ctrl selector (keeps sr_ctrl_t, and thus
+# base J1/J2/J4 decode_pkg.vhd, byte-identical).
+
+[defaults]
+  pc = "INC"
+  if_issue = "NO"
+  sr = "HOLD"
+
+[[instr]]
+  name = "CLIPU.B Rn"
+  format = "n"
+  opcode = "0100 nnnn 1000 0001"
+  operation = "0 <= Rn <= 0xFF"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    manip = "clip_ub"
+    pc = "INC"
+    xbus = "Rn"
+    zbus = "Rn"
+    zbus_sel = "MANIP"
+
+[[instr]]
+  name = "CLIPU.W Rn"
+  format = "n"
+  opcode = "0100 nnnn 1000 0101"
+  operation = "0 <= Rn <= 0xFFFF"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    manip = "clip_uw"
+    pc = "INC"
+    xbus = "Rn"
+    zbus = "Rn"
+    zbus_sel = "MANIP"
+
+[[instr]]
+  name = "CLIPS.B Rn"
+  format = "n"
+  opcode = "0100 nnnn 1001 0001"
+  operation = "-0x80 <= Rn <= 0x7F"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    manip = "clip_sb"
+    pc = "INC"
+    xbus = "Rn"
+    zbus = "Rn"
+    zbus_sel = "MANIP"
+
+[[instr]]
+  name = "CLIPS.W Rn"
+  format = "n"
+  opcode = "0100 nnnn 1001 0101"
+  operation = "-0x8000 <= Rn <= 0x7FFF"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    manip = "clip_sw"
+    pc = "INC"
+    xbus = "Rn"
+    zbus = "Rn"
+    zbus_sel = "MANIP"

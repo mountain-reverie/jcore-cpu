@@ -33,6 +33,16 @@ type shiftfunc_t is (LOGIC, ARITH, ROTATE, ROTC);
 -- change BASE J1/J2/J4 decoder output too).
 type alumanip_t is (SWAP_BYTE, SWAP_WORD, EXTEND_UBYTE, EXTEND_UWORD, EXTEND_SBYTE, EXTEND_SWORD, EXTRACT, SET_BIT_7, BITSET, CLIP_SB, CLIP_SW, CLIP_UB, CLIP_UW);
 
+-- NOTE: the SH-2A CS bit (SR bit 2, CLIPS/CLIPU saturation) is deliberately
+-- NOT a field of sr_t. sr_t is embedded in datapath_reg_t's shared
+-- register-variable ("this"), and widening it (even by one bit, even
+-- SH2A_ARCH-gated) perturbed the whole shared-record techmap and cost the
+-- base (non-SH2A) J2 datapath ~+400 cells (see the R1 shared-record
+-- spillover precedent for push_ptr_init/store/term above g_push in
+-- core/datapath.vhm). CS is instead carried in a small standalone
+-- generate-local register (signal sr_cs, g_cs/g_cs_off in datapath.vhm)
+-- muxed into the STC SR read value via to_slv(sr, cs), exactly like xbus's
+-- g_push/g_push_off mux -- not embedded in datapath_reg_t.
 type sr_t is record
    t, s, q, m : std_logic;
    int_mask : std_logic_vector(3 downto 0);

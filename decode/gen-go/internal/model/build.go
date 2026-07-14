@@ -751,6 +751,10 @@ var csvInstrOrder = []string{
 	"BLD #imm3,Rn",
 	"MOVRT Rn",
 	"NOTT",
+	"CLIPU.B Rn",
+	"CLIPU.W Rn",
+	"CLIPS.B Rn",
+	"CLIPS.W Rn",
 	// System-plane instructions (at end, in CSV row order):
 	"General Illegal",
 	"Slot Illegal",

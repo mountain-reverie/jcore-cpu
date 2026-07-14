@@ -11,6 +11,7 @@ package datapath_pack is
    -- SR bit Positions
    constant T   : integer range 0 to 30 := 0;
    constant S   : integer range 0 to 30 := 1;
+   constant CS  : integer range 0 to 30 := 2;   -- SH-2A CLIPS/CLIPU saturation flag (J2A only)
    constant I0  : integer range 0 to 30 := 4;
    constant I1  : integer range 0 to 30 := 5;
    constant I2  : integer range 0 to 30 := 6;

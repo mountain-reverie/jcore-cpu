@@ -1002,6 +1002,18 @@ func manipSel(v string) (string, error) {
 	// EXTEND_UWORD, EXTEND_SBYTE, EXTEND_SWORD, EXTRACT, SET_BIT_7,
 	// BITSET.
 	switch strings.ToLower(v) {
+	case "clip_sb":
+		// SH-2A CLIPS.B Rn (Group 8 PR-A): reuses the existing
+		// zbus_sel=SEL_MANIP path. alumanip_t is hand-maintained in
+		// core/components_pkg.vhd (Task 1), so adding CLIP_SB/CLIP_SW/
+		// CLIP_UB/CLIP_UW there is base-invisible, same rationale as BITSET.
+		return "CLIP_SB", nil
+	case "clip_sw":
+		return "CLIP_SW", nil
+	case "clip_ub":
+		return "CLIP_UB", nil
+	case "clip_uw":
+		return "CLIP_UW", nil
 	case "bitset":
 		// SH-2A BST #imm3,Rn (R1 de-risk fallback): reuses the existing
 		// zbus_sel=SEL_MANIP path (manip(xbus, ybus, sr.t, func)) rather

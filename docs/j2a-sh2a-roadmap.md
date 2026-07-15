@@ -245,6 +245,12 @@ Each group is a PR against master, gated behind `SH2A_ARCH`, with in-pipeline
 - **`reg_conf` weak interlock on movml** was worked around via the loop's natural
   pacing; the general "instruction after a zbus-writeback op" interlock for
   SH-2A ops should be reviewed when adding movmu/pop.
+- **MULR MAC-shadow restart-handling (Group 8 PR-B).** `mulr` saves/restores
+  MACH:MACL via two `SH2A_ARCH`-gated shadow registers across a 5-slot sequence.
+  `mulr` performs no memory access so it cannot itself take a D-side TLB fault,
+  and instruction atomicity (interrupts sampled at boundaries) covers the
+  multi-slot sequence today. When SH-2A lands on J4+MMU, review whether the
+  MAC-shadow state needs restart-handling like the movml/movmu push/pop path.
 - Nits carried from PR #105/#106 review: the `cpu_decode_direct_mmu` binding is
   now triplicated (mmu / mmu_sh2a / dsp_alu) with no CI tie; `CONFIG_DSP_ALU`
   vs `CONFIG_SH2A_ARCH` in `cpu_tb.vhd` are mutually exclusive with no guard;

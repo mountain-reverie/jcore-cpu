@@ -75,11 +75,32 @@
 !   r9=8  scenario 3: walker-invocation counter did NOT increment across
 !         the ASID switch (a cross-ASID TSB hit would wrongly skip the
 !         walker -- tag_lo must be checked against the live ASIDR)
-!   r9=99 do_page_fault() was reached (the walker treated our present,
-!         valid pte as not-present -- a real fault when none was expected)
+!   r9=99 do_page_fault() was reached unexpectedly (scenarios 1-3: the
+!         walker treated our present, valid pte as not-present -- a real
+!         fault when none was expected)
+!   r9=10 scenario 4 (fault path, not-present pte): fault-count global did
+!         not read back as exactly 1 (do_page_fault() not reached, or
+!         reached more than once)
+!   r9=11 scenario 4: do_page_fault()'s captured faulting address != VA_B
+!         (real jcore_tlb_fault_entry passed the wrong MMU_TEA readback,
+!         or the stub mis-recorded it)
+!   r9=12 scenario 4: VA_B's TSB slot tag_hi == VA_B (a translation WAS
+!         installed for a faulting access -- __jcore_tlb_walk() must
+!         return before any TSB/PTEL write on the not-present path)
+!   r9=13 scenario 5 (STALE pte): fault-count global did not read back as
+!         exactly 2 (do_page_fault() not reached exactly once more)
+!   r9=14 scenario 5: captured faulting address != VA_C
+!   r9=15 scenario 5: VA_C's TSB slot tag_hi == VA_C (translation WAS
+!         installed despite _PAGE_STALE -- walker must fault, not install)
 !
-! do_page_fault() itself is stubbed for Task 1 (a fixed record+halt); Task 3
-! fills in its real pt_regs-based body for the true-fault scenarios.
+! do_page_fault() has a real body from Task 3/SP2 scenarios 4-5: records a
+! fault-count + faulting address into scratch globals, restores SR.RB=0
+! and the harness SP (captured just before the faulting touch), then
+! JUMPS (never rts/rte) to a per-scenario target address held in a
+! scratch global -- the mapping is never fixed up, so returning through
+! entry.S's rte would just re-fault forever. Scenarios 1-3 point that
+! target at `unexpected_fault` (== the old Task-1 stub behavior: record
+! r9=99, halt) since they expect zero faults.
 ! jcore_tlb_walk_mark_accessed() IS stubbed from Task 2 on: a STRONG
 ! definition near the bottom of this file shadows tlb-jcore.o's __weak
 ! default so scenarios 2-3 get a walker-invocation counter (see that
@@ -157,11 +178,26 @@ kmain:
         mov     #0, r8
         mov     #0, r9
         mov     #0, r10
+        mov     #0, r11                 ! r11-r14: unbanked, never touched by
+        mov     #0, r12                 ! scenarios 1-3 (no real fault taken),
+        mov     #0, r13                 ! but jcore_tlb_fault_entry (scenarios
+        mov     #0, r14                 ! 4-5) DOES push them into pt_regs --
+                                         ! must be defined or the SRAM model
+                                         ! rejects the store (undefined data).
 
         ! ---- ASIDR = 0 (single context for scenarios 1-2; scenario 3
         ! switches ASIDR itself). ----
         mov     #0, r0
         ldc     r0, asidr
+        nop
+        nop
+
+        ! ---- GBR = 0. Never otherwise touched by this harness, but
+        ! jcore_tlb_fault_entry (scenarios 4-5) unconditionally saves it
+        ! into pt_regs via `stc gbr,r1` -- undefined at reset, so that
+        ! store trips the SRAM model's undefined-write-data check. ----
+        mov     #0, r0
+        ldc     r0, gbr
         nop
         nop
 
@@ -184,6 +220,26 @@ kmain:
         ! asm/pgtable-bits-jcore.h, not a hand-rolled encoding. ----
         mov.l   k_pte,   r0
         mov.l   v_pte,   r1
+        mov.l   r1, @r0
+
+        ! ---- Scenario 4/5 ptes: VA_B not-present (all-zero), VA_C
+        ! present+valid but _PAGE_STALE. Same pgd[0]/pte-table range as
+        ! va_A (different pte_index), so no extra pgd entry is needed. ----
+        mov.l   k_pte_b, r0
+        mov.l   v_pte_b, r1
+        mov.l   r1, @r0
+        mov.l   k_pte_c, r0
+        mov.l   v_pte_c, r1
+        mov.l   r1, @r0
+
+        ! ---- Zero the do_page_fault handshake globals; point the fault
+        ! target at `unexpected_fault` (scenarios 1-3 expect zero faults --
+        ! same behavior the old Task-1 stub had: record r9=99 and halt). ----
+        mov.l   k_faultcnt, r0
+        mov     #0, r1
+        mov.l   r1, @r0
+        mov.l   k_fault_target, r0
+        mov.l   unexpected_fault_ptr, r1
         mov.l   r1, @r0
 
         ! ---- Zero the TSB (64 words, matches mmurun.S's TSB sizing). ----
@@ -310,6 +366,91 @@ kmain:
         mov.l   k_wcnt, r0 ; mov.l @r0, r2 ; mov #2, r3
         cmp/eq  r3, r2 ; mov #8, r9 ; bf _fail                       ! walker MUST have re-run
 
+        ! ================= SCENARIO 4: fault path (not-present pte) =========
+        ! VA_B's pte word is all-zero (no _PAGE_VALID). Touch VA_B under AT:
+        ! real __jcore_tlb_walk() sees !_PAGE_VALID -> returns -EFAULT ->
+        ! jcore_tlb_miss_slow falls through to the real fault tail
+        ! (jcore_tlb_real_fault -> jcore_tlb_fault_entry, now fetchable
+        ! under AT since the whole image links at P1) -> our do_page_fault
+        ! body records fault-count + address, restores SR.RB=0 and SP, and
+        ! JUMPS to s4_assert (see the do_page_fault comment below for why
+        ! it never rts/rte).
+        mov.l   k_saved_sp, r0
+        mov.l   r15, @r0
+        mov.l   k_fault_target, r0
+        mov.l   s4_assert_ptr, r1
+        mov.l   r1, @r0
+
+        mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0   ! flush TLB (fresh miss)
+
+        mov.l   va_B, r0
+        mov.l   @r0, r8                 ! faulting load -> TLB miss -> walker
+                                         ! -EFAULT -> real fault tail -> stub
+
+        ! Expected path never falls through to here (the stub jumps to
+        ! s4_assert instead); if it does, the fault tail was never taken.
+        mov     #90, r9
+        bra     _fail
+        nop
+        .align 2
+s4_assert_ptr:  .long s4_assert
+s4_assert:
+        mov.l   k_mmucr, r0 ; mov #0, r1 ; mov.l r1, @r0   ! AT off for readback
+
+        mov.l   k_faultcnt, r0
+        mov.l   @r0, r1
+        mov     #1, r2
+        cmp/eq  r2, r1 ; mov #10, r9 ; bf _fail             ! fault not recorded exactly once
+
+        mov.l   k_faultaddr, r0
+        mov.l   @r0, r1
+        mov.l   va_B, r2
+        cmp/eq  r2, r1 ; mov #11, r9 ; bf _fail             ! captured address != VA_B
+
+        stc     tsbptr, r3
+        mov.l   @r3, r2                 ! tag_hi at VA_B's TSB slot
+        mov.l   va_B, r1
+        cmp/eq  r1, r2 ; mov #12, r9 ; bt _fail             ! translation WAS installed
+
+        ! ================= SCENARIO 5: STALE pte =============================
+        ! VA_C's pte is otherwise valid+present but carries _PAGE_STALE
+        ! (0x002). The walker's `pte_val(entry) & (_PAGE_PROTNONE|_PAGE_STALE)`
+        ! check must still fault it -- same fault-tail path as scenario 4.
+        mov.l   k_saved_sp, r0
+        mov.l   r15, @r0
+        mov.l   k_fault_target, r0
+        mov.l   s5_assert_ptr, r1
+        mov.l   r1, @r0
+
+        mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0   ! AT on + flush TLB
+
+        mov.l   va_C, r0
+        mov.l   @r0, r8                 ! faulting load -> walker sees STALE
+                                         ! -> -EFAULT -> fault tail -> stub
+
+        mov     #91, r9
+        bra     _fail
+        nop
+        .align 2
+s5_assert_ptr:  .long s5_assert
+s5_assert:
+        mov.l   k_mmucr, r0 ; mov #0, r1 ; mov.l r1, @r0
+
+        mov.l   k_faultcnt, r0
+        mov.l   @r0, r1
+        mov     #2, r2
+        cmp/eq  r2, r1 ; mov #13, r9 ; bf _fail             ! fault-count not exactly 2
+
+        mov.l   k_faultaddr, r0
+        mov.l   @r0, r1
+        mov.l   va_C, r2
+        cmp/eq  r2, r1 ; mov #14, r9 ; bf _fail             ! captured address != VA_C
+
+        stc     tsbptr, r3
+        mov.l   @r3, r2                 ! tag_hi at VA_C's TSB slot
+        mov.l   va_C, r1
+        cmp/eq  r1, r2 ; mov #15, r9 ; bt _fail             ! translation WAS installed
+
         mov     #0, r9
         bra     _done
         nop
@@ -336,6 +477,22 @@ v_ptel_expect:  .long 0x000401B9        ! PFN(0x00040000)|PageMask(16K,0x100)|V|
 k_wcnt:         .long 0x80029000        ! walker_calls counter (past TSB/before stack)
 v_accessed_clr: .long 0xFFFFFEFF        ! ~_PAGE_ACCESSED (0x100), see pgtable-bits-jcore.h
 
+! ---- Scenario 4/5 scratch: extra ptes (same pgd[0]/pte-table range as
+! va_A, different pte_index so no new pgd entry is needed), and the
+! do_page_fault <-> harness handshake globals (fault-count/address/target
+! jump-address/saved-SP), placed in the same scratch RAM region as k_wcnt.
+va_B:           .long 0x00104000        ! pte_index 0x41 -> k_ptetbl+0x104
+k_pte_b:        .long 0x80024104
+v_pte_b:        .long 0x00000000        ! not present (_PAGE_VALID clear)
+va_C:           .long 0x00108000        ! pte_index 0x42 -> k_ptetbl+0x108
+k_pte_c:        .long 0x80024108
+v_pte_c:        .long 0x000400BB        ! PFN(0x00040000)|V|C|U|W|D|STALE (0xB9|_PAGE_STALE(0x2))
+k_faultcnt:     .long 0x80029004        ! do_page_fault-recorded fault count
+k_faultaddr:    .long 0x80029008        ! do_page_fault-recorded faulting address
+k_fault_target: .long 0x8002900C        ! address do_page_fault jumps to next
+k_saved_sp:     .long 0x80029010        ! r15 snapshot restored by do_page_fault
+unexpected_fault_ptr: .long unexpected_fault
+
 ENTRY(_done)
         mov.l   p_test_result, r0
         mov     #0, r9
@@ -355,11 +512,57 @@ p_test_result: .long TEST_RESULT_ADDRESS
 ! symbols (SP2 Task 0's stub set; do_page_fault gets a real body in Task 3).
 ! ===========================================================================
 
-! do_page_fault(regs, error_code, address) -- Task 1: never expected to be
-! reached (our one pte is present and valid); if it IS reached, record a
-! distinct code and halt rather than let entry.S's rte resume into a fault
-! loop.
+! do_page_fault(regs, error_code, address) -- real body for SP2 scenarios
+! 4-5. Entered by jcore_tlb_fault_entry's `jsr` with r4=regs, r5=error_code
+! (always 0 today -- entry.S doesn't yet thread a real code through),
+! r6=faulting address (MMU_TEA readback). SR.RB is still 1 (exception-
+! entry bank) and r15 is this call's OWN pt_regs frame, not the harness's
+! SP -- both must be restored before we can safely run harness code again.
+!
+! Never rts/rte back into entry.S: the fault is never actually fixed up
+! here (no pte gets patched), so resuming the faulting load would just
+! re-fault forever. Instead: record fault-count + address, restore
+! SR.RB=0 and the harness's pre-touch SP, then JUMP to whatever address
+! k_fault_target currently holds (scenarios 1-3: `unexpected_fault`;
+! scenarios 4/5: that scenario's assert label).
 ENTRY(do_page_fault)
+        mov.l   dpf_faultcnt, r0
+        mov.l   @r0, r1
+        add     #1, r1
+        mov.l   r1, @r0
+        mov.l   dpf_faultaddr, r0
+        mov.l   r6, @r0
+
+        ! ---- SR.RB=1 -> 0: harness code (incl. the assert target) runs
+        ! against bank 0; entry.S never clears RB itself. ----
+        mov.l   dpf_rbclear, r0
+        stc     sr, r1
+        and     r0, r1
+        ldc     r1, sr
+        nop
+        nop
+
+        ! ---- restore the harness SP captured just before the faulting
+        ! touch (bank-0 r15 is unbanked/shared, so this is safe to do here
+        ! even though the RB flip above only just took effect). ----
+        mov.l   dpf_saved_sp, r0
+        mov.l   @r0, r15
+
+        mov.l   dpf_target, r0
+        mov.l   @r0, r0
+        jmp     @r0
+        nop
+        .align 2
+dpf_faultcnt:   .long 0x80029004        ! == k_faultcnt
+dpf_faultaddr:  .long 0x80029008        ! == k_faultaddr
+dpf_rbclear:    .long 0xDFFFFFFF        ! == p_rbclear (duplicated: forward-only pc-rel)
+dpf_saved_sp:   .long 0x80029010        ! == k_saved_sp
+dpf_target:     .long 0x8002900C        ! == k_fault_target
+
+! unexpected_fault -- scenarios 1-3 point k_fault_target here (they expect
+! zero faults). Same behavior the original Task-1 do_page_fault stub had:
+! record r9=99 and halt, rather than let anything resume into a fault loop.
+ENTRY(unexpected_fault)
         mov.l   p_test_result2, r0
         mov     #99, r9
         mov.l   r9, @r0

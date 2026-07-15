@@ -44,9 +44,13 @@ mechanisms. J2A is a build-time variant: `make -C decode generate-j2a`,
 - **Group 7 — single-word misc** (PR #118, merged):
   `movrt Rn` (¬T → Rn) and `nott` (invert T).
 
-- **Group 8 PR-A — arithmetic clips/clipu** (PR open, branch feat/j2a-group8-clips):
+- **Group 8 PR-A — arithmetic clips/clipu** (PR merged):
   `clips.b/w Rn`, `clipu.b/w Rn` (saturate Rn to signed/unsigned byte/word
-  range). Pending: `mulr` (PR-B), `divs`/`divu` (PR-C).
+  range).
+- **Group 8 PR-B — arithmetic mulr** (PR merged):
+  `mulr R0,Rn` (Rn ← R0 × Rn; reuse the multiplier, result to Rn).
+- **Group 8 PR-C — arithmetic divs/divu** (pending):
+  `divs R0,Rn`, `divu R0,Rn` (SH-2A signed/unsigned divide).
 
 ### Instructions live in J2A today
 `mov.l @(disp12,Rm),Rn`, `movml.l Rm,@-R15`, `mov.{b,w,l} R0,@Rn+`,
@@ -137,7 +141,7 @@ Single-word; bit op on a register selected by `#imm3`. Straightforward microcode
 Single-word but each needs a new ALU behavior.
 - ✅ `clips.b/w Rn`, `clipu.b/w Rn`  (saturate Rn to signed/unsigned byte/word
   range — new saturation logic in the ALU/manip unit) — **PR-A done**
-- `mulr R0,Rn`  (Rn ← R0 × Rn; reuse the multiplier, result to Rn) — **PR-B pending**
+- ✅ `mulr R0,Rn`  (Rn ← R0 × Rn; reuse the multiplier, result to Rn) — **PR-B done**
 - `divs R0,Rn`, `divu R0,Rn`  (SH-2A signed/unsigned divide — verify semantics
   vs the existing DIV0/DIV1 step machinery; these may be multi-cycle) — **PR-C pending**
 

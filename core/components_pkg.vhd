@@ -31,7 +31,11 @@ type shiftfunc_t is (LOGIC, ARITH, ROTATE, ROTC);
 -- reuses the existing zbus_sel=SEL_MANIP path instead of widening
 -- zbus_sel_t (which is generated into decode_pkg.vhd and would otherwise
 -- change BASE J1/J2/J4 decoder output too).
-type alumanip_t is (SWAP_BYTE, SWAP_WORD, EXTEND_UBYTE, EXTEND_UWORD, EXTEND_SBYTE, EXTEND_SWORD, EXTRACT, SET_BIT_7, BITSET, CLIP_SB, CLIP_SW, CLIP_UB, CLIP_UW);
+-- MAC_SAVE/MAC_RESTORE_L/MAC_RESTORE_H: SH-2A MULR MAC save/restore markers.
+-- Base decode never emits these (dead on base). manip() returns x unchanged
+-- for them; the actual save/restore-route behavior is implemented directly
+-- in the datapath (mac_shadow_h/l capture + SEL_MANIP restore routing).
+type alumanip_t is (SWAP_BYTE, SWAP_WORD, EXTEND_UBYTE, EXTEND_UWORD, EXTEND_SBYTE, EXTEND_SWORD, EXTRACT, SET_BIT_7, BITSET, CLIP_SB, CLIP_SW, CLIP_UB, CLIP_UW, MAC_SAVE, MAC_RESTORE_L, MAC_RESTORE_H);
 
 -- NOTE: the SH-2A CS bit (SR bit 2, CLIPS/CLIPU saturation) is deliberately
 -- NOT a field of sr_t. sr_t is embedded in datapath_reg_t's shared
@@ -694,6 +698,13 @@ begin
     -- below (SWAP_BYTE/EXTEND_*/EXTRACT/SET_BIT_7) does not apply here.
     tvec := (others => t);
     return (x and not y) or (y and tvec);
+  end if;
+
+  -- SH-2A MULR MAC save/restore markers: manip() itself is a no-op for
+  -- these (returns x unchanged); the actual capture/restore is implemented
+  -- directly in the datapath. Base never emits these values.
+  if func = MAC_SAVE or func = MAC_RESTORE_L or func = MAC_RESTORE_H then
+    return x;
   end if;
 
   -- SH-2A CLIPS/CLIPU: saturate x to a signed/unsigned byte/word range.

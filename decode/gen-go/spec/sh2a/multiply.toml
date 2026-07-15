@@ -1,0 +1,78 @@
+# SH-2A overlay: MULR R0,Rn (Group 8 PR-B).
+#
+# 32x32->32 signed multiply of R0 by Rn, result truncated to the low 32
+# bits and written back to Rn -- but unlike MUL.L (which leaves the
+# product sitting in MACL for a following STS), MULR must NOT disturb
+# the architectural MACH:MACL pair, since it is defined to reuse the
+# multiplier without being a MAC-family instruction.
+#
+# Implemented as a 5-slot sequence that borrows the existing MAC
+# datapath and the MAC_SAVE/MAC_RESTORE_L/MAC_RESTORE_H shadow-register
+# mechanism added in Task 1 (core/datapath.vhm, core/components_pkg.vhd):
+#   1. capture:      shadow MACH/MACL away (manip = MAC_SAVE)
+#   2. multiply:     R0 x Rn -> MACL, same mac_* fields as base MUL.L
+#   3. read product: MACL -> Rn (zbus = Rn, ybus = MACL, zbus_sel = Y)
+#   4. restore MACL: shadow_l -> MACL (manip = MAC_RESTORE_L), reusing the
+#      LDS Rm,MACL mac-write fields (macl = LOAD, macin_2 = ZBUS) but
+#      sourcing zbus from the shadow register (zbus_sel = MANIP) instead
+#      of a register-file operand.
+#   5. restore MACH: shadow_h -> MACH (manip = MAC_RESTORE_H), same
+#      pattern with the LDS Rm,MACH mac-write fields (mach = LOAD,
+#      macin_1 = ZBUS).
+#
+# Only the low 32 bits of the 64-bit product are architecturally defined
+# for MULR, which is exactly what MACL holds after a MULL mac_op, so no
+# extra truncation step is needed.
+
+[defaults]
+  pc = "HOLD"
+  if_issue = "NO"
+  sr = "HOLD"
+
+[[instr]]
+  name = "MULR R0, Rn"
+  format = "n"
+  opcode = "0100 nnnn 1000 0000"
+  operation = "R0 * Rn (low 32 bits) -> Rn, MACH:MACL preserved"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    manip = "mac_save"
+    mac_stall_sense = "Y"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    mac_busy = "NOT STALL"
+    mac_op = "MULL"
+    mac_stage = "EX"
+    mac_stall_sense = "Y"
+    macin_1 = "XBUS"
+    macin_2 = "YBUS"
+    xbus = "R0"
+    ybus = "Rn"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    mac_stall_sense = "Y"
+    ybus = "MACL"
+    zbus_sel = "Y"
+    zbus = "Rn"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    manip = "mac_restore_l"
+    mac_stage = "EX"
+    mac_stall_sense = "Y"
+    macin_2 = "ZBUS"
+    macl = "LOAD"
+    zbus_sel = "MANIP"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    manip = "mac_restore_h"
+    mac_stage = "EX"
+    mac_stall_sense = "Y"
+    macin_1 = "ZBUS"
+    mach = "LOAD"
+    zbus_sel = "MANIP"
+    pc = "INC"

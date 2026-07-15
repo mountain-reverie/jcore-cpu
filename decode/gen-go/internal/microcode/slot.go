@@ -1014,6 +1014,18 @@ func manipSel(v string) (string, error) {
 		return "CLIP_UB", nil
 	case "clip_uw":
 		return "CLIP_UW", nil
+	case "mac_save":
+		// SH-2A MULR R0,Rn (Group 8 PR-B): shadow MACH/MACL away before
+		// the multiply so they can be restored afterward, since MULR
+		// must not disturb the architectural MAC pair. Same base-invisible
+		// rationale as CLIP_* / BITSET (alumanip_t is hand-maintained in
+		// core/components_pkg.vhd, not part of the generated static
+		// package). See core/datapath.vhm mac_shadow_h/l capture.
+		return "MAC_SAVE", nil
+	case "mac_restore_l":
+		return "MAC_RESTORE_L", nil
+	case "mac_restore_h":
+		return "MAC_RESTORE_H", nil
 	case "bitset":
 		// SH-2A BST #imm3,Rn (R1 de-risk fallback): reuses the existing
 		// zbus_sel=SEL_MANIP path (manip(xbus, ybus, sr.t, func)) rather

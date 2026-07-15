@@ -108,6 +108,11 @@ architecture stru of datapath is
 	-- zbus as the multiplier operand mux (macin1/macin2) sees it: identical to
 	-- zbus except the SEL_SHIFT (shifter) source is a don't-care (see below).
 	signal zbus_mac : std_logic_vector(31 downto 0);
+	-- STC SR read value. SH2A builds: to_slv(sr, sr_cs) (CS at bit 2). Base:
+	-- plain to_slv(sr) -- BYTE-IDENTICAL to master, so the sr_o read path is
+	-- unperturbed (the 2-arg overload's extra r(CS) assignment otherwise
+	-- restructures the whole SR vector and depressed base Fmax ~11%).
+	signal sr_slv : std_logic_vector(31 downto 0);
 	signal sr : sr_t;
 	signal priv_regs : priv_reg_t;   -- SH-4 EXPEVT/INTEVT/TRA (J4); 0 on J1/J2
 	signal mmu_regs  : mmu_reg_t;    -- SH-4 MMU CSRs (J4+MMU_ARCH); 0 otherwise
@@ -364,7 +369,7 @@ begin
 	-- datapath's assert-derived `keep` blocks yosys from pruning the (reset-only)
 	-- push_ptr/push_active record fields + push comparators, spilling ~209 LUT4
 	-- into J4 (measured, PR #110 benchmark alert).
-	with buses.y_sel select ybus_temp <= reg_y when SEL_REG, pc when SEL_PC, mach when SEL_MACH, macl when SEL_MACL, to_slv(sr, sr_cs) when SEL_SR,
+	with buses.y_sel select ybus_temp <= reg_y when SEL_REG, pc when SEL_PC, mach when SEL_MACH, macl when SEL_MACL, sr_slv when SEL_SR,
 	                                     (x"00000" & priv_regs.expevt) when SEL_EXPEVT,
 	                                     (x"00000" & priv_regs.intevt) when SEL_INTEVT,
 	                                     (x"00000" & "00" & priv_regs.tra) when SEL_TRA,
@@ -526,9 +531,11 @@ g_cs : if SH2A_ARCH generate
       end if;
     end if;
   end process;
+  sr_slv <= to_slv(sr, sr_cs);
 end generate;
 g_cs_off : if not SH2A_ARCH generate
   sr_cs <= '0';
+  sr_slv <= to_slv(sr);   -- byte-identical to master's STC SR read
 end generate;
 	-- SH-4 register-bank remap on the four address ports; pass-through on J2.
 	num_x_r <= bank_remap(reg.num_x, sr.md, sr.rb) when PRIV_ARCH else reg.num_x;

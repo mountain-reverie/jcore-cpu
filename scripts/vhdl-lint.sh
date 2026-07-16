@@ -34,6 +34,18 @@ EXCLUDE_GENERATED=(
 # EXCLUDED from linting — v2p's output style is not controllable from this repo
 # (it collapses alignment/blank-lines), so these files cannot pass VSG's default
 # ruleset without globally gutting it. Their behaviour is gated by tests + synth.
+EXCLUDE_CPP=(
+  # cpp-preprocessed testbench sources: contain C-preprocessor directives
+  # (#include/#define/#ifdef) and are preprocessed to .vhh before compilation —
+  # NOT pure VHDL. VSG chokes on the # lines (returns a nonzero exit even at 0
+  # countable violations) and vsg --fix lowercases cpp macros (CLK_PERIOD).
+  # Kept as authored; excluded from linting (same class as the .vhm sources).
+  "sim/cpu_cache_tb.vhd"
+  "sim/cpu_dualcore_tb.vhd"
+  "sim/cpu_pure_tb.vhd"
+  "sim/cpu_tb.vhd"
+)
+
 EXCLUDE_SB_MAC16=(
   # SB_MAC16 iCE40 hard-primitive interface: the primitive name + parameter
   # names are matched CASE-SENSITIVELY by yosys synth_ice40, but VSG's default
@@ -64,7 +76,7 @@ EXCLUDE_VHM_DERIVED=(
 # tests). decode/gen-go/testdata/golden/* and decode/gen-go/spec/static/*.
 is_excluded() {
   local f="$1"
-  for e in "${EXCLUDE_GENERATED[@]}" "${EXCLUDE_VHM_DERIVED[@]}" "${EXCLUDE_SB_MAC16[@]}"; do
+  for e in "${EXCLUDE_GENERATED[@]}" "${EXCLUDE_VHM_DERIVED[@]}" "${EXCLUDE_SB_MAC16[@]}" "${EXCLUDE_CPP[@]}"; do
     [[ "$f" == "$e" ]] && return 0
   done
   case "$f" in

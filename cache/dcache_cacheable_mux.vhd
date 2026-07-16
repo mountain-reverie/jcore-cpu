@@ -37,12 +37,18 @@ architecture arch of dcache_cacheable_mux is
   signal c_mem_o    : cpu_data_o_t; -- adapter dbus_o
   signal c_mem_lock : std_logic;
   signal c_mem_ddrb : std_logic;
+  -- The cache still owns the memory bus while it has an in-flight mem-side
+  -- transaction (a background line fill or a dirty-line writeback): the dcache
+  -- acks the CPU on the critical word and completes the burst in the background,
+  -- so cpu_o may already have advanced to a following (uncacheable) access.
+  signal cache_busy : std_logic;
   -- snoop tie-offs
   signal snp_o : dcache_snoop_io_t;
 
 begin
 
   cacheable <= is_cacheable_mmu(cpu_o.a, a_mmu.at, a_mmu.c);
+  cache_busy <= c_mem_o.en;
 
   -- CPU-side fan to the cache: only present the access when cacheable, else hold
   -- the cache idle (en=0).
@@ -68,17 +74,17 @@ begin
       dbus_ack_r    => mem_ack_r
     );
 
-  -- Memory-side mux: cache fill/writeback when the current access is cacheable,
-  -- else the CPU access passes straight through.
-  mem_o        <= c_mem_o when cacheable else
-                  cpu_o;
-  mem_lock     <= c_mem_lock when cacheable else
-                  lock;
-  mem_ddrburst <= c_mem_ddrb when cacheable else
-                  '0';
+  -- Memory-side mux: the cache drives the bus whenever the current access is
+  -- cacheable OR it still has a burst in flight. An uncacheable bypass access
+  -- must NOT steal the bus mid-burst -- doing so drops a fill word and the CPU
+  -- later reads stale/zero data on the resulting bogus cache hit.
+  mem_o        <= c_mem_o    when (cacheable or cache_busy = '1') else cpu_o;
+  mem_lock     <= c_mem_lock when (cacheable or cache_busy = '1') else lock;
+  mem_ddrburst <= c_mem_ddrb when cacheable else '0';
 
-  -- CPU response mux.
-  cpu_i <= c_cpu_i when cacheable else
-           mem_i;
-
-end architecture arch;
+  -- CPU response mux. For an uncacheable access, suppress ack while the cache
+  -- still owns the bus: mem_i.ack in that window is acking the cache's fill
+  -- word, not the CPU's held-off bypass access.
+  cpu_i.d   <= c_cpu_i.d   when cacheable else mem_i.d;
+  cpu_i.ack <= c_cpu_i.ack when cacheable else (mem_i.ack and not cache_busy);
+end architecture;

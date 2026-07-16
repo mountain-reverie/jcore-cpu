@@ -23,14 +23,14 @@
 -- mult units from a single stimulus.
 
 library ieee;
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
-use work.cpu2j0_components_pack.all;
-use work.test_pkg.all;
-use work.mult_pkg.all;
+  use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
+  use work.cpu2j0_components_pack.all;
+  use work.test_pkg.all;
+  use work.mult_pkg.all;
 
 entity mult_seq_tap is
-end mult_seq_tap;
+end entity mult_seq_tap;
 
 architecture tb of mult_seq_tap is
 
@@ -38,7 +38,7 @@ architecture tb of mult_seq_tap is
   signal rst  : std_logic := '1';
   signal slot : std_logic;
 
-  shared variable ENDSIM : boolean := false;
+  shared variable endsim : boolean := false;
 
   signal mac_i : mult_i_t;
   signal mac_o : mult_o_t;
@@ -51,54 +51,74 @@ architecture tb of mult_seq_tap is
   -- Third multiplier instance: iCE40 DSP architecture (SB_MAC16 partial products).
   signal mac_o_dsp : mult_o_t;
 
-  procedure test_mult(actualh    : std_logic_vector(31 downto 0);
-                      actuall    : std_logic_vector(31 downto 0);
-                      expectedh  : std_logic_vector(31 downto 0);
-                      expectedl  : std_logic_vector(31 downto 0);
-                      description : string := "";
-                      directive   : string := "") is
+  procedure test_mult (
+    actualh     : std_logic_vector(31 downto 0);
+    actuall     : std_logic_vector(31 downto 0);
+    expectedh   : std_logic_vector(31 downto 0);
+    expectedl   : std_logic_vector(31 downto 0);
+    description : string := "";
+    directive   : string := ""
+  ) is
+
     variable okh : boolean := actualh = expectedh;
     variable okl : boolean := actuall = expectedl;
     variable ok  : boolean := okh and okl;
+
   begin
+
     test_ok(ok, description, directive);
-    if not okh then
+
+    if (not okh) then
       test_comment("MACH fail");
     end if;
-    if not okl then
+
+    if (not okl) then
       test_comment("MACL fail");
     end if;
-  end procedure;
+
+  end procedure test_mult;
 
   -- Wait for a multiply to finish: first wait until busy rises (the FSM has
   -- accepted the command), then count clock edges while busy stays high.
   -- Returns the number of clocks busy was asserted via the shared report.
-  procedure run_to_completion(signal clk_s   : in  std_logic;
-                              signal busy_s   : in  std_logic;
-                              description : string) is
+
+  procedure run_to_completion (
+    signal clk_s  : in  std_logic;
+    signal busy_s : in  std_logic;
+    description   : string
+  ) is
+
     variable cycles : integer := 0;
+
   begin
+
     -- Wait for busy to assert (skip if it never goes high -- shouldn't happen).
-    if busy_s = '0' then
+    if (busy_s = '0') then
       wait until busy_s = '1' for 100 ns;
     end if;
+
     -- Count rising clock edges while busy is high.
     while busy_s = '1' loop
+
       wait until rising_edge(clk_s);
       cycles := cycles + 1;
+
     end loop;
+
     test_comment(description & " busy cycles = " & integer'image(cycles));
     assert cycles > 8
       report description & ": expected a sequential (slow) multiply (>8 busy cycles), got "
              & integer'image(cycles)
       severity warning;
-  end procedure;
+
+  end procedure run_to_completion;
 
 begin
 
-  clk_gen : process
+  clk_gen : process is
   begin
-    if ENDSIM = false then
+
+    if (endsim = false) then
       clk <= '0';
       wait for 5 ns;
       clk <= '1';
@@ -106,21 +126,40 @@ begin
     else
       wait;
     end if;
+
   end process;
 
   -- Direct entity instantiation: unambiguously the sequential architecture.
   mult_i : entity work.mult(seq)
-    port map (clk => clk, rst => rst, slot => slot, a => mac_i, y => mac_o);
+    port map (
+      clk  => clk,
+      rst  => rst,
+      slot => slot,
+      a    => mac_i,
+      y    => mac_o
+    );
 
   -- The J2 array multiplier (stru) bound explicitly as the saturating oracle.
   mult_ref : entity work.mult(stru)
-    port map (clk => clk, rst => rst, slot => slot, a => mac_i, y => mac_o_ref);
+    port map (
+      clk  => clk,
+      rst  => rst,
+      slot => slot,
+      a    => mac_i,
+      y    => mac_o_ref
+    );
 
   -- The iCE40 DSP multiplier (ice40dsp) bound explicitly.
   dsp_dut : entity work.mult(ice40dsp)
-    port map (clk => clk, rst => rst, slot => slot, a => mac_i, y => mac_o_dsp);
+    port map (
+      clk  => clk,
+      rst  => rst,
+      slot => slot,
+      a    => mac_i,
+      y    => mac_o_dsp
+    );
 
-  process
+  process is
   begin
 
     -- 7 functional vectors checked on ALL THREE architectures (seq + stru + ice40dsp)
@@ -130,14 +169,14 @@ begin
     test_plan(31, "Mult seq+stru+ice40dsp (busy-aware)");
 
     -- Bypass a lot of logic, same as mult_tap.
-    mac_i.s       <= '0';
-    mac_i.acc_squash <= '0';  -- precise-exception MAC squash (MMU_ARCH); '0' = normal accumulate
-    mac_i.wr_mach <= '0';
-    mac_i.wr_macl <= '0';
+    mac_i.s          <= '0';
+    mac_i.acc_squash <= '0';                                                                        -- MAC squash
+    mac_i.wr_mach    <= '0';
+    mac_i.wr_macl    <= '0';
 
     mac_i.command <= NOP;
     mac_i.wr_m1   <= '1';
-    mac_i.in1     <= x"fffffffe";
+    mac_i.in1     <= x"FFFFFFFE";
     mac_i.in2     <= x"00005555";
     slot          <= '0';
 
@@ -193,7 +232,7 @@ begin
     mac_i.command <= MULUW;
     mac_i.wr_m1   <= '1';
     mac_i.in1     <= x"00000002";
-    mac_i.in2     <= x"ffffaaaa";
+    mac_i.in2     <= x"FFFFAAAA";
     wait until rising_edge(clk);
     mac_i.command <= NOP;
     mac_i.wr_m1   <= '0';
@@ -219,11 +258,11 @@ begin
 
     -------------------------------------------------------------- MAC.L
     mac_i.wr_m1   <= '1';
-    mac_i.in1     <= x"7fffffff";
+    mac_i.in1     <= x"7FFFFFFF";
     wait until rising_edge(clk);
     mac_i.command <= MACL;
     mac_i.wr_m1   <= '0';
-    mac_i.in2     <= x"7fffffff";
+    mac_i.in2     <= x"7FFFFFFF";
     wait until rising_edge(clk);
     mac_i.command <= NOP;
     run_to_completion(clk, mac_o.busy, "MAC.L");
@@ -252,17 +291,17 @@ begin
     mac_i.s       <= '1';
     mac_i.wr_mach <= '1';
     mac_i.wr_macl <= '1';
-    mac_i.in1     <= x"00000000";   -- MACH seed
-    mac_i.in2     <= x"80000001";   -- MACL seed (negative)
+    mac_i.in1     <= x"00000000";                                                                   -- MACH seed
+    mac_i.in2     <= x"80000001";                                                                   -- MACL seed (neg)
     wait until rising_edge(clk);
     mac_i.wr_mach <= '0';
     mac_i.wr_macl <= '0';
     mac_i.wr_m1   <= '1';
-    mac_i.in1     <= x"00000001";   -- multiplicand
+    mac_i.in1     <= x"00000001";                                                                   -- multiplicand
     wait until rising_edge(clk);
     mac_i.command <= MACW;
     mac_i.wr_m1   <= '0';
-    mac_i.in2     <= x"00000001";   -- multiplier
+    mac_i.in2     <= x"00000001";                                                                   -- multiplier
     wait until rising_edge(clk);
     mac_i.command <= NOP;
     run_to_completion(clk, mac_o.busy, "MAC.W S neg-no-ovf");
@@ -278,7 +317,7 @@ begin
     mac_i.wr_mach <= '1';
     mac_i.wr_macl <= '1';
     mac_i.in1     <= x"00000000";
-    mac_i.in2     <= x"7fffffff";
+    mac_i.in2     <= x"7FFFFFFF";
     wait until rising_edge(clk);
     mac_i.wr_mach <= '0';
     mac_i.wr_macl <= '0';
@@ -307,11 +346,11 @@ begin
     mac_i.wr_mach <= '0';
     mac_i.wr_macl <= '0';
     mac_i.wr_m1   <= '1';
-    mac_i.in1     <= x"00004000";   -- +0x4000
+    mac_i.in1     <= x"00004000";                                                                   -- +0x4000
     wait until rising_edge(clk);
     mac_i.command <= MACW;
     mac_i.wr_m1   <= '0';
-    mac_i.in2     <= x"ffffc000";   -- -0x4000
+    mac_i.in2     <= x"FFFFC000";                                                                   -- -0x4000
     wait until rising_edge(clk);
     mac_i.command <= NOP;
     run_to_completion(clk, mac_o.busy, "MAC.W S neg-ovf");
@@ -327,16 +366,16 @@ begin
     mac_i.wr_mach <= '1';
     mac_i.wr_macl <= '1';
     mac_i.in1     <= x"00000000";
-    mac_i.in2     <= x"ffff0000";
+    mac_i.in2     <= x"FFFF0000";
     wait until rising_edge(clk);
     mac_i.wr_mach <= '0';
     mac_i.wr_macl <= '0';
     mac_i.wr_m1   <= '1';
-    mac_i.in1     <= x"ffffc000";   -- -0x4000
+    mac_i.in1     <= x"FFFFC000";                                                                   -- -0x4000
     wait until rising_edge(clk);
     mac_i.command <= MACW;
     mac_i.wr_m1   <= '0';
-    mac_i.in2     <= x"00000002";   -- +2
+    mac_i.in2     <= x"00000002";                                                                   -- +2
     wait until rising_edge(clk);
     mac_i.command <= NOP;
     run_to_completion(clk, mac_o.busy, "MAC.W S neg-acc");
@@ -351,8 +390,8 @@ begin
     --   MACH bits must be preserved -> expect 0xa5a5a5a5.
     mac_i.wr_mach <= '1';
     mac_i.wr_macl <= '1';
-    mac_i.in1     <= x"a5a5a5a4";
-    mac_i.in2     <= x"7fffffff";
+    mac_i.in1     <= x"A5A5A5A4";
+    mac_i.in2     <= x"7FFFFFFF";
     wait until rising_edge(clk);
     mac_i.wr_mach <= '0';
     mac_i.wr_macl <= '0';
@@ -373,8 +412,9 @@ begin
     test_finished("done");
 
     wait for 40 ns;
-    ENDSIM := true;
+    endsim := true;
     wait;
+
   end process;
 
-end tb;
+end architecture tb;

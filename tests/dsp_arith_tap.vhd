@@ -3,79 +3,119 @@
 -- (the reference J2/J4/sim ALU function) for every vector tested, bit for
 -- bit across all 33 result bits.  This is a measurement/correctness
 -- prototype: vectors are NOT weakened or dropped to force a pass.
+
 library ieee;
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
-use ieee.math_real.all;
-use work.cpu2j0_components_pack.all;
-use work.test_pkg.all;
+  use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
+  use ieee.math_real.all;
+  use work.cpu2j0_components_pack.all;
+  use work.test_pkg.all;
 
 entity dsp_arith_tap is
-end dsp_arith_tap;
+end entity dsp_arith_tap;
 
 architecture tb of dsp_arith_tap is
-  signal clk    : std_logic := '0';
+
+  signal clk    : std_logic                     := '0';
   signal a, b   : std_logic_vector(31 downto 0) := (others => '0');
-  signal is_sub : std_logic := '0';
-  signal ci     : std_logic := '0';
+  signal is_sub : std_logic                     := '0';
+  signal ci     : std_logic                     := '0';
   signal result : std_logic_vector(32 downto 0);
 
-  shared variable ENDSIM : boolean := false;
+  shared variable endsim : boolean := false;
 
   component dsp_arith is
     port (
-      clk    : in  std_logic;
-      a      : in  std_logic_vector(31 downto 0);
-      b      : in  std_logic_vector(31 downto 0);
-      is_sub : in  std_logic;
-      ci     : in  std_logic;
-      result : out std_logic_vector(32 downto 0));
-  end component;
+      clk    : in    std_logic;
+      a      : in    std_logic_vector(31 downto 0);
+      b      : in    std_logic_vector(31 downto 0);
+      is_sub : in    std_logic;
+      ci     : in    std_logic;
+      result : out   std_logic_vector(32 downto 0)
+    );
+  end component dsp_arith;
 
 begin
 
-  clkgen : process begin
-    while not ENDSIM loop
-      clk <= '0'; wait for 5 ns; clk <= '1'; wait for 5 ns;
+  clkgen : process is
+  begin
+
+    while not endsim loop
+
+      clk                <= '0';
+      wait for 5 ns; clk <= '1';
+      wait for 5 ns;
+
     end loop;
+
     wait;
+
   end process;
 
-  dut : dsp_arith
-    port map (clk => clk, a => a, b => b, is_sub => is_sub, ci => ci, result => result);
+  dut : component dsp_arith
+    port map (
+      clk    => clk,
+      a      => a,
+      b      => b,
+      is_sub => is_sub,
+      ci     => ci,
+      result => result
+    );
 
-  stim : process
-    variable func : arith_func_t;
-    variable exp  : std_logic_vector(32 downto 0);
+  stim : process is
+
+    variable func    : arith_func_t;
+    variable exp     : std_logic_vector(32 downto 0);
     variable n_tests : integer := 0;
 
-    function to_bit_sl(x : boolean) return std_logic is
+    function to_bit_sl (
+      x : boolean
+    ) return std_logic is
     begin
-      if x then return '1'; else return '0'; end if;
-    end function;
 
-    procedure check(av, bv : std_logic_vector(31 downto 0);
-                     f : arith_func_t; civ : std_logic; tag : string) is
+      if (x) then
+        return '1';
+      else
+        return '0';
+      end if;
+
+    end function to_bit_sl;
+
+    procedure check (
+      av,
+      bv  : std_logic_vector(31 downto 0);
+      f   : arith_func_t;
+      civ : std_logic;
+      tag : string
+    ) is
     begin
-      a <= av; b <= bv; is_sub <= to_bit_sl(f = SUB); ci <= civ;
+
+      a       <= av;
+      b       <= bv;
+      is_sub  <= to_bit_sl(f = SUB);
+      ci      <= civ;
       wait for 1 ns;
-      exp := arith_unit(av, bv, f, civ);
+      exp     := arith_unit(av, bv, f, civ);
       n_tests := n_tests + 1;
       test_ok(result = exp, "dsp_arith " & tag);
-      if result /= exp then
+
+      if (result /= exp) then
         test_comment_fail(result, exp);
       end if;
-    end procedure;
+
+    end procedure check;
 
     -- Randomized/swept coverage on top of the directed corner cases below.
-    variable seed1 : integer := 42;
-    variable seed2 : integer := 4321;
-    variable rnd   : real;
+    variable seed1    : integer := 42;
+    variable seed2    : integer := 4321;
+    variable rnd      : real;
     variable rav, rbv : std_logic_vector(31 downto 0);
-    variable rci  : std_logic;
-    variable rfunc : arith_func_t;
+    variable rci      : std_logic;
+    variable rfunc    : arith_func_t;
+
   begin
-    test_plan(24 + 4*64, "dsp_arith vs arith_unit");
+
+    test_plan(24 + 4 * 64, "dsp_arith vs arith_unit");
 
     test_comment("directed corners, ADD");
     check(x"00000000", x"00000000", ADD, '0', "0+0");
@@ -110,7 +150,9 @@ begin
     -- Randomized sweep: 64 iterations over ADD and SUB, ci=0/1 each --
     -- 4*64 = 256 additional vectors.
     test_comment("randomized sweep");
+
     for i in 0 to 63 loop
+
       -- Build each 32-bit vector from two 16-bit random halves to stay
       -- within 32-bit signed integer range (avoids overflow in to_unsigned).
       uniform(seed1, seed2, rnd);
@@ -125,10 +167,13 @@ begin
       check(rav, rbv, ADD, '1', "rand ADD ci=1 #" & integer'image(i));
       check(rav, rbv, SUB, '0', "rand SUB ci=0 #" & integer'image(i));
       check(rav, rbv, SUB, '1', "rand SUB ci=1 #" & integer'image(i));
+
     end loop;
 
     test_finished("done");
-    ENDSIM := true;
+    endsim := true;
     wait;
+
   end process;
-end tb;
+
+end architecture tb;

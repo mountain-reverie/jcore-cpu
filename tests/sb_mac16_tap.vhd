@@ -3,137 +3,234 @@
 -- that the BOT/TOP post-multiply adder stage produces correct results.
 -- dut  : product-bypass mode (TOPOUTPUT_SELECT/BOTOUTPUT_SELECT = "11")
 -- dut2 : adder mode (OUTPUT_SELECT = "00", adder engaged, iH feeds adder)
+
 library ieee;
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
-use work.test_pkg.all;
+  use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
+  use work.test_pkg.all;
 
 entity sb_mac16_tap is
-end sb_mac16_tap;
+end entity sb_mac16_tap;
 
 architecture tb of sb_mac16_tap is
-  signal clk : std_logic := '0';
+
+  signal clk  : std_logic                     := '0';
   signal a, b : std_logic_vector(15 downto 0) := (others => '0');
-  signal o : std_logic_vector(31 downto 0);
+  signal o    : std_logic_vector(31 downto 0);
 
   -- dut2 signals (adder mode)
-  signal a2, b2, c2, d2 : std_logic_vector(15 downto 0) := (others => '0');
-  signal o2 : std_logic_vector(31 downto 0);
+  signal a2       : std_logic_vector(15 downto 0) := (others => '0');
+  signal b2       : std_logic_vector(15 downto 0) := (others => '0');
+  signal c2       : std_logic_vector(15 downto 0) := (others => '0');
+  signal d2       : std_logic_vector(15 downto 0) := (others => '0');
+  signal o2       : std_logic_vector(31 downto 0);
   signal accumco2 : std_logic;
 
-  shared variable ENDSIM : boolean := false;
+  shared variable endsim : boolean := false;
 
-  component SB_MAC16 is
+  component sb_mac16 is
     generic (
-      NEG_TRIGGER : std_logic := '0';
-      C_REG : std_logic := '0'; A_REG : std_logic := '0';
-      B_REG : std_logic := '0'; D_REG : std_logic := '0';
-      TOP_8x8_MULT_REG : std_logic := '0'; BOT_8x8_MULT_REG : std_logic := '0';
-      PIPELINE_16x16_MULT_REG1 : std_logic := '0';
-      PIPELINE_16x16_MULT_REG2 : std_logic := '0';
-      TOPOUTPUT_SELECT : std_logic_vector(1 downto 0) := "00";
-      TOPADDSUB_LOWERINPUT : std_logic_vector(1 downto 0) := "00";
-      TOPADDSUB_UPPERINPUT : std_logic := '0';
-      TOPADDSUB_CARRYSELECT : std_logic_vector(1 downto 0) := "00";
-      BOTOUTPUT_SELECT : std_logic_vector(1 downto 0) := "00";
-      BOTADDSUB_LOWERINPUT : std_logic_vector(1 downto 0) := "00";
-      BOTADDSUB_UPPERINPUT : std_logic := '0';
-      BOTADDSUB_CARRYSELECT : std_logic_vector(1 downto 0) := "00";
-      MODE_8x8 : std_logic := '0';
-      A_SIGNED : std_logic := '0'; B_SIGNED : std_logic := '0');
+      neg_trigger              : std_logic := '0';
+      c_reg                    : std_logic := '0';
+      a_reg                    : std_logic := '0';
+      b_reg                    : std_logic := '0';
+      d_reg                    : std_logic := '0';
+      top_8x8_mult_reg         : std_logic := '0';
+      bot_8x8_mult_reg         : std_logic := '0';
+      pipeline_16x16_mult_reg1 : std_logic := '0';
+      pipeline_16x16_mult_reg2 : std_logic := '0';
+      topoutput_select         : std_logic_vector(1 downto 0) := "00";
+      topaddsub_lowerinput     : std_logic_vector(1 downto 0) := "00";
+      topaddsub_upperinput     : std_logic := '0';
+      topaddsub_carryselect    : std_logic_vector(1 downto 0) := "00";
+      botoutput_select         : std_logic_vector(1 downto 0) := "00";
+      botaddsub_lowerinput     : std_logic_vector(1 downto 0) := "00";
+      botaddsub_upperinput     : std_logic := '0';
+      botaddsub_carryselect    : std_logic_vector(1 downto 0) := "00";
+      mode_8x8                 : std_logic := '0';
+      a_signed                 : std_logic := '0';
+      b_signed                 : std_logic := '0'
+    );
     port (
-      CLK : in std_logic; CE : in std_logic;
-      A : in std_logic_vector(15 downto 0); B : in std_logic_vector(15 downto 0);
-      C : in std_logic_vector(15 downto 0); D : in std_logic_vector(15 downto 0);
-      AHOLD : in std_logic; BHOLD : in std_logic;
-      CHOLD : in std_logic; DHOLD : in std_logic;
-      IRSTTOP : in std_logic; IRSTBOT : in std_logic;
-      ORSTTOP : in std_logic; ORSTBOT : in std_logic;
-      OLOADTOP : in std_logic; OLOADBOT : in std_logic;
-      ADDSUBTOP : in std_logic; ADDSUBBOT : in std_logic;
-      OHOLDTOP : in std_logic; OHOLDBOT : in std_logic;
-      CI : in std_logic; ACCUMCI : in std_logic; SIGNEXTIN : in std_logic;
-      O : out std_logic_vector(31 downto 0);
-      CO : out std_logic; ACCUMCO : out std_logic; SIGNEXTOUT : out std_logic);
-  end component;
+      clk        : in    std_logic;
+      ce         : in    std_logic;
+      a          : in    std_logic_vector(15 downto 0);
+      b          : in    std_logic_vector(15 downto 0);
+      c          : in    std_logic_vector(15 downto 0);
+      d          : in    std_logic_vector(15 downto 0);
+      ahold      : in    std_logic;
+      bhold      : in    std_logic;
+      chold      : in    std_logic;
+      dhold      : in    std_logic;
+      irsttop    : in    std_logic;
+      irstbot    : in    std_logic;
+      orsttop    : in    std_logic;
+      orstbot    : in    std_logic;
+      oloadtop   : in    std_logic;
+      oloadbot   : in    std_logic;
+      addsubtop  : in    std_logic;
+      addsubbot  : in    std_logic;
+      oholdtop   : in    std_logic;
+      oholdbot   : in    std_logic;
+      ci         : in    std_logic;
+      accumci    : in    std_logic;
+      signextin  : in    std_logic;
+      o          : out   std_logic_vector(31 downto 0);
+      co         : out   std_logic;
+      accumco    : out   std_logic;
+      signextout : out   std_logic
+    );
+  end component sb_mac16;
+
 begin
-  clkgen : process begin
-    while not ENDSIM loop
-      clk <= '0'; wait for 5 ns; clk <= '1'; wait for 5 ns;
+
+  clkgen : process is
+  begin
+
+    while not endsim loop
+
+      clk                <= '0';
+      wait for 5 ns; clk <= '1';
+      wait for 5 ns;
+
     end loop;
+
     wait;
+
   end process;
 
   -- Product-bypass instance (existing tests)
-  dut : SB_MAC16
-    generic map (PIPELINE_16x16_MULT_REG1 => '1',
-                 TOPOUTPUT_SELECT => "11", BOTOUTPUT_SELECT => "11")
+  dut : component sb_mac16
+    generic map (
+      pipeline_16x16_mult_reg1 => '1',
+      topoutput_select         => "11", botoutput_select => "11"
+    )
     port map (
-      CLK => clk, CE => '1', A => a, B => b,
-      C => (others => '0'), D => (others => '0'),
-      AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
-      IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
-      OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
-      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
-      SIGNEXTIN => '0', O => o, CO => open, ACCUMCO => open, SIGNEXTOUT => open);
+      clk        => clk,
+      ce         => '1',
+      a          => a,
+      b          => b,
+      c          => (others => '0'),
+      d          => (others => '0'),
+      ahold      => '0',
+      bhold      => '0',
+      chold      => '0',
+      dhold      => '0',
+      irsttop    => '0',
+      irstbot    => '0',
+      orsttop    => '0',
+      orstbot    => '0',
+      oloadtop   => '0',
+      oloadbot   => '0',
+      addsubtop  => '0',
+      addsubbot  => '0',
+      oholdtop   => '0',
+      oholdbot   => '0',
+      ci         => '0',
+      accumci    => '0',
+      signextin  => '0',
+      o          => o,
+      co         => open,
+      accumco    => open,
+      signextout => open
+    );
 
   -- Adder-mode instance: iH feeds BOT+TOP adder, C/D are addends
   -- BOTADDSUB_LOWERINPUT="10" → iH[15:0]; BOTADDSUB_UPPERINPUT='1' → D
   -- BOTADDSUB_CARRYSELECT="00" → LCI=0; BOTOUTPUT_SELECT="00" → adder result
   -- TOPADDSUB_LOWERINPUT="10" → iH[31:16]; TOPADDSUB_UPPERINPUT='1' → C
   -- TOPADDSUB_CARRYSELECT="10" → HCI=LCO; TOPOUTPUT_SELECT="00" → adder result
-  dut2 : SB_MAC16
+  dut2 : component sb_mac16
     generic map (
-      PIPELINE_16x16_MULT_REG1  => '1',
-      BOTADDSUB_LOWERINPUT      => "10",
-      BOTADDSUB_UPPERINPUT      => '1',
-      BOTADDSUB_CARRYSELECT     => "00",
-      BOTOUTPUT_SELECT          => "00",
-      TOPADDSUB_LOWERINPUT      => "10",
-      TOPADDSUB_UPPERINPUT      => '1',
-      TOPADDSUB_CARRYSELECT     => "10",
-      TOPOUTPUT_SELECT          => "00")
+      pipeline_16x16_mult_reg1 => '1',
+      botaddsub_lowerinput     => "10",
+      botaddsub_upperinput     => '1',
+      botaddsub_carryselect    => "00",
+      botoutput_select         => "00",
+      topaddsub_lowerinput     => "10",
+      topaddsub_upperinput     => '1',
+      topaddsub_carryselect    => "10",
+      topoutput_select         => "00"
+    )
     port map (
-      CLK => clk, CE => '1', A => a2, B => b2, C => c2, D => d2,
-      AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
-      IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
-      OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
-      OHOLDTOP => '0', OHOLDBOT => '0', CI => '0', ACCUMCI => '0',
-      SIGNEXTIN => '0', O => o2, CO => open, ACCUMCO => accumco2,
-      SIGNEXTOUT => open);
+      clk        => clk,
+      ce         => '1',
+      a          => a2,
+      b          => b2,
+      c          => c2,
+      d          => d2,
+      ahold      => '0',
+      bhold      => '0',
+      chold      => '0',
+      dhold      => '0',
+      irsttop    => '0',
+      irstbot    => '0',
+      orsttop    => '0',
+      orstbot    => '0',
+      oloadtop   => '0',
+      oloadbot   => '0',
+      addsubtop  => '0',
+      addsubbot  => '0',
+      oholdtop   => '0',
+      oholdbot   => '0',
+      ci         => '0',
+      accumci    => '0',
+      signextin  => '0',
+      o          => o2,
+      co         => open,
+      accumco    => accumco2,
+      signextout => open
+    );
 
-  stim : process
-    procedure check(av, bv : integer) is
+  stim : process is
+
+    procedure check (
+      av,
+      bv : integer
+    ) is
+
       variable exp : std_logic_vector(31 downto 0);
+
     begin
+
       a <= std_logic_vector(to_unsigned(av, 16));
       b <= std_logic_vector(to_unsigned(bv, 16));
-      wait until rising_edge(clk);   -- inputs presented
-      wait until rising_edge(clk);   -- registered product available
+      wait until rising_edge(clk); -- inputs presented
+      wait until rising_edge(clk); -- registered product available
       -- Compute via unsigned 16x16->32 to avoid native-integer overflow
       -- (e.g. 65535*65535 exceeds integer'high).
       exp := std_logic_vector(to_unsigned(av, 16) * to_unsigned(bv, 16));
       test_ok(o = exp, "SB_MAC16 " & integer'image(av) & "*" & integer'image(bv));
-    end procedure;
+
+    end procedure check;
 
     -- Check adder mode: O = (A*B) + (C concatenated with D) as 32-bit add.
     -- Hand-computed expected values (see comments below each call).
-    procedure check_adder(
-      av, bv, cv, dv : integer;
-      exp_o          : std_logic_vector(31 downto 0);
-      exp_accumco    : std_logic;
-      tag            : string) is
+
+    procedure check_adder (
+      av,
+      bv,
+      cv,
+      dv          : integer;
+      exp_o       : std_logic_vector(31 downto 0);
+      exp_accumco : std_logic;
+      tag         : string
+    ) is
     begin
+
       a2 <= std_logic_vector(to_unsigned(av, 16));
       b2 <= std_logic_vector(to_unsigned(bv, 16));
       c2 <= std_logic_vector(to_unsigned(cv, 16));
       d2 <= std_logic_vector(to_unsigned(dv, 16));
-      wait until rising_edge(clk);  -- inputs presented, prod will update
-      wait until rising_edge(clk);  -- prod now = A*B; O is combinational
+      wait until rising_edge(clk); -- inputs presented, prod will update
+      wait until rising_edge(clk); -- prod now = A*B; O is combinational
       test_ok(o2 = exp_o and accumco2 = exp_accumco,
               "SB_MAC16 adder " & tag);
-    end procedure;
+
+    end procedure check_adder;
+
   begin
+
     test_plan(7, "SB_MAC16 behavioral model");
 
     -- Existing product-bypass cases (dut, BOTOUTPUT_SELECT/TOPOUTPUT_SELECT="11")
@@ -163,7 +260,9 @@ begin
     check_adder(255, 257, 0, 1, x"00010000", '0', "full32_carry");
 
     test_finished("done");
-    ENDSIM := true;
+    endsim := true;
     wait;
+
   end process;
-end tb;
+
+end architecture tb;

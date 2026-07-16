@@ -1,17 +1,20 @@
 library ieee;
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
-use work.cpu2j0_components_pack.all;
-use work.test_pkg.all;
+  use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
+  use work.cpu2j0_components_pack.all;
+  use work.test_pkg.all;
 
 entity manip_tap is
-end;
+end entity manip_tap;
 
 architecture tb of manip_tap is
+
 begin
-  process
-    begin
-    test_plan(29,"test manip()");
+
+  process is
+  begin
+
+    test_plan(29, "test manip()");
     -- Existing manip cases ignore the t argument (only BITSET uses it); pass '0'.
     test_equal(manip(x"ffffffff", x"12345678", '0', SWAP_BYTE, true), x"12347856", "swap byte");
     test_equal(manip(x"ffffffff", x"12345678", '0', SWAP_WORD, true), x"56781234", "swap word");
@@ -33,23 +36,31 @@ begin
     -- SH-2A CLIPS/CLIPU saturation (manip() ignores y,t for CLIP_* funcs).
     -- clips.b: signed clamp to [-128,127]
     test_equal(manip(x"00000005", x"00000000", '0', CLIP_SB, true), x"00000005", "clips.b in-range");
-    test_equal(manip(x"000000FF", x"00000000", '0', CLIP_SB, true), x"0000007F", "clips.b sat hi"); -- 255 -> +127
-    test_equal(manip(x"FFFFFF00", x"00000000", '0', CLIP_SB, true), x"FFFFFF80", "clips.b sat lo"); -- -256 -> -128
+    -- 255 -> +127
+    test_equal(manip(x"000000FF", x"00000000", '0', CLIP_SB, true), x"0000007F", "clips.b sat hi");
+    -- -256 -> -128
+    test_equal(manip(x"FFFFFF00", x"00000000", '0', CLIP_SB, true), x"FFFFFF80", "clips.b sat lo");
     test_equal((0 => clip_saturated(x"00000005", CLIP_SB)), "0", "clips.b flag in-range");
     test_equal((0 => clip_saturated(x"000000FF", CLIP_SB)), "1", "clips.b flag sat");
     -- clips.w: signed clamp to [-32768,32767]
-    test_equal(manip(x"00008000", x"00000000", '0', CLIP_SW, true), x"00007FFF", "clips.w sat hi"); -- 32768 -> 32767
-    test_equal(manip(x"FFFF7FFF", x"00000000", '0', CLIP_SW, true), x"FFFF8000", "clips.w sat lo"); -- -32769 -> -32768
+    -- 32768 -> 32767
+    test_equal(manip(x"00008000", x"00000000", '0', CLIP_SW, true), x"00007FFF", "clips.w sat hi");
+    -- -32769 -> -32768
+    test_equal(manip(x"FFFF7FFF", x"00000000", '0', CLIP_SW, true), x"FFFF8000", "clips.w sat lo");
     test_equal((0 => clip_saturated(x"00001234", CLIP_SW)), "0", "clips.w flag in-range");
     -- clipu.b: unsigned clamp [0,255], no lower bound
     test_equal(manip(x"00000042", x"00000000", '0', CLIP_UB, true), x"00000042", "clipu.b in-range");
-    test_equal(manip(x"00000100", x"00000000", '0', CLIP_UB, true), x"000000FF", "clipu.b sat hi"); -- 256 -> 255
-    test_equal(manip(x"FFFFFFFF", x"00000000", '0', CLIP_UB, true), x"000000FF", "clipu.b neg sat"); -- large unsigned -> 255
+    -- 256 -> 255
+    test_equal(manip(x"00000100", x"00000000", '0', CLIP_UB, true), x"000000FF", "clipu.b sat hi");
+    -- large unsigned -> 255
+    test_equal(manip(x"FFFFFFFF", x"00000000", '0', CLIP_UB, true), x"000000FF", "clipu.b neg sat");
     test_equal((0 => clip_saturated(x"00000100", CLIP_UB)), "1", "clipu.b flag sat");
     -- clipu.w: unsigned clamp [0,65535]
     test_equal(manip(x"00010000", x"00000000", '0', CLIP_UW, true), x"0000FFFF", "clipu.w 65536 -> 65535");
     test_equal((0 => clip_saturated(x"0000FFFF", CLIP_UW)), "0", "clipu.w 65535 no sat");
     test_finished("done");
     wait;
-    end process;
-end;
+
+  end process;
+
+end architecture tb;

@@ -205,7 +205,8 @@ jobs:
           make ARCH=sh CROSS_COMPILE=sh2-elf- CC="sh2-elf-gcc -B$J4BIN" jcore_defconfig
           make ARCH=sh CROSS_COMPILE=sh2-elf- CC="sh2-elf-gcc -B$J4BIN" \
                arch/sh/mm/tlb-jcore.o arch/sh/kernel/cpu/jcore/ex.o \
-               arch/sh/kernel/cpu/jcore/entry.o
+               arch/sh/kernel/cpu/jcore/entry.o \
+               arch/sh/kernel/cpu/jcore/mmu_enable.o
 
       - name: Build MMU-on co-sim + run all functional guards
         working-directory: jcore-cpu
@@ -322,6 +323,12 @@ jobs:
           # LINUX_SRC/J4GAS/J4LD/J4BIN are exported above; sim/tests/Makefile's
           # `?=` defaults pick them up. 200us matches sim/linux_sim.sh.
           run_guard mmulinux "" 200us 120
+          # SP3-c: mmuboot links the REAL linux@jcore head_32.S MMU-enable
+          # sequence (jcore_mmu_enable, built by kbuild above) and proves the
+          # boot bring-up SP2 never covered: AT enables, a present-page
+          # translated access relocates, an absent-page access hits the miss
+          # vector. Same LINUX_SRC/J4GAS/J4LD/J4BIN + sh32_p1.x link.
+          run_guard mmuboot "" 200us 120
           # Scenarios 4-5 (deferred) and any exhaustive/slow mmulinux variant
           # would run only on the nightly schedule, e.g.:
           # if [ "${{ github.event_name }}" = "schedule" ]; then

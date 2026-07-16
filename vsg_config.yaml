@@ -60,3 +60,8 @@ rule:
   # a necessary violation. Left as-is (warning) rather than fought.
   length_001:
     disable: true
+  length_002:
+    disable: true
+    # File-length limit (2000 lines). Two cache testbenches (icache_tb.vhd,
+    # ictest02h/icache_tb.vhd) are large hand-written test-vector files; splitting
+    # them is not meaningful. Warning-severity file-size heuristic, not a defect.

@@ -10,6 +10,7 @@ use work.cpu2j0_pack.all;
 use work.monitor_pkg.all;
 use work.data_bus_pkg.all;
 use work.cache_pack.all;
+use work.ddrc_cnt_pack.all;
 
 #include "cpu_signals.h"
 
@@ -70,7 +71,21 @@ architecture behaviour of cpu_dualcore_tb is
   signal event_info_i : std_logic_vector(11 downto 0) := ( others => '0' );
 
   signal event_i : cpu_event_i_t;
+  signal event0_i, event1_i : cpu_event_i_t;
   signal event0_o, event1_o : cpu_event_o_t;
+
+  -- IPI block (existing entity work.icache_modereg): int0/int1 are 1-cycle
+  -- pulses (bit 28 written to word0/word1 @ 0xABCD00C0/C4). Latched here into
+  -- a level held until the target core's event ack, mirroring how the C-model
+  -- event-trigger backdoor (evt_ack_cb in cpu_ctb.c) holds event_i.en until ack.
+  signal modereg_int0, modereg_int1 : std_logic;
+  signal ipi0_pending, ipi1_pending : std_logic := '0';
+  constant IPI_VEC : std_logic_vector(7 downto 0) := x"14";
+
+  -- SMP spin-table release-enable mailbox (0xABCD0640): a plain register slave,
+  -- the release entry PC itself lives in ordinary (already snoop-coherent) SRAM
+  -- at 0x8000 and needs no dedicated slave.
+  signal release_reg : std_logic_vector(31 downto 0) := (others => '0');
   signal copro_i : cop_i_t;
   signal copro0_o, copro1_o : cop_o_t;
 
@@ -115,6 +130,37 @@ begin
   event_i.vec <= event_info_i( 7 downto 0);
   event_ack_o <= event0_o.ack;
 
+  -- cpu0 keeps the legacy C-model event-trigger backdoor (unused by the
+  -- SMP-bringup guard, preserved for any other use of this TB).
+  event0_i <= event_i;
+
+  -- cpu1's event input is driven for real by the IPI block's int1 pulse
+  -- (icache_modereg), latched until cpu1 acks it.
+  process(clk, rst)
+  begin
+    if rst = '1' then
+      ipi0_pending <= '0';
+      ipi1_pending <= '0';
+    elsif rising_edge(clk) then
+      if modereg_int0 = '1' then
+        ipi0_pending <= '1';
+      elsif event0_o.ack = '1' then
+        ipi0_pending <= '0';
+      end if;
+      if modereg_int1 = '1' then
+        ipi1_pending <= '1';
+      elsif event1_o.ack = '1' then
+        ipi1_pending <= '0';
+      end if;
+    end if;
+  end process;
+
+  event1_i.en  <= ipi1_pending;
+  event1_i.cmd <= INTERRUPT;
+  event1_i.vec <= IPI_VEC;
+  event1_i.msk <= '0';
+  event1_i.lvl <= x"1";
+
   with debug_i_cmd select
     debug_i.cmd <=
     BREAK when "00",
@@ -128,7 +174,7 @@ begin
                      db_o => cpu0_db_o, db_lock => cpu0_db_lock, db_i => cpu0_db_i,
                      inst_o => cpu0_inst_o, inst_i => cpu0_inst_i,
                      debug_o => debug_o, debug_i => debug_i,
-                     event_i => event_i, event_o => event0_o,
+                     event_i => event0_i, event_o => event0_o,
                      cop_o => copro0_o, cop_i => copro_i,
                      mmu_o => cpu0_mmu);
   ----- CPU1 -----
@@ -137,7 +183,7 @@ begin
                      db_o => cpu1_db_o, db_lock => cpu1_db_lock, db_i => cpu1_db_i,
                      inst_o => cpu1_inst_o, inst_i => cpu1_inst_i,
                      debug_o => debug1_o, debug_i => debug_i,
-                     event_i => event_i, event_o => event1_o,
+                     event_i => event1_i, event_o => event1_o,
                      cop_o => copro1_o, cop_i => copro_i,
                      mmu_o => cpu1_mmu);
 
@@ -235,6 +281,37 @@ begin
 
   pio_data_o <= data_slaves_o(DEV_PIO);
   data_slaves_i(DEV_PIO) <= pio_data_i;
+
+  -- IPI block: the existing entity work.icache_modereg, decoded at
+  -- 0xABCD00C0 (word0/int0) and 0xABCD00C4 (word1/int1). Cache-control and
+  -- debug-only outputs (cache*_ctrl_ic/dc, cache01sel_ctrl_temp) are unused
+  -- here; ddr_status/cpuN_ddr_ibus_o inputs are only for a debug read-back
+  -- path we don't exercise, so they're tied to idle/real instruction buses.
+  u_ipi: entity work.icache_modereg port map(
+    rst => rst, clk => clk,
+    db_i => data_slaves_o(DEV_IPI), db_o => data_slaves_i(DEV_IPI),
+    cpu0_ddr_ibus_o => cpu0_inst_o, cpu1_ddr_ibus_o => cpu1_inst_o,
+    cache0_ctrl_ic => open, cache1_ctrl_ic => open,
+    cache0_ctrl_dc => open, cache1_ctrl_dc => open,
+    ddr_status => NULL_DDR_STATUS,
+    int0 => modereg_int0, int1 => modereg_int1,
+    cache01sel_ctrl_temp => open);
+
+  -- SMP spin-table release-enable mailbox (0xABCD0640): plain flopped
+  -- register slave. smp-j2.c's j2_boot_secondary() writes the entry PC to
+  -- ordinary SRAM @0x8000 then writel(1, 0xabcd0640) to release the core.
+  process(clk, rst)
+  begin
+    if rst = '1' then
+      release_reg <= (others => '0');
+    elsif rising_edge(clk) then
+      if data_slaves_o(DEV_RELEASE).en = '1' and data_slaves_o(DEV_RELEASE).wr = '1' then
+        release_reg <= data_slaves_o(DEV_RELEASE).d;
+      end if;
+    end if;
+  end process;
+  data_slaves_i(DEV_RELEASE).d   <= release_reg;
+  data_slaves_i(DEV_RELEASE).ack <= data_slaves_o(DEV_RELEASE).en;
 
 #include "sim_macros.h"
 end behaviour;

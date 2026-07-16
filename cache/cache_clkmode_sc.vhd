@@ -15,5 +15,7 @@
 -- miss is +2 cycles vs the negedge form; a cache HIT is unaffected. Verified by
 -- the dcache scoreboard (sim/cache_sim.sh sc): hit=2, cold-miss 10->12 cycles.
 package cache_clkmode is
-  constant CACHE_SAME_CLOCK : boolean := true;
-end package;
+
+  constant cache_same_clock : boolean := true;
+
+end package cache_clkmode;

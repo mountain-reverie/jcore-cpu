@@ -1,8 +1,10 @@
 name: vhdl-lint
-# VSG (VHDL Style Guide) lint, report-only. Surfaces the formatting backlog
-# (Phases B/C reformat hand-written .vhd and .vhm sources) without gating
-# the build yet. VSG is slow (~minutes across the in-scope file set), so
-# this job has a generous timeout and always exits 0.
+# VSG (VHDL Style Guide) gate over the hand-written .vhd. Fails the job on any
+# violation. Scope (scripts/vhdl-lint.sh): excludes the Go-generated decode
+# files, the v2p-generated .vhm-derived .vhd (external tool's output style is
+# not controllable from this repo), and the generator golden/static fixtures
+# (byte-compared by go tests). VSG is slow (~minutes over ~82 files) -> generous
+# timeout.
 
 on:
   pull_request:
@@ -22,12 +24,6 @@ jobs:
       - name: Checkout jcore-cpu
         uses: actions/checkout@v4
 
-      - name: Checkout jcore-soc (tools/v2p)
-        uses: actions/checkout@v4
-        with:
-          repository: mountain-reverie/jcore-soc
-          path: jcore-soc
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -36,28 +32,5 @@ jobs:
       - name: Install VSG
         run: pip install -r requirements-dev.txt
 
-      - name: Run vhdl-lint (report-only)
-        id: lint
-        env:
-          TOOLS_DIR: ${{ github.workspace }}/jcore-soc/tools
-          JCORE_SOC: ${{ github.workspace }}/jcore-soc
-        run: |
-          set +e
-          scripts/vhdl-lint.sh 2>&1 | tee /tmp/vhdl-lint.log
-          status=${PIPESTATUS[0]}
-          total=$(grep -oE 'Total violations: [0-9]+' /tmp/vhdl-lint.log | tail -1 | grep -oE '[0-9]+')
-          echo "total=${total:-0}" >> "$GITHUB_OUTPUT"
-          echo "vsg_status=${status}" >> "$GITHUB_OUTPUT"
-          true   # report-only: never fail this job on VSG findings
-
-      - name: Step summary
-        if: always()
-        run: |
-          {
-            echo "### VSG lint (report-only)"
-            echo "- Total violations: ${{ steps.lint.outputs.total }}"
-            echo "- VSG exit status (informational, not gating): ${{ steps.lint.outputs.vsg_status }}"
-            echo ""
-            echo "This job is report-only (Task A). It does not gate CI; reformatting"
-            echo "lands in later phases (Phase B: hand-written .vhd, Phase C: .vhm)."
-          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Run vhdl-lint (gating)
+        run: scripts/vhdl-lint.sh

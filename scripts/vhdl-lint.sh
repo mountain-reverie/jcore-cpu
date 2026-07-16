@@ -34,6 +34,18 @@ EXCLUDE_GENERATED=(
 # EXCLUDED from linting — v2p's output style is not controllable from this repo
 # (it collapses alignment/blank-lines), so these files cannot pass VSG's default
 # ruleset without globally gutting it. Their behaviour is gated by tests + synth.
+EXCLUDE_SB_MAC16=(
+  # SB_MAC16 iCE40 hard-primitive interface: the primitive name + parameter
+  # names are matched CASE-SENSITIVELY by yosys synth_ice40, but VSG's default
+  # name-case rules lowercase identifiers -> breaks the j1 ice40 synth
+  # ("Module sb_mac16 is used with parameters but is not parametric"). Kept as
+  # authored (uppercase); excluded from linting.
+  "core/dsp_arith.vhd"
+  "core/mult_ice40dsp.vhd"
+  "core/sb_mac16_sim.vhd"
+  "tests/sb_mac16_tap.vhd"
+)
+
 EXCLUDE_VHM_DERIVED=(
   "core/datapath.vhd"
   "core/mult.vhd"
@@ -52,7 +64,7 @@ EXCLUDE_VHM_DERIVED=(
 # tests). decode/gen-go/testdata/golden/* and decode/gen-go/spec/static/*.
 is_excluded() {
   local f="$1"
-  for e in "${EXCLUDE_GENERATED[@]}" "${EXCLUDE_VHM_DERIVED[@]}"; do
+  for e in "${EXCLUDE_GENERATED[@]}" "${EXCLUDE_VHM_DERIVED[@]}" "${EXCLUDE_SB_MAC16[@]}"; do
     [[ "$f" == "$e" ]] && return 0
   done
   case "$f" in

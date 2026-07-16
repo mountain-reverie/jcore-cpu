@@ -57,20 +57,18 @@
 -- SB_MAC16 is left as an UNBOUND component (like core/mult_ice40dsp.vhd) so
 -- synthesis (--syn-binding via yosys) maps it to the real DSP, while GHDL
 -- simulation binds core/sb_mac16_sim.vhd.
-
 library ieee;
-  use ieee.std_logic_1164.all;
-  use ieee.numeric_std.all;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
 entity dsp_arith is
   port (
-    clk    : in    std_logic;
-    a      : in    std_logic_vector(31 downto 0);
-    b      : in    std_logic_vector(31 downto 0);
-    is_sub : in    std_logic;
-    ci     : in    std_logic;
-    result : out   std_logic_vector(32 downto 0)
-  );
+    clk    : in  std_logic;
+    a      : in  std_logic_vector(31 downto 0);
+    b      : in  std_logic_vector(31 downto 0);
+    is_sub : in  std_logic;
+    ci     : in  std_logic;
+    result : out std_logic_vector(32 downto 0));
 end entity dsp_arith;
 
 architecture ice40dsp of dsp_arith is
@@ -82,118 +80,78 @@ architecture ice40dsp of dsp_arith is
   signal o          : std_logic_vector(31 downto 0);  -- O(31:0) = 32-bit sum
   signal cin31, c32 : std_logic;
 
-  component sb_mac16 is
+  component SB_MAC16 is
     generic (
-      neg_trigger              : std_logic := '0';
-      c_reg                    : std_logic := '0';
-      a_reg                    : std_logic := '0';
-      b_reg                    : std_logic := '0';
-      d_reg                    : std_logic := '0';
-      top_8x8_mult_reg         : std_logic := '0';
-      bot_8x8_mult_reg         : std_logic := '0';
-      pipeline_16x16_mult_reg1 : std_logic := '0';
-      pipeline_16x16_mult_reg2 : std_logic := '0';
-      topoutput_select         : std_logic_vector(1 downto 0) := "00";
-      topaddsub_lowerinput     : std_logic_vector(1 downto 0) := "00";
-      topaddsub_upperinput     : std_logic := '0';
-      topaddsub_carryselect    : std_logic_vector(1 downto 0) := "00";
-      botoutput_select         : std_logic_vector(1 downto 0) := "00";
-      botaddsub_lowerinput     : std_logic_vector(1 downto 0) := "00";
-      botaddsub_upperinput     : std_logic := '0';
-      botaddsub_carryselect    : std_logic_vector(1 downto 0) := "00";
-      mode_8x8                 : std_logic := '0';
-      a_signed                 : std_logic := '0';
-      b_signed                 : std_logic := '0'
-    );
+      NEG_TRIGGER : std_logic := '0';
+      C_REG : std_logic := '0'; A_REG : std_logic := '0';
+      B_REG : std_logic := '0'; D_REG : std_logic := '0';
+      TOP_8x8_MULT_REG : std_logic := '0'; BOT_8x8_MULT_REG : std_logic := '0';
+      PIPELINE_16x16_MULT_REG1 : std_logic := '0';
+      PIPELINE_16x16_MULT_REG2 : std_logic := '0';
+      TOPOUTPUT_SELECT : std_logic_vector(1 downto 0) := "00";
+      TOPADDSUB_LOWERINPUT : std_logic_vector(1 downto 0) := "00";
+      TOPADDSUB_UPPERINPUT : std_logic := '0';
+      TOPADDSUB_CARRYSELECT : std_logic_vector(1 downto 0) := "00";
+      BOTOUTPUT_SELECT : std_logic_vector(1 downto 0) := "00";
+      BOTADDSUB_LOWERINPUT : std_logic_vector(1 downto 0) := "00";
+      BOTADDSUB_UPPERINPUT : std_logic := '0';
+      BOTADDSUB_CARRYSELECT : std_logic_vector(1 downto 0) := "00";
+      MODE_8x8 : std_logic := '0';
+      A_SIGNED : std_logic := '0'; B_SIGNED : std_logic := '0');
     port (
-      clk        : in    std_logic;
-      ce         : in    std_logic;
-      a          : in    std_logic_vector(15 downto 0);
-      b          : in    std_logic_vector(15 downto 0);
-      c          : in    std_logic_vector(15 downto 0);
-      d          : in    std_logic_vector(15 downto 0);
-      ahold      : in    std_logic;
-      bhold      : in    std_logic;
-      chold      : in    std_logic;
-      dhold      : in    std_logic;
-      irsttop    : in    std_logic;
-      irstbot    : in    std_logic;
-      orsttop    : in    std_logic;
-      orstbot    : in    std_logic;
-      oloadtop   : in    std_logic;
-      oloadbot   : in    std_logic;
-      addsubtop  : in    std_logic;
-      addsubbot  : in    std_logic;
-      oholdtop   : in    std_logic;
-      oholdbot   : in    std_logic;
-      ci         : in    std_logic;
-      accumci    : in    std_logic;
-      signextin  : in    std_logic;
-      o          : out   std_logic_vector(31 downto 0);
-      co         : out   std_logic;
-      accumco    : out   std_logic;
-      signextout : out   std_logic
-    );
-  end component sb_mac16;
+      CLK : in std_logic; CE : in std_logic;
+      A : in std_logic_vector(15 downto 0); B : in std_logic_vector(15 downto 0);
+      C : in std_logic_vector(15 downto 0); D : in std_logic_vector(15 downto 0);
+      AHOLD : in std_logic; BHOLD : in std_logic;
+      CHOLD : in std_logic; DHOLD : in std_logic;
+      IRSTTOP : in std_logic; IRSTBOT : in std_logic;
+      ORSTTOP : in std_logic; ORSTBOT : in std_logic;
+      OLOADTOP : in std_logic; OLOADBOT : in std_logic;
+      ADDSUBTOP : in std_logic; ADDSUBBOT : in std_logic;
+      OHOLDTOP : in std_logic; OHOLDBOT : in std_logic;
+      CI : in std_logic; ACCUMCI : in std_logic; SIGNEXTIN : in std_logic;
+      O : out std_logic_vector(31 downto 0);
+      CO : out std_logic; ACCUMCO : out std_logic; SIGNEXTOUT : out std_logic);
+  end component;
 
 begin
 
   is_sub32 <= (others => is_sub);
-  b2       <= b xor is_sub32; -- bitwise NOT of b when is_sub='1', else b unchanged
-  carry0   <= is_sub xor ci;  -- LSB carry-in into the chain, per arith_unit
+  b2       <= b xor is_sub32;          -- bitwise NOT of b when is_sub='1', else b unchanged
+  carry0   <= is_sub xor ci;           -- LSB carry-in into the chain, per arith_unit
 
   -- Single SB_MAC16: BOT adds the low 16-bit column, TOP adds the high 16-bit
   -- column, chained by the tile-local BOT->TOP carry (TOPADDSUB_CARRYSELECT=
   -- "10" -> HCI=LCO). Same pure-adder idiom as mult_ice40dsp.vhd's DSP_C23.
-  dsp : component sb_mac16
+  DSP : SB_MAC16
     generic map (
-      botaddsub_lowerinput  => "00",
-      botaddsub_upperinput  => '1',
-      botaddsub_carryselect => "11",
-      botoutput_select      => "00",
-      topaddsub_lowerinput  => "00",
-      topaddsub_upperinput  => '1',
-      topaddsub_carryselect => "10",
-      topoutput_select      => "00",
-      a_signed              => '0', b_signed => '0'
-    )
+      BOTADDSUB_LOWERINPUT  => "00",   -- iZ = B port  = a(15:0)
+      BOTADDSUB_UPPERINPUT  => '1',    -- iY = D port  = b2(15:0)
+      BOTADDSUB_CARRYSELECT => "11",   -- LCI = CI port = carry0
+      BOTOUTPUT_SELECT      => "00",   -- Ol = bottom adder result (no product used)
+      TOPADDSUB_LOWERINPUT  => "00",   -- iX = A port  = a(31:16)
+      TOPADDSUB_UPPERINPUT  => '1',    -- iW = C port  = b2(31:16)
+      TOPADDSUB_CARRYSELECT => "10",   -- HCI = LCO -> chain low-half carry into high half
+      TOPOUTPUT_SELECT      => "00",   -- Oh = top adder result
+      A_SIGNED => '0', B_SIGNED => '0')
     port map (
-      clk        => clk,
-      ce         => '1',
-      a          => a(31 downto 16),
-      b          => a(15 downto 0),
-      c          => b2(31 downto 16),
-      d          => b2(15 downto 0),
-      ahold      => '0',
-      bhold      => '0',
-      chold      => '0',
-      dhold      => '0',
-      irsttop    => '0',
-      irstbot    => '0',
-      orsttop    => '0',
-      orstbot    => '0',
-      oloadtop   => '0',
-      oloadbot   => '0',
-      addsubtop  => '0',
-      addsubbot  => '0',
-      oholdtop   => '0',
-      oholdbot   => '0',
-      ci         => carry0,
-      accumci    => '0',
-      signextin  => '0',
-      o          => o,
-      co         => open,
-      accumco    => open,
-      signextout => open
-    );
+      CLK => clk, CE => '1',
+      A => a(31 downto 16), B => a(15 downto 0),
+      C => b2(31 downto 16), D => b2(15 downto 0),
+      AHOLD => '0', BHOLD => '0', CHOLD => '0', DHOLD => '0',
+      IRSTTOP => '0', IRSTBOT => '0', ORSTTOP => '0', ORSTBOT => '0',
+      OLOADTOP => '0', OLOADBOT => '0', ADDSUBTOP => '0', ADDSUBBOT => '0',
+      OHOLDTOP => '0', OHOLDBOT => '0', CI => carry0, ACCUMCI => '0',
+      SIGNEXTIN => '0', O => o, CO => open, ACCUMCO => open,
+      SIGNEXTOUT => open);
 
   -- 33rd bit (carry/borrow) in fabric: true full-adder carry-out of the MSB.
-  cin31 <= o(31) xor a(31) xor b2(31); -- carry into bit 31
+  cin31 <= o(31) xor a(31) xor b2(31);              -- carry into bit 31
   c32   <= (a(31) and b2(31))
-           or (a(31) and cin31)
-           or (b2(31) and cin31);      -- majority = carry out of bit 31
+        or (a(31) and cin31)
+        or (b2(31) and cin31);                      -- majority = carry out of bit 31
 
   result(31 downto 0) <= o;
-  result(32)          <= c32 xor is_sub; -- carry->borrow fixup, matches arith_unit
+  result(32)          <= c32 xor is_sub;            -- carry->borrow fixup, matches arith_unit
 
 end architecture ice40dsp;

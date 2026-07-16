@@ -2,5 +2,7 @@
 -- transparent-latch CDC phase elements. One of cache_clkmode_{sc,dc}.vhd is
 -- analyzed per build; only the analyzed one defines `package cache_clkmode`.
 package cache_clkmode is
-  constant CACHE_SAME_CLOCK : boolean := false;
-end package;
+
+  constant cache_same_clock : boolean := false;
+
+end package cache_clkmode;

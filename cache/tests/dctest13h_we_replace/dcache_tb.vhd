@@ -1,76 +1,97 @@
 library ieee;
-use ieee.std_logic_1164.all;
-use std.textio.all;
-use ieee.std_logic_textio.all;
-use ieee.numeric_std.all;
-
-use work.cache_pack.all;
-use work.cpu2j0_pack.all;
-use work.data_bus_pack.all;
+  use ieee.std_logic_1164.all;
+  use std.textio.all;
+  use ieee.std_logic_textio.all;
+  use ieee.numeric_std.all;
+  use work.cache_pack.all;
+  use work.cpu2j0_pack.all;
+  use work.data_bus_pack.all;
 
 entity dcache_tb is
-end dcache_tb;
+end entity dcache_tb;
 
 architecture tb of dcache_tb is
 
-type acc_vect_t is array (0 to 2047)  of std_logic_vector( 67 downto 0);
-type ddr_ram_t  is array (0 to 2**14-1)  of std_logic_vector( 31 downto 0);
+  type acc_vect_t is array (0 to 2047)  of std_logic_vector( 67 downto 0);
 
-   signal rst   : std_logic;
-   signal rst_46nsdel   : std_logic;
-   signal clk125   : std_logic;
-   signal clk200   : std_logic;
+  type ddr_ram_t is array (0 to 2 ** 14 - 1)  of std_logic_vector( 31 downto 0);
 
-   signal a     : cpu_data_o_t;
-   signal y     : cpu_data_i_t;
-   signal ra    : dcache_ram_o_t;
-   signal ry    : dcache_ram_i_t;
-   signal ma    : mem_i_t;
-   signal my    : mem_o_t;
-   signal ctrl :  cache_ctrl_t;
-   signal my_1delay : mem_o_t;
-   signal ma_rdy_1wait_sig : std_logic;
+  signal rst         : std_logic;
+  signal rst_46nsdel : std_logic;
+  signal clk125      : std_logic;
+  signal clk200      : std_logic;
 
-   signal cavec  : std_logic_vector( 67 downto 0 );
+  signal a                : cpu_data_o_t;
+  signal y                : cpu_data_i_t;
+  signal ra               : dcache_ram_o_t;
+  signal ry               : dcache_ram_i_t;
+  signal ma               : mem_i_t;
+  signal my               : mem_o_t;
+  signal ctrl             : cache_ctrl_t;
+  signal my_1delay        : mem_o_t;
+  signal ma_rdy_1wait_sig : std_logic;
 
-   signal acc_vect : acc_vect_t;
-   signal ddr_ram  : ddr_ram_t := ( others => x"A5A5A5A5" );
-   signal ack_pointer_thisc : std_logic_vector(10 downto 0);
-   signal ack_pointer_thisr : std_logic_vector(10 downto 0);
-   signal mis_counter_thisc : std_logic_vector(10 downto 0);
-   signal mis_counter_thisr : std_logic_vector(10 downto 0);
-   signal y_ack_1del_thisc : std_logic;
-   signal y_ack_1del_thisr : std_logic;
+  signal cavec : std_logic_vector( 67 downto 0);
+
+  signal acc_vect          : acc_vect_t;
+  signal ddr_ram           : ddr_ram_t := (others => x"A5A5A5A5");
+  signal ack_pointer_thisc : std_logic_vector(10 downto 0);
+  signal ack_pointer_thisr : std_logic_vector(10 downto 0);
+  signal mis_counter_thisc : std_logic_vector(10 downto 0);
+  signal mis_counter_thisr : std_logic_vector(10 downto 0);
+  signal y_ack_1del_thisc  : std_logic;
+  signal y_ack_1del_thisr  : std_logic;
+
 begin
 
   --
-  rst <= '1', '0' after 15 ns;
+  rst         <= '1', '0' after 15 ns;
   rst_46nsdel <= rst after 46 ns;
-  clk125 <= '0' after 4   ns when clk125 = '1' else '1' after 4   ns;
-  clk200 <= '0' after 2.5 ns when clk200 = '1' else '1' after 2.5 ns;
+  clk125      <= '0' after 4   ns when clk125 = '1' else
+                 '1' after 4   ns;
+  clk200      <= '0' after 2.5 ns when clk200 = '1' else
+                 '1' after 2.5 ns;
 
--- .+....1....+....1....+....1....+....1....+....1....+....1....+....1....+....1
-  dut : dcache     port map ( rst => rst,
-    clk125 => clk125, clk200 => clk200, a => a,
-    y => y,           ra => ra,         ry => ry,
-    ma => ma,         my => my ,        ctrl => ctrl,
-    lock => '0',      sa => NULL_SNOOP_IO );
-  mem : dcache_ram port map ( rst => rst, clk125 => clk125, 
-    clk200 => clk200, ra => ry, ry => ra );
+  -- .+....1....+....1....+....1....+....1....+....1....+....1....+....1....+....1
+  dut : component dcache
+    port map (
+      rst    => rst,
+      clk125 => clk125,
+      clk200 => clk200,
+      a      => a,
+      y      => y,
+      ra     => ra,
+      ry     => ry,
+      ma     => ma,
+      my     => my,
+      ctrl   => ctrl,
+      lock   => '0',
+      sa     => NULL_SNOOP_IO
+    );
 
--- .+....1....+....1....+....1....+....1....+....1....+....1....+....1....+....1
+  mem : component dcache_ram
+    port map (
+      rst    => rst,
+      clk125 => clk125,
+      clk200 => clk200,
+      ra     => ry,
+      ry     => ra
+    );
+
+  -- .+....1....+....1....+....1....+....1....+....1....+....1....+....1....+....1
   -- cache on/off selection
   -- --------------------------------------------------------------------------
   ctrl.en <= '1'; -- cache on
---  ctrl.en <= '0'; -- cache off
+  --  ctrl.en <= '0'; -- cache off
   -- --------------------------------------------------------------------------
   ctrl.inv <= '0';
 
-  valid_rest : process( ack_pointer_thisr, y_ack_1del_thisr, rst_46nsdel)
+  valid_rest : process (ack_pointer_thisr, y_ack_1del_thisr, rst_46nsdel) is
   begin
-    if(y_ack_1del_thisr = '1') and
-      (ack_pointer_thisr(2 downto 0) = b"111") then
-      a.a  <= x"0aaaaaa0";
+
+    if ((y_ack_1del_thisr = '1') and
+        (ack_pointer_thisr(2 downto 0) = b"111")) then
+      a.a  <= x"0AAAAAA0";
       a.en <= '0';
       a.wr <= '0';
       a.we <= x"0";
@@ -83,192 +104,228 @@ begin
       a.we <= acc_vect(vtoi(ack_pointer_thisr))(63 downto 60);
       a.d  <= acc_vect(vtoi(ack_pointer_thisr))(31 downto  0);
     end if;
+
   end process;
 
   ma.d <= (ddr_ram(vtoi(my.a(15 downto 2)))) and
-   (
-    ma.ack & ma.ack & ma.ack & ma.ack &
-    ma.ack & ma.ack & ma.ack & ma.ack &
-    ma.ack & ma.ack & ma.ack & ma.ack &
-    ma.ack & ma.ack & ma.ack & ma.ack &
-    ma.ack & ma.ack & ma.ack & ma.ack &
-    ma.ack & ma.ack & ma.ack & ma.ack &
-    ma.ack & ma.ack & ma.ack & ma.ack &
-    ma.ack & ma.ack & ma.ack & ma.ack 
-   ) ;
+          (
+           ma.ack & ma.ack & ma.ack & ma.ack &
+           ma.ack & ma.ack & ma.ack & ma.ack &
+           ma.ack & ma.ack & ma.ack & ma.ack &
+           ma.ack & ma.ack & ma.ack & ma.ack &
+           ma.ack & ma.ack & ma.ack & ma.ack &
+           ma.ack & ma.ack & ma.ack & ma.ack &
+           ma.ack & ma.ack & ma.ack & ma.ack &
+           ma.ack & ma.ack & ma.ack & ma.ack
+         );
 
   my_1delay <= my after 5 ns;
 
   -- --------------------------------------------------------------------------
-  gen_ready_1wait : process (my, my_1delay)
+  gen_ready_1wait : process (my, my_1delay) is
+
     variable mem_rdy_1wait : std_logic;
+
   begin
-    if (my_1delay.en = '1') and
-       (my.en        = '1') and
-       (my_1delay.a = my.a) then mem_rdy_1wait := '1';
-     else                        mem_rdy_1wait := '0';
-     end if;
-     ma_rdy_1wait_sig <=     mem_rdy_1wait;
+
+    if ((my_1delay.en = '1') and
+        (my.en = '1') and
+        (my_1delay.a = my.a)) then
+      mem_rdy_1wait := '1';
+    else
+      mem_rdy_1wait := '0';
+    end if;
+
+    ma_rdy_1wait_sig <= mem_rdy_1wait;
+
   end process;
+
   -- --------------------------------------------------------------------------
   -- 1 wait
   ma.ack <= ma_rdy_1wait_sig;
   -- --------------------------------------------------------------------------
   -- 0 wait
---  ma.ack <= my.en;
+  --  ma.ack <= my.en;
   -- --------------------------------------------------------------------------
 
-  ackfsm : process(ack_pointer_thisr, mis_counter_thisr, y_ack_1del_thisr, y.ack, my.av, ma.ack )
-   variable ack_pointer_this : std_logic_vector(10 downto 0);
-   variable mis_counter_this : std_logic_vector(10 downto 0);
-   variable y_ack_1del_this  : std_logic;
+  ackfsm : process (ack_pointer_thisr, mis_counter_thisr, y_ack_1del_thisr, y.ack, my.av, ma.ack) is
+
+    variable ack_pointer_this : std_logic_vector(10 downto 0);
+    variable mis_counter_this : std_logic_vector(10 downto 0);
+    variable y_ack_1del_this  : std_logic;
+
   begin
-   ack_pointer_this := ack_pointer_thisr;
-   mis_counter_this := mis_counter_thisr;
-   y_ack_1del_this  := y_ack_1del_thisr;
 
-   if(y.ack = '1') then
-     ack_pointer_this := std_logic_vector(unsigned(ack_pointer_this) + 1);
-   end if;
-   if((my.av = '1') and (ma.ack = '1')) then
-     mis_counter_this := std_logic_vector(unsigned(mis_counter_this) + 1);
-   end if;
-   y_ack_1del_this := y.ack;
+    ack_pointer_this := ack_pointer_thisr;
+    mis_counter_this := mis_counter_thisr;
+    y_ack_1del_this  := y_ack_1del_thisr;
 
-   ack_pointer_thisc <= ack_pointer_this;
-   mis_counter_thisc <= mis_counter_this;
-   y_ack_1del_thisc  <= y_ack_1del_this ;
+    if (y.ack = '1') then
+      ack_pointer_this := std_logic_vector(unsigned(ack_pointer_this) + 1);
+    end if;
+
+    if ((my.av = '1') and (ma.ack = '1')) then
+      mis_counter_this := std_logic_vector(unsigned(mis_counter_this) + 1);
+    end if;
+
+    y_ack_1del_this := y.ack;
+
+    ack_pointer_thisc <= ack_pointer_this;
+    mis_counter_thisc <= mis_counter_this;
+    y_ack_1del_thisc  <= y_ack_1del_this;
+
   end process;
 
-  p0_r0_125fsm : process(clk125, rst)
+  p0_r0_125fsm : process (clk125, rst) is
   begin
-     if rst = '1' then
-        ack_pointer_thisr <= b"000" & x"00";
-        y_ack_1del_thisr  <= '0';
-     elsif clk125 = '1' and clk125'event then
-        ack_pointer_thisr <= ack_pointer_thisc;
-        y_ack_1del_thisr  <= y_ack_1del_thisc ;
-     end if;
+
+    if (rst = '1') then
+      ack_pointer_thisr <= b"000" & x"00";
+      y_ack_1del_thisr  <= '0';
+    elsif (clk125 = '1' and clk125'event) then
+      ack_pointer_thisr <= ack_pointer_thisc;
+      y_ack_1del_thisr  <= y_ack_1del_thisc;
+    end if;
+
   end process;
 
-  p0_r0_200fsm : process(clk200, rst)
+  p0_r0_200fsm : process (clk200, rst) is
   begin
-     if rst = '1' then
-        mis_counter_thisr <= b"000" & x"00";
-     elsif clk200 = '1' and clk200'event then
-        mis_counter_thisr <= mis_counter_thisc;
-     end if;
+
+    if (rst = '1') then
+      mis_counter_thisr <= b"000" & x"00";
+    elsif (clk200 = '1' and clk200'event) then
+      mis_counter_thisr <= mis_counter_thisc;
+    end if;
+
   end process;
 
-  ddr_raminit : process(rst, my)
+  ddr_raminit : process (rst, my) is
   begin
-   if rst = '1' then
-   ddr_ram(   56) <= x"20212223";
-   ddr_ram(   57) <= x"24252627";
-   ddr_ram(   58) <= x"28292a2b";
-   ddr_ram(   59) <= x"2c2d2e2f";
-   ddr_ram(   60) <= x"30313233";
-   ddr_ram(   61) <= x"34353637";
-   ddr_ram(   62) <= x"38393a3b";
-   ddr_ram(   63) <= x"3c3d3e3f";
-   --
-   ddr_ram(   64) <= x"20212223";
-   ddr_ram(   65) <= x"24252627";
-   ddr_ram(   66) <= x"28292a2b";
-   ddr_ram(   67) <= x"2c2d2e2f";
-   ddr_ram(   68) <= x"30313233";
-   ddr_ram(   69) <= x"34353637";
-   ddr_ram(   70) <= x"38393a3b";
-   ddr_ram(   71) <= x"3c3d3e3f";
-   --
-   ddr_ram(   72) <= x"20212223";
-   ddr_ram(   73) <= x"24252627";
-   ddr_ram(   74) <= x"28292a2b";
-   ddr_ram(   75) <= x"2c2d2e2f";
-   ddr_ram(   76) <= x"30313233";
-   ddr_ram(   77) <= x"34353637";
-   ddr_ram(   78) <= x"38393a3b";
-   ddr_ram(   79) <= x"3c3d3e3f";
-   --
-   ddr_ram( 2104) <= x"40414243";
-   ddr_ram( 2105) <= x"44454647";
-   ddr_ram( 2106) <= x"48494a4b";
-   ddr_ram( 2107) <= x"4c4d4e4f";
-   ddr_ram( 2108) <= x"50515253";
-   ddr_ram( 2109) <= x"54555657";
-   ddr_ram( 2110) <= x"58595a5b";
-   ddr_ram( 2111) <= x"5c5d5e5f";
-   --
-   ddr_ram( 2112) <= x"40414243";
-   ddr_ram( 2113) <= x"44454647";
-   ddr_ram( 2114) <= x"48494a4b";
-   ddr_ram( 2115) <= x"4c4d4e4f";
-   ddr_ram( 2116) <= x"50515253";
-   ddr_ram( 2117) <= x"54555657";
-   ddr_ram( 2118) <= x"58595a5b";
-   ddr_ram( 2119) <= x"5c5d5e5f";
-   --
-   ddr_ram( 2120) <= x"40414243";
-   ddr_ram( 2121) <= x"44454647";
-   ddr_ram( 2122) <= x"48494a4b";
-   ddr_ram( 2123) <= x"4c4d4e4f";
-   ddr_ram( 2124) <= x"50515253";
-   ddr_ram( 2125) <= x"54555657";
-   ddr_ram( 2126) <= x"58595a5b";
-   ddr_ram( 2126) <= x"5c5d5e5f";
-   --
-   ddr_ram(  108) <= x"00000100";
-   ddr_ram(  109) <= x"000012e0";
-   ddr_ram(  110) <= x"000015a0";
-   ddr_ram(  111) <= x"00001910";
-   ddr_ram(  112) <= x"00001be0";
-   ddr_ram(  113) <= x"00002090";
-   elsif (my.en = '1') and (my.wr = '1') then
-     for i in 0 to 3 loop
-       if(my.we(i) = '1') then
-         ddr_ram(vtoi(my.a(15 downto 2)))(8 * i + 7 downto 8 * i)
-         <= my.d                         (8 * i + 7 downto 8 * i);
-       end if;
-     end loop;
-   end if;
-   end process;
 
--- ---- cpu access dump ------
-  process
-    file f0 : text is out "cpu.acc";
-    variable l : line;
+    if (rst = '1') then
+      ddr_ram(   56) <= x"20212223";
+      ddr_ram(   57) <= x"24252627";
+      ddr_ram(   58) <= x"28292A2B";
+      ddr_ram(   59) <= x"2C2D2E2F";
+      ddr_ram(   60) <= x"30313233";
+      ddr_ram(   61) <= x"34353637";
+      ddr_ram(   62) <= x"38393A3B";
+      ddr_ram(   63) <= x"3C3D3E3F";
+      --
+      ddr_ram(   64) <= x"20212223";
+      ddr_ram(   65) <= x"24252627";
+      ddr_ram(   66) <= x"28292A2B";
+      ddr_ram(   67) <= x"2C2D2E2F";
+      ddr_ram(   68) <= x"30313233";
+      ddr_ram(   69) <= x"34353637";
+      ddr_ram(   70) <= x"38393A3B";
+      ddr_ram(   71) <= x"3C3D3E3F";
+      --
+      ddr_ram(   72) <= x"20212223";
+      ddr_ram(   73) <= x"24252627";
+      ddr_ram(   74) <= x"28292A2B";
+      ddr_ram(   75) <= x"2C2D2E2F";
+      ddr_ram(   76) <= x"30313233";
+      ddr_ram(   77) <= x"34353637";
+      ddr_ram(   78) <= x"38393A3B";
+      ddr_ram(   79) <= x"3C3D3E3F";
+      --
+      ddr_ram( 2104) <= x"40414243";
+      ddr_ram( 2105) <= x"44454647";
+      ddr_ram( 2106) <= x"48494A4B";
+      ddr_ram( 2107) <= x"4C4D4E4F";
+      ddr_ram( 2108) <= x"50515253";
+      ddr_ram( 2109) <= x"54555657";
+      ddr_ram( 2110) <= x"58595A5B";
+      ddr_ram( 2111) <= x"5C5D5E5F";
+      --
+      ddr_ram( 2112) <= x"40414243";
+      ddr_ram( 2113) <= x"44454647";
+      ddr_ram( 2114) <= x"48494A4B";
+      ddr_ram( 2115) <= x"4C4D4E4F";
+      ddr_ram( 2116) <= x"50515253";
+      ddr_ram( 2117) <= x"54555657";
+      ddr_ram( 2118) <= x"58595A5B";
+      ddr_ram( 2119) <= x"5C5D5E5F";
+      --
+      ddr_ram( 2120) <= x"40414243";
+      ddr_ram( 2121) <= x"44454647";
+      ddr_ram( 2122) <= x"48494A4B";
+      ddr_ram( 2123) <= x"4C4D4E4F";
+      ddr_ram( 2124) <= x"50515253";
+      ddr_ram( 2125) <= x"54555657";
+      ddr_ram( 2126) <= x"58595A5B";
+      ddr_ram( 2126) <= x"5C5D5E5F";
+      --
+      ddr_ram(  108) <= x"00000100";
+      ddr_ram(  109) <= x"000012E0";
+      ddr_ram(  110) <= x"000015A0";
+      ddr_ram(  111) <= x"00001910";
+      ddr_ram(  112) <= x"00001BE0";
+      ddr_ram(  113) <= x"00002090";
+    elsif ((my.en = '1') and (my.wr = '1')) then
+
+      for i in 0 to 3 loop
+
+        if (my.we(i) = '1') then
+          ddr_ram(vtoi(my.a(15 downto 2)))(8 * i + 7 downto 8 * i)
+ <= my.d                         (8 * i + 7 downto 8 * i);
+        end if;
+
+      end loop;
+
+    end if;
+
+  end process;
+
+  -- ---- cpu access dump ------
+  process is
+
+    file     f0 : text is out "cpu.acc";
+    variable l  : line;
+
   begin
 
     wait for 1 ns;
-    if(y.ack = '1') then
-      hwrite(     l, a.a );   write(l, string'(" "));
-      if(a.wr = '1') then
-           hwrite(l, a.d );   write(l, string'(" "));
-      else hwrite(l, y.d );   write(l, string'(" "));
+
+    if (y.ack = '1') then
+      hwrite(l, a.a);   write(l, string'(" "));
+      if (a.wr = '1') then
+        hwrite(l, a.d);   write(l, string'(" "));
+      else
+        hwrite(l, y.d);   write(l, string'(" "));
       end if;
-       write(     l, a.wr );  write(l, string'(" "));
+      write(l, a.wr);  write(l, string'(" "));
       -- write line --------------
       writeline(f0, l);
       deallocate(l);
     end if;
+
     wait for 7 ns;
+
   end process;
 
--- ---- bus write dump ------
-  process
-    file f1 : text is out "bus.acc";
+  -- ---- bus write dump ------
+  process is
+
+    file     f1 : text is out "bus.acc";
     variable l1 : line;
+
   begin
 
     wait for 1 ns;
-    if(ma.ack = '1') and (my.wr = '1') then
-      hwrite(l1, my.a );   write(l1, string'(" "));
-      hwrite(l1, my.d );   write(l1, string'(" "));
+
+    if ((ma.ack = '1') and (my.wr = '1')) then
+      hwrite(l1, my.a);   write(l1, string'(" "));
+      hwrite(l1, my.d);   write(l1, string'(" "));
       -- write line --------------
       writeline(f1, l1);
       deallocate(l1);
     end if;
+
     wait for 4 ns;
+
   end process;
 
   -- vector           ww
@@ -276,8 +333,8 @@ begin
   --                  |||_____||______|
   -- prepare hit entry
   --
--- cpu_sim load/store first 50 times
--- initialize finish
+  -- cpu_sim load/store first 50 times
+  -- initialize finish
   --
   acc_vect( 000) <= x"1400000F1898A8B8C";
   acc_vect( 001) <= x"0000000FC3C3D3E3F"; -- read 32B, 1byte ref's store
@@ -416,6 +473,6 @@ begin
   acc_vect( 117) <= x"1F00003E000000117";
   acc_vect( 118) <= x"1F00003E000000118";
   acc_vect( 119) <= x"1F00003E000000119";
-  --
+--
 
-end tb;
+end architecture tb;

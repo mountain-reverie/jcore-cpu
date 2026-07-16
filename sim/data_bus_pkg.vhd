@@ -45,17 +45,17 @@ package data_bus_pkg is
   -- arrays for mapping mcu_lib's data bus and irq ports to the internal versions
   constant ext_to_int_data : ext_to_int_data_bus_t :=
   (
-    DEV_BL0   => DEV_BL0,
-    DEV_EMAC  => DEV_EMAC,
-    DEV_I2C => DEV_I2C,
-    DEV_DDR   => DEV_NONE
+    DEV_BL0  => DEV_BL0,
+    DEV_EMAC => DEV_EMAC,
+    DEV_I2C  => DEV_I2C,
+    DEV_DDR  => DEV_NONE
   );
   constant ext_to_int_irq  : ext_to_int_irq_t      :=
   (
-    DEV_EMAC  => 0,
-    DEV_I2C => 7,
-    DEV_1PPS  => 5,
-    DEV_EXT   => 3
+    DEV_EMAC => 0,
+    DEV_I2C  => 7,
+    DEV_1PPS => 5,
+    DEV_EXT  => 3
   );
   -- TODO: Should instruction bus have a DEV_NONE? Depends on if all reads
   -- outside DDR should be mapped to SRAM.

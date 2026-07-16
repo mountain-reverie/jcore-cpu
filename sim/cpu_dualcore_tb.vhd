@@ -27,9 +27,14 @@ architecture behaviour of cpu_dualcore_tb is
 
   constant cpuid_addr : std_logic_vector(31 downto 0) := x"ABCD0600";
 
-  signal   clk        : std_logic := '1';
-  signal   rst        : std_logic := '1';
-  constant clk_period : time      := CLK_PERIOD ns;
+  signal clk : std_logic := '1';
+  signal rst : std_logic := '1';
+  -- vsg_off constant_013
+  -- CLK_PERIOD is a C-preprocessor macro (sim/cpu_signals.h) substituted by
+  -- gcc -E before ghdl analysis, NOT a reference to the clk_period constant;
+  -- vsg's constant_013 must not lowercase it (would break macro substitution).
+  constant clk_period : time := CLK_PERIOD ns;
+  -- vsg_on constant_013
 
   -- per-cpu raw buses
   signal cpu0_db_o,    cpu1_db_o    : cpu_data_o_t;
@@ -67,12 +72,12 @@ architecture behaviour of cpu_dualcore_tb is
 
   -- misc cpu interface tie-offs (mirror cpu_cache_tb defaults)
   signal debug_i     : cpu_debug_i_t                := (
-                                         en => '0',
-                                         cmd => BREAK,
-                                         ir => (others => '0'),
-                                         d => (others => '0'),
-                                         d_en => '0'
-                                        );
+                                                        en => '0',
+                                                        cmd => BREAK,
+                                                        ir => (others => '0'),
+                                                        d => (others => '0'),
+                                                        d_en => '0'
+                                                       );
   signal debug_i_cmd : std_logic_vector(1 downto 0) := "00";
   signal debug_o     : cpu_debug_o_t;
   signal debug1_o    : cpu_debug_o_t;

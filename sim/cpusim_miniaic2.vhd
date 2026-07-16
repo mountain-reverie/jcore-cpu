@@ -31,13 +31,13 @@ architecture fullrw of cpusim_miniaic2 is
 
   constant aic2m_reg_reset : aicmtwo_reg_t :=
   (
-    ((others => '0'),   (others => '0'),   (others => '0'),
+    ((others  => '0'),   (others => '0'),   (others => '0'),
       (others => '0'),   (others => '0'),   (others => '0'),
       (others => '0'),   (others => '0'),   (others => '0'),
       (others => '0')), -- sbu_regfile    : sbu_regf_t; general rw reg file
-    (others => '0'),    -- sbu_num_ex     : std_logic_vector(3 downto 0);
-    (others => '0'),    -- sbu_wnum_ma     : std_logic_vector(3 downto 0);
-    (others => '0'),    -- sbu_wnum_ma     : std_logic_vector(3 downto 0);
+    (others   => '0'),  -- sbu_num_ex     : std_logic_vector(3 downto 0);
+    (others   => '0'),  -- sbu_wnum_ma     : std_logic_vector(3 downto 0);
+    (others   => '0'),  -- sbu_wnum_ma     : std_logic_vector(3 downto 0);
     '0'                 -- sbu_oplds_ma
   );
   signal   this_c          : aicmtwo_reg_t;
@@ -59,10 +59,13 @@ begin
     --
     variable tmp5b : std_logic_vector( 4 downto 0);
 
-  begin                                                                                              -- begin of process ( )
+  -- begin of process ( )
+
+  begin
 
     this := this_r;
-    nx   := this;                                                                                    -- set all nx variable
+    -- set all nx variable
+    nx := this;
 
     -- part 6 SBU coprcessor control, general = ---------------------------------
     -- ------- full bit SBR0-SBR7 assumption ------------------------------------
@@ -81,7 +84,8 @@ begin
     end if;
 
     -- write number (EX stage combinational) ------------------------------------
-    sbu_cpa_op8b := b"000" & cpa.op;                                                                 -- to display 8 bit x"@@"
+    -- to display 8 bit x"@@"
+    sbu_cpa_op8b := b"000" & cpa.op;
 
     tmp5b := (others => '0');
 
@@ -93,12 +97,14 @@ begin
 
         when x"1d" | x"11" =>
 
-          tmp5b := '1' & x"9";                                                                       -- op_1d=LDS, 11=CLDS
+          -- op_1d=LDS, 11=CLDS
+          tmp5b := '1' & x"9";
 
         when x"10" =>                                                                                -- op_10=CSTS
 
+          -- decode write to SBR0-SBR8
           if ((this.sbu_num_ex(3) = '0') or
-              (this.sbu_num_ex = x"8")) then                                                         -- decode write to SBR0-SBR8
+              (this.sbu_num_ex = x"8")) then
             tmp5b := '1' & this.sbu_num_ex(3 downto 0);
           end if;
 
@@ -120,7 +126,8 @@ begin
 
     -- write (MA stage combinational) -------------------------------------------
 
-    wnum_ma_4b := this.sbu_wnum_ma(3 downto 0);                                                      -- for multiple reference
+    -- for multiple reference
+    wnum_ma_4b := this.sbu_wnum_ma(3 downto 0);
 
     if ((cpa.stallcp = '0') and (this.sbu_wnum_ma(4) = '1')) then
       if (this.sbu_wnum_ma(3 downto 0) = x"9") then
@@ -135,8 +142,10 @@ begin
             (wnum_ma_4b = x"8")) then
           nx.sbu_regfile(to_integer(unsigned(wnum_ma_4b))) := this.sbu_regfile(9);                   -- CSTS update
         end if;
-      end if;                                                                                        -- end of if(this.sbu_wnum_ma(3) = '1') ...
-    end if;                                                                                          -- end of if(cpa.stallcp = '0') ...
+      -- end of if(this.sbu_wnum_ma(3) = '1') ...
+      end if;
+    -- end of if(cpa.stallcp = '0') ...
+    end if;
 
     this   := nx;                                                                                    -- all ff update
     this_c <= this;

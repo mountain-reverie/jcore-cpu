@@ -1,12 +1,14 @@
 architecture two_bank of register_file is
-  constant ZERO_ADDR : addr_t := (others => '0');
+
+  constant zero_addr : addr_t := (others => '0');
 
   type ram_type is array(0 to NUM_REGS - 1) of data_t;
+
   signal bank_a, bank_b : ram_type;
-  signal reg0 : data_t;
+  signal reg0           : data_t;
 
   signal ex_pipes : ex_pipeline_t;
-  signal wb_pipe : reg_pipe_t;
+  signal wb_pipe  : reg_pipe_t;
 
   -- Bank-remapped R0 index. On non-PRIV_ARCH (BANKED=false) builds this folds to
   -- a hard ZERO_ADDR constant at elaboration, so the bank-aware dout_0 read
@@ -14,13 +16,16 @@ architecture two_bank of register_file is
   -- synth_ecp5 (FPGA) yosys backends -- no residual addr_r0 mux on either, and
   -- (unlike a `generate`-gated split) abc9 maps J2 back to ~the pre-leak LUT4.
   signal r0_addr : addr_t;
+
 begin
-  r0_addr <= addr_r0 when BANKED else ZERO_ADDR;
-  wb_pipe.en <= we_wb;
+
+  r0_addr      <= addr_r0 when BANKED else
+                  zero_addr;
+  wb_pipe.en   <= we_wb;
   wb_pipe.addr <= w_addr_wb;
   wb_pipe.data <= din_wb;
 
-  ex_pipes(0).en <= we_ex;
+  ex_pipes(0).en   <= we_ex;
   ex_pipes(0).addr <= w_addr_ex;
   ex_pipes(0).data <= din_ex;
 
@@ -32,26 +37,30 @@ begin
   -- addr_r0 selects a non-zero (bank-1 R0) index under RB=1, read the remapped
   -- value straight from bank_a (the write side writes the remapped index), so
   -- the R0-banking fix is unchanged. Forwarding overlays in-flight EX/WB writes.
-  dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes)
-              when to_reg_index(r0_addr) = 0
-            else read_with_forwarding(r0_addr, bank_a(to_reg_index(r0_addr)), wb_pipe, ex_pipes);
-  
-  process (clk, rst, ce, wb_pipe, ex_pipes)
+  dout_0 <= read_with_forwarding(zero_addr, reg0, wb_pipe, ex_pipes)
+            when to_reg_index(r0_addr) = 0 else
+            read_with_forwarding(r0_addr, bank_a(to_reg_index(r0_addr)), wb_pipe, ex_pipes);
+
+  process (clk, rst, ce, wb_pipe, ex_pipes) is
+
     variable addr : integer;
     variable data : data_t;
+
   begin
-    if rst = '1' then
-      addr := 0;
-      data := (others => '0');
-      wr_data_o <= (others => '0');
-      reg0 <= (others => '0');
+
+    if (rst = '1') then
+      addr        := 0;
+      data        := (others => '0');
+      wr_data_o   <= (others => '0');
+      reg0        <= (others => '0');
       ex_pipes(1) <= REG_PIPE_RESET;
       ex_pipes(2) <= REG_PIPE_RESET;
     elsif (rising_edge(clk) and ce = '1') then
       -- the decoder should never schedule a write to a register for both Z and
       -- W bus at the same time
       assert (wb_pipe.en and ex_pipes(2).en) = '0'
-        report "Write clash detected" severity warning;
+        report "Write clash detected"
+        severity warning;
 
       addr := to_reg_index(wb_pipe.addr);
       data := wb_pipe.data;
@@ -61,7 +70,7 @@ begin
       end if;
       wr_data_o <= (others => '0');
       if ((wb_pipe.en or ex_pipes(2).en) = '1') then
-        wr_data_o <= data;
+        wr_data_o    <= data;
         bank_a(addr) <= data;
         bank_b(addr) <= data;
         if (addr = 0) then
@@ -71,5 +80,7 @@ begin
       ex_pipes(2) <= ex_pipes(1);
       ex_pipes(1) <= ex_pipes(0);
     end if;
+
   end process;
-end architecture;
+
+end architecture two_bank;

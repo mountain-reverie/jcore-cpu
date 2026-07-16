@@ -6,28 +6,33 @@
 -- architecture and are dead logic here (synthesis prunes them).
 
 library ieee;
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
-use work.cpu2j0_components_pack.all;
+  use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
+  use work.cpu2j0_components_pack.all;
 
 entity shifter is
   port (
-    clk   : in  std_logic;
-    rst   : in  std_logic;
-    start : in  std_logic;
-    sel   : in  std_logic;
-    a     : in  std_logic_vector(31 downto 0);
-    b     : in  std_logic_vector(5 downto 0);
-    t_in  : in  std_logic;
-    op    : in  shiftfunc_t;
-    y     : out std_logic_vector(31 downto 0);
-    t_out : out std_logic;
-    busy  : out std_logic);
-end shifter;
+    clk   : in    std_logic;
+    rst   : in    std_logic;
+    start : in    std_logic;
+    sel   : in    std_logic;
+    a     : in    std_logic_vector(31 downto 0);
+    b     : in    std_logic_vector(5 downto 0);
+    t_in  : in    std_logic;
+    op    : in    shiftfunc_t;
+    y     : out   std_logic_vector(31 downto 0);
+    t_out : out   std_logic;
+    busy  : out   std_logic
+  );
+end entity shifter;
 
 architecture comb of shifter is
+
 begin
+
   y     <= bshifter(a, b, t_in, op);
-  t_out <= a(a'left) when b(b'left) = '0' else a(a'right);
+  t_out <= a(a'left) when b(b'left) = '0' else
+           a(a'right);
   busy  <= '0';
-end comb;
+
+end architecture comb;

@@ -15,174 +15,282 @@
 -- Generics not implemented (left as accepted/ignored): AHOLD/BHOLD/CHOLD/DHOLD,
 -- IRST*/ORST*/OLOAD*/OHOLD*, A_REG/B_REG/C_REG/D_REG, 8x8 registers,
 -- PIPELINE_16x16_MULT_REG2, MODE_8x8, A_SIGNED/B_SIGNED, OUTPUT_SELECT "01"/"10".
+
 library ieee;
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
+  use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
 
-entity SB_MAC16 is
+entity sb_mac16 is
   generic (
-    NEG_TRIGGER : std_logic := '0';
-    C_REG : std_logic := '0'; A_REG : std_logic := '0';
-    B_REG : std_logic := '0'; D_REG : std_logic := '0';
-    TOP_8x8_MULT_REG : std_logic := '0'; BOT_8x8_MULT_REG : std_logic := '0';
-    PIPELINE_16x16_MULT_REG1 : std_logic := '0';
-    PIPELINE_16x16_MULT_REG2 : std_logic := '0';
-    TOPOUTPUT_SELECT : std_logic_vector(1 downto 0) := "00";
-    TOPADDSUB_LOWERINPUT : std_logic_vector(1 downto 0) := "00";
-    TOPADDSUB_UPPERINPUT : std_logic := '0';
-    TOPADDSUB_CARRYSELECT : std_logic_vector(1 downto 0) := "00";
-    BOTOUTPUT_SELECT : std_logic_vector(1 downto 0) := "00";
-    BOTADDSUB_LOWERINPUT : std_logic_vector(1 downto 0) := "00";
-    BOTADDSUB_UPPERINPUT : std_logic := '0';
-    BOTADDSUB_CARRYSELECT : std_logic_vector(1 downto 0) := "00";
-    MODE_8x8 : std_logic := '0';
-    A_SIGNED : std_logic := '0'; B_SIGNED : std_logic := '0');
+    neg_trigger              : std_logic                    := '0';
+    c_reg                    : std_logic                    := '0';
+    a_reg                    : std_logic                    := '0';
+    b_reg                    : std_logic                    := '0';
+    d_reg                    : std_logic                    := '0';
+    top_8x8_mult_reg         : std_logic                    := '0';
+    bot_8x8_mult_reg         : std_logic                    := '0';
+    pipeline_16x16_mult_reg1 : std_logic                    := '0';
+    pipeline_16x16_mult_reg2 : std_logic                    := '0';
+    topoutput_select         : std_logic_vector(1 downto 0) := "00";
+    topaddsub_lowerinput     : std_logic_vector(1 downto 0) := "00";
+    topaddsub_upperinput     : std_logic                    := '0';
+    topaddsub_carryselect    : std_logic_vector(1 downto 0) := "00";
+    botoutput_select         : std_logic_vector(1 downto 0) := "00";
+    botaddsub_lowerinput     : std_logic_vector(1 downto 0) := "00";
+    botaddsub_upperinput     : std_logic                    := '0';
+    botaddsub_carryselect    : std_logic_vector(1 downto 0) := "00";
+    mode_8x8                 : std_logic                    := '0';
+    a_signed                 : std_logic                    := '0';
+    b_signed                 : std_logic                    := '0'
+  );
   port (
-    CLK : in std_logic; CE : in std_logic;
-    A : in std_logic_vector(15 downto 0); B : in std_logic_vector(15 downto 0);
-    C : in std_logic_vector(15 downto 0); D : in std_logic_vector(15 downto 0);
-    AHOLD : in std_logic; BHOLD : in std_logic;
-    CHOLD : in std_logic; DHOLD : in std_logic;
-    IRSTTOP : in std_logic; IRSTBOT : in std_logic;
-    ORSTTOP : in std_logic; ORSTBOT : in std_logic;
-    OLOADTOP : in std_logic; OLOADBOT : in std_logic;
-    ADDSUBTOP : in std_logic; ADDSUBBOT : in std_logic;
-    OHOLDTOP : in std_logic; OHOLDBOT : in std_logic;
-    CI : in std_logic; ACCUMCI : in std_logic; SIGNEXTIN : in std_logic;
-    O : out std_logic_vector(31 downto 0);
-    CO : out std_logic; ACCUMCO : out std_logic; SIGNEXTOUT : out std_logic);
-end entity;
+    clk        : in    std_logic;
+    ce         : in    std_logic;
+    a          : in    std_logic_vector(15 downto 0);
+    b          : in    std_logic_vector(15 downto 0);
+    c          : in    std_logic_vector(15 downto 0);
+    d          : in    std_logic_vector(15 downto 0);
+    ahold      : in    std_logic;
+    bhold      : in    std_logic;
+    chold      : in    std_logic;
+    dhold      : in    std_logic;
+    irsttop    : in    std_logic;
+    irstbot    : in    std_logic;
+    orsttop    : in    std_logic;
+    orstbot    : in    std_logic;
+    oloadtop   : in    std_logic;
+    oloadbot   : in    std_logic;
+    addsubtop  : in    std_logic;
+    addsubbot  : in    std_logic;
+    oholdtop   : in    std_logic;
+    oholdbot   : in    std_logic;
+    ci         : in    std_logic;
+    accumci    : in    std_logic;
+    signextin  : in    std_logic;
+    o          : out   std_logic_vector(31 downto 0);
+    co         : out   std_logic;
+    accumco    : out   std_logic;
+    signextout : out   std_logic
+  );
+end entity sb_mac16;
 
-architecture behave of SB_MAC16 is
+architecture behave of sb_mac16 is
+
   -- iH: registered 16x16 product (PIPELINE_16x16_MULT_REG1 path)
   signal prod : std_logic_vector(31 downto 0) := (others => '0');
+
 begin
-  process(CLK) begin
-    if rising_edge(CLK) then
-      if CE = '1' then
-        prod <= std_logic_vector(unsigned(A) * unsigned(B));
+
+  process (clk) is
+  begin
+
+    if rising_edge(clk) then
+      if (ce = '1') then
+        prod <= std_logic_vector(unsigned(a) * unsigned(b));
       end if;
     end if;
+
   end process;
 
   -- Combinational BOT/TOP adder stage, transcribed from yosys cells_sim.v.
   -- Variable names iZ/iY/LCI/LCO/YZ/iR/iX/iW/HCI/XW/iP match cells_sim.v.
   -- The xor-with-replicated-ADDSUB form matches cells_sim.v even when ADDSUB='0'.
   -- Accumulator registers (iS/iQ in cells_sim.v) are zeroed — not modelled.
-  process(prod, A, B, C, D, CI, ACCUMCI, SIGNEXTIN, ADDSUBBOT, ADDSUBTOP)
-    variable iZ_v        : unsigned(15 downto 0);
-    variable iY_v        : unsigned(15 downto 0);
+  process (prod, a, b, c, d, ci, accumci, signextin, addsubbot, addsubtop) is
+
+    variable iz_v          : unsigned(15 downto 0);
+    variable iy_v          : unsigned(15 downto 0);
     variable addsubbot_rep : unsigned(15 downto 0);
     variable addsubtop_rep : unsigned(15 downto 0);
-    variable LCI_v       : std_logic;
-    variable sum17_bot   : unsigned(16 downto 0);
-    variable LCO_v       : std_logic;
-    variable YZ_v        : unsigned(15 downto 0);
-    variable iR_v        : unsigned(15 downto 0);
-    variable iX_v        : unsigned(15 downto 0);
-    variable iW_v        : unsigned(15 downto 0);
-    variable HCI_v       : std_logic;
-    variable sum17_top   : unsigned(16 downto 0);
-    variable ACCUMCO_v   : std_logic;
-    variable XW_v        : unsigned(15 downto 0);
-    variable iP_v        : unsigned(15 downto 0);
-    variable Oh_v        : std_logic_vector(15 downto 0);
-    variable Ol_v        : std_logic_vector(15 downto 0);
+    variable lci_v         : std_logic;
+    variable sum17_bot     : unsigned(16 downto 0);
+    variable lco_v         : std_logic;
+    variable yz_v          : unsigned(15 downto 0);
+    variable ir_v          : unsigned(15 downto 0);
+    variable ix_v          : unsigned(15 downto 0);
+    variable iw_v          : unsigned(15 downto 0);
+    variable hci_v         : std_logic;
+    variable sum17_top     : unsigned(16 downto 0);
+    variable accumco_v     : std_logic;
+    variable xw_v          : unsigned(15 downto 0);
+    variable ip_v          : unsigned(15 downto 0);
+    variable oh_v          : std_logic_vector(15 downto 0);
+    variable ol_v          : std_logic_vector(15 downto 0);
+
   begin
-    addsubbot_rep := (others => ADDSUBBOT);
-    addsubtop_rep := (others => ADDSUBTOP);
+
+    addsubbot_rep := (others => addsubbot);
+    addsubtop_rep := (others => addsubtop);
 
     -- BOT lower input mux (iZ in cells_sim.v)
     -- "00"→B, "01"→iG 8x8 partial (stub 0), "10"→iH[15:0], "11"→sign-ext SIGNEXTIN
-    case BOTADDSUB_LOWERINPUT is
-      when "10"   => iZ_v := unsigned(prod(15 downto 0));
-      when "11"   => iZ_v := (others => SIGNEXTIN);
-      when "01"   => iZ_v := (others => '0');  -- iG partial not modelled
-      when others => iZ_v := unsigned(B);       -- "00"
+    case botaddsub_lowerinput is
+
+      when "10" =>
+
+        iz_v := unsigned(prod(15 downto 0));
+
+      when "11" =>
+
+        iz_v := (others => signextin);
+
+      when "01" =>
+
+        iz_v := (others => '0');                                  -- iG partial not modelled
+
+      when others =>
+
+        iz_v := unsigned(b);                                      -- "00"
+
     end case;
 
     -- BOT upper input mux (iY in cells_sim.v)
     -- '1'→D (iD), '0'→accumulator register (not modelled, zeroed)
-    if BOTADDSUB_UPPERINPUT = '1' then
-      iY_v := unsigned(D);
+    if (botaddsub_upperinput = '1') then
+      iy_v := unsigned(d);
     else
-      iY_v := (others => '0');
+      iy_v := (others => '0');
     end if;
 
     -- BOT carry-in (LCI in cells_sim.v)
-    case BOTADDSUB_CARRYSELECT is
-      when "00"   => LCI_v := '0';
-      when "01"   => LCI_v := '1';
-      when "10"   => LCI_v := ACCUMCI;
-      when others => LCI_v := CI;
+    case botaddsub_carryselect is
+
+      when "00" =>
+
+        lci_v := '0';
+
+      when "01" =>
+
+        lci_v := '1';
+
+      when "10" =>
+
+        lci_v := accumci;
+
+      when others =>
+
+        lci_v := ci;
+
     end case;
 
     -- BOT adder: {LCO, YZ} = iZ + (iY ^ {16{ADDSUBBOT}}) + LCI  (cells_sim.v)
-    sum17_bot := ('0' & iZ_v) + ('0' & (iY_v xor addsubbot_rep));
-    if LCI_v = '1' then
+    sum17_bot := ('0' & iz_v) + ('0' & (iy_v xor addsubbot_rep));
+
+    if (lci_v = '1') then
       sum17_bot := sum17_bot + 1;
     end if;
-    LCO_v := sum17_bot(16);
-    YZ_v  := sum17_bot(15 downto 0);
+
+    lco_v := sum17_bot(16);
+    yz_v  := sum17_bot(15 downto 0);
     -- iR = OLOADBOT ? iD : YZ ^ {16{ADDSUBBOT}}  (OLOADBOT not modelled → always YZ path)
-    iR_v  := YZ_v xor addsubbot_rep;
+    ir_v := yz_v xor addsubbot_rep;
 
     -- BOT output select (Ol in cells_sim.v)
     -- "00"→iR (combinational adder), "11"→iH[15:0] (raw product bypass)
-    case BOTOUTPUT_SELECT is
-      when "00"   => Ol_v := std_logic_vector(iR_v);
-      when "11"   => Ol_v := prod(15 downto 0);
-      when others => Ol_v := (others => '0');  -- iS or iG not modelled
+    case botoutput_select is
+
+      when "00" =>
+
+        ol_v := std_logic_vector(ir_v);
+
+      when "11" =>
+
+        ol_v := prod(15 downto 0);
+
+      when others =>
+
+        ol_v := (others => '0');                                  -- iS or iG not modelled
+
     end case;
 
     -- TOP lower input mux (iX in cells_sim.v)
     -- "00"→A, "01"→iF 8x8 partial (stub 0), "10"→iH[31:16], "11"→{16{iZ[15]}}
-    case TOPADDSUB_LOWERINPUT is
-      when "10"   => iX_v := unsigned(prod(31 downto 16));
-      when "11"   => iX_v := (others => iZ_v(15));
-      when "01"   => iX_v := (others => '0');  -- iF partial not modelled
-      when others => iX_v := unsigned(A);       -- "00"
+    case topaddsub_lowerinput is
+
+      when "10" =>
+
+        ix_v := unsigned(prod(31 downto 16));
+
+      when "11" =>
+
+        ix_v := (others => iZ_v(15));
+
+      when "01" =>
+
+        ix_v := (others => '0');                                  -- iF partial not modelled
+
+      when others =>
+
+        ix_v := unsigned(a);                                      -- "00"
+
     end case;
 
     -- TOP upper input mux (iW in cells_sim.v)
     -- '1'→C (iC), '0'→accumulator register (not modelled, zeroed)
-    if TOPADDSUB_UPPERINPUT = '1' then
-      iW_v := unsigned(C);
+    if (topaddsub_upperinput = '1') then
+      iw_v := unsigned(c);
     else
-      iW_v := (others => '0');
+      iw_v := (others => '0');
     end if;
 
     -- TOP carry-in (HCI in cells_sim.v)
-    case TOPADDSUB_CARRYSELECT is
-      when "00"   => HCI_v := '0';
-      when "01"   => HCI_v := '1';
-      when "10"   => HCI_v := LCO_v;
-      when others => HCI_v := LCO_v xor ADDSUBBOT;
+    case topaddsub_carryselect is
+
+      when "00" =>
+
+        hci_v := '0';
+
+      when "01" =>
+
+        hci_v := '1';
+
+      when "10" =>
+
+        hci_v := lco_v;
+
+      when others =>
+
+        hci_v := lco_v xor addsubbot;
+
     end case;
 
     -- TOP adder: {ACCUMCO, XW} = iX + (iW ^ {16{ADDSUBTOP}}) + HCI  (cells_sim.v)
-    sum17_top := ('0' & iX_v) + ('0' & (iW_v xor addsubtop_rep));
-    if HCI_v = '1' then
+    sum17_top := ('0' & ix_v) + ('0' & (iw_v xor addsubtop_rep));
+
+    if (hci_v = '1') then
       sum17_top := sum17_top + 1;
     end if;
-    ACCUMCO_v := sum17_top(16);
-    XW_v      := sum17_top(15 downto 0);
+
+    accumco_v := sum17_top(16);
+    xw_v      := sum17_top(15 downto 0);
     -- iP = OLOADTOP ? iC : XW ^ {16{ADDSUBTOP}}  (OLOADTOP not modelled → always XW path)
-    iP_v      := XW_v xor addsubtop_rep;
+    ip_v := xw_v xor addsubtop_rep;
 
     -- TOP output select (Oh in cells_sim.v)
     -- "00"→iP (combinational adder), "11"→iH[31:16] (raw product bypass)
-    case TOPOUTPUT_SELECT is
-      when "00"   => Oh_v := std_logic_vector(iP_v);
-      when "11"   => Oh_v := prod(31 downto 16);
-      when others => Oh_v := (others => '0');  -- iQ or iF not modelled
+    case topoutput_select is
+
+      when "00" =>
+
+        oh_v := std_logic_vector(ip_v);
+
+      when "11" =>
+
+        oh_v := prod(31 downto 16);
+
+      when others =>
+
+        oh_v := (others => '0');                                  -- iQ or iF not modelled
+
     end case;
 
-    O          <= Oh_v & Ol_v;
-    ACCUMCO    <= ACCUMCO_v;
+    o       <= oh_v & ol_v;
+    accumco <= accumco_v;
     -- CO = ACCUMCO ^ ADDSUBTOP  (cells_sim.v)
-    CO         <= ACCUMCO_v xor ADDSUBTOP;
+    co <= accumco_v xor addsubtop;
     -- SIGNEXTOUT = iX[15]  (cells_sim.v)
-    SIGNEXTOUT <= iX_v(15);
+    signextout <= iX_v(15);
+
   end process;
-end architecture;
+
+end architecture behave;

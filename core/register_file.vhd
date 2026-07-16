@@ -1,6 +1,6 @@
 -- A Register File with 2 write ports and 2 read ports built out of
 -- 2 RAM blocks with 1 read and 1 independant write port. Register 0
--- also has independant ouput. 32 regs x 32 bits by default, one write clock. 
+-- also has independant ouput. 32 regs x 32 bits by default, one write clock.
 --
 -- Both write ports actually write to the same RAM blocks by delaying EX stage
 -- writes to the WB stage and assuming that the decoder will never schedule
@@ -12,78 +12,91 @@
 -- the current WB write value implements W bus forwarding.
 
 library ieee;
-
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
+  use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
 
 entity register_file is
   generic (
-    ADDR_WIDTH : integer;
-    NUM_REGS : integer;
-    REG_WIDTH : integer;
+    addr_width : integer;
+    num_regs   : integer;
+    reg_width  : integer;
     -- When true (PRIV_ARCH/J4), dout_0 follows SR.RB via the addr_r0 index.
     -- When false (J1/J2) the bank-aware read path is never elaborated, so the
     -- regfile emits the original bank-0 R0 read and the netlist is unchanged.
-    BANKED : boolean := false);
+    banked : boolean := false
+  );
   port (
-    clk     : in  std_logic;
-    rst     : in  std_logic;
-    ce      : in  std_logic;
+    clk : in    std_logic;
+    rst : in    std_logic;
+    ce  : in    std_logic;
 
-    addr_ra : in  std_logic_vector(ADDR_WIDTH-1 downto 0);
-    dout_a  : out std_logic_vector(REG_WIDTH-1 downto 0);
-    addr_rb : in  std_logic_vector(ADDR_WIDTH-1 downto 0);
-    dout_b  : out std_logic_vector(REG_WIDTH-1 downto 0);
-    dout_0  : out std_logic_vector(REG_WIDTH-1 downto 0);
+    addr_ra : in    std_logic_vector(addr_width - 1 downto 0);
+    dout_a  : out   std_logic_vector(reg_width - 1 downto 0);
+    addr_rb : in    std_logic_vector(addr_width - 1 downto 0);
+    dout_b  : out   std_logic_vector(reg_width - 1 downto 0);
+    dout_0  : out   std_logic_vector(reg_width - 1 downto 0);
     -- Bank-remapped index for the dedicated R0 read port (dout_0). Default = R0
     -- of bank 0, so J1/J2 (no banking) are byte-identical; the datapath drives
     -- bank_remap("00000",md,rb) under PRIV_ARCH so dout_0 follows SR.RB.
-    addr_r0 : in  std_logic_vector(ADDR_WIDTH-1 downto 0) := (others => '0');
+    addr_r0 : in    std_logic_vector(addr_width - 1 downto 0) := (others => '0');
     -- One-cycle-early read addresses, used only by architecture(ebr) for its
     -- rising-edge (full-cycle) RAM read. Default = (others=>'0'); two_bank and
     -- flops ignore them, so J2/J4/sim see no change.
-    addr_ra_early : in std_logic_vector(ADDR_WIDTH-1 downto 0) := (others => '0');
-    addr_rb_early : in std_logic_vector(ADDR_WIDTH-1 downto 0) := (others => '0');
+    addr_ra_early : in    std_logic_vector(addr_width - 1 downto 0) := (others => '0');
+    addr_rb_early : in    std_logic_vector(addr_width - 1 downto 0) := (others => '0');
 
-    we_wb     : in  std_logic;
-    w_addr_wb : in  std_logic_vector(ADDR_WIDTH-1 downto 0);
-    din_wb    : in  std_logic_vector(REG_WIDTH-1 downto 0);
+    we_wb     : in    std_logic;
+    w_addr_wb : in    std_logic_vector(addr_width - 1 downto 0);
+    din_wb    : in    std_logic_vector(reg_width - 1 downto 0);
 
-    we_ex     : in  std_logic;
-    w_addr_ex : in  std_logic_vector(ADDR_WIDTH-1 downto 0);
-    din_ex    : in  std_logic_vector(REG_WIDTH-1 downto 0);
+    we_ex     : in    std_logic;
+    w_addr_ex : in    std_logic_vector(addr_width - 1 downto 0);
+    din_ex    : in    std_logic_vector(reg_width - 1 downto 0);
 
     -- wr_data_o exposes the data about to be written to the
     -- register memories
-    wr_data_o : out std_logic_vector(REG_WIDTH-1 downto 0)
-    );
+    wr_data_o : out   std_logic_vector(reg_width - 1 downto 0)
+  );
 
-  subtype addr_t is std_logic_vector(ADDR_WIDTH-1 downto 0);
-  subtype data_t is std_logic_vector(REG_WIDTH-1 downto 0);
+  subtype addr_t is std_logic_vector(addr_width - 1 downto 0);
 
-  type reg_pipe_t is
-  record
-    en : std_logic;
+  subtype data_t is std_logic_vector(reg_width - 1 downto 0);
+
+  type reg_pipe_t is record
+    en   : std_logic;
     data : data_t;
     addr : addr_t;
-  end record;
+  end record reg_pipe_t;
+
   type ex_pipeline_t is array(0 to 2) of reg_pipe_t;
-  constant REG_PIPE_RESET : reg_pipe_t := (
+
+  constant reg_pipe_reset : reg_pipe_t :=
+  (
     en   => '0',
     data => (others => '0'),
-    addr => (others => '0'));
+    addr => (others => '0')
+  );
 
-  function pipe_matches(pipe : reg_pipe_t; addr : addr_t)
+  function pipe_matches (
+    pipe : reg_pipe_t;
+    addr : addr_t
+  )
   return boolean is
   begin
-    return pipe.en = '1' and pipe.addr = addr;
-  end;
 
-  function read_with_forwarding(addr : addr_t; bank_data : data_t;
-                                wb_pipe : reg_pipe_t;
-                                ex_pipes : ex_pipeline_t)
+    return pipe.en = '1' and pipe.addr = addr;
+
+  end function pipe_matches;
+
+  function read_with_forwarding (
+    addr      : addr_t;
+    bank_data : data_t;
+    wb_pipe   : reg_pipe_t;
+    ex_pipes  : ex_pipeline_t
+  )
   return std_logic_vector is
   begin
+
     -- The goal here is to read the most recent value for a register.
     -- (I believe the order of the wb_pipe and ex_pipes(1) checks doesn't
     -- matter and can be reversed because they cannot both be writing to the
@@ -92,7 +105,7 @@ entity register_file is
     -- forward from W bus writes occuring this cycle
     if (pipe_matches(wb_pipe, addr)) then
       return wb_pipe.data;
-    
+
     -- ex_pipes(1) and ex_pipes(2) are "already written" values that should be
     -- returned before the bank data. Check ex_pipes(1) first as it is the more
     -- recent write.
@@ -104,17 +117,26 @@ entity register_file is
       -- no matching pending writes in the pipeline, return bank data
       return bank_data;
     end if;
-  end;
 
-  function to_reg_index(addr : addr_t)
+  end function read_with_forwarding;
+
+  function to_reg_index (
+    addr : addr_t
+  )
   return integer is
-  variable ret : integer range 0 to 31;
+
+    variable ret : integer range 0 to 31;
+
   begin
-     ret := to_integer(unsigned(addr));
-     if ret >= NUM_REGS then
-        report "Register out of range";
-        ret := 0;
-     end if;
-     return ret;
-  end;
-end register_file;
+
+    ret := to_integer(unsigned(addr));
+
+    if (ret >= num_regs) then
+      report "Register out of range";
+      ret := 0;
+    end if;
+
+    return ret;
+
+  end function to_reg_index;
+end entity register_file;

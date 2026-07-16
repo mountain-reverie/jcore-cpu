@@ -9,10 +9,11 @@ configuration cpu_decode_direct_sh2a of decode is
   for arch
     for core : decode_core
       use entity work.decode_core(arch)
-        generic map (
-          decode_type => DIRECT,
-          reset_vector => DEC_CORE_RESET,
-          SH2A_ARCH => true);
+generic map (
+  decode_type => DIRECT,
+  reset_vector => DEC_CORE_RESET,
+  sh2a_arch => true
+);
     end for;
     for table : decode_table
       use entity work.decode_table(direct_logic);
@@ -45,53 +46,60 @@ end configuration;
 -- map, which needs a component-instantiation context. cpu_j2a_top provides it;
 -- cpu_synth_j2a_sh2a binds u_cpu to cpu_synth_j2a generic map(SH2A_ARCH=>true).
 -- Exactly mirrors cpu_j4_priv_top / cpu_synth_j4_priv in cpu_synth_j4_config.vhd.
+
 library ieee;
-use ieee.std_logic_1164.all;
-use work.cpu2j0_pack.all;
+  use ieee.std_logic_1164.all;
+  use work.cpu2j0_pack.all;
 
 entity cpu_j2a_top is
   port (
-    clk     : in  std_logic;
-    rst     : in  std_logic;
-    db_o    : out cpu_data_o_t;
-    db_lock : out std_logic;
-    db_i    : in  cpu_data_i_t;
-    inst_o  : out cpu_instruction_o_t;
-    inst_i  : in  cpu_instruction_i_t;
-    debug_o : out cpu_debug_o_t;
-    debug_i : in  cpu_debug_i_t;
-    event_o : out cpu_event_o_t;
-    event_i : in  cpu_event_i_t;
-    cop_o   : out cop_o_t;
-    cop_i   : in  cop_i_t;
-    priv_o  : out cpu_priv_o_t);
+    clk     : in    std_logic;
+    rst     : in    std_logic;
+    db_o    : out   cpu_data_o_t;
+    db_lock : out   std_logic;
+    db_i    : in    cpu_data_i_t;
+    inst_o  : out   cpu_instruction_o_t;
+    inst_i  : in    cpu_instruction_i_t;
+    debug_o : out   cpu_debug_o_t;
+    debug_i : in    cpu_debug_i_t;
+    event_o : out   cpu_event_o_t;
+    event_i : in    cpu_event_i_t;
+    cop_o   : out   cop_o_t;
+    cop_i   : in    cop_i_t;
+    priv_o  : out   cpu_priv_o_t
+  );
 end entity cpu_j2a_top;
 
 architecture stru of cpu_j2a_top is
+
   component cpu is
     generic (
-      COPRO_DECODE : boolean := true;
-      PRIV_ARCH    : boolean := false;
-      MMU_ARCH     : boolean := false;
-      SH2A_ARCH    : boolean := false);
+      copro_decode : boolean := true;
+      priv_arch    : boolean := false;
+      mmu_arch     : boolean := false;
+      sh2a_arch    : boolean := false
+    );
     port (
-      clk     : in  std_logic;
-      rst     : in  std_logic;
-      db_o    : out cpu_data_o_t;
-      db_lock : out std_logic;
-      db_i    : in  cpu_data_i_t;
-      inst_o  : out cpu_instruction_o_t;
-      inst_i  : in  cpu_instruction_i_t;
-      debug_o : out cpu_debug_o_t;
-      debug_i : in  cpu_debug_i_t;
-      event_o : out cpu_event_o_t;
-      event_i : in  cpu_event_i_t;
-      cop_o   : out cop_o_t;
-      cop_i   : in  cop_i_t;
-      priv_o  : out cpu_priv_o_t);
+      clk     : in    std_logic;
+      rst     : in    std_logic;
+      db_o    : out   cpu_data_o_t;
+      db_lock : out   std_logic;
+      db_i    : in    cpu_data_i_t;
+      inst_o  : out   cpu_instruction_o_t;
+      inst_i  : in    cpu_instruction_i_t;
+      debug_o : out   cpu_debug_o_t;
+      debug_i : in    cpu_debug_i_t;
+      event_o : out   cpu_event_o_t;
+      event_i : in    cpu_event_i_t;
+      cop_o   : out   cop_o_t;
+      cop_i   : in    cop_i_t;
+      priv_o  : out   cpu_priv_o_t
+    );
   end component cpu;
+
 begin
-  u_cpu : cpu
+
+  u_cpu : component cpu
     port map (
       clk     => clk,
       rst     => rst,
@@ -106,14 +114,18 @@ begin
       event_i => event_i,
       cop_o   => cop_o,
       cop_i   => cop_i,
-      priv_o  => priv_o);
+      priv_o  => priv_o
+    );
+
 end architecture stru;
 
 configuration cpu_synth_j2a_sh2a of cpu_j2a_top is
   for stru
     for u_cpu : cpu
       use configuration work.cpu_synth_j2a
-        generic map (SH2A_ARCH => true);
+generic map (
+  sh2a_arch => true
+);
     end for;
   end for;
 end configuration cpu_synth_j2a_sh2a;

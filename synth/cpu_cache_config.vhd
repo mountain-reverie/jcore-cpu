@@ -4,5 +4,7 @@
 -- ddr2 controller fsm is not part of the cpu+cache harness), so a nominal value
 -- suffices. Only analyzed for the j2c/j4c (cpu+cache) synth variants.
 package config is
-  constant CFG_DDR_CK_CYCLE : integer := 20;
+
+  constant cfg_ddr_ck_cycle : integer := 20;
+
 end package config;

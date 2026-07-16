@@ -23,7 +23,9 @@ configuration cpu_synth_j1_dsp of cpu is
     end for;
     for u_datapath : datapath
       use entity work.datapath(stru)
-        generic map (EARLY_REGFILE_READ => true, DSP_ALU => true);
+generic map (
+  early_regfile_read => true, dsp_alu => true
+);
       for stru
         for u_regfile : register_file
           use entity work.register_file(ebr);
@@ -31,11 +33,11 @@ configuration cpu_synth_j1_dsp of cpu is
         for u_shifter : shifter
           use entity work.shifter(seq);
         end for;
-        -- Explicit binding for the DSP_ALU=>true generate branch's dsp_arith
-        -- instance. Needed so ghdl --syn-binding (targets/boards/icesugar/
-        -- synth.sh) does not blackbox it: --syn-binding only blackboxes
-        -- components left UNBOUND, and an explicit binding here also removes
-        -- any dependency on dsp_arith.vhd's position in the synth filelist.
+-- Explicit binding for the DSP_ALU=>true generate branch's dsp_arith
+-- instance. Needed so ghdl --syn-binding (targets/boards/icesugar/
+-- synth.sh) does not blackbox it: --syn-binding only blackboxes
+-- components left UNBOUND, and an explicit binding here also removes
+-- any dependency on dsp_arith.vhd's position in the synth filelist.
         for dsp_alu_gen
           for u_dsp_arith : dsp_arith
             use entity work.dsp_arith(ice40dsp);

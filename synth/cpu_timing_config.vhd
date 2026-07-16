@@ -12,7 +12,9 @@ end configuration;
 configuration cpu_timing_j1 of cpu_timing_top is
   for timing
     for u_cpu : cpu use configuration work.cpu_synth_j1
-      generic map(COPRO_DECODE => false);
+generic map (
+  copro_decode => false
+);
     end for;
   end for;
 end configuration;
@@ -25,7 +27,9 @@ end configuration;
 configuration cpu_timing_j1_dsp of cpu_timing_top is
   for timing
     for u_cpu : cpu use configuration work.cpu_synth_j1_dsp
-      generic map(COPRO_DECODE => false);
+generic map (
+  copro_decode => false
+);
     end for;
   end for;
 end configuration;
@@ -33,7 +37,9 @@ end configuration;
 configuration cpu_timing_j4 of cpu_timing_top is
   for timing
     for u_cpu : cpu use configuration work.cpu_synth_j4
-      generic map(PRIV_ARCH => true);
+generic map (
+  priv_arch => true
+);
     end for;
   end for;
 end configuration;
@@ -41,7 +47,9 @@ end configuration;
 configuration cpu_timing_j2a of cpu_timing_top is
   for timing
     for u_cpu : cpu use configuration work.cpu_synth_j2a
-      generic map (SH2A_ARCH => true);
+generic map (
+  sh2a_arch => true
+);
     end for;
   end for;
 end configuration;

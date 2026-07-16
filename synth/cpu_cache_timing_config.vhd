@@ -28,7 +28,9 @@ configuration cpu_cache_timing_j4_priv of cpu_cache_timing_top is
   for timing
     for u_cpu : cpu
       use configuration work.cpu_synth_j4
-        generic map (PRIV_ARCH => true);
+generic map (
+  priv_arch => true
+);
     end for;
     for u_icache : icache_adapter use configuration work.icache_adapter_fpga; end for;
     for u_dcache : dcache_adapter use configuration work.dcache_adapter_fpga; end for;
@@ -41,7 +43,9 @@ end configuration;
 configuration cpu_cache_timing_j2a of cpu_cache_timing_top is
   for timing
     for u_cpu : cpu use configuration work.cpu_synth_j2a
-      generic map (SH2A_ARCH => true);
+generic map (
+  sh2a_arch => true
+);
     end for;
     for u_icache : icache_adapter use configuration work.icache_adapter_fpga; end for;
     for u_dcache : dcache_adapter use configuration work.dcache_adapter_fpga; end for;
@@ -58,7 +62,9 @@ configuration cpu_cache_timing_j4_priv_mmu of cpu_cache_timing_top is
   for timing
     for u_cpu : cpu
       use configuration work.cpu_synth_j4
-        generic map (PRIV_ARCH => true, MMU_ARCH => true);
+generic map (
+  priv_arch => true, mmu_arch => true
+);
     end for;
     for u_icache : icache_adapter use configuration work.icache_adapter_fpga; end for;
     for u_dcache : dcache_adapter use configuration work.dcache_adapter_fpga; end for;

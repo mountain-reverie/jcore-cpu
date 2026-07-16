@@ -1,0 +1,3 @@
+# VHDL Style Guide config for jcore-cpu. Default ruleset; project exceptions below.
+# (populated as Phases B/C reveal rules that must be relaxed, each with a reason)
+rule: {}

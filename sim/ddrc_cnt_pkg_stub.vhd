@@ -4,13 +4,17 @@
 -- which is not available in the cpu sim build, so this shim is justified.
 -- ddr_status_o_t MUST stay in sync with the real definition at
 -- $(JCORE_SOC)/components/ddr2/ddrc_cnt_pkg.vhd lines ~133-136.
+
 library ieee;
-use ieee.std_logic_1164.all;
+  use ieee.std_logic_1164.all;
 
 package ddrc_cnt_pack is
+
   type ddr_status_o_t is record
     status0 : std_logic_vector(7 downto 0);
     dummy1  : std_logic;
-  end record;
-  constant NULL_DDR_STATUS : ddr_status_o_t := ( (others => '0'), '0' );
-end package;
+  end record ddr_status_o_t;
+
+  constant null_ddr_status : ddr_status_o_t := ((others => '0'), '0');
+
+end package ddrc_cnt_pack;

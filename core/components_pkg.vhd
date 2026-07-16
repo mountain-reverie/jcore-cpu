@@ -1,828 +1,1240 @@
 library ieee;
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
-use ieee.math_real.all;
-
-use work.cpu2j0_pack.all;
+  use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
+  use ieee.math_real.all;
+  use work.cpu2j0_pack.all;
 
 package cpu2j0_components_pack is
 
-constant bits_exp : natural := 5;
-constant bits     : natural := 2**bits_exp;
+  constant bits_exp : natural := 5;
+  constant bits     : natural := 2 ** bits_exp;
 
-type arith_func_t is (ADD, SUB);
-type arith_sr_func_t is (ZERO,
-                         OVERUNDERFLOW,
-                         UGRTER_EQ, SGRTER_EQ,
-                         UGRTER, SGRTER,
-                         DIV0S, DIV1);
-type logic_func_t is (LOGIC_NOT, LOGIC_AND, LOGIC_OR, LOGIC_XOR);
--- NOT_ZERO: T := (value /= 0). Added for SH-2A BLD #imm3,Rn (single-slot
--- register bit-load: AND Rn with the IMM_BIT3_MASK one-hot mask, then T is
--- the isolated bit's value -- ZERO gives the inverse convention (T=1 when
--- the bit is *clear*), which no existing instruction wants inverted, so a
--- dedicated case is added rather than reusing/negating ZERO downstream.
-type logic_sr_func_t is (ZERO, BYTE_EQ, NOT_ZERO);
-type shiftfunc_t is (LOGIC, ARITH, ROTATE, ROTC);
--- BITSET: SH-2A BST #imm3,Rn (register bit-op group, R1 de-risk fallback --
--- see decode/gen-go/spec/sh2a/bit.toml). Single-cycle variable-position
--- bit-insert of the T flag: y carries a decode-time one-hot mask (1 <<
--- imm3), x carries Rn, and manip()'s new "t" parameter carries sr.t. This
--- reuses the existing zbus_sel=SEL_MANIP path instead of widening
--- zbus_sel_t (which is generated into decode_pkg.vhd and would otherwise
--- change BASE J1/J2/J4 decoder output too).
--- MAC_SAVE/MAC_RESTORE_L/MAC_RESTORE_H: SH-2A MULR MAC save/restore markers.
--- Base decode never emits these (dead on base). manip() returns x unchanged
--- for them; the actual save/restore-route behavior is implemented directly
--- in the datapath (mac_shadow_h/l capture + SEL_MANIP restore routing).
-type alumanip_t is (SWAP_BYTE, SWAP_WORD, EXTEND_UBYTE, EXTEND_UWORD, EXTEND_SBYTE, EXTEND_SWORD, EXTRACT, SET_BIT_7, BITSET, CLIP_SB, CLIP_SW, CLIP_UB, CLIP_UW, MAC_SAVE, MAC_RESTORE_L, MAC_RESTORE_H);
+  type arith_func_t is (add, sub);
 
--- NOTE: the SH-2A CS bit (SR bit 2, CLIPS/CLIPU saturation) is deliberately
--- NOT a field of sr_t. sr_t is embedded in datapath_reg_t's shared
--- register-variable ("this"), and widening it (even by one bit, even
--- SH2A_ARCH-gated) perturbed the whole shared-record techmap and cost the
--- base (non-SH2A) J2 datapath ~+400 cells (see the R1 shared-record
--- spillover precedent for push_ptr_init/store/term above g_push in
--- core/datapath.vhm). CS is instead carried in a small standalone
--- generate-local register (signal sr_cs, g_cs/g_cs_off in datapath.vhm)
--- muxed into the STC SR read value via to_slv(sr, cs), exactly like xbus's
--- g_push/g_push_off mux -- not embedded in datapath_reg_t.
-type sr_t is record
-   t, s, q, m : std_logic;
-   int_mask : std_logic_vector(3 downto 0);
-   md, rb, bl : std_logic;   -- SH-4 privileged-arch bits (MD=30, RB=29, BL=28)
-end record;
+  type arith_sr_func_t is (
+    zero,
+    overunderflow,
+    ugrter_eq, sgrter_eq,
+    ugrter, sgrter,
+    div0s, div1
+  );
 
--- SH-4 exception cause registers (J4). All zero on a non-PRIV_ARCH build.
-type priv_reg_t is record
-   expevt : std_logic_vector(11 downto 0);  -- general-exception code
-   intevt : std_logic_vector(11 downto 0);  -- interrupt code
-   tra    : std_logic_vector(9 downto 0);   -- TRAPA imm << 2
-end record;
-constant PRIV_REG_RESET : priv_reg_t := (others => (others => '0'));
+  type logic_func_t is (logic_not, logic_and, logic_or, logic_xor);
 
--- SH-4 MMU control registers (J4 + MMU_ARCH). A dedicated flop block, NOT the
--- regfile: these are CSRs read/written broadside by the TLB/fault logic.
--- All-0 at reset (hardware-spec §9). M1 wires PTEH/PTEL/ASIDR to LDC/STC;
--- MMUCR/TEA/TTB exist (reset 0) but get their software path in M2 (P4 decode).
-type mmu_reg_t is record
-  pteh   : std_logic_vector(31 downto 0);
-  ptel   : std_logic_vector(31 downto 0);
-  asidr  : std_logic_vector(31 downto 0);
-  mmucr  : std_logic_vector(31 downto 0);
-  tea    : std_logic_vector(31 downto 0);
-  ttb    : std_logic_vector(31 downto 0);
-  -- TSB pointer assist (M5, hardware-spec §2.6-2.8). tsbbr/tsbcfg are MMIO
-  -- config (0xFF000014/18); tsbptr is hardware-computed on every TLB miss and
-  -- is read-only (STC TSBPTR,Rn / MMIO 0xFF00001C).
-  tsbbr  : std_logic_vector(31 downto 0);
-  tsbcfg : std_logic_vector(31 downto 0);
-  tsbptr : std_logic_vector(31 downto 0);
-end record;
-constant MMU_REG_RESET : mmu_reg_t := (others => (others => '0'));
+  -- NOT_ZERO: T := (value /= 0). Added for SH-2A BLD #imm3,Rn (single-slot
+  -- register bit-load: AND Rn with the IMM_BIT3_MASK one-hot mask, then T is
+  -- the isolated bit's value -- ZERO gives the inverse convention (T=1 when
+  -- the bit is *clear*), which no existing instruction wants inverted, so a
+  -- dedicated case is added rather than reusing/negating ZERO downstream.
 
--- TLB entry and array types (MMU_ARCH). ppn is PA[31:10] = 22-bit PFN at 4 KB
--- granularity; i_pa_tag/d_pa_tag use ppn(27 downto 13) = PA[27:13] = 15 bits
--- (matches CACHE_PA_TAG_WIDTH for the 28-bit cache region).
-type tlb_entry_t is record
-  valid     : std_logic;
-  global    : std_logic;
-  used      : std_logic;
-  vpn       : std_logic_vector(31 downto 12);
-  asid_tag  : std_logic_vector(15 downto 0);
-  page_mask : std_logic_vector(3 downto 0);
-  ppn       : std_logic_vector(31 downto 10);
-  w         : std_logic;
-  x         : std_logic;
-  u         : std_logic;
-  d         : std_logic;
-  c         : std_logic;
-  stale     : std_logic;
-end record;
-constant TLB_ENTRY_RESET : tlb_entry_t := (
-  valid => '0', global => '0', used => '0',
-  vpn => (others => '0'), asid_tag => (others => '0'),
-  page_mask => (others => '0'), ppn => (others => '0'),
-  w => '0', x => '0', u => '0', d => '0', c => '0', stale => '0'
-);
-type tlb_array_t is array(0 to 31) of tlb_entry_t;
+  type logic_sr_func_t is (zero, byte_eq, not_zero);
 
-type tlb_exc_kind_t is (IMISS, DMISS_R, DMISS_W, IPROT, DPROT_R, DPROT_W);
+  type shiftfunc_t is (logic, arith, rotate, rotc);
 
--- if size becomes part of the bus, mem_size_t will move into cpu2j0_pack
-type mem_size_t is (BYTE, WORD, LONG);
+  -- BITSET: SH-2A BST #imm3,Rn (register bit-op group, R1 de-risk fallback --
+  -- see decode/gen-go/spec/sh2a/bit.toml). Single-cycle variable-position
+  -- bit-insert of the T flag: y carries a decode-time one-hot mask (1 <<
+  -- imm3), x carries Rn, and manip()'s new "t" parameter carries sr.t. This
+  -- reuses the existing zbus_sel=SEL_MANIP path instead of widening
+  -- zbus_sel_t (which is generated into decode_pkg.vhd and would otherwise
+  -- change BASE J1/J2/J4 decoder output too).
+  -- MAC_SAVE/MAC_RESTORE_L/MAC_RESTORE_H: SH-2A MULR MAC save/restore markers.
+  -- Base decode never emits these (dead on base). manip() returns x unchanged
+  -- for them; the actual save/restore-route behavior is implemented directly
+  -- in the datapath (mac_shadow_h/l capture + SEL_MANIP restore routing).
 
-type debug_state_t is ( RUN, READY, AWAIT_IF, AWAIT_BREAK );
+  type alumanip_t is (swap_byte, swap_word, extend_ubyte, extend_uword, extend_sbyte, extend_sword, extract, set_bit_7, bitset, clip_sb, clip_sw, clip_ub, clip_uw, mac_save, mac_restore_l, mac_restore_h);
 
-type bus_val_t is record
-  en : std_logic;
-  d  : std_logic_vector(bits-1 downto 0);
-end record;
+  -- NOTE: the SH-2A CS bit (SR bit 2, CLIPS/CLIPU saturation) is deliberately
+  -- NOT a field of sr_t. sr_t is embedded in datapath_reg_t's shared
+  -- register-variable ("this"), and widening it (even by one bit, even
+  -- SH2A_ARCH-gated) perturbed the whole shared-record techmap and cost the
+  -- base (non-SH2A) J2 datapath ~+400 cells (see the R1 shared-record
+  -- spillover precedent for push_ptr_init/store/term above g_push in
+  -- core/datapath.vhm). CS is instead carried in a small standalone
+  -- generate-local register (signal sr_cs, g_cs/g_cs_off in datapath.vhm)
+  -- muxed into the STC SR read value via to_slv(sr, cs), exactly like xbus's
+  -- g_push/g_push_off mux -- not embedded in datapath_reg_t.
 
-constant BUS_VAL_RESET : bus_val_t := ('0', (others => '0'));
+  type sr_t is record
+    t, s, q, m : std_logic;
+    int_mask   : std_logic_vector(3 downto 0);
+    md, rb, bl : std_logic; -- SH-4 privileged-arch bits (MD=30, RB=29, BL=28)
+  end record sr_t;
 
-type ybus_val_pipeline_t is array (2 downto 0) of bus_val_t;
+  -- SH-4 exception cause registers (J4). All zero on a non-PRIV_ARCH build.
 
-type datapath_reg_t is record
-   pc         : std_logic_vector(bits-1 downto 0);
-   sr         : sr_t;
-   priv       : priv_reg_t;   -- SH-4 EXPEVT/INTEVT/TRA (J4)
-   mmu        : mmu_reg_t;   -- SH-4 MMU CSRs: PTEH/PTEL/ASIDR/MMUCR/TEA/TTB (J4+MMU_ARCH)
-   -- High after TEA/PTEH have been captured for the current TLB-fault episode,
-   -- so the capture happens once (on the first faulting cycle) and is not
-   -- overwritten by a later cycle of the same fault. Needed for IMISS, where the
-   -- I-fetch stream advances a word while the miss persists (J4+MMU_ARCH).
-   tlb_exc_captured : std_logic;
-   -- Faulting-instruction restart-PC capture (J4+MMU_ARCH). ma_pc shadows the
-   -- architectural PC of the instruction that launches each data access (a fixed
-   -- pipeline point, so the offset to the access's own instruction is constant
-   -- regardless of how far the fetch pointer later runs ahead). On the first
-   -- cycle of a D-side TLB fault ma_pc is latched into tlb_exc_pc and routed to
-   -- the SPC computation, so RTE/LDTLB.R re-executes the faulting access even
-   -- under back-to-back faults (where the frozen fetch PC's lead is variable).
-   -- It is read onto xbus via SEL_TLBPC for the D-fault exception entry only
-   -- (I-fetch faults keep SEL_PC / the live PC); the decoder scopes the use.
-   ma_pc      : std_logic_vector(31 downto 0);
-   -- Per-instruction fetch-PC. ma_pc (=this.pc at MA-launch) is the run-ahead
-   -- fetch pointer: fine for a normal load (constant +4 lead) but for a delay-slot
-   -- load the branch redirect already carried this.pc into the target region, so
-   -- ma_pc is the target, not the load. if_pc captures the instruction's OWN fetch
-   -- VA at fetch (before any redirect); it is routed out to decode, re-registered
-   -- EX-aligned (ex_if_pc), and shadowed at the MA-launch as ma_if_pc, from which
-   -- the D-fault restart PC is derived. if_pc_next tracks if_dr_next; if_pc tracks
-   -- if_dr. (J4+MMU_ARCH only; unused/pruned on J1/J2.)
-   if_pc_next : std_logic_vector(31 downto 0);
-   if_pc      : std_logic_vector(31 downto 0);
-   ma_if_pc   : std_logic_vector(31 downto 0);
-   tlb_exc_pc : std_logic_vector(31 downto 0);
-   -- User SR captured at the first D-fault cycle, read onto ybus via SEL_TLBSR
-   -- for the D-fault entry's SSR save. The shared SEL_EXCEPTION SSR slot reads
-   -- the live SR, which under back-to-back faults can re-evaluate after this
-   -- entry already set RB=1 -> SSR.RB=1 -> the handler's LDTLB.R/RTE resumes in
-   -- bank 1 and user code reads uninitialised bank-1 registers. The captured
-   -- value is stable across the stalled slot's re-evaluations.
-   tlb_exc_sr : sr_t;
-   -- Precise-exception squash (J4+MMU_ARCH). Set on the first cycle a D/I-side
-   -- TLB fault is detected and held until the handler is entered (SR.RB=1). The
-   -- faulting access stalls/redirects a slot late, so the instruction(s) issued
-   -- behind the faulting one would otherwise commit their GPR writeback before
-   -- the exception is taken -- corrupting a base register the restarted faulting
-   -- access depends on (e.g. a store whose base was loaded two instructions
-   -- earlier). While tlb_squash is high the WB-stage GPR write-enable (we_wb) is
-   -- forced low, so no post-fault instruction retires its writeback -> a precise
-   -- restart. (The EX-stage we is left live so the exception entry's own
-   -- SPC/SSR saves to the regfile are not suppressed.)
-   tlb_squash : std_logic;
-   -- Precise auto-increment restore (J4+MMU_ARCH). On an @Rn+ load the base
-   -- post-increment commits via the EX-stage z-write one cycle BEFORE the load's
-   -- TLB fault is detectable in MEM, so neither the we_wb squash nor any later
-   -- gate can suppress it -> Rn is double-incremented when RTE re-executes the
-   -- load. ma_numz/ma_autoupd shadow the access-launching instruction's
-   -- (bank-remapped) z-write register and a "this EX write is a memory base
-   -- post-increment (@Rn+)" marker, captured at the same pipeline point as ma_pc.
-   -- On the first fault cycle they are latched into tlb_fault_zreg/tlb_restore_val
-   -- and tlb_restore_pend is armed; on the next EX-write slot the microcode leaves
-   -- free (reg.wr_z='0', i.e. clear of the slot0/slot1 SPC/SSR saves) the captured
-   -- pre-increment base (tlb_restore_val = the faulting VA) is written back to
-   -- tlb_fault_zreg, so the RTE-restarted load re-applies the single architectural
-   -- increment. ma_autoupd is 0 for @Rn, @(disp,Rn) and ALU-result EX writes, so
-   -- only genuine post-increments are restored.
-   ma_numz          : std_logic_vector(4 downto 0);
-   ma_autoupd       : std_logic;
-   -- Symmetric @-Rn pre-decrement STORE support (M8). ma_predec marks "this EX
-   -- write is a memory base pre-decrement store" (mem.wr='1', addr=ZBUS, SUB) and
-   -- ma_base shadows the access's ORIGINAL (pre-decrement) base = xbus (Rn) at the
-   -- launch point. Unlike @Rn+ loads (whose pre-modify base equals the faulting
-   -- VA), the @-Rn store's faulting VA is the ALREADY-decremented address, so the
-   -- value to restore is the captured original base, not tlb_fault_va. On the
-   -- first fault cycle ma_base is latched into tlb_restore_val and the restore is
-   -- armed, so the RTE-restarted store re-applies the single architectural
-   -- decrement instead of double-decrementing.
-   ma_predec        : std_logic;
-   ma_base          : std_logic_vector(31 downto 0);
-   -- Delay-slot marker of the access-launching instruction, shadowed at the same
-   -- pipeline point as ma_pc. A D-side TLB fault whose faulting instruction is in
-   -- a branch delay slot must restart at the BRANCH (so it re-issues the delay
-   -- slot), not at the delay-slot instruction. ma_pc for a delay-slot instruction
-   -- is the branch PC (the fetch PC is held across the delayed branch), so the
-   -- normal tlb_exc_pc = ma_pc - 2 bias undershoots; when ma_dslot='1' the bias is
-   -- ma_pc + 2 instead, yielding SPC = TLBPC - 4 = branch PC - 2 = branch restart.
-   ma_dslot         : std_logic;
-   tlb_fault_zreg   : std_logic_vector(4 downto 0);
-   tlb_restore_val  : std_logic_vector(31 downto 0);
-   tlb_restore_pend : std_logic;
-   mac_s      : std_logic;
-   data_o_size: mem_size_t;
-   data_o_unsigned: std_logic; -- SH2A_ARCH only: MOVU.B/MOVU.W zero-extend
-   data_o_lock: std_logic;
-   data_o     : cpu_data_o_t;
-   inst_o     : cpu_instruction_o_t;
-   pc_inc     : std_logic_vector(31 downto 0);
-   if_dr      : std_logic_vector(15 downto 0);
-   if_dr_next : std_logic_vector(15 downto 0);
-   illegal_delay_slot : std_logic;
-   illegal_instr : std_logic;
-   if_en      : std_logic;
-   m_dr       : std_logic_vector(31 downto 0);
-   m_dr_next  : std_logic_vector(31 downto 0);
-   m_en       : std_logic;
-   slot       : std_logic;
-   -- pipelines the enter_debug signal to delay it so that single stepping
-   -- instructions works and debug mode is re-entered after one instruction.
-   -- The length of this depends on how many microcode lines there are in the
-   -- break instruction after it has raised the debug control line.
-   enter_debug: std_logic_vector(3 downto 0);
-   old_debug : std_logic;
-   stop_pc_inc : std_logic;
-   debug_state: debug_state_t;
-   debug_o    : cpu_debug_o_t;
-   -- pipeline of inserted values to override y-bus. Values go in at 'left and
-   -- move downto 'right
-   ybus_override : ybus_val_pipeline_t;
-   -- NOTE: the SH2A restart-safe MOVML.L Rm,@-R15 push scratch state
-   -- (push_ptr/push_active) is deliberately NOT a field of this shared record.
-   -- It lives in an SH2A_ARCH generate-scoped register inside core/datapath.vhm
-   -- (g_push_state), so non-SH2A variants carry zero push state. A shared record
-   -- field does not prune under datapath's assert-derived `keep` attribute even
-   -- when only ever written on SH2A, spilling ~209 combinational LUT4 into the J4
-   -- variant (measured, PR #110 benchmark alert).
-end record;
+  type priv_reg_t is record
+    expevt : std_logic_vector(11 downto 0); -- general-exception code
+    intevt : std_logic_vector(11 downto 0); -- interrupt code
+    tra    : std_logic_vector(9 downto 0);  -- TRAPA imm << 2
+  end record priv_reg_t;
 
-constant DATAPATH_RESET : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, tlb_exc_captured => '0', ma_pc => (others => '0'), tlb_exc_pc => (others => '0'), tlb_exc_sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), tlb_squash => '0', ma_numz => (others => '0'), ma_autoupd => '0', ma_predec => '0', ma_base => (others => '0'), ma_dslot => '0', if_pc_next => (others => '0'), if_pc => (others => '0'), ma_if_pc => (others => '0'), tlb_fault_zreg => (others => '0'), tlb_restore_val => (others => '0'), tlb_restore_pend => '0', mac_s => '0', data_o_size => BYTE, data_o_unsigned => '0', data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
+  constant priv_reg_reset : priv_reg_t := (others => (others => '0'));
 
-subtype regnum_t is std_logic_vector(4 downto 0);
-component register_file is
-  generic ( ADDR_WIDTH : integer; NUM_REGS : integer; REG_WIDTH : integer;
-            BANKED : boolean := false );
-  port (
-    clk     : in  std_logic;
-    rst     : in  std_logic;
-    ce      : in  std_logic;
+  -- SH-4 MMU control registers (J4 + MMU_ARCH). A dedicated flop block, NOT the
+  -- regfile: these are CSRs read/written broadside by the TLB/fault logic.
+  -- All-0 at reset (hardware-spec §9). M1 wires PTEH/PTEL/ASIDR to LDC/STC;
+  -- MMUCR/TEA/TTB exist (reset 0) but get their software path in M2 (P4 decode).
 
-    addr_ra : in  std_logic_vector(ADDR_WIDTH-1 downto 0);
-    dout_a  : out std_logic_vector(REG_WIDTH-1 downto 0);
-    addr_rb : in  std_logic_vector(ADDR_WIDTH-1 downto 0);
-    dout_b  : out std_logic_vector(REG_WIDTH-1 downto 0);
-    dout_0  : out std_logic_vector(REG_WIDTH-1 downto 0);
-    -- Bank-remapped index for the dedicated R0 read port (dout_0); defaulted to
-    -- bank-0 R0 so two_bank/flops/J1 instantiations are unchanged.
-    addr_r0 : in  std_logic_vector(ADDR_WIDTH-1 downto 0) := (others => '0');
-    -- One-cycle-early read addresses (J1 architecture(ebr) full-cycle read);
-    -- defaulted so two_bank/flops instantiations need not drive them.
-    addr_ra_early : in std_logic_vector(ADDR_WIDTH-1 downto 0) := (others => '0');
-    addr_rb_early : in std_logic_vector(ADDR_WIDTH-1 downto 0) := (others => '0');
+  type mmu_reg_t is record
+    pteh  : std_logic_vector(31 downto 0);
+    ptel  : std_logic_vector(31 downto 0);
+    asidr : std_logic_vector(31 downto 0);
+    mmucr : std_logic_vector(31 downto 0);
+    tea   : std_logic_vector(31 downto 0);
+    ttb   : std_logic_vector(31 downto 0);
+    -- TSB pointer assist (M5, hardware-spec §2.6-2.8). tsbbr/tsbcfg are MMIO
+    -- config (0xFF000014/18); tsbptr is hardware-computed on every TLB miss and
+    -- is read-only (STC TSBPTR,Rn / MMIO 0xFF00001C).
+    tsbbr  : std_logic_vector(31 downto 0);
+    tsbcfg : std_logic_vector(31 downto 0);
+    tsbptr : std_logic_vector(31 downto 0);
+  end record mmu_reg_t;
 
-    we_wb     : in  std_logic;
-    w_addr_wb : in  std_logic_vector(ADDR_WIDTH-1 downto 0);
-    din_wb    : in  std_logic_vector(REG_WIDTH-1 downto 0);
+  constant mmu_reg_reset : mmu_reg_t := (others => (others => '0'));
 
-    we_ex     : in  std_logic;
-    w_addr_ex : in  std_logic_vector(ADDR_WIDTH-1 downto 0);
-    din_ex    : in  std_logic_vector(REG_WIDTH-1 downto 0);
+  -- TLB entry and array types (MMU_ARCH). ppn is PA[31:10] = 22-bit PFN at 4 KB
+  -- granularity; i_pa_tag/d_pa_tag use ppn(27 downto 13) = PA[27:13] = 15 bits
+  -- (matches CACHE_PA_TAG_WIDTH for the 28-bit cache region).
 
-    wr_data_o : out std_logic_vector(REG_WIDTH-1 downto 0)
+  type tlb_entry_t is record
+    valid     : std_logic;
+    global    : std_logic;
+    used      : std_logic;
+    vpn       : std_logic_vector(31 downto 12);
+    asid_tag  : std_logic_vector(15 downto 0);
+    page_mask : std_logic_vector(3 downto 0);
+    ppn       : std_logic_vector(31 downto 10);
+    w         : std_logic;
+    x         : std_logic;
+    u         : std_logic;
+    d         : std_logic;
+    c         : std_logic;
+    stale     : std_logic;
+  end record tlb_entry_t;
+
+  constant tlb_entry_reset : tlb_entry_t :=
+  (
+    valid     => '0',
+    global    => '0',
+    used      => '0',
+    vpn       => (others => '0'),
+    asid_tag  => (others => '0'),
+    page_mask => (others => '0'),
+    ppn       => (others => '0'),
+    w         => '0',
+    x         => '0',
+    u         => '0',
+    d         => '0',
+    c         => '0',
+    stale     => '0'
+  );
+
+  type tlb_array_t is array(0 to 31) of tlb_entry_t;
+
+  type tlb_exc_kind_t is (imiss, dmiss_r, dmiss_w, iprot, dprot_r, dprot_w);
+
+  -- if size becomes part of the bus, mem_size_t will move into cpu2j0_pack
+
+  type mem_size_t is (byte, word, long);
+
+  type debug_state_t is (run, ready, await_if, await_break);
+
+  type bus_val_t is record
+    en : std_logic;
+    d  : std_logic_vector(bits - 1 downto 0);
+  end record bus_val_t;
+
+  constant bus_val_reset : bus_val_t := ('0', (others => '0'));
+
+  type ybus_val_pipeline_t is array (2 downto 0) of bus_val_t;
+
+  type datapath_reg_t is record
+    pc   : std_logic_vector(bits - 1 downto 0);
+    sr   : sr_t;
+    priv : priv_reg_t; -- SH-4 EXPEVT/INTEVT/TRA (J4)
+    mmu  : mmu_reg_t;  -- SH-4 MMU CSRs: PTEH/PTEL/ASIDR/MMUCR/TEA/TTB (J4+MMU_ARCH)
+    -- High after TEA/PTEH have been captured for the current TLB-fault episode,
+    -- so the capture happens once (on the first faulting cycle) and is not
+    -- overwritten by a later cycle of the same fault. Needed for IMISS, where the
+    -- I-fetch stream advances a word while the miss persists (J4+MMU_ARCH).
+    tlb_exc_captured : std_logic;
+    -- Faulting-instruction restart-PC capture (J4+MMU_ARCH). ma_pc shadows the
+    -- architectural PC of the instruction that launches each data access (a fixed
+    -- pipeline point, so the offset to the access's own instruction is constant
+    -- regardless of how far the fetch pointer later runs ahead). On the first
+    -- cycle of a D-side TLB fault ma_pc is latched into tlb_exc_pc and routed to
+    -- the SPC computation, so RTE/LDTLB.R re-executes the faulting access even
+    -- under back-to-back faults (where the frozen fetch PC's lead is variable).
+    -- It is read onto xbus via SEL_TLBPC for the D-fault exception entry only
+    -- (I-fetch faults keep SEL_PC / the live PC); the decoder scopes the use.
+    ma_pc : std_logic_vector(31 downto 0);
+    -- Per-instruction fetch-PC. ma_pc (=this.pc at MA-launch) is the run-ahead
+    -- fetch pointer: fine for a normal load (constant +4 lead) but for a delay-slot
+    -- load the branch redirect already carried this.pc into the target region, so
+    -- ma_pc is the target, not the load. if_pc captures the instruction's OWN fetch
+    -- VA at fetch (before any redirect); it is routed out to decode, re-registered
+    -- EX-aligned (ex_if_pc), and shadowed at the MA-launch as ma_if_pc, from which
+    -- the D-fault restart PC is derived. if_pc_next tracks if_dr_next; if_pc tracks
+    -- if_dr. (J4+MMU_ARCH only; unused/pruned on J1/J2.)
+    if_pc_next : std_logic_vector(31 downto 0);
+    if_pc      : std_logic_vector(31 downto 0);
+    ma_if_pc   : std_logic_vector(31 downto 0);
+    tlb_exc_pc : std_logic_vector(31 downto 0);
+    -- User SR captured at the first D-fault cycle, read onto ybus via SEL_TLBSR
+    -- for the D-fault entry's SSR save. The shared SEL_EXCEPTION SSR slot reads
+    -- the live SR, which under back-to-back faults can re-evaluate after this
+    -- entry already set RB=1 -> SSR.RB=1 -> the handler's LDTLB.R/RTE resumes in
+    -- bank 1 and user code reads uninitialised bank-1 registers. The captured
+    -- value is stable across the stalled slot's re-evaluations.
+    tlb_exc_sr : sr_t;
+    -- Precise-exception squash (J4+MMU_ARCH). Set on the first cycle a D/I-side
+    -- TLB fault is detected and held until the handler is entered (SR.RB=1). The
+    -- faulting access stalls/redirects a slot late, so the instruction(s) issued
+    -- behind the faulting one would otherwise commit their GPR writeback before
+    -- the exception is taken -- corrupting a base register the restarted faulting
+    -- access depends on (e.g. a store whose base was loaded two instructions
+    -- earlier). While tlb_squash is high the WB-stage GPR write-enable (we_wb) is
+    -- forced low, so no post-fault instruction retires its writeback -> a precise
+    -- restart. (The EX-stage we is left live so the exception entry's own
+    -- SPC/SSR saves to the regfile are not suppressed.)
+    tlb_squash : std_logic;
+    -- Precise auto-increment restore (J4+MMU_ARCH). On an @Rn+ load the base
+    -- post-increment commits via the EX-stage z-write one cycle BEFORE the load's
+    -- TLB fault is detectable in MEM, so neither the we_wb squash nor any later
+    -- gate can suppress it -> Rn is double-incremented when RTE re-executes the
+    -- load. ma_numz/ma_autoupd shadow the access-launching instruction's
+    -- (bank-remapped) z-write register and a "this EX write is a memory base
+    -- post-increment (@Rn+)" marker, captured at the same pipeline point as ma_pc.
+    -- On the first fault cycle they are latched into tlb_fault_zreg/tlb_restore_val
+    -- and tlb_restore_pend is armed; on the next EX-write slot the microcode leaves
+    -- free (reg.wr_z='0', i.e. clear of the slot0/slot1 SPC/SSR saves) the captured
+    -- pre-increment base (tlb_restore_val = the faulting VA) is written back to
+    -- tlb_fault_zreg, so the RTE-restarted load re-applies the single architectural
+    -- increment. ma_autoupd is 0 for @Rn, @(disp,Rn) and ALU-result EX writes, so
+    -- only genuine post-increments are restored.
+    ma_numz    : std_logic_vector(4 downto 0);
+    ma_autoupd : std_logic;
+    -- Symmetric @-Rn pre-decrement STORE support (M8). ma_predec marks "this EX
+    -- write is a memory base pre-decrement store" (mem.wr='1', addr=ZBUS, SUB) and
+    -- ma_base shadows the access's ORIGINAL (pre-decrement) base = xbus (Rn) at the
+    -- launch point. Unlike @Rn+ loads (whose pre-modify base equals the faulting
+    -- VA), the @-Rn store's faulting VA is the ALREADY-decremented address, so the
+    -- value to restore is the captured original base, not tlb_fault_va. On the
+    -- first fault cycle ma_base is latched into tlb_restore_val and the restore is
+    -- armed, so the RTE-restarted store re-applies the single architectural
+    -- decrement instead of double-decrementing.
+    ma_predec : std_logic;
+    ma_base   : std_logic_vector(31 downto 0);
+    -- Delay-slot marker of the access-launching instruction, shadowed at the same
+    -- pipeline point as ma_pc. A D-side TLB fault whose faulting instruction is in
+    -- a branch delay slot must restart at the BRANCH (so it re-issues the delay
+    -- slot), not at the delay-slot instruction. ma_pc for a delay-slot instruction
+    -- is the branch PC (the fetch PC is held across the delayed branch), so the
+    -- normal tlb_exc_pc = ma_pc - 2 bias undershoots; when ma_dslot='1' the bias is
+    -- ma_pc + 2 instead, yielding SPC = TLBPC - 4 = branch PC - 2 = branch restart.
+    ma_dslot           : std_logic;
+    tlb_fault_zreg     : std_logic_vector(4 downto 0);
+    tlb_restore_val    : std_logic_vector(31 downto 0);
+    tlb_restore_pend   : std_logic;
+    mac_s              : std_logic;
+    data_o_size        : mem_size_t;
+    data_o_unsigned    : std_logic; -- SH2A_ARCH only: MOVU.B/MOVU.W zero-extend
+    data_o_lock        : std_logic;
+    data_o             : cpu_data_o_t;
+    inst_o             : cpu_instruction_o_t;
+    pc_inc             : std_logic_vector(31 downto 0);
+    if_dr              : std_logic_vector(15 downto 0);
+    if_dr_next         : std_logic_vector(15 downto 0);
+    illegal_delay_slot : std_logic;
+    illegal_instr      : std_logic;
+    if_en              : std_logic;
+    m_dr               : std_logic_vector(31 downto 0);
+    m_dr_next          : std_logic_vector(31 downto 0);
+    m_en               : std_logic;
+    slot               : std_logic;
+    -- pipelines the enter_debug signal to delay it so that single stepping
+    -- instructions works and debug mode is re-entered after one instruction.
+    -- The length of this depends on how many microcode lines there are in the
+    -- break instruction after it has raised the debug control line.
+    enter_debug : std_logic_vector(3 downto 0);
+    old_debug   : std_logic;
+    stop_pc_inc : std_logic;
+    debug_state : debug_state_t;
+    debug_o     : cpu_debug_o_t;
+    -- pipeline of inserted values to override y-bus. Values go in at 'left and
+    -- move downto 'right
+    ybus_override : ybus_val_pipeline_t;
+  -- NOTE: the SH2A restart-safe MOVML.L Rm,@-R15 push scratch state
+  -- (push_ptr/push_active) is deliberately NOT a field of this shared record.
+  -- It lives in an SH2A_ARCH generate-scoped register inside core/datapath.vhm
+  -- (g_push_state), so non-SH2A variants carry zero push state. A shared record
+  -- field does not prune under datapath's assert-derived `keep` attribute even
+  -- when only ever written on SH2A, spilling ~209 combinational LUT4 into the J4
+  -- variant (measured, PR #110 benchmark alert).
+  end record datapath_reg_t;
+
+  constant datapath_reset : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, tlb_exc_captured => '0', ma_pc => (others => '0'), tlb_exc_pc => (others => '0'), tlb_exc_sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), tlb_squash => '0', ma_numz => (others => '0'), ma_autoupd => '0', ma_predec => '0', ma_base => (others => '0'), ma_dslot => '0', if_pc_next => (others => '0'), if_pc => (others => '0'), ma_if_pc => (others => '0'), tlb_fault_zreg => (others => '0'), tlb_restore_val => (others => '0'), tlb_restore_pend => '0', mac_s => '0', data_o_size => BYTE, data_o_unsigned => '0', data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
+
+  subtype regnum_t is std_logic_vector(4 downto 0);
+
+  component register_file is
+    generic (
+      addr_width : integer;
+      num_regs   : integer;
+      reg_width  : integer;
+      banked     : boolean := false
     );
-end component register_file;
+    port (
+      clk : in    std_logic;
+      rst : in    std_logic;
+      ce  : in    std_logic;
 
--- Adds or subtracts a and b with carry-in and carry-out. The carry-out
--- (borrow for subtraction) bit is in the left-most bit of the result, which is
--- one bit wider than the inputs
-function arith_unit(
-  a : std_logic_vector;
-  b : std_logic_vector;
-  func : arith_func_t;
-  ci : std_logic)
+      addr_ra : in    std_logic_vector(ADDR_WIDTH - 1 downto 0);
+      dout_a  : out   std_logic_vector(REG_WIDTH - 1 downto 0);
+      addr_rb : in    std_logic_vector(ADDR_WIDTH - 1 downto 0);
+      dout_b  : out   std_logic_vector(REG_WIDTH - 1 downto 0);
+      dout_0  : out   std_logic_vector(REG_WIDTH - 1 downto 0);
+      -- Bank-remapped index for the dedicated R0 read port (dout_0); defaulted to
+      -- bank-0 R0 so two_bank/flops/J1 instantiations are unchanged.
+      addr_r0 : in    std_logic_vector(ADDR_WIDTH - 1 downto 0) := (others => '0');
+      -- One-cycle-early read addresses (J1 architecture(ebr) full-cycle read);
+      -- defaulted so two_bank/flops instantiations need not drive them.
+      addr_ra_early : in    std_logic_vector(ADDR_WIDTH - 1 downto 0) := (others => '0');
+      addr_rb_early : in    std_logic_vector(ADDR_WIDTH - 1 downto 0) := (others => '0');
+
+      we_wb     : in    std_logic;
+      w_addr_wb : in    std_logic_vector(ADDR_WIDTH - 1 downto 0);
+      din_wb    : in    std_logic_vector(REG_WIDTH - 1 downto 0);
+
+      we_ex     : in    std_logic;
+      w_addr_ex : in    std_logic_vector(ADDR_WIDTH - 1 downto 0);
+      din_ex    : in    std_logic_vector(REG_WIDTH - 1 downto 0);
+
+      wr_data_o : out   std_logic_vector(REG_WIDTH - 1 downto 0)
+    );
+  end component register_file;
+
+  -- Adds or subtracts a and b with carry-in and carry-out. The carry-out
+  -- (borrow for subtraction) bit is in the left-most bit of the result, which is
+  -- one bit wider than the inputs
+
+  function arith_unit (
+    a : std_logic_vector;
+    b : std_logic_vector;
+    func : arith_func_t;
+    ci : std_logic
+  )
   return std_logic_vector;
 
--- based on the input and output of the arith_unit, update the SR register
--- flags for different operations
-function arith_update_sr(
-  sr_in : sr_t;
-  a_msb : std_logic;
-  b_msb : std_logic;
-  value : std_logic_vector;
-  co_or_borrow : std_logic;
-  arithfunc : arith_func_t;
-  func : arith_sr_func_t)
+  -- based on the input and output of the arith_unit, update the SR register
+  -- flags for different operations
+
+  function arith_update_sr (
+    sr_in : sr_t;
+    a_msb : std_logic;
+    b_msb : std_logic;
+    value : std_logic_vector;
+    co_or_borrow : std_logic;
+    arithfunc : arith_func_t;
+    func : arith_sr_func_t
+  )
   return sr_t;
 
--- Returns either the bitwise AND, OR or XOR of a and b or the NOT of b
-function logic_unit(
-  a : std_logic_vector;
-  b : std_logic_vector;
-  func : logic_func_t)
+  -- Returns either the bitwise AND, OR or XOR of a and b or the NOT of b
+
+  function logic_unit (
+    a : std_logic_vector;
+    b : std_logic_vector;
+    func : logic_func_t
+  )
   return std_logic_vector;
 
--- based on the output of the logic_unit, update the SR register flags for
--- different operations
-function logic_update_sr(
-  sr_in : sr_t;
-  value : std_logic_vector;
-  func : logic_sr_func_t;
-  constant byte_width : integer := 8)
+  -- based on the output of the logic_unit, update the SR register flags for
+  -- different operations
+
+  function logic_update_sr (
+    sr_in : sr_t;
+    value : std_logic_vector;
+    func : logic_sr_func_t;
+    constant byte_width : integer := 8
+  )
   return sr_t;
 
-function is_zero(a : std_logic_vector) return std_logic;
+  function is_zero (
+    a : std_logic_vector
+  ) return std_logic;
 
--- PageMask helpers (MMU_ARCH variable page sizes, docs/architecture/tlb.md).
--- page_offset_mask: bit p = '1' iff PA bit 12+p is within the page offset (use VA).
---   pm: 0=4KB(0 extra bits) 1=16KB(2) 2=64KB(4) ... 8=256MB(16) 9+=1GB(18, capped).
-function page_offset_mask(pm : std_logic_vector(3 downto 0)) return std_logic_vector;
--- vpn_compare_mask: 20-bit mask over VPN (bit p = VA bit 12+p). '1'=compared, '0'=in-page.
-function vpn_compare_mask(pm : std_logic_vector(3 downto 0)) return std_logic_vector;
+  -- PageMask helpers (MMU_ARCH variable page sizes, docs/architecture/tlb.md).
+  -- page_offset_mask: bit p = '1' iff PA bit 12+p is within the page offset (use VA).
+  --   pm: 0=4KB(0 extra bits) 1=16KB(2) 2=64KB(4) ... 8=256MB(16) 9+=1GB(18, capped).
 
-function bshifter(a,b : std_logic_vector; c : std_logic; ops : shiftfunc_t) return std_logic_vector;
-function manip(x, y : std_logic_vector(31 downto 0); t : std_logic; func : alumanip_t; sh2a : boolean)
+  function page_offset_mask (
+    pm : std_logic_vector(3 downto 0)
+  ) return std_logic_vector;
+  -- vpn_compare_mask: 20-bit mask over VPN (bit p = VA bit 12+p). '1'=compared, '0'=in-page.
+
+  function vpn_compare_mask (
+    pm : std_logic_vector(3 downto 0)
+  ) return std_logic_vector;
+
+  function bshifter (
+    a,
+    b : std_logic_vector;
+    c : std_logic;
+    ops : shiftfunc_t
+  ) return std_logic_vector;
+
+  function manip (
+    x,
+    y : std_logic_vector(31 downto 0);
+    t : std_logic;
+    func : alumanip_t;
+    sh2a : boolean
+  )
   return std_logic_vector;
-function clip_saturated(x : std_logic_vector(31 downto 0); func : alumanip_t)
+
+  function clip_saturated (
+    x : std_logic_vector(31 downto 0);
+    func : alumanip_t
+  )
   return std_logic;
 
-component shifter is
-  port (
-    clk   : in  std_logic;
-    rst   : in  std_logic;
-    start : in  std_logic;
-    sel   : in  std_logic;
-    a     : in  std_logic_vector(31 downto 0);
-    b     : in  std_logic_vector(5 downto 0);
-    t_in  : in  std_logic;
-    op    : in  shiftfunc_t;
-    y     : out std_logic_vector(31 downto 0);
-    t_out : out std_logic;
-    busy  : out std_logic);
-end component shifter;
-end package;
+  component shifter is
+    port (
+      clk   : in    std_logic;
+      rst   : in    std_logic;
+      start : in    std_logic;
+      sel   : in    std_logic;
+      a     : in    std_logic_vector(31 downto 0);
+      b     : in    std_logic_vector(5 downto 0);
+      t_in  : in    std_logic;
+      op    : in    shiftfunc_t;
+      y     : out   std_logic_vector(31 downto 0);
+      t_out : out   std_logic;
+      busy  : out   std_logic
+    );
+  end component shifter;
+
+end package cpu2j0_components_pack;
 
 package body cpu2j0_components_pack is
 
-  constant NO_WARNING: BOOLEAN := FALSE; -- default to emit warnings
+  constant no_warning : BOOLEAN := FALSE; -- default to emit warnings
 
-function or_reduce(a : std_logic_vector) return std_logic is
-  variable r : std_logic := '0';
-begin
-  for i in a'range loop
-    r := r or a(i);
-  end loop;
-  return r;
-end;
+  function or_reduce (
+    a : std_logic_vector
+  ) return std_logic is
 
--- Like or_reduce, but doesn't not completely reduce to a single bit. Instead
--- it splits the input into bytes, reduces each, and returns a vector
-function or_reduce_bytes(a : std_logic_vector; constant byte_width : integer)
-  return std_logic_vector is
-  constant num_bytes : integer := natural(floor(real(a'length) / real(byte_width)));
-  variable r : std_logic_vector(num_bytes - 1 downto 0);
-begin
-  for i in r'range loop
-    r(i) := or_reduce(a((i + 1) * byte_width - 1 downto i * byte_width));
-  end loop;
-  return r;
-end;
+    variable r : std_logic := '0';
 
-function is_zero(a : std_logic_vector) return std_logic is
-  variable r : std_logic := '0';
-begin
-  return not or_reduce(a);
-end;
+  begin
 
-function page_offset_mask(pm : std_logic_vector(3 downto 0)) return std_logic_vector is
-  variable n : integer range 0 to 16;
-  variable m : std_logic_vector(15 downto 0) := (others => '0');
-begin
-  case pm is
-    when "0000" => n := 0;   when "0001" => n := 2;   when "0010" => n := 4;
-    when "0011" => n := 6;   when "0100" => n := 8;   when "0101" => n := 10;
-    when "0110" => n := 12;  when "0111" => n := 14;  when others => n := 16;
-  end case;
-  for p in 0 to 15 loop
-    if p < n then m(p) := '1'; end if;  -- bit 12+p is in-page offset -> use VA
-  end loop;
-  return m;
-end function;
+    for i in a'range loop
 
-function vpn_compare_mask(pm : std_logic_vector(3 downto 0)) return std_logic_vector is
-  variable n : integer range 0 to 20;
-  variable m : std_logic_vector(19 downto 0) := (others => '1');
-begin
-  case pm is
-    when "0000" => n := 0;   when "0001" => n := 2;   when "0010" => n := 4;
-    when "0011" => n := 6;   when "0100" => n := 8;   when "0101" => n := 10;
-    when "0110" => n := 12;  when "0111" => n := 14;  when "1000" => n := 16;
-    when "1001" => n := 18;  when others => n := 20;
-  end case;
-  for p in 0 to 19 loop
-    if p < n then m(p) := '0'; end if;  -- in-page VPN bit -> ignore
-  end loop;
-  return m;
-end function;
+      r := r or a(i);
 
--- xor every bit in vector a by bit b
-function xor_all(a : std_logic_vector; b : std_logic) return std_logic_vector is
-  alias av : std_logic_vector(a'length - 1 downto 0) is a;
-  variable bv : std_logic_vector(a'length - 1 downto 0) := (others => b);
-begin
-  return av xor bv;
-end;
+    end loop;
 
-function to_bit(b: boolean) return std_logic is
-begin
-  if b then
-    return '1';
-  else
-    return '0';
-  end if;
-end;
-
-function arith_unit(
-  a : std_logic_vector;
-  b : std_logic_vector;
-  func : arith_func_t;
-  ci : std_logic)
-return std_logic_vector is
-  alias xa : std_logic_vector(a'length - 1 downto 0) is a;
-  alias xb : std_logic_vector(b'length - 1 downto 0) is b;
-
-  variable is_sub : std_logic;
-  variable b2 : std_logic_vector(xb'range);
-  variable sum : unsigned(a'length downto 0);
-  variable carry_in : unsigned(a'length downto 0);
-begin
-  if a'length /= b'length then
-    assert NO_WARNING
-      report "arith_unit: Arg size mismatch. Returning 0"
-      severity WARNING;
-    sum := to_unsigned(0, sum'length);
-    return std_logic_vector(sum);
-  end if;
-  is_sub := to_bit(func = SUB);
-  -- if ADD, then r = A+B+ci
-  -- if SUB, then r = A-B-ci = A+not(B)+1-ci
-
-  -- Perform a subtraction by negating the B operand. Take the twos complement
-  -- by first flipping the bits and then xor-ing the ci to implement the +1.
-  b2 := xor_all(xb, is_sub);
-  -- If is_sub=0, then ci behaves normally. If is_sub=1 then
-  -- r = A+not(B)+1-ci = A+not(B)+1-1 = A+not(B) when ci = 1
-  --                   = A+not(B)+1              when ci = 0
-  -- Xor-ing the ci by is_sub gives the correct calculation.
-  carry_in := (others => '0');
-  carry_in(0) := is_sub xor ci;
-
-  sum := ('0' & unsigned(xa)) + ('0' & unsigned(b2)) + carry_in;
-
-  -- convert left-most bit to a borrow instead of carry out when doing a subtraction
-  sum(sum'left) := sum(sum'left) xor is_sub;
-  return std_logic_vector(sum);
-end;
-
-function logic_unit(
-  a : std_logic_vector;
-  b : std_logic_vector;
-  func : logic_func_t)
-return std_logic_vector is
-  alias xa : std_logic_vector(a'length - 1 downto 0) is a;
-  alias xb : std_logic_vector(b'length - 1 downto 0) is b;
-  variable r : std_logic_vector(xa'range);
-begin
-  if a'length /= b'length then
-    assert NO_WARNING
-      report "logic_unit: Arg size mismatch. Returning 0"
-      severity WARNING;
-    r := (others => '0');
     return r;
-  end if;
-  case func is
-    when LOGIC_NOT =>
-      r := xor_all(xb, '1');
-    when LOGIC_AND =>
-      r := xa and xb;
-    when LOGIC_OR =>
-      r := xa or xb;
-    when LOGIC_XOR =>
-      r := xa xor xb;
-  end case;
-  return r;
-end;
 
-function arith_update_sr(
-  sr_in : sr_t;
-  a_msb : std_logic;
-  b_msb : std_logic;
-  value : std_logic_vector;
-  co_or_borrow : std_logic;
-  arithfunc : arith_func_t;
-  func : arith_sr_func_t)
-return sr_t is
-  alias v : std_logic_vector(value'length - 1 downto 0) is value;
-  variable sr_out : sr_t := sr_in;
-  variable v_msb : std_logic := v(v'left);
-  variable is_sub : std_logic := to_bit(arithfunc = SUB);
-  variable value_zero : std_logic := is_zero(v);
-  variable common_gr_eq, sign_gr_eq, unsign_gr_eq : std_logic;
-begin
-  -- logic common to both signed and unsigned comparisons.
-  -- common_gr = '1' => a >= b, but not the converse
-  common_gr_eq := (not(a_msb) and not(b_msb) and not(v_msb)) or
-                  (a_msb and b_msb and not(v_msb));
-  sign_gr_eq := common_gr_eq or (not(a_msb) and b_msb);
-  unsign_gr_eq := common_gr_eq or (a_msb and not(b_msb));
-  case func is
-    when ZERO =>
-      sr_out.t := is_zero(v);
-    when OVERUNDERFLOW =>
-      sr_out.t := (not(a_msb) and not(b_msb xor is_sub) and v_msb) or
-                  (a_msb and (b_msb xor is_sub) and not(v_msb));
-    when UGRTER =>
-      sr_out.t := unsign_gr_eq and not(value_zero);
-    when UGRTER_EQ =>
-      sr_out.t := unsign_gr_eq;
-    when SGRTER =>
-      sr_out.t := sign_gr_eq and not(value_zero);
-    when SGRTER_EQ =>
-      sr_out.t := sign_gr_eq;
-    when DIV0S =>
-      sr_out.q := a_msb;
-      sr_out.m := b_msb;
-      sr_out.t := a_msb xor b_msb;
-    when DIV1 =>
-      sr_out.q := a_msb xor sr_in.m xor co_or_borrow;
-      sr_out.t := not (sr_out.q xor sr_in.m);
-  end case;
-  return sr_out;
-end;
+  end function or_reduce;
 
-function logic_update_sr(
-  sr_in : sr_t;
-  value : std_logic_vector;
-  func : logic_sr_func_t;
-  constant byte_width : integer := 8)
-return sr_t is
-  alias v : std_logic_vector(value'length - 1 downto 0) is value;
-  variable sr_out : sr_t := sr_in;
-begin
-  case func is
-    when ZERO =>
-      sr_out.t := is_zero(v);
-    when BYTE_EQ =>
-      -- assumes the value is a xor b
-      sr_out.t := or_reduce(xor_all(or_reduce_bytes(v, byte_width), '1'));
-    when NOT_ZERO =>
-      sr_out.t := not is_zero(v);
-  end case;
-  return sr_out;
-end;
+  -- Like or_reduce, but doesn't not completely reduce to a single bit. Instead
+  -- it splits the input into bytes, reduces each, and returns a vector
 
-function left_rotate(a : std_logic_vector; b : std_logic_vector) return std_logic_vector is
-   constant num_bits : integer := a'length;
-   variable sr, yr : std_logic_vector(a'range);
-   variable offset : integer range 0 to num_bits/2;
-   variable k : integer;
-   begin
-
-   yr := a;
-   offset := num_bits/2;
-
-   for i in b'range loop
-      if b(i) = '1' then
-         for j in a'range loop
-            if j + offset >= num_bits then k := j + offset - num_bits;
-            else                           k := j + offset;            end if;
-
-            sr(k) := yr(j);
-         end loop;
-      else
-         for j in a'range loop
-            sr(j) := yr(j);
-         end loop;
-      end if;
-
-      offset := offset/2;
-      yr := sr;
-   end loop;
-
-   return yr;
-end function;
-
-function calf_fcn(b : unsigned) return std_logic_vector is
-   constant b_left : integer := b'length - 1;
-   constant result_bits : integer := 2 ** b'length;
-   --variable ib : natural range 0 to result_bits-1 := to_integer(b);
-   variable ib : natural := to_integer(b);
-   variable f : std_logic_vector(result_bits-1 downto 0) := (others => '0');
-   begin
-
-   for i in f'range loop
-      if i < ib then f(i) := '1'; end if;
-   end loop;
-   return f;
-end function;
-
-function calp_fcn(f : std_logic_vector; rotate, left : std_logic) return std_logic_vector is
-   variable p : std_logic_vector(f'range);
-   begin
-
-   for i in f'range loop
-      p(i) := (f(i) xor left) or rotate;
-   end loop;
-   return p;
-end function;
-
-function caly_fcn(y, p : std_logic_vector; ops : shiftfunc_t; left, c, a : std_logic) return std_logic_vector is
-   variable t : std_logic_vector(y'range);
-   variable s : std_logic := '0';
-   -- assumes y and p have the same range and that their 'right is 0
-   constant num_bits : integer := p'length;
-   begin
-
-   if ops = arith and left = '0' then s := a; end if;
-
-   if p(0) = '1'                   then t(0) := y(0);
-   elsif left = '1' and ops = rotc then t(0) := c;
-   else                                 t(0) := s;      end if;
-
-   if p(num_bits-1) = '1'          then t(num_bits-1) := y(num_bits-1);
-   elsif left = '0' and ops = rotc then t(num_bits-1) := c;
-   else                                 t(num_bits-1) := s; end if;
-
-   for i in 1 to num_bits-2 loop
-      if p(i) = '1' then t(i) := y(i);
-      else               t(i) := s;    end if;
-   end loop;
-
-   return t;
-end function;
-
-function bshifter(a,b : std_logic_vector; c : std_logic; ops : shiftfunc_t) return std_logic_vector is
-   variable left, rot : std_logic := '0';
-   constant a_left : integer := a'length - 1;
-   constant b_left : integer := b'length - 1;
-   alias xa : std_logic_vector(a_left downto 0) is a;
-   alias xb : std_logic_vector(b_left downto 0) is b;
-   variable b_mag : std_logic_vector(b_left-1 downto 0);
-   variable f, p, y1, y : std_logic_vector(a_left downto 0);
-   begin
-   -- Verify argument lengths match. The b argument is a sign bit plus
-   -- N bits, and the a arg must be 2^N bits.
-   if integer(a'length) /= integer(2 ** (b'length - 1)) then
-     assert NO_WARNING
-       report "BSHIFTER: Arg size mismatch, returning A"
-       severity WARNING;
-     return a;
-   end if;
-
-   -- split b into a shift magnitude and shift direction
-   b_mag := xb(b_mag'range);
-   left := not xb(b_left);
-
-   if ops = rotate then rot := '1'; end if;
-
-   f  := calf_fcn(unsigned(b_mag));
-   p  := calp_fcn(f, rot, left);
-   y1 := left_rotate(xa, b_mag);
-
-   y  := caly_fcn(y1, p, ops, left, c, xa(a_left));
-   return y;
-end function;
-
-function manip(x, y : std_logic_vector(31 downto 0); t : std_logic; func : alumanip_t; sh2a : boolean)
+  function or_reduce_bytes (
+    a : std_logic_vector;
+    constant byte_width : integer
+  )
   return std_logic_vector is
-  variable b0, b1, b2, b3 : std_logic_vector(7 downto 0);
-  variable sign_bit : std_logic;
-  variable sign_byte : std_logic_vector(7 downto 0);
-  variable tvec : std_logic_vector(31 downto 0);
-begin
-  if func = BITSET then
-    -- SH-2A BST #imm3,Rn: x = Rn, y = decode-time one-hot mask
-    -- (1 << imm3), t = sr.t. Insert t at whichever bit y's mask picks
-    -- out; all other bits of x pass through unchanged. Byte-lane logic
-    -- below (SWAP_BYTE/EXTEND_*/EXTRACT/SET_BIT_7) does not apply here.
-    tvec := (others => t);
-    return (x and not y) or (y and tvec);
-  end if;
 
-  -- SH-2A MULR MAC save/restore markers: manip() itself is a no-op for
-  -- these (returns x unchanged); the actual capture/restore is implemented
-  -- directly in the datapath. Base never emits these values.
-  if func = MAC_SAVE or func = MAC_RESTORE_L or func = MAC_RESTORE_H then
-    return x;
-  end if;
+    constant num_bytes : integer := natural(floor(real(a'length) / real(byte_width)));
+    variable r         : std_logic_vector(num_bytes - 1 downto 0);
 
-  -- SH-2A CLIPS/CLIPU: saturate x to a signed/unsigned byte/word range.
-  -- y and t are unused for clip funcs; only x is examined. Guarded by the
-  -- compile-time `sh2a` argument: on a base build the caller passes false, so
-  -- ghdl drops this whole branch at elaboration and the (asic-expensive) 32-bit
-  -- magnitude comparators are never synthesized into the base datapath. func is
-  -- never CLIP_* on base anyway, but the synthesizer cannot prove that from the
-  -- alumanip_t type alone, so the constant guard is what keeps base neutral.
-  if sh2a then
-    if func = CLIP_SB then
-      if signed(x) > 127 then
-        return x"0000007F";
-      elsif signed(x) < -128 then
-        return x"FFFFFF80";
+  begin
+
+    for i in r'range loop
+
+      r(i) := or_reduce(a((i + 1) * byte_width - 1 downto i * byte_width));
+
+    end loop;
+
+    return r;
+
+  end function or_reduce_bytes;
+
+  function is_zero (
+    a : std_logic_vector
+  ) return std_logic is
+
+    variable r : std_logic := '0';
+
+  begin
+
+    return not or_reduce(a);
+
+  end function is_zero;
+
+  function page_offset_mask (
+    pm : std_logic_vector(3 downto 0)
+  ) return std_logic_vector is
+
+    variable n : integer range 0 to 16;
+    variable m : std_logic_vector(15 downto 0) := (others => '0');
+
+  begin
+
+    case pm is
+
+      when "0000" =>
+
+        n := 0;   when "0001" =>
+
+        n := 2;   when "0010" =>
+
+        n := 4;
+
+      when "0011" =>
+
+        n := 6;   when "0100" =>
+
+        n := 8;   when "0101" =>
+
+        n := 10;
+
+      when "0110" =>
+
+        n := 12;  when "0111" =>
+
+        n := 14;  when others =>
+
+        n := 16;
+
+    end case;
+
+    for p in 0 to 15 loop
+
+      if (p < n) then
+        m(p) := '1';
+      end if;  -- bit 12+p is in-page offset -> use VA
+
+    end loop;
+
+    return m;
+
+  end function page_offset_mask;
+
+  function vpn_compare_mask (
+    pm : std_logic_vector(3 downto 0)
+  ) return std_logic_vector is
+
+    variable n : integer range 0 to 20;
+    variable m : std_logic_vector(19 downto 0) := (others => '1');
+
+  begin
+
+    case pm is
+
+      when "0000" =>
+
+        n := 0;   when "0001" =>
+
+        n := 2;   when "0010" =>
+
+        n := 4;
+
+      when "0011" =>
+
+        n := 6;   when "0100" =>
+
+        n := 8;   when "0101" =>
+
+        n := 10;
+
+      when "0110" =>
+
+        n := 12;  when "0111" =>
+
+        n := 14;  when "1000" =>
+
+        n := 16;
+
+      when "1001" =>
+
+        n := 18;  when others =>
+
+        n := 20;
+
+    end case;
+
+    for p in 0 to 19 loop
+
+      if (p < n) then
+        m(p) := '0';
+      end if;  -- in-page VPN bit -> ignore
+
+    end loop;
+
+    return m;
+
+  end function vpn_compare_mask;
+
+  -- xor every bit in vector a by bit b
+
+  function xor_all (
+    a : std_logic_vector;
+    b : std_logic
+  ) return std_logic_vector is
+
+    alias    av : std_logic_vector(a'length - 1 downto 0) is a;
+    variable bv : std_logic_vector(a'length - 1 downto 0) := (others => b);
+
+  begin
+
+    return av xor bv;
+
+  end function xor_all;
+
+  function to_bit (
+    b: boolean
+  ) return std_logic is
+  begin
+
+    if (b) then
+      return '1';
+    else
+      return '0';
+    end if;
+
+  end function to_bit;
+
+  function arith_unit (
+    a : std_logic_vector;
+    b : std_logic_vector;
+    func : arith_func_t;
+    ci : std_logic
+  )
+return std_logic_vector is
+
+    alias xa : std_logic_vector(a'length - 1 downto 0) is a;
+    alias xb : std_logic_vector(b'length - 1 downto 0) is b;
+
+    variable is_sub   : std_logic;
+    variable b2       : std_logic_vector(xb'range);
+    variable sum      : unsigned(a'length downto 0);
+    variable carry_in : unsigned(a'length downto 0);
+
+  begin
+
+    if (a'length /= b'length) then
+      assert NO_WARNING
+        report "arith_unit: Arg size mismatch. Returning 0"
+        severity WARNING;
+      sum := to_unsigned(0, sum'length);
+      return std_logic_vector(sum);
+    end if;
+
+    is_sub := to_bit(func = SUB);
+    -- if ADD, then r = A+B+ci
+    -- if SUB, then r = A-B-ci = A+not(B)+1-ci
+
+    -- Perform a subtraction by negating the B operand. Take the twos complement
+    -- by first flipping the bits and then xor-ing the ci to implement the +1.
+    b2 := xor_all(xb, is_sub);
+    -- If is_sub=0, then ci behaves normally. If is_sub=1 then
+    -- r = A+not(B)+1-ci = A+not(B)+1-1 = A+not(B) when ci = 1
+    --                   = A+not(B)+1              when ci = 0
+    -- Xor-ing the ci by is_sub gives the correct calculation.
+    carry_in    := (others => '0');
+    carry_in(0) := is_sub xor ci;
+
+    sum := ('0' & unsigned(xa)) + ('0' & unsigned(b2)) + carry_in;
+
+    -- convert left-most bit to a borrow instead of carry out when doing a subtraction
+    sum(sum'left) := sum(sum'left) xor is_sub;
+    return std_logic_vector(sum);
+
+  end function arith_unit;
+
+  function logic_unit (
+    a : std_logic_vector;
+    b : std_logic_vector;
+    func : logic_func_t
+  )
+return std_logic_vector is
+
+    alias    xa : std_logic_vector(a'length - 1 downto 0) is a;
+    alias    xb : std_logic_vector(b'length - 1 downto 0) is b;
+    variable r  : std_logic_vector(xa'range);
+
+  begin
+
+    if (a'length /= b'length) then
+      assert NO_WARNING
+        report "logic_unit: Arg size mismatch. Returning 0"
+        severity WARNING;
+      r := (others => '0');
+      return r;
+    end if;
+
+    case func is
+
+      when LOGIC_NOT =>
+
+        r := xor_all(xb, '1');
+
+      when LOGIC_AND =>
+
+        r := xa and xb;
+
+      when LOGIC_OR =>
+
+        r := xa or xb;
+
+      when LOGIC_XOR =>
+
+        r := xa xor xb;
+
+    end case;
+
+    return r;
+
+  end function logic_unit;
+
+  function arith_update_sr (
+    sr_in : sr_t;
+    a_msb : std_logic;
+    b_msb : std_logic;
+    value : std_logic_vector;
+    co_or_borrow : std_logic;
+    arithfunc : arith_func_t;
+    func : arith_sr_func_t
+  )
+return sr_t is
+
+    alias    v            : std_logic_vector(value'length - 1 downto 0) is value;
+    variable sr_out       : sr_t      := sr_in;
+    variable v_msb        : std_logic := v(v'left);
+    variable is_sub       : std_logic := to_bit(arithfunc = SUB);
+    variable value_zero   : std_logic := is_zero(v);
+    variable common_gr_eq : std_logic;
+    variable sign_gr_eq   : std_logic;
+    variable unsign_gr_eq : std_logic;
+
+  begin
+
+    -- logic common to both signed and unsigned comparisons.
+    -- common_gr = '1' => a >= b, but not the converse
+    common_gr_eq := (not(a_msb) and not(b_msb) and not(v_msb)) or
+                    (a_msb and b_msb and not(v_msb));
+    sign_gr_eq   := common_gr_eq or (not(a_msb) and b_msb);
+    unsign_gr_eq := common_gr_eq or (a_msb and not(b_msb));
+
+    case func is
+
+      when ZERO =>
+
+        sr_out.t := is_zero(v);
+
+      when OVERUNDERFLOW =>
+
+        sr_out.t := (not(a_msb) and not(b_msb xor is_sub) and v_msb) or
+                    (a_msb and (b_msb xor is_sub) and not(v_msb));
+
+      when UGRTER =>
+
+        sr_out.t := unsign_gr_eq and not(value_zero);
+
+      when UGRTER_EQ =>
+
+        sr_out.t := unsign_gr_eq;
+
+      when SGRTER =>
+
+        sr_out.t := sign_gr_eq and not(value_zero);
+
+      when SGRTER_EQ =>
+
+        sr_out.t := sign_gr_eq;
+
+      when DIV0S =>
+
+        sr_out.q := a_msb;
+        sr_out.m := b_msb;
+        sr_out.t := a_msb xor b_msb;
+
+      when DIV1 =>
+
+        sr_out.q := a_msb xor sr_in.m xor co_or_borrow;
+        sr_out.t := not (sr_out.q xor sr_in.m);
+
+    end case;
+
+    return sr_out;
+
+  end function arith_update_sr;
+
+  function logic_update_sr (
+    sr_in : sr_t;
+    value : std_logic_vector;
+    func : logic_sr_func_t;
+    constant byte_width : integer := 8
+  )
+return sr_t is
+
+    alias    v      : std_logic_vector(value'length - 1 downto 0) is value;
+    variable sr_out : sr_t := sr_in;
+
+  begin
+
+    case func is
+
+      when ZERO =>
+
+        sr_out.t := is_zero(v);
+
+      when BYTE_EQ =>
+
+        -- assumes the value is a xor b
+        sr_out.t := or_reduce(xor_all(or_reduce_bytes(v, byte_width), '1'));
+
+      when NOT_ZERO =>
+
+        sr_out.t := not is_zero(v);
+
+    end case;
+
+    return sr_out;
+
+  end function logic_update_sr;
+
+  function left_rotate (
+    a : std_logic_vector;
+    b : std_logic_vector
+  ) return std_logic_vector is
+
+    constant num_bits : integer := a'length;
+    variable sr, yr   : std_logic_vector(a'range);
+    variable offset   : integer range 0 to num_bits / 2;
+    variable k        : integer;
+
+  begin
+
+    yr     := a;
+    offset := num_bits / 2;
+
+    for i in b'range loop
+
+      if (b(i) = '1') then
+
+        for j in a'range loop
+
+          if (j + offset >= num_bits) then
+            k := j + offset - num_bits;
+          else
+            k := j + offset;
+          end if;
+
+          sr(k) := yr(j);
+
+        end loop;
+
       else
-        return x;
+
+        for j in a'range loop
+
+          sr(j) := yr(j);
+
+        end loop;
+
       end if;
-    elsif func = CLIP_SW then
-      if signed(x) > 32767 then
-        return x"00007FFF";
-      elsif signed(x) < -32768 then
-        return x"FFFF8000";
-      else
-        return x;
+
+      offset := offset / 2;
+      yr     := sr;
+
+    end loop;
+
+    return yr;
+
+  end function left_rotate;
+
+  function calf_fcn (
+    b : unsigned
+  ) return std_logic_vector is
+
+    constant b_left      : integer := b'length - 1;
+    constant result_bits : integer := 2 ** b'length;
+    -- variable ib : natural range 0 to result_bits-1 := to_integer(b);
+    variable ib : natural                                    := to_integer(b);
+    variable f  : std_logic_vector(result_bits - 1 downto 0) := (others => '0');
+
+  begin
+
+    for i in f'range loop
+
+      if (i < ib) then
+        f(i) := '1';
       end if;
-    elsif func = CLIP_UB then
-      if unsigned(x) > 255 then
-        return x"000000FF";
+
+    end loop;
+
+    return f;
+
+  end function calf_fcn;
+
+  function calp_fcn (
+    f : std_logic_vector;
+    rotate,
+    left : std_logic
+  ) return std_logic_vector is
+
+    variable p : std_logic_vector(f'range);
+
+  begin
+
+    for i in f'range loop
+
+      p(i) := (f(i) xor left) or rotate;
+
+    end loop;
+
+    return p;
+
+  end function calp_fcn;
+
+  function caly_fcn (
+    y,
+    p : std_logic_vector;
+    ops : shiftfunc_t;
+    left,
+    c,
+    a : std_logic
+  ) return std_logic_vector is
+
+    variable t : std_logic_vector(y'range);
+    variable s : std_logic := '0';
+    -- assumes y and p have the same range and that their 'right is 0
+    constant num_bits : integer := p'length;
+
+  begin
+
+    if (ops = arith and left = '0') then
+      s := a;
+    end if;
+
+    if (p(0) = '1') then
+      t(0) := y(0);
+    elsif (left = '1' and ops = rotc) then
+      t(0) := c;
+    else
+      t(0) := s;
+    end if;
+
+    if (p(num_bits - 1) = '1') then
+      t(num_bits - 1) := y(num_bits - 1);
+    elsif (left = '0' and ops = rotc) then
+      t(num_bits - 1) := c;
+    else
+      t(num_bits - 1) := s;
+    end if;
+
+    for i in 1 to num_bits - 2 loop
+
+      if (p(i) = '1') then
+        t(i) := y(i);
       else
-        return x;
+        t(i) := s;
       end if;
-    elsif func = CLIP_UW then
-      if unsigned(x) > 65535 then
-        return x"0000FFFF";
-      else
-        return x;
+
+    end loop;
+
+    return t;
+
+  end function caly_fcn;
+
+  function bshifter (
+    a,
+    b : std_logic_vector;
+    c : std_logic;
+    ops : shiftfunc_t
+  ) return std_logic_vector is
+
+    variable left, rot : std_logic := '0';
+    constant a_left    : integer   := a'length - 1;
+    constant b_left    : integer   := b'length - 1;
+    alias    xa        : std_logic_vector(a_left downto 0) is a;
+    alias    xb        : std_logic_vector(b_left downto 0) is b;
+    variable b_mag     : std_logic_vector(b_left - 1 downto 0);
+    variable f         : std_logic_vector(a_left downto 0);
+    variable p         : std_logic_vector(a_left downto 0);
+    variable y1        : std_logic_vector(a_left downto 0);
+    variable y         : std_logic_vector(a_left downto 0);
+
+  begin
+
+    -- Verify argument lengths match. The b argument is a sign bit plus
+    -- N bits, and the a arg must be 2^N bits.
+    if (integer(a'length) /= integer(2 ** (b'length - 1))) then
+      assert NO_WARNING
+        report "BSHIFTER: Arg size mismatch, returning A"
+        severity WARNING;
+      return a;
+    end if;
+
+    -- split b into a shift magnitude and shift direction
+    b_mag := xb(b_mag'range);
+    left  := not xb(b_left);
+
+    if (ops = rotate) then
+      rot := '1';
+    end if;
+
+    f  := calf_fcn(unsigned(b_mag));
+    p  := calp_fcn(f, rot, left);
+    y1 := left_rotate(xa, b_mag);
+
+    y := caly_fcn(y1, p, ops, left, c, xa(a_left));
+    return y;
+
+  end function bshifter;
+
+  function manip (
+    x,
+    y : std_logic_vector(31 downto 0);
+    t : std_logic;
+    func : alumanip_t;
+    sh2a : boolean
+  )
+  return std_logic_vector is
+
+    variable b0        : std_logic_vector(7 downto 0);
+    variable b1        : std_logic_vector(7 downto 0);
+    variable b2        : std_logic_vector(7 downto 0);
+    variable b3        : std_logic_vector(7 downto 0);
+    variable sign_bit  : std_logic;
+    variable sign_byte : std_logic_vector(7 downto 0);
+    variable tvec      : std_logic_vector(31 downto 0);
+
+  begin
+
+    if (func = BITSET) then
+      -- SH-2A BST #imm3,Rn: x = Rn, y = decode-time one-hot mask
+      -- (1 << imm3), t = sr.t. Insert t at whichever bit y's mask picks
+      -- out; all other bits of x pass through unchanged. Byte-lane logic
+      -- below (SWAP_BYTE/EXTEND_*/EXTRACT/SET_BIT_7) does not apply here.
+      tvec := (others => t);
+      return (x and not y) or (y and tvec);
+    end if;
+
+    -- SH-2A MULR MAC save/restore markers: manip() itself is a no-op for
+    -- these (returns x unchanged); the actual capture/restore is implemented
+    -- directly in the datapath. Base never emits these values.
+    if (func = MAC_SAVE or func = MAC_RESTORE_L or func = MAC_RESTORE_H) then
+      return x;
+    end if;
+
+    -- SH-2A CLIPS/CLIPU: saturate x to a signed/unsigned byte/word range.
+    -- y and t are unused for clip funcs; only x is examined. Guarded by the
+    -- compile-time `sh2a` argument: on a base build the caller passes false, so
+    -- ghdl drops this whole branch at elaboration and the (asic-expensive) 32-bit
+    -- magnitude comparators are never synthesized into the base datapath. func is
+    -- never CLIP_* on base anyway, but the synthesizer cannot prove that from the
+    -- alumanip_t type alone, so the constant guard is what keeps base neutral.
+    if (sh2a) then
+      if (func = CLIP_SB) then
+        if (signed(x) > 127) then
+          return x"0000007F";
+        elsif (signed(x) < -128) then
+          return x"FFFFFF80";
+        else
+          return x;
+        end if;
+      elsif (func = CLIP_SW) then
+        if (signed(x) > 32767) then
+          return x"00007FFF";
+        elsif (signed(x) < -32768) then
+          return x"FFFF8000";
+        else
+          return x;
+        end if;
+      elsif (func = CLIP_UB) then
+        if (unsigned(x) > 255) then
+          return x"000000FF";
+        else
+          return x;
+        end if;
+      elsif (func = CLIP_UW) then
+        if (unsigned(x) > 65535) then
+          return x"0000FFFF";
+        else
+          return x;
+        end if;
       end if;
     end if;
-  end if;
 
-  if func = EXTEND_SBYTE then
-    sign_bit := y(7);
-  else
-    sign_bit := y(15);
-  end if;
-  sign_byte := (others => sign_bit);
+    if (func = EXTEND_SBYTE) then
+      sign_bit := y(7);
+    else
+      sign_bit := y(15);
+    end if;
 
-  -- assign each byte of output separately to group same cases
-  case func is
-    when SWAP_BYTE
-       | SET_BIT_7    => b3 := y(31 downto 24);
-    when EXTEND_UBYTE
-       | EXTEND_UWORD => b3 := (others => '0');
-    when EXTEND_SBYTE
-       | EXTEND_SWORD => b3 := sign_byte;
-    -- others is SWAP_WORD or EXTRACT
-    when others       => b3 := y(15 downto  8);
-  end case;
-  case func is
-    when SWAP_BYTE
-       | SET_BIT_7    => b2 := y(23 downto 16);
-    when EXTEND_UBYTE
-       | EXTEND_UWORD => b2 := (others => '0');
-    when EXTEND_SBYTE
-       | EXTEND_SWORD => b2 := sign_byte;
-     -- others is SWAP_WORD  or EXTRACT
-    when others       => b2 := y(7  downto  0);
-  end case;
-  case func is
-    when SWAP_BYTE    => b1 := y(7  downto  0);
-    when SWAP_WORD    => b1 := y(31 downto 24);
-    when EXTEND_UBYTE => b1 := (others => '0');
-    when EXTEND_UWORD
-       | EXTEND_SWORD
-       | SET_BIT_7    => b1 := y(15 downto  8);
-    when EXTEND_SBYTE => b1 := sign_byte;
-    -- others is EXTRACT
-    when others       => b1 := x(31 downto 24);
-  end case;
-  case func is
-    when SWAP_BYTE    => b0 := y(15 downto  8);
-    when SWAP_WORD    => b0 := y(23 downto 16);
-    when EXTEND_UBYTE
-       | EXTEND_UWORD
-       | EXTEND_SBYTE
-       | EXTEND_SWORD => b0 := y(7  downto  0);
-    when SET_BIT_7    => b0 := '1' & y(6  downto  0);
-    -- others is EXTRACT
-    when others       => b0 := x(23 downto 16);
-  end case;
-  return b3 & b2 & b1 & b0;
-end function;
+    sign_byte := (others => sign_bit);
 
-function clip_saturated(x : std_logic_vector(31 downto 0); func : alumanip_t)
+    -- assign each byte of output separately to group same cases
+    case func is
+
+      when SWAP_BYTE
+           | SET_BIT_7 =>
+
+        b3 := y(31 downto 24);
+
+      when EXTEND_UBYTE
+           | EXTEND_UWORD =>
+
+        b3 := (others => '0');
+
+      when EXTEND_SBYTE
+           | EXTEND_SWORD =>
+
+        b3 := sign_byte;
+
+      -- others is SWAP_WORD or EXTRACT
+      when others =>
+
+        b3 := y(15 downto  8);
+
+    end case;
+
+    case func is
+
+      when SWAP_BYTE
+           | SET_BIT_7 =>
+
+        b2 := y(23 downto 16);
+
+      when EXTEND_UBYTE
+           | EXTEND_UWORD =>
+
+        b2 := (others => '0');
+
+      when EXTEND_SBYTE
+           | EXTEND_SWORD =>
+
+        b2 := sign_byte;
+
+      -- others is SWAP_WORD  or EXTRACT
+      when others =>
+
+        b2 := y(7  downto  0);
+
+    end case;
+
+    case func is
+
+      when SWAP_BYTE =>
+
+        b1 := y(7  downto  0);
+
+      when SWAP_WORD =>
+
+        b1 := y(31 downto 24);
+
+      when EXTEND_UBYTE =>
+
+        b1 := (others => '0');
+
+      when EXTEND_UWORD
+           | EXTEND_SWORD
+           | SET_BIT_7 =>
+
+        b1 := y(15 downto  8);
+
+      when EXTEND_SBYTE =>
+
+        b1 := sign_byte;
+
+      -- others is EXTRACT
+      when others =>
+
+        b1 := x(31 downto 24);
+
+    end case;
+
+    case func is
+
+      when SWAP_BYTE =>
+
+        b0 := y(15 downto  8);
+
+      when SWAP_WORD =>
+
+        b0 := y(23 downto 16);
+
+      when EXTEND_UBYTE
+           | EXTEND_UWORD
+           | EXTEND_SBYTE
+           | EXTEND_SWORD =>
+
+        b0 := y(7  downto  0);
+
+      when SET_BIT_7 =>
+
+        b0 := '1' & y(6  downto  0);
+
+      -- others is EXTRACT
+      when others =>
+
+        b0 := x(23 downto 16);
+
+    end case;
+
+    return b3 & b2 & b1 & b0;
+
+  end function manip;
+
+  function clip_saturated (
+    x : std_logic_vector(31 downto 0);
+    func : alumanip_t
+  )
   return std_logic is
-begin
-  case func is
-    when CLIP_SB =>
-      if signed(x) > 127 or signed(x) < -128 then
-        return '1';
-      end if;
-    when CLIP_SW =>
-      if signed(x) > 32767 or signed(x) < -32768 then
-        return '1';
-      end if;
-    when CLIP_UB =>
-      if unsigned(x) > 255 then
-        return '1';
-      end if;
-    when CLIP_UW =>
-      if unsigned(x) > 65535 then
-        return '1';
-      end if;
-    when others =>
-      return '0';
-  end case;
-  return '0';
-end function;
+  begin
 
-end cpu2j0_components_pack;
+    case func is
+
+      when CLIP_SB =>
+
+        if (signed(x) > 127 or signed(x) < -128) then
+          return '1';
+        end if;
+
+      when CLIP_SW =>
+
+        if (signed(x) > 32767 or signed(x) < -32768) then
+          return '1';
+        end if;
+
+      when CLIP_UB =>
+
+        if (unsigned(x) > 255) then
+          return '1';
+        end if;
+
+      when CLIP_UW =>
+
+        if (unsigned(x) > 65535) then
+          return '1';
+        end if;
+
+      when others =>
+
+        return '0';
+
+    end case;
+
+    return '0';
+
+  end function clip_saturated;
+
+end package body cpu2j0_components_pack;

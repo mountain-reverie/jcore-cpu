@@ -1,3 +1,37 @@
 # VHDL Style Guide config for jcore-cpu. Default ruleset; project exceptions below.
 # (populated as Phases B/C reveal rules that must be relaxed, each with a reason)
-rule: {}
+rule:
+  # signal_007/variable_007: "remove default assignment" on signal/variable
+  # declarations changes the initial/reset value seen by synthesis — not
+  # cosmetic, so left alone.
+  signal_007:
+    disable: true
+  variable_007:
+    disable: true
+  # port_012: "remove assignment" (default expression) on port declarations
+  # changes behavior when a port is left unconnected at instantiation — not
+  # cosmetic, so left alone.
+  port_012:
+    disable: true
+  # process_016/018: add labels to (unlabeled) process/end-process statements.
+  # vsg cannot auto-generate a label (no fixer), and hand-picking process
+  # names is a naming exercise, not a mechanical reformat; left alone for a
+  # separate, deliberate pass.
+  process_016:
+    disable: true
+  process_018:
+    disable: true
+  # instantiation_034/036: would force direct-entity instantiations to the
+  # named-component form. This is an elaboration/binding style choice already
+  # established in this codebase, not purely cosmetic whitespace/case; left
+  # alone rather than changed by an autofixer.
+  instantiation_034:
+    disable: true
+  instantiation_036:
+    disable: true
+  # subprogram_body_205 (blank line after a subprogram body) conflicts with
+  # entity_016 (no blank line before "end entity") when a function is the
+  # last declaration before the entity's closing statement — mutually
+  # exclusive on that boundary; entity_016 (no blank line) wins.
+  subprogram_body_205:
+    disable: true

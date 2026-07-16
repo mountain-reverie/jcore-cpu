@@ -18,20 +18,22 @@
 -- decoder guarantees EX and WB never write the same cycle) and commit to BOTH
 -- copies on the rising edge. read_with_forwarding overlays the current-cycle
 -- pipeline writes, identical to the other archs.
-library ieee;
 
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
+library ieee;
+  use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
 
 architecture ebr of register_file is
-  constant ZERO_ADDR : addr_t := (others => '0');
+
+  constant zero_addr : addr_t := (others => '0');
 
   type ram_type is array(0 to NUM_REGS - 1) of data_t;
+
   signal ram_a, ram_b : ram_type;
-  signal reg0 : data_t;
+  signal reg0         : data_t;
 
   -- Rising-edge-latched (full-cycle) RAM read outputs (the "bank data" for forwarding).
-  signal q_a, q_b : data_t;
+  signal q_a,   q_b : data_t;
 
   -- Bias yosys toward SB_RAM40_4K/BRAM inference (ignored by GHDL simulation
   -- and by backends without block RAM, e.g. the generic ASIC flow).
@@ -40,7 +42,7 @@ architecture ebr of register_file is
   attribute ram_style of ram_b : signal is "block";
 
   signal ex_pipes : ex_pipeline_t;
-  signal wb_pipe : reg_pipe_t;
+  signal wb_pipe  : reg_pipe_t;
 
   -- Full-cycle (rising-edge) read closes the q->EX half-cycle, but its committed
   -- value q is one cycle staler: the write that commits ON the read edge is not
@@ -50,16 +52,24 @@ architecture ebr of register_file is
   -- overlays it onto q as the lowest-priority forward (below ex_pipes(2)).
   signal last_wr : reg_pipe_t;
 
-  function fwd_last(addr : addr_t; bank : data_t; last : reg_pipe_t)
+  function fwd_last (
+    addr : addr_t;
+    bank : data_t;
+    last : reg_pipe_t
+  )
   return data_t is
   begin
-    if last.en = '1' and last.addr = addr then
+
+    if (last.en = '1' and last.addr = addr) then
       return last.data;
     else
       return bank;
     end if;
-  end;
+
+  end function fwd_last;
+
 begin
+
   wb_pipe.en   <= we_wb;
   wb_pipe.addr <= w_addr_wb;
   wb_pipe.data <= din_wb;
@@ -87,16 +97,18 @@ begin
   -- const-foldable `r0_addr <= addr_r0 when BANKED else ZERO_ADDR` form because
   -- synth_ecp5/abc9 did NOT fold this `generate` for j2 (+418 LUT4; see
   -- register_file_two_bank.vhd). Prefer that foldable form if a binding regresses.
-  banked_r0: if BANKED generate
-    dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes)
-                when to_reg_index(addr_r0) = 0
-              else read_with_forwarding(addr_r0,
-                     fwd_last(addr_r0, ram_a(to_reg_index(addr_r0)), last_wr),
-                     wb_pipe, ex_pipes);
+
+  banked_r0 : if BANKED generate
+    dout_0 <= read_with_forwarding(zero_addr, reg0, wb_pipe, ex_pipes)
+              when to_reg_index(addr_r0) = 0 else
+              read_with_forwarding(addr_r0,
+                                    fwd_last(addr_r0, ram_a(to_reg_index(addr_r0)), last_wr),
+                                    wb_pipe, ex_pipes);
   end generate banked_r0;
-  unbanked_r0: if not BANKED generate
+
+  unbanked_r0 : if not BANKED generate
     -- J1/J2: original bank-0 R0 read, no addr_r0 path (byte-identical netlist).
-    dout_0 <= read_with_forwarding(ZERO_ADDR, reg0, wb_pipe, ex_pipes);
+    dout_0 <= read_with_forwarding(zero_addr, reg0, wb_pipe, ex_pipes);
   end generate unbanked_r0;
 
   -- Full-cycle read: clock the block-RAM read on the RISING edge using the
@@ -108,31 +120,37 @@ begin
   -- in lockstep with the ex1 register load: when slot='0' (a slot-stretch stall)
   -- ex1 holds and the early address may move, so q must HOLD the held EX
   -- instruction's operand rather than re-latch a stale/next early address.
-  read_proc : process(clk)
+  read_proc : process (clk) is
   begin
-    if rising_edge(clk) and ce = '1' then
+
+    if (rising_edge(clk) and ce = '1') then
       q_a <= ram_a(to_reg_index(addr_ra_early));
       q_b <= ram_b(to_reg_index(addr_rb_early));
     end if;
-  end process;
+
+  end process read_proc;
 
   -- Single muxed write on the rising edge, committed to both RAM copies (and
   -- reg0 for R0). Identical to register_file(two_bank).
-  write_proc : process(clk, rst)
+  write_proc : process (clk, rst) is
+
     variable addr : integer;
     variable data : data_t;
+
   begin
-    if rst = '1' then
-      wr_data_o <= (others => '0');
-      reg0 <= (others => '0');
+
+    if (rst = '1') then
+      wr_data_o   <= (others => '0');
+      reg0        <= (others => '0');
       ex_pipes(1) <= REG_PIPE_RESET;
       ex_pipes(2) <= REG_PIPE_RESET;
-      last_wr <= REG_PIPE_RESET;
+      last_wr     <= REG_PIPE_RESET;
     elsif (rising_edge(clk) and ce = '1') then
       -- the decoder should never schedule a write to a register for both Z and
       -- W bus at the same time
       assert (wb_pipe.en and ex_pipes(2).en) = '0'
-        report "Write clash detected" severity warning;
+        report "Write clash detected"
+        severity warning;
 
       addr := to_reg_index(wb_pipe.addr);
       data := wb_pipe.data;
@@ -142,7 +160,7 @@ begin
       end if;
       wr_data_o <= (others => '0');
       if ((wb_pipe.en or ex_pipes(2).en) = '1') then
-        wr_data_o <= data;
+        wr_data_o   <= data;
         ram_a(addr) <= data;
         ram_b(addr) <= data;
         if (addr = 0) then
@@ -163,5 +181,7 @@ begin
         last_wr.data <= wb_pipe.data;
       end if;
     end if;
-  end process;
-end architecture;
+
+  end process write_proc;
+
+end architecture ebr;

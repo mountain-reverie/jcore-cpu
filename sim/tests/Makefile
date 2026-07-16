@@ -55,6 +55,23 @@ mmulinux.elf: mmulinux.o $(TLBJCORE_O) $(EX_O) $(ENTRY_O)
 mmulinux.img: mmulinux.elf
 	$(J4OBJCOPY) -v -S -O binary --srec-forceS3 $< $@
 
+# ---------------------------------------------------------------------------
+# SP3-c Task 3: mmuboot links the REAL jcore_mmu_enable (Task 2) and drives
+# it through the cosim; the TLB-miss handler itself is hand-rolled in
+# mmuboot.S (Task 2 only factored the boot enable stub, not a full walker).
+# ---------------------------------------------------------------------------
+MMU_ENABLE_O := $(LINUX_SRC)/arch/sh/kernel/cpu/jcore/mmu_enable.o
+
+mmuboot.o: mmuboot.S
+	mkdir -p $(J4BIN) && ln -sf $(abspath $(J4GAS)) $(J4BIN)/as
+	$(CC) $(CFLAGS) -D__ASSEMBLY__ -I$(LINUX_SRC)/arch/sh/include -B$(J4BIN) -Wa,--isa=any -c $< -o $@
+
+mmuboot.elf: mmuboot.o $(MMU_ENABLE_O)
+	$(J4LD) -T sh32_p1.x -Map main.map $^ $(LIBGCC) -o $@
+
+mmuboot.img: mmuboot.elf
+	$(J4OBJCOPY) -v -S -O binary --srec-forceS3 $< $@
+
 m8_macarith.elf: m8_macarith.o
 interrupts.elf: interrupts.o
 rte.elf: rte.o

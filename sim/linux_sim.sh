@@ -58,7 +58,8 @@ if [ "$BUILD" = 1 ]; then
     make ARCH=sh CROSS_COMPILE=sh2-elf- CC="sh2-elf-gcc -B$J4BIN" jcore_defconfig >/dev/null
     make ARCH=sh CROSS_COMPILE=sh2-elf- CC="sh2-elf-gcc -B$J4BIN" \
          arch/sh/mm/tlb-jcore.o arch/sh/kernel/cpu/jcore/ex.o \
-         arch/sh/kernel/cpu/jcore/entry.o
+         arch/sh/kernel/cpu/jcore/entry.o \
+         arch/sh/kernel/cpu/jcore/mmu_enable.o
   ) || { echo "ERROR: linux@jcore object build failed" >&2; exit 1; }
 
   echo "== generate-j4 (J4 overlay decoder: PRIV_ARCH + MMU instructions) =="

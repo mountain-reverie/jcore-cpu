@@ -24,7 +24,7 @@ package cache_pack is
   constant cache_d_width_bits   : natural := 2;  -- 32 bit data
 
   constant cache_tag_width    : natural := CACHE_REGION_WIDTH - CACHE_LINE_WIDTH_BITS - CACHE_INDEX_BITS;
-  constant cache_pa_tag_width : natural := CACHE_TAG_WIDTH; -- PA[27:13], 15 b: matches the 28-bit cache region (fetch addr is 28-bit)
+  constant cache_pa_tag_width : natural := CACHE_TAG_WIDTH; -- PA[27:13], 15 b: matches the 28-bit cache region
 
   type mmu_cache_i_t is record
     pa_tag : std_logic_vector(CACHE_PA_TAG_WIDTH - 1 downto 0);

@@ -92,6 +92,15 @@
 !   r9=14 scenario 5: captured faulting address != VA_C
 !   r9=15 scenario 5: VA_C's TSB slot tag_hi == VA_C (translation WAS
 !         installed despite _PAGE_STALE -- walker must fault, not install)
+!   r9=16 scenario 6 (ASID generation tagging): resumed load's value !=
+!         harness seed for VA_D (initial gen0 install), OR the TSB slot's
+!         tag_lo != the live (gen1) ASIDR after the cross-generation
+!         re-touch (a stale gen0 tag surviving would mean a false-hit risk
+!         -- security-review S-I3)
+!   r9=17 scenario 6: walker-invocation counter did NOT change across the
+!         ASIDR generation bump (same 12-bit ASID, gen_low 0->1) -- the
+!         TSB fast-path tag_lo compare must treat this as a miss and force
+!         a real re-walk, exactly like scenario 3's cross-ASID case
 !
 ! do_page_fault() has a real body from Task 3/SP2 scenarios 4-5: records a
 ! fault-count + faulting address into scratch globals, restores SR.RB=0
@@ -232,6 +241,12 @@ kmain:
         mov.l   v_pte_c, r1
         mov.l   r1, @r0
 
+        ! ---- Scenario 6 pte: VA_D present+valid, no STALE (own backing
+        ! page/PFN, distinct from va_A's). Same pgd[0]/pte-table range. ----
+        mov.l   k_pte_d, r0
+        mov.l   v_pte_d, r1
+        mov.l   r1, @r0
+
         ! ---- Zero the do_page_fault handshake globals; point the fault
         ! target at `unexpected_fault` (scenarios 1-3 expect zero faults --
         ! same behavior the old Task-1 stub had: record r9=99 and halt). ----
@@ -255,6 +270,12 @@ kmain:
         ! known value; the resumed P0 load must read this back. ----
         mov.l   k_backing, r0
         mov.l   v_seed,    r1
+        mov.l   r1, @r0
+
+        ! ---- Seed scenario 6's own backing page (distinct PFN/value from
+        ! va_A's, so its readback is unambiguous). ----
+        mov.l   k_backing_d, r0
+        mov.l   v_seed_d,    r1
         mov.l   r1, @r0
 
         ! ---- Point MMU_TTB at our pgd (raw P1 pointer -- __jcore_tlb_walk
@@ -451,6 +472,73 @@ s5_assert:
         mov.l   va_C, r1
         cmp/eq  r1, r2 ; mov #15, r9 ; bt _fail             ! translation WAS installed
 
+        ! ================= SCENARIO 6: ASID generation tagging (S-I3) ========
+        ! VA_D is a fresh mapped page (present+valid, no STALE) never touched
+        ! by scenarios 1-5. Install its translation under ASIDR=gen0 (12-bit
+        ! ASID X, gen_low=0), then advance ASIDR to gen1 (SAME 12-bit ASID X,
+        ! gen_low=0->1) and re-touch: the TSB fast-path's tag_lo compare
+        ! (core/tlb.vhd ASID_TAG[15:12] generation field) must MISS despite
+        ! the low 12 ASID bits being identical, forcing a real re-walk. This
+        ! proves generation-tagging rejects a stale cross-generation TSB
+        ! entry instead of a false ASID-recycling hit.
+        !
+        ! ---- Reset the fault target: scenario 6 expects zero faults (VA_D
+        ! is present+valid), same discipline as scenarios 1-3. ----
+        mov.l   k_fault_target, r0
+        mov.l   unexpected_fault_ptr, r1
+        mov.l   r1, @r0
+
+        ! ---- ASIDR = gen0 (12-bit ASID X, gen_low=0). ----
+        mov.l   k_asidr_gen0, r0
+        ldc     r0, asidr
+        nop                             ! ASIDR write-to-use hazard
+        nop
+
+        mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0   ! flush TLB, AT on
+
+        mov.l   va_D, r0
+        mov.l   @r0, r8                 ! TLB miss -> TSB miss (fresh VA) ->
+                                         ! __jcore_tlb_walk() installs under
+                                         ! ASID_TAG = gen0
+
+        mov.l   k_mmucr, r0 ; mov #0, r1 ; mov.l r1, @r0   ! AT off for readback
+
+        mov.l   v_seed_d, r1 ; cmp/eq r1, r8 ; mov #16, r9 ; bf _fail
+                                         ! initial gen0 translation wrong
+
+        mov.l   k_wcnt, r0 ; mov.l @r0, r4   ! r4 = wcnt baseline (post gen0 walk)
+
+        ! ---- ASIDR = gen1 (SAME 12-bit ASID X, gen_low 0->1). The TSB slot
+        ! installed above still carries tag_lo = gen0's ASIDR value; the
+        ! generation bump must make the fast-path tag_lo compare MISS even
+        ! though the low 12 ASID bits are unchanged. ----
+        mov.l   k_asidr_gen1, r0
+        ldc     r0, asidr
+        nop
+        nop
+
+        mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0   ! flush TLB, AT on
+
+        mov.l   va_D, r0
+        mov.l   @r0, r8                 ! re-touch under new generation: TSB
+                                         ! tag_lo(gen0) != ASIDR(gen1) -> fast
+                                         ! path MUST miss -> real re-walk
+
+        mov.l   k_mmucr, r0 ; mov #0, r1 ; mov.l r1, @r0   ! AT off for readback
+
+        mov.l   k_wcnt, r0 ; mov.l @r0, r5
+        cmp/eq  r4, r5 ; mov #17, r9 ; bt _fail
+                                 ! walker did NOT re-run for the new generation
+
+        stc     tsbptr, r3
+        mov.l   @(4, r3), r2            ! tag_lo (ASID_TAG) at VA_D's TSB slot
+        mov.l   k_asidr_gen1, r1
+        cmp/eq  r1, r2 ; mov #16, r9 ; bf _fail
+                         ! stale gen0 tag retained -- false-hit risk (S-I3)
+
+        mov.l   v_seed_d, r1 ; cmp/eq r1, r8 ; mov #16, r9 ; bf _fail
+                                 ! translation after generation bump wrong/stale
+
         mov     #0, r9
         bra     _done
         nop
@@ -492,6 +580,19 @@ k_faultaddr:    .long 0x80029008        ! do_page_fault-recorded faulting addres
 k_fault_target: .long 0x8002900C        ! address do_page_fault jumps to next
 k_saved_sp:     .long 0x80029010        ! r15 snapshot restored by do_page_fault
 unexpected_fault_ptr: .long unexpected_fault
+
+! ---- Scenario 6 scratch: a fresh mapped VA_D (present+valid, own backing
+! page distinct from va_A's so its seed value is unambiguous) and the two
+! ASIDR literals that differ ONLY in gen_low (bits [15:12]) -- same 12-bit
+! ASID X (chosen as 2, distinct from scenario 1's ASID 0 and scenario 3's
+! ASID 1) across both generations.
+va_D:           .long 0x0010C000        ! pte_index 0x43 -> k_ptetbl+0x10C
+k_pte_d:        .long 0x8002410C
+v_pte_d:        .long 0x000440B9        ! PFN(0x00044000)|V|C|U|W|D
+k_backing_d:    .long 0x80044000
+v_seed_d:       .long 0xD00DFEED
+k_asidr_gen0:   .long 0x00000002        ! ASID X=2, gen_low=0
+k_asidr_gen1:   .long 0x00001002        ! ASID X=2, gen_low=1 (X | 0x1000)
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -587,6 +688,36 @@ ENTRY(arch_local_save_flags)
         mov     #0, r0
         rts
         nop
+
+! memset(s, c, n) / jcore_boot_tsb -- link-only stubs for tlb-jcore.o's
+! jcore_tsb_flush_on_generation() (parallel Linux-side ASID-generation work,
+! S-I3), pulled in transitively now that tlb-jcore.c references them. NEVER
+! actually invoked by this harness: get_mmu_context()/the version-wrap path
+! that calls jcore_tsb_flush_on_generation() is not exercised here -- scenario
+! 6 advances ASIDR's gen_low directly by hand, it never wraps a generation
+! counter. A minimal byte-store loop and a reserved .bss buffer are enough
+! to satisfy the link. r4=s, r5=c, r6=n; returns s in r0 (SH memset ABI).
+ENTRY(memset)
+        mov     r4, r3                  ! save s for the return value
+1:      tst     r6, r6
+        bt      2f
+        mov.b   r5, @r4
+        add     #1, r4
+        add     #-1, r6
+        bra     1b
+        nop
+2:      mov     r3, r0
+        rts
+        nop
+
+        .bss
+        .balign 16
+        .globl  jcore_boot_tsb
+        .type   jcore_boot_tsb, @object
+        .size   jcore_boot_tsb, 4096
+jcore_boot_tsb:
+        .skip   4096
+        .text
 
 ! jcore_tlb_walk_mark_accessed(pte_t *ptep, pte_t entry) -- Task 2: this
 ! STRONG definition shadows tlb-jcore.o's __weak default (mmulinux.o links

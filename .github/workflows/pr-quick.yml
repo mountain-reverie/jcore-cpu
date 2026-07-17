@@ -45,6 +45,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
+    # Run in the same prebuilt CI image full-regression uses. It ships a
+    # source-built GHDL 6.0.0 (mcode backend, VITAL-capable -> elaborates the
+    # jcore-soc tech-RAM cache testbenches in Step 7), Go, and the GCC/make
+    # toolchain at /usr/local/bin. This replaces the external
+    # ghdl/setup-ghdl@v1 action, whose inventory.json format change broke the
+    # '5.0.1' download; the container pins the exact toolchain instead.
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
     steps:
       - name: Checkout jcore-cpu
         uses: actions/checkout@v4
@@ -56,30 +68,6 @@ jobs:
         with:
           repository: j-core/jcore-soc
           path: jcore-soc
-
-      # Ubuntu's ghdl-mcode (4.1.0) ships without a usable ieee.vital_timing,
-      # so it cannot elaborate the cache testbenches (dcache/icache pull the
-      # jcore-soc VITAL tech-RAM sim models -> Step 7). Use the upstream ghdl
-      # release (mcode), which includes VITAL, for the whole pr-quick job.
-      - name: Set up GHDL (mcode, VITAL-capable)
-        uses: ghdl/setup-ghdl@v1
-        with:
-          version: '5.0.1'
-          backend: 'mcode'
-
-      - name: Install apt dependencies (GCC, make)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            gcc make build-essential \
-            python3
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: jcore-cpu/decode/gen-go/go.mod
-          cache: true
-          cache-dependency-path: jcore-cpu/decode/gen-go/go.sum
 
       - name: Show toolchain versions
         run: |

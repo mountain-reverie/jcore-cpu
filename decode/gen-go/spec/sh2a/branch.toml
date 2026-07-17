@@ -1,0 +1,22 @@
+[[instr]]
+  name = "RTS/N"
+  format = "0"
+  opcode = "0000 0000 0110 1011"
+  operation = "PR -> PC, no delay slot"
+
+  [[instr.slots]]
+    ybus = "PR"
+    zbus = "PC"
+    zbus_sel = "Y"
+    if_issue = "YES"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    if_addy = "ZBUS"
+    if_issue = "YES"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    dispatch = "YES"
+    if_issue = "YES"
+    pc = "INC"

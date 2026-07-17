@@ -756,6 +756,7 @@ var csvInstrOrder = []string{
 	"CLIPS.B Rn",
 	"CLIPS.W Rn",
 	"MULR R0, Rn",
+	"RTS/N",
 	// System-plane instructions (at end, in CSV row order):
 	"General Illegal",
 	"Slot Illegal",

@@ -243,12 +243,9 @@ jobs:
           # cpu_cache_tb (cache-side guards, selected at run time via SIM_TOP).
           cd sim
           rm -f work-obj93.cf cpu_tb.vhh cpu_ctb
-          # cpu_dualcore_tb is the 2-core top for the SP3-d SMP-bringup guard
-          # (spin-table release + IPI); it elaborates cleanly under the MMU-on
-          # flags and is selected at run time via SIM_TOP by run_bringup.sh.
           make TOOLS_DIR="$TOOLS_DIR" JCORE_SOC="$JCORE_SOC" \
             CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 \
-            cpu_ctb cpu_tb cpu_cache_tb cpu_dualcore_tb work-obj93.cf >/dev/null
+            cpu_ctb cpu_tb cpu_cache_tb work-obj93.cf >/dev/null
           grep -q 'MMU_ARCH => true' cpu_tb.vhh \
             || { echo "FAIL: build is not MMU-on (stale cpu_tb.vhh?)"; exit 1; }
 
@@ -338,15 +335,51 @@ jobs:
           #   run_guard mmulinux_exhaustive "" 400us 240
           # fi
 
-          # SP3-d: the 2-core SMP-bringup guard runs on cpu_dualcore_tb via its
-          # own script (not run_guard, which drives the single-core cpu_ctb /
-          # cpu_cache_tb). Proves spin-table secondary release + IPI (bit-28 ->
-          # target-core interrupt, auto-clear) through the real icache_modereg.
-          if bash tests/dualcore/run_bringup.sh; then
-            echo "  PASS  smp_bringup [cpu_dualcore_tb]"
-          else
-            echo "  FAIL  smp_bringup [cpu_dualcore_tb]" >&2; fail=1
-          fi
-
           [ "$fail" = 0 ] || { echo "==> functional guards FAILED" >&2; exit 1; }
           echo "==> all 47 priv-arch + MMU functional guards PASSED"
+
+  # SP3-d: the 2-core SMP-bring-up guard (spin-table secondary release + IPI via
+  # the real icache_modereg) runs on cpu_dualcore_tb. It is a BASE-J2 SMP test
+  # and MUST be built with the base decoder + no PRIV_ARCH/MMU_ARCH: the
+  # J4/priv-arch overlay changes the SR/banking/exception model and breaks the
+  # guard's cpu1 path after release. So it gets its own lightweight base-J2 job
+  # (no binutils/linux needed -- the test is pure SH-2 built by sh2-elf-gcc).
+  smp-dualcore-guard:
+    name: SMP dualcore bring-up guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/jcore-cpu-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout jcore-cpu
+        uses: actions/checkout@v4
+        with:
+          path: jcore-cpu
+      - name: Checkout jcore-soc (tools + cache deps)
+        uses: actions/checkout@v4
+        with:
+          repository: mountain-reverie/jcore-soc
+          path: jcore-soc
+      - name: Build cpu_dualcore_tb (base-J2) + run smp_bringup
+        working-directory: jcore-cpu
+        shell: bash
+        env:
+          TOOLS_DIR: ${{ github.workspace }}/jcore-soc/tools
+          JCORE_SOC: ${{ github.workspace }}/jcore-soc
+        run: |
+          set -euo pipefail
+          # base-J2 decoder (NOT generate-j4 -- the guard is base-J2).
+          make -C decode generate
+          # v2p the .vhm cache cores the dualcore TB needs (incl icache_modereg,
+          # the IPI block); the sim Makefile has no %.vhd:%.vhm pattern rule.
+          for f in cache/dcache_ccl cache/dcache_mcl cache/icache_ccl \
+                   cache/icache_mcl cache/icache_modereg; do
+            LD_LIBRARY_PATH='' perl "$JCORE_SOC/tools/v2p" < "$f.vhm" > "$f.vhd"
+          done
+          cd sim
+          make TOOLS_DIR="$TOOLS_DIR" JCORE_SOC="$JCORE_SOC" \
+            cpu_ctb cpu_dualcore_tb work-obj93.cf >/dev/null
+          bash tests/dualcore/run_bringup.sh

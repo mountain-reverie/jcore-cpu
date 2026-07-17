@@ -48,9 +48,10 @@ architecture arch of dcache_snoop_cacheable_mux is
   -- the burst in the background, so cpu_o may already have advanced to the next
   -- (uncacheable) access while c_mem_o is still bursting.
   signal cache_busy : std_logic;
+
 begin
 
-  cacheable <= is_cacheable_mmu(cpu_o.a, a_mmu.at, a_mmu.c);
+  cacheable  <= is_cacheable_mmu(cpu_o.a, a_mmu.at, a_mmu.c);
   cache_busy <= c_mem_o.en;
 
   -- CPU-side fan to the cache: only present the access when cacheable, else hold
@@ -82,14 +83,20 @@ begin
   -- must NOT steal the bus mid-burst -- doing so drops a fill word and the CPU
   -- later reads stale/zero data on the resulting bogus cache hit. Hold the
   -- bypass off the bus until the cache's burst completes.
-  mem_o        <= c_mem_o    when (cacheable or cache_busy = '1') else cpu_o;
-  mem_lock     <= c_mem_lock when (cacheable or cache_busy = '1') else lock;
-  mem_ddrburst <= c_mem_ddrb when cacheable else '0';
+  mem_o        <= c_mem_o when (cacheable or cache_busy = '1') else
+                  cpu_o;
+  mem_lock     <= c_mem_lock when (cacheable or cache_busy = '1') else
+                  lock;
+  mem_ddrburst <= c_mem_ddrb when cacheable else
+                  '0';
 
   -- CPU response mux. For an uncacheable access, suppress ack while the cache
   -- still owns the bus: mem_i.ack in that window is acking the cache's fill
   -- word, not the CPU's held-off bypass access.
-  cpu_i.d   <= c_cpu_i.d   when cacheable else mem_i.d;
-  cpu_i.ack <= c_cpu_i.ack when cacheable else (mem_i.ack and not cache_busy);
-end architecture;
+  cpu_i.d   <= c_cpu_i.d when cacheable else
+               mem_i.d;
+  cpu_i.ack <= c_cpu_i.ack when cacheable else
+               (mem_i.ack and not cache_busy);
+
+end architecture arch;
 

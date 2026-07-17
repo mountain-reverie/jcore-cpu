@@ -57,6 +57,15 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
+    # Inside a container GitHub Actions defaults run: steps to sh (dash), which
+    # rejects the `set -o pipefail` several steps (Steps 1-5, Step 4b, ...) use.
+    # Force bash (present in the image) job-wide. The one step that must not run
+    # under pipefail (the version probe, whose `| head` SIGPIPEs) disables it
+    # locally with `set +o pipefail`.
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - name: Checkout jcore-cpu
         uses: actions/checkout@v4
@@ -71,18 +80,15 @@ jobs:
 
       - name: Show toolchain versions
         run: |
+          # No pipefail here: `<tool> --version | head` SIGPIPEs (exit 141) once
+          # a tool prints more lines than head consumes (GHDL 6.0.0 does).
+          set +o pipefail
           go version
           ghdl --version | head -3
           gcc --version | head -1
           make --version | head -1
 
       - name: Run regression Steps 1-5
-        # Inside the container GitHub Actions defaults run: steps to sh (dash),
-        # which rejects this script's `set -o pipefail`; force bash (in the
-        # image). Scoped to this step only -- a job-wide bash default would put
-        # pipefail on the version-probe step too, where `ghdl --version | head`
-        # SIGPIPEs (exit 141) once ghdl prints more lines than head consumes.
-        shell: bash
         working-directory: jcore-cpu
         env:
           TOOLS_DIR: ${{ github.workspace }}/jcore-soc/tools

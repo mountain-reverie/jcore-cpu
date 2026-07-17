@@ -57,6 +57,13 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
+    # Inside a container GitHub Actions defaults `run:` steps to `sh` (dash),
+    # which rejects the `set -o pipefail` the Steps 1-5 script uses. Force bash
+    # (present in the image) so the steps run as written.
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - name: Checkout jcore-cpu
         uses: actions/checkout@v4

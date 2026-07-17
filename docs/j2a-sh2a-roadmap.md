@@ -52,11 +52,14 @@ mechanisms. J2A is a build-time variant: `make -C decode generate-j2a`,
 - **Group 8 PR-C — arithmetic divs/divu** (pending):
   `divs R0,Rn`, `divu R0,Rn` (SH-2A signed/unsigned divide).
 
+- **Group 9 — delay-slot-less branches** (PR merged):
+  `rts/n`, `rtv/n Rm`, `jsr/n @Rm` (return and branch without delay slot).
+
 ### Instructions live in J2A today
 `mov.l @(disp12,Rm),Rn`, `movml.l Rm,@-R15`, `mov.{b,w,l} R0,@Rn+`,
 `mov.{b,w,l} @-Rm,R0`, `bclr #imm3,Rn`, `bset #imm3,Rn`, `bld #imm3,Rn`,
 `bst #imm3,Rn`, `movrt Rn`, `nott`, `clips.b Rn`, `clips.w Rn`, `clipu.b Rn`,
-`clipu.w Rn`.
+`clipu.w Rn`, `rts/n`, `rtv/n Rm`, `jsr/n @Rm`.
 
 ---
 
@@ -145,10 +148,10 @@ Single-word but each needs a new ALU behavior.
 - `divs R0,Rn`, `divu R0,Rn`  (SH-2A signed/unsigned divide — verify semantics
   vs the existing DIV0/DIV1 step machinery; these may be multi-cycle) — **PR-C pending**
 
-### Group 9 — delay-slot-less branches  — effort M
+### Group 9 — delay-slot-less branches ✅ — DONE
 SH-2A branches that do NOT execute a delay slot — a distinct branch microcode
 path from the existing (delay-slotted) RTS/JSR. Care around PC/pipeline timing.
-- `rts/n`, `rtv/n Rm` (return + Rm→R0), `jsr/n @Rm`
+- ✅ `rts/n`, `rtv/n Rm` (return + Rm→R0), `jsr/n @Rm`
 
 ---
 

@@ -196,14 +196,16 @@ package body data_bus_pkg is
                     return DEV_I2C;
 
                   when others =>
+
                     -- 0xABCD00C0-DF: dualcore-only IPI window (icache_modereg
                     -- int0/int1 pulse regs), the rest of the "11" sub-range
                     -- stays DEV_NONE (loopback), unchanged for other TBs.
-                    if addr(5 downto 4) = "00" then
+                    if (addr(5 downto 4) = "00") then
                       return DEV_IPI;
                     else
                       return DEV_NONE;
                     end if;
+
                 end case;
 
               when x"01" =>
@@ -221,10 +223,13 @@ package body data_bus_pkg is
               when x"04" =>
 
                 return DEV_UARTGPS;
+
               when x"06" =>
+
                 -- 0xABCD0640: dualcore-only SMP spin-table release-enable
                 -- mailbox (smp-j2.c cpu-release-addr enable register).
                 return DEV_RELEASE;
+
               when others =>
 
                 return DEV_NONE;

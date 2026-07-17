@@ -106,7 +106,8 @@ begin
         hit_page_mask := entry.page_mask;
         hit_c         := entry.c;
         if (entry.x = '0' or (entry.u = '0' and md = '0')                                                          -- X / user-on-super (mmufault)
-            or (entry.u = '1' and md = '1')) then                                                                  -- SMEP: kernel fetch of user page (mmusmep)
+            or (entry.u = '1' and md = '1')                                                                       -- SMEP: kernel fetch of user page (mmusmep)
+            or (entry.global = '1' and entry.u = '1')) then                                                       -- S-I7: global user page is illegal (mmuglobal)
           prot := '1';
         end if;
       end if;
@@ -156,7 +157,8 @@ begin
         hit_pa12      := entry.ppn(12);                                                                            -- PA[12] (PIPT relocation)
         hit_page_mask := entry.page_mask;
         hit_c         := entry.c;
-        if ((entry.u = '0' and md = '0') or (d_we = '1' and entry.w = '0')) then
+        if ((entry.u = '0' and md = '0') or (d_we = '1' and entry.w = '0')
+            or (entry.global = '1' and entry.u = '1')) then                                                       -- S-I7: global user page is illegal (mmuglobal)
           prot := '1';
         end if;
       end if;

@@ -34,6 +34,12 @@ sim/tests/*.o
 sim/tests/*.elf
 sim/tests/*.img
 sim/tests/*.map
+# ...and in subdirectories (e.g. sim/tests/dualcore/) — these .img/.elf are
+# build artifacts regenerated from the tracked .s + Makefile, never committed.
+sim/tests/**/*.o
+sim/tests/**/*.elf
+sim/tests/**/*.img
+sim/tests/**/*.map
 
 # Working/scratch files at repo root — not part of the build
 insns.json

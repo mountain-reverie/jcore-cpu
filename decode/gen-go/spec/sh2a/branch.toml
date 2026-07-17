@@ -20,3 +20,60 @@
     dispatch = "YES"
     if_issue = "YES"
     pc = "INC"
+
+[[instr]]
+  name = "JSR/N @Rm"
+  format = "m"
+  opcode = "0100 mmmm 0100 1011"
+  operation = "PC -> PR, Rm -> PC, no delay slot"
+
+  [[instr.slots]]
+    alu_y = "0"
+    arith = "ADD"
+    pr = "RD PC"
+    xbus = "Rm"
+    zbus = "PC"
+    zbus_sel = "ARITH"
+    if_issue = "YES"
+    dispatch = "NT"
+    pc = "INC"
+
+  [[instr.slots]]
+    if_addy = "ZBUS"
+    if_issue = "YES"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    dispatch = "YES"
+    if_issue = "YES"
+    pc = "INC"
+
+[[instr]]
+  name = "RTV/N Rm"
+  format = "m"
+  opcode = "0000 mmmm 0111 1011"
+  operation = "Rm -> R0, PR -> PC, no delay slot"
+
+  [[instr.slots]]
+    ybus = "Rm"
+    zbus = "R0"
+    zbus_sel = "Y"
+    if_issue = "YES"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    ybus = "PR"
+    zbus = "PC"
+    zbus_sel = "Y"
+    if_issue = "YES"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    if_addy = "ZBUS"
+    if_issue = "YES"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    dispatch = "YES"
+    if_issue = "YES"
+    pc = "INC"

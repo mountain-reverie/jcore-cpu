@@ -244,3 +244,32 @@ func TestNi3FormatWidth(t *testing.T) {
 		t.Errorf("formatBitWidth(\"ni3\") = %d, want 3", got)
 	}
 }
+
+func TestNd12i3FormatWidth(t *testing.T) {
+	if got := formatBitWidth("nd12i3"); got != 12 {
+		t.Errorf("formatBitWidth(\"nd12i3\") = %d, want 12", got)
+	}
+}
+
+// TestMask3_64Position covers the (6:4) imm3 mask variant used by the
+// SH-2A memory bit-op (nd12i3) format, distinct from the register-form
+// MASK3/MASK3INV which read imm3 from op.code(2:0).
+func TestMask3_64Position(t *testing.T) {
+	v, ok := ParseImmToml("nd12i3", "MASK3_64")
+	if !ok || v.Kind != ImmBit3Mask64 || v.Literal() != "IMM_BIT3_MASK_64" {
+		t.Fatalf("ParseImmToml(nd12i3, MASK3_64) = {%+v,%v}, want Kind=ImmBit3Mask64 Literal=IMM_BIT3_MASK_64", v, ok)
+	}
+	got := ImmLiteralToVHDL("IMM_BIT3_MASK_64")
+	if !strings.Contains(got, "op.code(6 downto 4)") {
+		t.Fatalf("IMM_BIT3_MASK_64 VHDL = %q, want to contain op.code(6 downto 4)", got)
+	}
+
+	vi, ok := ParseImmToml("nd12i3", "MASK3INV_64")
+	if !ok || vi.Kind != ImmBit3MaskInv64 || vi.Literal() != "IMM_BIT3_MASK_INV_64" {
+		t.Fatalf("ParseImmToml(nd12i3, MASK3INV_64) = {%+v,%v}, want Kind=ImmBit3MaskInv64 Literal=IMM_BIT3_MASK_INV_64", vi, ok)
+	}
+	gotInv := ImmLiteralToVHDL("IMM_BIT3_MASK_INV_64")
+	if !strings.Contains(gotInv, "op.code(6 downto 4)") || !strings.HasPrefix(gotInv, "not ") {
+		t.Fatalf("IMM_BIT3_MASK_INV_64 VHDL = %q, want prefix \"not \" and op.code(6 downto 4)", gotInv)
+	}
+}

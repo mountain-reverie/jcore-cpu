@@ -1241,7 +1241,7 @@ func RegnumVHDL(tag string) string {
 
 func rnRegister(format string) string {
 	switch format {
-	case "n", "nd8", "ni", "ni20", "nm", "nmd", "nmd12", "mn":
+	case "n", "nd8", "ni", "ni20", "nm", "nmd", "nmd12", "mn", "nd12i3":
 		return "RA"
 	case "nd4", "ni3":
 		// ni3 (SH-2A register bit-ops BCLR/BSET/BST/BLD #imm3,Rn):
@@ -1298,6 +1298,10 @@ func isConstStr(v string) bool {
 	}
 	// SH-2A register bit-op decode-time masks (see ParseImmToml).
 	if up == "MASK3" || up == "MASK3INV" {
+		return true
+	}
+	// SH-2A memory bit-op (nd12i3) decode-time masks: imm3 at op.code(6:4).
+	if up == "MASK3_64" || up == "MASK3INV_64" {
 		return true
 	}
 	// High-nibble unsigned: "UH" or "UH*N".

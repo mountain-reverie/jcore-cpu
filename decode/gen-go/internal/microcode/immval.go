@@ -52,6 +52,11 @@ const (
 	// ImmBit3MaskInv is the bitwise complement of ImmBit3Mask (~(1 <<
 	// imm3)), used by BCLR to AND-clear the target bit in one cycle.
 	ImmBit3MaskInv
+	// ImmBit3Mask64 / ImmBit3MaskInv64: one-hot mask (1<<imm3) and its
+	// complement, imm3 read from op.code(6:4) — the SH-2A memory bit-op
+	// (nd12i3) field position, distinct from the register form's (2:0).
+	ImmBit3Mask64
+	ImmBit3MaskInv64
 )
 
 // ImmLiteralToVHDL translates an immval_t enum literal name to the
@@ -110,6 +115,13 @@ func ImmLiteralToVHDL(lit string) string {
 		return `std_logic_vector(SHIFT_LEFT(TO_UNSIGNED(1, 32), TO_INTEGER(UNSIGNED(op.code(2 downto 0)))))`
 	case "IMM_BIT3_MASK_INV":
 		return `not std_logic_vector(SHIFT_LEFT(TO_UNSIGNED(1, 32), TO_INTEGER(UNSIGNED(op.code(2 downto 0)))))`
+	case "IMM_BIT3_MASK_64":
+		// SH-2A memory bit-ops (BSET.B/BCLR.B/BLD.B/BST.B #imm3,@(disp12,Rn),
+		// nd12i3 format): same one-hot mask as IMM_BIT3_MASK, but imm3 sits
+		// at op.code(6:4) instead of (2:0).
+		return `std_logic_vector(SHIFT_LEFT(TO_UNSIGNED(1, 32), TO_INTEGER(UNSIGNED(op.code(6 downto 4)))))`
+	case "IMM_BIT3_MASK_INV_64":
+		return `not std_logic_vector(SHIFT_LEFT(TO_UNSIGNED(1, 32), TO_INTEGER(UNSIGNED(op.code(6 downto 4)))))`
 	case "IMM_S_8_0":
 		return "imms_8_0"
 	case "IMM_S_8_1":
@@ -169,6 +181,10 @@ func (i ImmVal) Literal() string {
 		return "IMM_BIT3_MASK"
 	case ImmBit3MaskInv:
 		return "IMM_BIT3_MASK_INV"
+	case ImmBit3Mask64:
+		return "IMM_BIT3_MASK_64"
+	case ImmBit3MaskInv64:
+		return "IMM_BIT3_MASK_INV_64"
 	}
 	return ""
 }
@@ -225,7 +241,7 @@ func formatBitWidth(format string) int {
 		return 4
 	case "d8", "nd8", "i8", "ni":
 		return 8
-	case "d12", "nmd12":
+	case "d12", "nmd12", "nd12i3":
 		return 12
 	case "ni20":
 		return 20
@@ -268,6 +284,10 @@ func ParseImmToml(format, v string) (ImmVal, bool) {
 		return ImmVal{Kind: ImmBit3Mask}, true
 	case "MASK3INV":
 		return ImmVal{Kind: ImmBit3MaskInv}, true
+	case "MASK3_64":
+		return ImmVal{Kind: ImmBit3Mask64}, true
+	case "MASK3INV_64":
+		return ImmVal{Kind: ImmBit3MaskInv64}, true
 	}
 	// Try integer first.
 	if n, err := strconv.Atoi(v); err == nil {

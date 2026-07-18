@@ -145,6 +145,7 @@ package cpu2j0_components_pack is
   -- 0x180 still satisfies "distinct from the 5 TLB codes" and is fully
   -- observable via the normal exception-entry/EXPEVT path.
   -- See core/tlb.vhd, docs/architecture/tlb.md §3.
+
   type tlb_exc_kind_t is (imiss, dmiss_r, dmiss_w, iprot, dprot_r, dprot_w, multi_hit);
 
   -- if size becomes part of the bus, mem_size_t will move into cpu2j0_pack

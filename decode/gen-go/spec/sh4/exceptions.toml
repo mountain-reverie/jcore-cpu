@@ -385,6 +385,17 @@
 #         DPROT_R=0x0C0 DPROT_W=0x0C0.
 # Vectors (Option-A layout): I-fetch (IMISS/IPROT)->VBR+0x400 (=1024),
 #   D-load (DMISS_R/DPROT_R)->VBR+0x420 (=1056), D-store (DMISS_W/DPROT_W)->VBR+0x440 (=1088).
+#
+# S-I5 (multiple-TLB-match, see tlb.vhd i_multihit/d_multihit): the decoder's
+# system-plane immediate-value field (ROM imm-value selector, 5 bits) is
+# already at capacity (32/32 distinct constants) -- adding a dedicated
+# MULTIHIT EXPEVT+vector pair would need a 6-bit field and a rom template
+# regen (see internal/model/extraimm.go's romImmFieldBits guard, which fails
+# loudly on this). Rather than take on that unrelated decoder-widening
+# project, S-I5 is routed to the EXISTING General Illegal register-model
+# exception (EXPEVT=0x180, PC<-VBR+0x100; system.toml) -- see cpu.vhd's
+# tlb_exc_kind_t dispatch and decode_core.vhm. Zero new immval literals,
+# zero new opcodes.
 
 [[instr]]
   name = "TLB IMISS"

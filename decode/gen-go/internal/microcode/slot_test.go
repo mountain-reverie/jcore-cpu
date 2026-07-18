@@ -13,6 +13,16 @@ import (
 //   - sr = "T=0" → sr_sel=SEL_SET_T, t_sel=SEL_CLEAR
 //   - pc = "INC"  → incpc=1
 //   - if_issue = "NO" → no if_issue signal (suppressed)
+// TestNd12i3RnRegister covers the SH-2A memory bit-op format nd12i3
+// (Rn=code(11:8), imm3=code(6:4), disp12=ext_word(11:0)): Rn sits at the
+// standard high-nibble RA position, unlike the register-form ni3 (Rn at
+// 7:4, RB) it is otherwise adjacent to.
+func TestNd12i3RnRegister(t *testing.T) {
+	if got := rnRegister("nd12i3"); got != "RA" {
+		t.Errorf("rnRegister(\"nd12i3\") = %q, want \"RA\"", got)
+	}
+}
+
 func TestAssignSlotCLRT(t *testing.T) {
 	instr := spec.Instr{Name: "CLRT", Format: "0", Opcode: "0000 0000 0000 1000"}
 	slot := spec.Slot{"sr": "T=0", "pc": "INC", "if_issue": "NO"}

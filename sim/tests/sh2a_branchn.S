@@ -68,17 +68,23 @@ _rts_target:
         nop
 
 ! --- JSR/N @Rm ---------------------------------------------------------
-! r1 = target address. r10 = sentinel. JSR/N must save PC+2 (address of
-! the POISON instruction) into PR and jump to Rm, with no delay slot.
+! r1 = target address. r10 = sentinel, r11 = delay-slot-execution counter.
+! JSR/N has NO delay slot, so the correct return address is the instruction
+! IMMEDIATELY after it (call+2), and the call+2 instruction must NOT execute
+! as a delay slot at jump time.
+!
+! T is forced to 0 first: jsr/n is UNCONDITIONAL, so it must still jump and
+! suppress its "delay slot" even at T=0 (proves dispatch=NT was removed).
 _jsrn_test:
+        .word   0x0008          ! CLRT: force T=0
+        mov     #0, r11         ! delay-slot-execution counter (must stay 0)
         mov     #0x5A, r10      ! sentinel: must survive if no delay slot
 
         mov.l   p_jsrn_target, r1
         .word   0x414B          ! JSR/N @R1
-
-        mov     #0xFF, r10      ! POISON: must NOT execute (no delay slot)
-p_jsrn_return:
-        bra     _fail4          ! must NOT execute either (fell through)
+p_jsrn_ret2:
+        add     #1, r11         ! call+2: benign bump, must NOT run as delay slot
+        bra     _fail4          ! call+4: must NOT run (total fallthrough)
         nop
 
         .align 2
@@ -87,18 +93,22 @@ p_jsrn_target: .long _jsrn_target
 _jsrn_target:
         mov     #0x5A, r5
         cmp/eq  r10, r5
-        bf      _fail3          ! r10 != 0x5A -> poison ran -> fail
+        bf      _fail3          ! r10 != 0x5A -> sentinel clobbered -> fail
+
+        mov     #0, r5
+        cmp/eq  r11, r5
+        bf      _fail8          ! r11 != 0 -> call+2 ran as delay slot -> fail
 
         .word   0x062A          ! STS PR,R6
-        mov.l   p_jsrn_return_val, r5
+        mov.l   p_jsrn_ret2_val, r5
         cmp/eq  r5, r6
-        bf      _fail5          ! PR != addr right after the POISON -> fail
+        bf      _fail5          ! PR != call+2 -> wrong return address -> fail
 
         bra     _rtvn_test
         nop
 
         .align 2
-p_jsrn_return_val: .long p_jsrn_return
+p_jsrn_ret2_val: .long p_jsrn_ret2
 
 ! --- RTV/N Rm ------------------------------------------------------------
 ! r2 = known value (0x33). PR = address of _rtvn_target. r0 = different
@@ -174,6 +184,12 @@ _fail7:
         mov     #7, r9
         mov.l   r9, @r0
         bra     _fail7
+        nop
+_fail8:
+        mov.l   p_test_result, r0
+        mov     #8, r9
+        mov.l   r9, @r0
+        bra     _fail8
         nop
         .align 2
 p_test_result: .long TEST_RESULT_ADDRESS

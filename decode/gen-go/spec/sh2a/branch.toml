@@ -27,16 +27,29 @@
   opcode = "0100 mmmm 0100 1011"
   operation = "PC -> PR, Rm -> PC, no delay slot"
 
+  # jsr/n has NO delay slot, so the return address saved to PR must be
+  # call+2 (the instruction immediately after jsr/n) — NOT call+4, which
+  # base delayed JSR saves via pr="RD PC" (the wrpr-pc path). Here the PC
+  # routed onto the ALU/zbus in this first slot is already call+2, so we
+  # pass it through unchanged (PC+0) and write it to PR via pr="RD Z".
+  # This mirrors the unconditional no-delay RTS/N shape (no dispatch=NT).
   [[instr.slots]]
+    xbus = "PC"
     alu_y = "0"
     arith = "ADD"
-    pr = "RD PC"
+    zbus_sel = "ARITH"
+    pr = "RD Z"
+    if_issue = "YES"
+    pc = "HOLD"
+
+  [[instr.slots]]
     xbus = "Rm"
+    alu_y = "0"
+    arith = "ADD"
     zbus = "PC"
     zbus_sel = "ARITH"
     if_issue = "YES"
-    dispatch = "NT"
-    pc = "INC"
+    pc = "HOLD"
 
   [[instr.slots]]
     if_addy = "ZBUS"

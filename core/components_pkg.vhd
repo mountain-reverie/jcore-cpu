@@ -133,7 +133,19 @@ package cpu2j0_components_pack is
 
   type tlb_array_t is array(0 to 31) of tlb_entry_t;
 
-  type tlb_exc_kind_t is (imiss, dmiss_r, dmiss_w, iprot, dprot_r, dprot_w);
+  -- multi_hit: S-I5 -- >1 valid TLB entries matched the same VPN+(global|ASID)
+  -- on a single lookup (duplicate install, kernel bug). Non-recoverable: takes
+  -- priority over hit_found so a fault is raised instead of silently picking
+  -- one of the matching PAs. Dispatches to the EXISTING "General Illegal"
+  -- register-model exception (EXPEVT=0x180, PC<-VBR+0x100; see
+  -- decode_core.vhm) rather than minting a new dedicated EXPEVT/vector pair:
+  -- the decoder's system-plane immediate field is already at capacity
+  -- (32/32), so a new distinct constant would force an unrelated
+  -- ROM-imm-field-width regen (see decode/gen-go/internal/model/extraimm.go).
+  -- 0x180 still satisfies "distinct from the 5 TLB codes" and is fully
+  -- observable via the normal exception-entry/EXPEVT path.
+  -- See core/tlb.vhd, docs/architecture/tlb.md §3.
+  type tlb_exc_kind_t is (imiss, dmiss_r, dmiss_w, iprot, dprot_r, dprot_w, multi_hit);
 
   -- if size becomes part of the bus, mem_size_t will move into cpu2j0_pack
 

@@ -605,6 +605,20 @@ begin
       when MMU_ARCH and texc_req = '1' and texc_kind_held = DPROT_R else
     system_op(TLB_DPROT_W)
       when MMU_ARCH and texc_req = '1' and texc_kind_held = DPROT_W else
+    -- S-I5: multiple-TLB-match (duplicate VPN+ASID install, a kernel bug) is
+    -- a defined non-recoverable fault, never a silent last-match-wins PA
+    -- pick. Routed to the EXISTING General Illegal register-model exception
+    -- (EXPEVT=0x180, PC<-VBR+0x100) rather than minting a new dedicated
+    -- EXPEVT/vector pair -- see components_pkg.vhd tlb_exc_kind_t for why
+    -- (the decoder's system-plane immediate field is already at capacity,
+    -- 32/32). 0x180 is still "distinct from 0x040/060/080/0A0/0C0" (the
+    -- brief's only hard requirement) and observable/testable the same way
+    -- every other TLB fault is; the kernel's General-Illegal handler is
+    -- fatal, so a duplicate-install bug still ends in a defined panic, never
+    -- a silently-resolved PA. TEA/PTEH are still captured (datapath.vhm,
+    -- gated on tlb_exc_pend generically) for postmortem.
+    system_op(GENERAL_ILLEGAL)
+      when MMU_ARCH and texc_req = '1' and texc_kind_held = MULTI_HIT else
     -- Break Instruction
     system_op(BREAK)
       when delay_slot = '0' and enter_debug = '1' else

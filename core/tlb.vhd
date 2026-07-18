@@ -40,6 +40,7 @@ entity tlb is
     i_c         : out   std_logic;                     -- cacheable (PTE.C)
     i_hit       : out   std_logic;                     -- usable match found
     i_prot      : out   std_logic;                     -- hit but permission violated
+    i_multihit  : out   std_logic;                     -- S-I5: >1 usable match (fatal, priority over i_hit)
     -- D-side (load/store) lookup; d_we=1 marks the access a store (W check).
     d_va        : in    std_logic_vector(31 downto 0);
     d_we        : in    std_logic;
@@ -49,6 +50,7 @@ entity tlb is
     d_c         : out   std_logic;
     d_hit       : out   std_logic;
     d_prot      : out   std_logic;
+    d_multihit  : out   std_logic;                     -- S-I5: >1 usable match (fatal, priority over d_hit)
     -- Current context + mode for the lookup.
     asid : in    std_logic_vector(15 downto 0); -- live ASIDR (lookup tag)
     md   : in    std_logic;                     -- SR.MD (1=privileged)
@@ -75,8 +77,8 @@ begin
   -- (X=0) OR it is a supervisor page (U=0) accessed from user mode (MD=0) OR
   -- (SMEP) it is a user page (U=1) fetched from kernel mode (MD=1) -- a
   -- kernel is never permitted to execute user-controlled code.
-  -- Note: on a multi-hit the last (highest-index) match wins; software must not
-  -- install duplicate VPN+ASID entries.
+  -- S-I5: a multi-hit (>1 usable match, e.g. a duplicate VPN+ASID install) is
+  -- a defined non-recoverable fault (i_multihit), never a silent PA pick.
   process (ram, i_va, asid, md) is
 
     variable entry         : tlb_entry_t;
@@ -86,11 +88,12 @@ begin
     variable hit_page_mask : std_logic_vector(3 downto 0);
     variable hit_c         : std_logic;
     variable prot          : std_logic;
+    variable hit_count     : natural range 0 to 32;
 
   begin
 
     hit_found     := '0'; hit_pa := (others => '0'); hit_pa12 := '0';
-    hit_page_mask := (others => '0'); hit_c := '0'; prot := '0';
+    hit_page_mask := (others => '0'); hit_c := '0'; prot := '0'; hit_count := 0;
 
     for k in 0 to 31 loop
 
@@ -101,6 +104,7 @@ begin
          and ((entry.vpn xor i_va(31 downto 12)) and vpn_compare_mask(entry.page_mask)) = (entry.vpn'range => '0')
          and (entry.global = '1' or entry.asid_tag = asid)) then                                                   -- ASID isolation (mmuasid)
         hit_found     := '1';
+        hit_count     := hit_count + 1;                                                                            -- S-I5: count usable matches (fatal if >1)
         hit_pa        := entry.ppn(27 downto 13);                                                                  -- PA[27:13] = 15-bit relocation tag
         hit_pa12      := entry.ppn(12);                                                                            -- PA[12] (PIPT relocation, mmurelocif)
         hit_page_mask := entry.page_mask;
@@ -120,6 +124,11 @@ begin
     i_page_mask <= hit_page_mask;
     i_c         <= hit_c;
     i_prot      <= prot and hit_found;                                                                             -- prot only meaningful on a hit
+    if (hit_count > 1) then                                                                                       -- S-I5: duplicate VPN+ASID install (fatal)
+      i_multihit <= '1';
+    else
+      i_multihit <= '0';
+    end if;
 
   end process;
 
@@ -138,11 +147,12 @@ begin
     variable hit_page_mask : std_logic_vector(3 downto 0);
     variable hit_c         : std_logic;
     variable prot          : std_logic;
+    variable hit_count     : natural range 0 to 32;
 
   begin
 
     hit_found     := '0'; hit_pa := (others => '0'); hit_pa12 := '0';
-    hit_page_mask := (others => '0'); hit_c := '0'; prot := '0';
+    hit_page_mask := (others => '0'); hit_c := '0'; prot := '0'; hit_count := 0;
 
     for k in 0 to 31 loop
 
@@ -153,6 +163,7 @@ begin
          and ((entry.vpn xor d_va(31 downto 12)) and vpn_compare_mask(entry.page_mask)) = (entry.vpn'range => '0')
          and (entry.global = '1' or entry.asid_tag = asid)) then
         hit_found     := '1';
+        hit_count     := hit_count + 1;                                                                            -- S-I5: count usable matches (fatal if >1)
         hit_pa        := entry.ppn(27 downto 13);
         hit_pa12      := entry.ppn(12);                                                                            -- PA[12] (PIPT relocation)
         hit_page_mask := entry.page_mask;
@@ -171,6 +182,11 @@ begin
     d_page_mask <= hit_page_mask;
     d_c         <= hit_c;
     d_prot      <= prot and hit_found;
+    if (hit_count > 1) then                                                                                       -- S-I5: duplicate VPN+ASID install (fatal)
+      d_multihit <= '1';
+    else
+      d_multihit <= '0';
+    end if;
 
   end process;
 

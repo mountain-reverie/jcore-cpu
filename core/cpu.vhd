@@ -71,6 +71,8 @@ architecture stru of cpu is
   signal tlb_d_hit  : std_logic;
   signal tlb_i_prot : std_logic;
   signal tlb_d_prot : std_logic;
+  signal tlb_i_multihit : std_logic; -- S-I5: >1 usable I-side match (fatal)
+  signal tlb_d_multihit : std_logic; -- S-I5: >1 usable D-side match (fatal)
   -- MMU address-translation intermediates (driven by g_mmu only; VHDL-93 forbids
   -- signal declarations inside a generate body, so they live here).
   signal i_va_32         : std_logic_vector(31 downto 0);
@@ -347,6 +349,7 @@ begin
         i_c         => tlb_i_c,
         i_hit       => tlb_i_hit,
         i_prot      => tlb_i_prot,
+        i_multihit  => tlb_i_multihit,
         d_va        => d_va_32,
         d_we        => sig_db_o.wr,
         d_pa_tag    => tlb_d_pa,
@@ -355,6 +358,7 @@ begin
         d_c         => tlb_d_c,
         d_hit       => tlb_d_hit,
         d_prot      => tlb_d_prot,
+        d_multihit  => tlb_d_multihit,
         asid        => dp_mmu_regs.asidr(15 downto 0),
         md          => dp_sr.md,
         at          => dp_mmu_regs.mmucr(0),
@@ -378,7 +382,8 @@ begin
     -- tlb_exc_pend and tlb_fault_va go to datapath to write TEA/PTEH.
     process (i_at_translated, d_at_translated,
              sig_inst_o, sig_db_o,
-             tlb_i_hit, tlb_i_prot, tlb_d_hit, tlb_d_prot,
+             tlb_i_hit, tlb_i_prot, tlb_i_multihit,
+             tlb_d_hit, tlb_d_prot, tlb_d_multihit,
              i_va_32, d_va_32, dp_sr) is
 
       variable exc_en   : std_logic;
@@ -403,7 +408,11 @@ begin
       -- second access then raises no exception while RB=1; it re-faults cleanly
       -- after the handler returns (RB back to 0). (J4+MMU_ARCH.)
       if (i_at_translated = '1' and sig_inst_o.en = '1' and dp_sr.rb = '0') then
-        if (tlb_i_hit = '0') then
+        if (tlb_i_multihit = '1') then                                        -- S-I5: hit-count fault, priority over hit_found/prot
+          exc_en   := '1';
+          exc_kind := MULTI_HIT;
+          fva      := i_va_32;
+        elsif (tlb_i_hit = '0') then
           exc_en   := '1';
           exc_kind := IMISS;
           fva      := i_va_32;
@@ -415,7 +424,11 @@ begin
       end if;
 
       if (exc_en = '0' and d_at_translated = '1' and sig_db_o.en = '1' and dp_sr.rb = '0') then
-        if (tlb_d_hit = '0') then
+        if (tlb_d_multihit = '1') then                                        -- S-I5: hit-count fault, priority over hit_found/prot
+          exc_en   := '1';
+          exc_kind := MULTI_HIT;
+          fva      := d_va_32;
+        elsif (tlb_d_hit = '0') then
           if (sig_db_o.wr = '1') then
             exc_en   := '1';
             exc_kind := DMISS_W;
@@ -440,8 +453,12 @@ begin
       tlb_exc_kind <= exc_kind;
       tlb_exc_pend <= exc_en;
       tlb_fault_va <= fva;
-      -- I-fetch faults (IMISS/IPROT) come only from the i_at_translated branch
-      -- above; flag them so the datapath captures the I-side restart PC.
+      -- I-fetch faults (IMISS/IPROT) come only from the i_at_translated
+      -- branch above; flag them so the datapath captures the I-side restart
+      -- PC. MULTI_HIT dispatches to the existing General Illegal register-model
+      -- exception (decode_core.vhm), which captures SPC/SSR the same way any
+      -- other illegal-instruction trap does -- it does not need this TLB-specific
+      -- I-side restart-PC side channel, so it is deliberately excluded here.
       if (exc_en = '1' and (exc_kind = IMISS or exc_kind = IPROT)) then
         tlb_exc_is_i <= '1';
       else
@@ -452,14 +469,20 @@ begin
 
     -- SH-4 EXPEVT code for the detected fault kind, captured into EXPEVT as a
     -- datapath hardware side-effect (see datapath.vhm). IMISS=0x040 DMISS_R=0x060
-    -- DMISS_W=0x080 IPROT=0x0A0 DPROT_R/W=0x0C0.
+    -- DMISS_W=0x080 IPROT=0x0A0 DPROT_R/W=0x0C0. MULTI_HIT does NOT dispatch
+    -- through this EXPEVT-driven path (it dispatches to the existing General
+    -- Illegal register-model exception, which writes its own EXPEVT=0x180 via
+    -- microcode) -- decoder imm-field capacity is full
+    -- (see components_pkg.vhd tlb_exc_kind_t comment), so no code is minted
+    -- for it here; "others" is a required exhaustive arm, not a real dispatch.
     with tlb_exc_kind select tlb_exc_expevt <=
       x"040" when IMISS,
       x"060" when DMISS_R,
       x"080" when DMISS_W,
       x"0A0" when IPROT,
       x"0C0" when DPROT_R,
-      x"0C0" when DPROT_W;
+      x"0C0" when DPROT_W,
+      (others => '0') when others;
   end generate g_mmu;
 
   g_no_mmu : if not MMU_ARCH generate

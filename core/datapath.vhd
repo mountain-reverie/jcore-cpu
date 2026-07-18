@@ -766,7 +766,13 @@ end generate;
           -- boundary) so the capture window cannot be missed. EXPEVT is NOT
           -- captured here (it would not persist past the handler prologue) -- it
           -- is latched via a slot-gated sr="EXPEVT" microcode write in the TLB
-          -- exception microcode.
+          -- exception microcode. S-I5 invariant: MULTI_HIT sets tlb_exc_pend
+          -- (so TEA/PTEH are still captured here for postmortem) but decode_core.vhm
+          -- dispatches it to system_op(GENERAL_ILLEGAL), never to a TLB_* system_op,
+          -- so this TLB-exception-microcode EXPEVT write never fires for it; EXPEVT=0x180
+          -- comes solely from the General-Illegal microcode's own write. The two
+          -- writes are mutually exclusive by system_op dispatch (one op/cycle), so
+          -- there is no race.
           -- Capture only on the FIRST cycle of a fault episode (tlb_exc_captured
           -- still '0'). The D-side holds the faulting access steady, but the
           -- I-fetch stream advances a word while an IMISS persists, so capturing

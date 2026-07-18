@@ -88,12 +88,12 @@ begin
     variable hit_page_mask : std_logic_vector(3 downto 0);
     variable hit_c         : std_logic;
     variable prot          : std_logic;
-    variable hit_count     : natural range 0 to 32;
+    variable multihit      : std_logic;
 
   begin
 
     hit_found     := '0'; hit_pa := (others => '0'); hit_pa12 := '0';
-    hit_page_mask := (others => '0'); hit_c := '0'; prot := '0'; hit_count := 0;
+    hit_page_mask := (others => '0'); hit_c := '0'; prot := '0'; multihit := '0';
 
     for k in 0 to 31 loop
 
@@ -103,8 +103,10 @@ begin
          and entry.stale = '0'                                                                                     -- STALE (PTEL[1]) = SW soft-invalidate/revocation (mmustale)
          and ((entry.vpn xor i_va(31 downto 12)) and vpn_compare_mask(entry.page_mask)) = (entry.vpn'range => '0')
          and (entry.global = '1' or entry.asid_tag = asid)) then                                                   -- ASID isolation (mmuasid)
+        if hit_found = '1' then
+          multihit := '1';                                                                                        -- S-I5: sticky flag, 2nd+ match while one already found
+        end if;
         hit_found     := '1';
-        hit_count     := hit_count + 1;                                                                            -- S-I5: count usable matches (fatal if >1)
         hit_pa        := entry.ppn(27 downto 13);                                                                  -- PA[27:13] = 15-bit relocation tag
         hit_pa12      := entry.ppn(12);                                                                            -- PA[12] (PIPT relocation, mmurelocif)
         hit_page_mask := entry.page_mask;
@@ -124,11 +126,7 @@ begin
     i_page_mask <= hit_page_mask;
     i_c         <= hit_c;
     i_prot      <= prot and hit_found;                                                                             -- prot only meaningful on a hit
-    if (hit_count > 1) then                                                                                       -- S-I5: duplicate VPN+ASID install (fatal)
-      i_multihit <= '1';
-    else
-      i_multihit <= '0';
-    end if;
+    i_multihit  <= multihit;                                                                                       -- S-I5: duplicate VPN+ASID install (fatal); sticky flag, not a count
 
   end process;
 
@@ -147,12 +145,12 @@ begin
     variable hit_page_mask : std_logic_vector(3 downto 0);
     variable hit_c         : std_logic;
     variable prot          : std_logic;
-    variable hit_count     : natural range 0 to 32;
+    variable multihit      : std_logic;
 
   begin
 
     hit_found     := '0'; hit_pa := (others => '0'); hit_pa12 := '0';
-    hit_page_mask := (others => '0'); hit_c := '0'; prot := '0'; hit_count := 0;
+    hit_page_mask := (others => '0'); hit_c := '0'; prot := '0'; multihit := '0';
 
     for k in 0 to 31 loop
 
@@ -162,8 +160,10 @@ begin
          and entry.stale = '0'                                                                                     -- STALE (PTEL[1]) = software soft-invalidate
          and ((entry.vpn xor d_va(31 downto 12)) and vpn_compare_mask(entry.page_mask)) = (entry.vpn'range => '0')
          and (entry.global = '1' or entry.asid_tag = asid)) then
+        if hit_found = '1' then
+          multihit := '1';                                                                                        -- S-I5: sticky flag, 2nd+ match while one already found
+        end if;
         hit_found     := '1';
-        hit_count     := hit_count + 1;                                                                            -- S-I5: count usable matches (fatal if >1)
         hit_pa        := entry.ppn(27 downto 13);
         hit_pa12      := entry.ppn(12);                                                                            -- PA[12] (PIPT relocation)
         hit_page_mask := entry.page_mask;
@@ -182,11 +182,7 @@ begin
     d_page_mask <= hit_page_mask;
     d_c         <= hit_c;
     d_prot      <= prot and hit_found;
-    if (hit_count > 1) then                                                                                       -- S-I5: duplicate VPN+ASID install (fatal)
-      d_multihit <= '1';
-    else
-      d_multihit <= '0';
-    end if;
+    d_multihit  <= multihit;                                                                                       -- S-I5: duplicate VPN+ASID install (fatal); sticky flag, not a count
 
   end process;
 

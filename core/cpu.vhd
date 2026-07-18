@@ -109,12 +109,82 @@ architecture stru of cpu is
   signal dp_if_pc     : std_logic_vector(31 downto 0);
   signal dec_ex_if_pc : std_logic_vector(31 downto 0);
 
+  -- S-I4: double-fault (any non-TLB exception taken while SR.RB=1, i.e. the
+  -- exception context -- SPC/SSR -- is already live/un-restored from a prior
+  -- exception) must NOT re-run the register-model SPC<-PC/SSR<-SR save: that
+  -- would silently clobber the still-unsaved context of the first exception.
+  -- TLB faults are already suppressed while dp_sr.rb='1' (above, tlb_exc_en
+  -- process). Non-TLB exception entry (Interrupt/Error/General-Illegal/
+  -- Slot-Illegal/TRAPA) is dispatched purely from the event_i the decoder
+  -- sees, so gating it here -- by substituting a synthesized RESET_CPU event
+  -- for decode's event_i input whenever RB=1 and an exception condition is
+  -- live -- reuses the EXISTING "Reset CPU" register-model-free entry (reads
+  -- PC/R15 from the reset vector at address 0, touches no SPC/SSR/EXPEVT;
+  -- see system.toml "Reset CPU") as the defined non-recoverable outcome, with
+  -- ZERO changes to decode_core/the generated decoder (PRIV_ARCH-gated; J1/J2
+  -- byte-identical, and the sole cpu.vhd-local signal below elaborates away
+  -- when PRIV_ARCH=false). Covers: (a) a real external Interrupt/Error event_i
+  -- arriving while RB=1 (the canonical SH-4 double-fault), and (b) a nested
+  -- General-Illegal-Instruction fault taken from inside a handler (RB=1) --
+  -- the scenario mmudblflt.S exercises. Residual (documented, not gated):
+  -- Slot-Illegal-in-a-delay-slot and a deliberately-executed nested TRAPA
+  -- while RB=1 are not intercepted by this cpu.vhd-local gate (both would
+  -- need decode_core.vhm's next_op mux itself to know about RB); left for a
+  -- follow-on since they are far rarer double-fault triggers than an
+  -- asynchronous Interrupt/Error or a nested illegal decode.
+  signal event_i_gated : cpu_event_i_t;
+
 begin
 
   event_o.ack <= event_ack;
   event_o.lvl <= ibit;
   event_o.slp <= slp_o;
   event_o.dbg <= debug;
+
+  -- S-I4 double-fault gate: see event_i_gated declaration above.
+  g_dblflt : if PRIV_ARCH generate
+    process (event_i, illegal_instr, dp_sr)
+    begin
+      event_i_gated <= event_i;
+      if dp_sr.rb = '1' then
+        if event_i.en = '1' and (event_i.cmd = INTERRUPT or event_i.cmd = ERROR) then
+          -- Real async/error event arriving while the exception context is
+          -- already live: the canonical SH-4 double fault.
+          event_i_gated.cmd <= RESET_CPU;
+          event_i_gated.vec <= (others => '0');
+        elsif illegal_instr = '1' then
+          -- Nested General-Illegal-Instruction fault taken from inside a
+          -- handler: synthesize the same defined-reset outcome.
+          event_i_gated.en  <= '1';
+          event_i_gated.cmd <= RESET_CPU;
+          event_i_gated.vec <= (others => '0');
+        end if;
+      end if;
+    end process;
+  end generate g_dblflt;
+  g_no_dblflt : if not PRIV_ARCH generate
+    event_i_gated <= event_i;
+  end generate g_no_dblflt;
+
+  -- H-M3 defense-in-depth invariant: the banked exception state (RB=1) must
+  -- never be live in user mode (MD=0) -- if any future path reached this it
+  -- would mean untrusted code could observe/abuse bank-1 registers. Sim-only
+  -- assertion (a synthesizable guard would need to force a state no RTL path
+  -- should ever produce -- not cheap and not needed for a sim-verifiable
+  -- invariant); PRIV_ARCH-gated so it is inert as a comment-only signal on
+  -- non-PRIV_ARCH (J1/J2) builds.
+  -- pragma translate_off
+  g_rb_md_assert : if PRIV_ARCH generate
+    process (clk)
+    begin
+      if rising_edge(clk) then
+        assert not (dp_sr.rb = '1' and dp_sr.md = '0')
+          report "S-I4/H-M3: SR.RB=1 with SR.MD=0 -- banked exception state live in user mode"
+          severity failure;
+      end if;
+    end process;
+  end generate g_rb_md_assert;
+  -- pragma translate_on
 
   u_decode : component decode
     port map (
@@ -140,7 +210,7 @@ begin
       coproc             => coproc_decode,
       copreg             => copreg,
       t_bcc              => t_bcc,
-      event_i            => event_i,
+      event_i            => event_i_gated,
       event_ack          => event_ack,
       ibit               => ibit,
       slp                => slp_o,

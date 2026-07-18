@@ -271,6 +271,26 @@ func TestAssignSlotPR(t *testing.T) {
 	}
 }
 
+// TestAssignSlotPRZ tests pr="RD Z" → wrreg_z=1, regnum_z=PR, and
+// crucially leaves wrpr_pc UNSET (so PR takes the zbus/ALU value, not PC).
+func TestAssignSlotPRZ(t *testing.T) {
+	instr := spec.Instr{Name: "JSR/N", Format: "m"}
+	slot := spec.Slot{"pr": "RD Z", "xbus": "PC", "zbus_sel": "ARITH"}
+	got, err := AssignSlot(instr, slot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got[SigWrprPC]; ok {
+		t.Errorf("pr=RD Z: wrpr_pc=%q want unset", got[SigWrprPC])
+	}
+	if got[SigWrregZ] != "1" {
+		t.Errorf("pr=RD Z: wrreg_z=%q want 1", got[SigWrregZ])
+	}
+	if got[SigRegnumZ] != "PR" {
+		t.Errorf("pr=RD Z: regnum_z=%q want PR", got[SigRegnumZ])
+	}
+}
+
 // TestAssignSlotProductionSpec exercises every non-system slot in the
 // production spec and confirms AssignSlot returns no error. This catches
 // "unrecognized slot value" errors across all 160 instructions × ~5 slots.

@@ -219,11 +219,21 @@ func AssignSlot(instr spec.Instr, slot spec.Slot) (AssignMap, error) {
 	//     (concat ["PR = PC"] (ao :wrpr-pc 1 :wrreg-z 1 :regnum-z (second (register-map "pr")))))
 	// register-map "pr" → (with-meta [:r 18] {:name "PR"}) → second is 18
 	if v := slot["pr"]; v != "" {
-		if strings.ToLower(v) == "rd pc" {
+		switch strings.ToLower(v) {
+		case "rd pc":
 			out[SigWrprPC] = "1"
 			out[SigWrregZ] = "1"
 			out[SigRegnumZ] = "PR"
-		} else {
+		case "rd z":
+			// PR <- zbus (ALU result), NOT PC. Used by SH-2A jsr/n, which
+			// has no delay slot: the saved return address must be call+2
+			// (the instruction right after jsr/n) rather than the call+4
+			// that the wrpr-pc path ("rd pc") produces. Leaving wrpr_pc
+			// unset routes gpf_zwd through the "else zbus" path in datapath
+			// (core/datapath.vhm), so PR gets whatever the ALU put on zbus.
+			out[SigWrregZ] = "1"
+			out[SigRegnumZ] = "PR"
+		default:
 			return nil, fmt.Errorf("pr: unrecognized value %q", v)
 		}
 	}

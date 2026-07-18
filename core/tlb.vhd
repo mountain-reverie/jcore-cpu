@@ -50,7 +50,7 @@ entity tlb is
     d_c         : out   std_logic;
     d_hit       : out   std_logic;
     d_prot      : out   std_logic;
-    d_multihit  : out   std_logic;                     -- S-I5: >1 usable match (fatal, priority over d_hit)
+    d_multihit  : out   std_logic; -- S-I5: >1 usable match (fatal, priority over d_hit)
     -- Current context + mode for the lookup.
     asid : in    std_logic_vector(15 downto 0); -- live ASIDR (lookup tag)
     md   : in    std_logic;                     -- SR.MD (1=privileged)
@@ -103,8 +103,8 @@ begin
          and entry.stale = '0'                                                                                     -- STALE (PTEL[1]) = SW soft-invalidate/revocation (mmustale)
          and ((entry.vpn xor i_va(31 downto 12)) and vpn_compare_mask(entry.page_mask)) = (entry.vpn'range => '0')
          and (entry.global = '1' or entry.asid_tag = asid)) then                                                   -- ASID isolation (mmuasid)
-        if hit_found = '1' then
-          multihit := '1';                                                                                        -- S-I5: sticky flag, 2nd+ match while one already found
+        if (hit_found = '1') then
+          multihit := '1';                                                                                         -- S-I5: sticky flag, 2nd+ match while one already found
         end if;
         hit_found     := '1';
         hit_pa        := entry.ppn(27 downto 13);                                                                  -- PA[27:13] = 15-bit relocation tag
@@ -112,8 +112,8 @@ begin
         hit_page_mask := entry.page_mask;
         hit_c         := entry.c;
         if (entry.x = '0' or (entry.u = '0' and md = '0')                                                          -- X / user-on-super (mmufault)
-            or (entry.u = '1' and md = '1')                                                                       -- SMEP: kernel fetch of user page (mmusmep)
-            or (entry.global = '1' and entry.u = '1')) then                                                       -- S-I7: global user page is illegal (mmuglobal)
+            or (entry.u = '1' and md = '1')                                                                        -- SMEP: kernel fetch of user page (mmusmep)
+            or (entry.global = '1' and entry.u = '1')) then                                                        -- S-I7: global user page is illegal (mmuglobal)
           prot := '1';
         end if;
       end if;
@@ -160,8 +160,8 @@ begin
          and entry.stale = '0'                                                                                     -- STALE (PTEL[1]) = software soft-invalidate
          and ((entry.vpn xor d_va(31 downto 12)) and vpn_compare_mask(entry.page_mask)) = (entry.vpn'range => '0')
          and (entry.global = '1' or entry.asid_tag = asid)) then
-        if hit_found = '1' then
-          multihit := '1';                                                                                        -- S-I5: sticky flag, 2nd+ match while one already found
+        if (hit_found = '1') then
+          multihit := '1';                                                                                         -- S-I5: sticky flag, 2nd+ match while one already found
         end if;
         hit_found     := '1';
         hit_pa        := entry.ppn(27 downto 13);
@@ -169,7 +169,7 @@ begin
         hit_page_mask := entry.page_mask;
         hit_c         := entry.c;
         if ((entry.u = '0' and md = '0') or (d_we = '1' and entry.w = '0')
-            or (entry.global = '1' and entry.u = '1')) then                                                       -- S-I7: global user page is illegal (mmuglobal)
+            or (entry.global = '1' and entry.u = '1')) then                                                        -- S-I7: global user page is illegal (mmuglobal)
           prot := '1';
         end if;
       end if;
@@ -196,9 +196,11 @@ begin
   -- software can install an entry already soft-invalidated.
   process (clk) is
 
-    variable idx      : integer range 0 to 31;
-    variable found    : boolean;
-    variable all_used : boolean;
+    variable idx       : integer range 0 to 31;
+    variable nru_idx   : integer range 0 to 31;
+    variable dedup     : boolean;
+    variable nru_found : boolean;
+    variable all_used  : boolean;
 
   begin
 
@@ -213,17 +215,35 @@ begin
         end loop;
 
       elsif (tlb_wr = '1') then
-        -- NRU: find first invalid slot; if none, first unused; if all used clear all
-        idx := 0; found := false; all_used := true;
+        -- Slot selection for an LDTLB install. Dedup takes PRIORITY over NRU:
+        -- if a valid entry already maps this VPN under this ASID (or either
+        -- side is global), overwrite THAT slot so the install replaces the
+        -- mapping in place. This mirrors SH-4 LDTLB semantics and prevents a
+        -- benign re-install -- e.g. Linux upgrading a page's permissions
+        -- (dirty bit) while it is still resident -- from leaving TWO matching
+        -- entries, which the S-I5 multi-hit check would otherwise (correctly)
+        -- flag as a fatal illegal state. With dedup, a multi-hit can only
+        -- arise from a genuinely inconsistent SW/HW state, never normal use.
+        -- Absent a dedup match, fall back to NRU: first invalid slot, else
+        -- first unused; if all valid+used, clear used bits and take slot 0.
+        idx      := 0; nru_idx := 0; dedup := false; nru_found := false;
+        all_used := true;
 
         for k in 0 to 31 loop
 
-          if (not found) then
+          if (not dedup and ram(k).valid = '1'
+              and ram(k).vpn = pteh_vpn
+              and (ram(k).global = '1' or ptel(2) = '1'
+                    or ram(k).asid_tag = asidr)) then
+            idx := k; dedup := true;
+          end if;
+
+          if (not nru_found) then
             if (ram(k).valid = '0') then
-              idx := k; found := true;
+              nru_idx := k; nru_found := true;
             elsif (ram(k).used = '0') then
               if (all_used) then
-                idx := k;
+                nru_idx := k;
               end if;
               all_used := false;
             end if;
@@ -231,15 +251,19 @@ begin
 
         end loop;
 
-        if (not found and all_used) then
-          -- all entries valid+used: clear used bits, write to slot 0
-          for k in 0 to 31 loop
+        if (not dedup) then
+          if (not nru_found and all_used) then
+            -- all entries valid+used: clear used bits, write to slot 0
+            for k in 0 to 31 loop
 
-            ram(k).used <= '0';
+              ram(k).used <= '0';
 
-          end loop;
+            end loop;
 
-          idx := 0;
+            idx := 0;
+          else
+            idx := nru_idx;
+          end if;
         end if;
         ram(idx).valid     <= '1';
         ram(idx).used      <= '1';

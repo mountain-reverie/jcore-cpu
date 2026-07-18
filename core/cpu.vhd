@@ -37,7 +37,7 @@ architecture stru of cpu is
   signal slot, if_stall     : std_logic;
   signal mac_i              : mult_i_t;
   signal mac_o              : mult_o_t;
-  signal dp_tlb_squash      : std_logic;  -- datapath tlb_squash, gates MAC accumulate on faulting pass
+  signal dp_tlb_squash      : std_logic; -- datapath tlb_squash, gates MAC accumulate on faulting pass
   signal reg                : reg_ctrl_t;
   signal func               : func_ctrl_t;
   signal mem                : mem_ctrl_t;
@@ -67,10 +67,10 @@ architecture stru of cpu is
   signal dp_mmu_regs : mmu_reg_t;
   signal dp_sr       : sr_t;
   -- TLB output signals (Task 8 will consume hit/prot; mmu_o carries PA tags out).
-  signal tlb_i_hit  : std_logic;
-  signal tlb_d_hit  : std_logic;
-  signal tlb_i_prot : std_logic;
-  signal tlb_d_prot : std_logic;
+  signal tlb_i_hit      : std_logic;
+  signal tlb_d_hit      : std_logic;
+  signal tlb_i_prot     : std_logic;
+  signal tlb_d_prot     : std_logic;
   signal tlb_i_multihit : std_logic; -- S-I5: >1 usable I-side match (fatal)
   signal tlb_d_multihit : std_logic; -- S-I5: >1 usable D-side match (fatal)
   -- MMU address-translation intermediates (driven by g_mmu only; VHDL-93 forbids
@@ -142,17 +142,21 @@ begin
   event_o.dbg <= debug;
 
   -- S-I4 double-fault gate: see event_i_gated declaration above.
+
   g_dblflt : if PRIV_ARCH generate
-    process (event_i, illegal_instr, dp_sr)
+
+    process (event_i, illegal_instr, dp_sr) is
     begin
+
       event_i_gated <= event_i;
-      if dp_sr.rb = '1' then
-        if event_i.en = '1' and (event_i.cmd = INTERRUPT or event_i.cmd = ERROR) then
+
+      if (dp_sr.rb = '1') then
+        if (event_i.en = '1' and (event_i.cmd = INTERRUPT or event_i.cmd = ERROR)) then
           -- Real async/error event arriving while the exception context is
           -- already live: the canonical SH-4 double fault.
           event_i_gated.cmd <= RESET_CPU;
           event_i_gated.vec <= (others => '0');
-        elsif illegal_instr = '1' then
+        elsif (illegal_instr = '1') then
           -- Nested General-Illegal-Instruction fault taken from inside a
           -- handler: synthesize the same defined-reset outcome.
           event_i_gated.en  <= '1';
@@ -160,8 +164,11 @@ begin
           event_i_gated.vec <= (others => '0');
         end if;
       end if;
+
     end process;
+
   end generate g_dblflt;
+
   g_no_dblflt : if not PRIV_ARCH generate
     event_i_gated <= event_i;
   end generate g_no_dblflt;
@@ -174,16 +181,22 @@ begin
   -- invariant); PRIV_ARCH-gated so it is inert as a comment-only signal on
   -- non-PRIV_ARCH (J1/J2) builds.
   -- pragma translate_off
+
   g_rb_md_assert : if PRIV_ARCH generate
-    process (clk)
+
+    process (clk) is
     begin
+
       if rising_edge(clk) then
         assert not (dp_sr.rb = '1' and dp_sr.md = '0')
           report "S-I4/H-M3: SR.RB=1 with SR.MD=0 -- banked exception state live in user mode"
           severity failure;
       end if;
+
     end process;
+
   end generate g_rb_md_assert;
+
   -- pragma translate_on
 
   u_decode : component decode
@@ -478,7 +491,7 @@ begin
       -- second access then raises no exception while RB=1; it re-faults cleanly
       -- after the handler returns (RB back to 0). (J4+MMU_ARCH.)
       if (i_at_translated = '1' and sig_inst_o.en = '1' and dp_sr.rb = '0') then
-        if (tlb_i_multihit = '1') then                                        -- S-I5: hit-count fault, priority over hit_found/prot
+        if (tlb_i_multihit = '1') then                                                          -- S-I5: hit-count fault, priority over hit_found/prot
           exc_en   := '1';
           exc_kind := MULTI_HIT;
           fva      := i_va_32;
@@ -494,7 +507,7 @@ begin
       end if;
 
       if (exc_en = '0' and d_at_translated = '1' and sig_db_o.en = '1' and dp_sr.rb = '0') then
-        if (tlb_d_multihit = '1') then                                        -- S-I5: hit-count fault, priority over hit_found/prot
+        if (tlb_d_multihit = '1') then                                                          -- S-I5: hit-count fault, priority over hit_found/prot
           exc_en   := '1';
           exc_kind := MULTI_HIT;
           fva      := d_va_32;

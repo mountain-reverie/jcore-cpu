@@ -12,7 +12,7 @@ CONFIG_SH2A_ARCH ?= 0
 CFLAGS = -m2 -g -Os -Wall -Iinclude -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -DCONFIG_SH2A_ARCH=$(CONFIG_SH2A_ARCH)
 LDFLAGS = -T sh32.x -Map main.map
 
-all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img rteredir.img mmureg.img mmuguard.img mmuxlate.img mmufault.img mmudslot.img mmurte.img mmustore.img mmuimiss.img mmuimiss_illegal.img mmusr.img mmuicolor.img mmudcbit.img mmuldtlbr.img mmutsb.img mmurun.img mmuidx.img mmustres.img mmustr2.img mmusmep.img mmuirun.img mmuainc.img mmuainc2.img mmureloc.img mmurelocif.img mmurelocbp.img mmustale.img mmuasid.img mmuglobal.img mmumultihit.img mmudblflt.img mmunest.img mmupage4k.img mmupagereloc16k.img mmupage16k.img mmupage64k.img mmupage1m.img mmupagemix.img mmupagemix2.img mmupagewalk.img m8_smoke.img m8_dside.img m8_ifetch_0.img m8_ifetch_1.img m8_ifetch_2.img m8_macarith.img m8_macseq.img
+all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img rteredir.img mmureg.img mmuguard.img mmuxlate.img mmufault.img mmudslot.img mmurte.img mmustore.img mmuimiss.img mmuimiss_illegal.img mmusr.img mmuicolor.img mmudcbit.img mmuldtlbr.img mmutsb.img mmurun.img mmuidx.img mmustres.img mmustr2.img mmusmep.img mmuirun.img mmuainc.img mmuainc2.img mmureloc.img mmurelocif.img mmurelocbp.img mmustale.img mmuasid.img mmuglobal.img mmumultihit.img mmudblflt.img mmunest.img mmuremap.img mmupage4k.img mmupagereloc16k.img mmupage16k.img mmupage64k.img mmupage1m.img mmupagemix.img mmupagemix2.img mmupagewalk.img m8_smoke.img m8_dside.img m8_ifetch_0.img m8_ifetch_1.img m8_ifetch_2.img m8_macarith.img m8_macseq.img
 
 # J4-only guard images. These require the J4/PRIV/MMU overlay decoder built
 # by sim/mmu_sim.sh to pass: the base-J2 cpu_ctb cannot fire illegal-
@@ -104,6 +104,7 @@ mmuglobal.elf: mmuglobal.o
 mmumultihit.elf: mmumultihit.o
 mmudblflt.elf: mmudblflt.o
 mmunest.elf: mmunest.o
+mmuremap.elf: mmuremap.o
 mmupage4k.elf: mmupage4k.o
 mmupagereloc16k.elf: mmupagereloc16k.o
 mmupage16k.elf: mmupage16k.o

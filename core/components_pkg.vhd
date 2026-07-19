@@ -42,8 +42,14 @@ package cpu2j0_components_pack is
   -- Base decode never emits these (dead on base). manip() returns x unchanged
   -- for them; the actual save/restore-route behavior is implemented directly
   -- in the datapath (mac_shadow_h/l capture + SEL_MANIP restore routing).
+  --
+  -- DIV_START_U/DIV_START_S/DIV_READ: SH-2A DIVU/DIVS markers (Task 2 of the
+  -- divs/divu plan). Base decode never emits these either. manip() returns x
+  -- unchanged for them; div_i.start/is_signed and the quotient readback are
+  -- implemented directly in the datapath (see g_div/g_div_off, mirroring
+  -- g_macsh/g_msel above), exactly like the MULR precedent.
 
-  type alumanip_t is (swap_byte, swap_word, extend_ubyte, extend_uword, extend_sbyte, extend_sword, extract, set_bit_7, bitset, clip_sb, clip_sw, clip_ub, clip_uw, mac_save, mac_restore_l, mac_restore_h, band, bandnot, bor, bornot, bxor);
+  type alumanip_t is (swap_byte, swap_word, extend_ubyte, extend_uword, extend_sbyte, extend_sword, extract, set_bit_7, bitset, clip_sb, clip_sw, clip_ub, clip_uw, mac_save, mac_restore_l, mac_restore_h, band, bandnot, bor, bornot, bxor, div_start_u, div_start_s, div_read);
 
   -- NOTE: the SH-2A CS bit (SR bit 2, CLIPS/CLIPU saturation) is deliberately
   -- NOT a field of sr_t. sr_t is embedded in datapath_reg_t's shared

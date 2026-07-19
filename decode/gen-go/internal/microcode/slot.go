@@ -1064,6 +1064,22 @@ func manipSel(v string) (string, error) {
 		return "BORNOT", nil
 	case "bxor":
 		return "BXOR", nil
+	case "div_start_u":
+		// SH-2A DIVU R0,Rn (Task 2): decode-only marker consumed by
+		// datapath's g_div block (core/datapath.vhm) to pulse
+		// div_i.start/div_i.is_signed='0' for the divider unit
+		// (core/divider.vhd, Task 1). Same base-invisible rationale as
+		// MAC_SAVE/CLIP_*/BAND above -- alumanip_t is hand-maintained in
+		// core/components_pkg.vhd, not part of the generated static
+		// package.
+		return "DIV_START_U", nil
+	case "div_start_s":
+		return "DIV_START_S", nil
+	case "div_read":
+		// Final DIVU/DIVS slot: zbus_sel=SEL_MANIP reads div_o.quotient via
+		// manip_sel (datapath.vhm g_msel), same route MULR's MAC_RESTORE_L/H
+		// use for the shadow registers.
+		return "DIV_READ", nil
 	case "xtract":
 		return "EXTRACT", nil
 	case "set b7":

@@ -282,3 +282,7 @@ Each group is a PR against master, gated behind `SH2A_ARCH`, with in-pipeline
   `sim/tests/Makefile`.
 - Build: `make -C decode generate-j2a`, `make -C decode diff`,
   `make -C decode insns[-check]`, `decode/gen-go/regression.sh`.
+
+
+### Group 8 — arithmetic — ✅ COMPLETE (2026-07-19)
+clips/clipu (PR-A) + mulr (PR-B) + **divs/divu (PR-C)** all shipped. divs/divu = an isolated SH2A_ARCH-gated sequential divider (`core/divider.vhd`, unit-tested via `divider_unit_tap`), wired like `mult(seq)` (busy→stall), ~33-cycle. Base J1/J2/J4 byte-identical (only illegal-routing terms; the g_div datapath prunes on base — verified: isolated illegal-routing j1 +87, full branch +70, divider adds nothing). Completes the J2A INTEGER instruction set (remaining SH-2A = FPU, out of scope; register banking descoped).

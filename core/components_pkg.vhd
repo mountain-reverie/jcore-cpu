@@ -1022,13 +1022,13 @@ return sr_t is
   )
   return std_logic_vector is
 
-    variable b0        : std_logic_vector(7 downto 0);
-    variable b1        : std_logic_vector(7 downto 0);
-    variable b2        : std_logic_vector(7 downto 0);
-    variable b3        : std_logic_vector(7 downto 0);
-    variable sign_bit  : std_logic;
-    variable sign_byte : std_logic_vector(7 downto 0);
-    variable tvec      : std_logic_vector(31 downto 0);
+    variable b0         : std_logic_vector(7 downto 0);
+    variable b1         : std_logic_vector(7 downto 0);
+    variable b2         : std_logic_vector(7 downto 0);
+    variable b3         : std_logic_vector(7 downto 0);
+    variable sign_bit   : std_logic;
+    variable sign_byte  : std_logic_vector(7 downto 0);
+    variable tvec       : std_logic_vector(31 downto 0);
     variable bit_val    : std_logic;
     variable result_bit : std_logic;
 
@@ -1052,13 +1052,17 @@ return sr_t is
       -- self-test with logic_sr=NOT_ZERO can recover it as the new T value
       -- without widening any sr_sel/zbus_sel enum.
       bit_val := or_reduce(x and y);
-      case func is
-        when BAND    => result_bit := t and bit_val;
-        when BANDNOT => result_bit := t and (not bit_val);
-        when BOR     => result_bit := t or bit_val;
-        when BORNOT  => result_bit := t or (not bit_val);
-        when others  => result_bit := t xor bit_val;   -- BXOR
-      end case;
+      if (func = BAND) then
+        result_bit := t and bit_val;
+      elsif (func = BANDNOT) then
+        result_bit := t and (not bit_val);
+      elsif (func = BOR) then
+        result_bit := t or bit_val;
+      elsif (func = BORNOT) then
+        result_bit := t or (not bit_val);
+      else  -- BXOR
+        result_bit := t xor bit_val;
+      end if;
       tvec := (others => result_bit);
       return tvec;
     end if;

@@ -82,3 +82,121 @@
     ma_op = "WRITE"            # movml pattern: advances sit next to dispatch).
     ma_size = "8"
     pc = "INC"
+
+[[instr]]
+  name = "BCLR.B #imm3,@(disp12,Rn)"
+  format = "nd12i3"
+  opcode = "0011 nnnn 0iii 1001"
+  opcode2 = "0010 dddd dddd dddd"
+  operation = "0 -> bit imm3 of (disp12 + Rn)"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]                 # slot0: latch ext word (INC #1 - consumes word1)
+    latch_ext = "1"
+    pc = "INC"
+    if_issue = "YES"
+  [[instr.slots]]                 # slot1: EA = Rn + disp12 -> TEMP1. imm_from_ext
+    imm_from_ext = "1"            # reads word2 combinationally off if_dr (no
+    alu_y = "U*1"                 # if_issue needed to consume it), and pc=HOLD:
+    arith = "ADD"                 # the SECOND PC-advance/fetch is deferred to the
+    xbus = "Rn"                   # terminal so it sits ADJACENT to dispatch (the
+    zbus = "TEMP1"                # movi20 pattern). A fetch-advance here, far from
+    zbus_sel = "ARITH"           # dispatch, lets the prefetch drift over the long
+    pc = "HOLD"                   # RMW body and drops an instruction after bset.
+  [[instr.slots]]                 # slot2-4: wait for TEMP1 write-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot5: READ byte @TEMP1 -> TEMP0
+    xbus = "TEMP1"
+    ma_addy = "XBUS"
+    ma_op = "READ"
+    ma_size = "8"
+    wbus = "TEMP0"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot6-8: wait for TEMP0 load-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot9: MODIFY TEMP0 &= ~(1<<imm3) -> TEMP0
+    logic = "AND"
+    xbus = "TEMP0"
+    ybus = "MASK3INV_64"
+    zbus = "TEMP0"
+    zbus_sel = "LOGIC"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot10-11: wait for TEMP0 commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot12: STORE byte TEMP0 -> @TEMP1 (terminal).
+    xbus = "TEMP1"                # pc=INC + auto if_issue+dispatch: the SECOND
+    ybus = "TEMP0"                # word's PC-advance/fetch happens HERE, adjacent
+    ma_addy = "XBUS"             # to dispatch, so the prefetch is exactly in sync
+    ma_data = "YBUS"            # when the next instruction is fetched (movi20/
+    ma_op = "WRITE"            # movml pattern: advances sit next to dispatch).
+    ma_size = "8"
+    pc = "INC"
+
+[[instr]]
+  name = "BST.B #imm3,@(disp12,Rn)"
+  format = "nd12i3"
+  opcode = "0011 nnnn 0iii 1001"
+  opcode2 = "0111 dddd dddd dddd"
+  operation = "T -> bit imm3 of (disp12 + Rn)"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]                 # slot0: latch ext word (INC #1 - consumes word1)
+    latch_ext = "1"
+    pc = "INC"
+    if_issue = "YES"
+  [[instr.slots]]                 # slot1: EA = Rn + disp12 -> TEMP1. imm_from_ext
+    imm_from_ext = "1"            # reads word2 combinationally off if_dr (no
+    alu_y = "U*1"                 # if_issue needed to consume it), and pc=HOLD:
+    arith = "ADD"                 # the SECOND PC-advance/fetch is deferred to the
+    xbus = "Rn"                   # terminal so it sits ADJACENT to dispatch (the
+    zbus = "TEMP1"                # movi20 pattern). A fetch-advance here, far from
+    zbus_sel = "ARITH"           # dispatch, lets the prefetch drift over the long
+    pc = "HOLD"                   # RMW body and drops an instruction after bset.
+  [[instr.slots]]                 # slot2-4: wait for TEMP1 write-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot5: READ byte @TEMP1 -> TEMP0
+    xbus = "TEMP1"
+    ma_addy = "XBUS"
+    ma_op = "READ"
+    ma_size = "8"
+    wbus = "TEMP0"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot6-8: wait for TEMP0 load-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot9: MODIFY insert T at bit imm3 of TEMP0 (BITSET manip + sr.t)
+    manip = "bitset"
+    xbus = "TEMP0"
+    ybus = "MASK3_64"
+    zbus = "TEMP0"
+    zbus_sel = "MANIP"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot10-11: wait for TEMP0 commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot12: STORE byte TEMP0 -> @TEMP1 (terminal).
+    xbus = "TEMP1"                # pc=INC + auto if_issue+dispatch: the SECOND
+    ybus = "TEMP0"                # word's PC-advance/fetch happens HERE, adjacent
+    ma_addy = "XBUS"             # to dispatch, so the prefetch is exactly in sync
+    ma_data = "YBUS"            # when the next instruction is fetched (movi20/
+    ma_op = "WRITE"            # movml pattern: advances sit next to dispatch).
+    ma_size = "8"
+    pc = "INC"

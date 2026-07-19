@@ -248,8 +248,27 @@ begin
   -- (and holds across a slot1 stall, since the fetch freezes too). Wrapped in a
   -- generate so the logic is simply absent on non-J2A builds (byte-identical).
   g_ext_word : if SH2A_ARCH generate
+    signal ext_hold_r : std_logic_vector(15 downto 0);
   begin
-    ext_word_o <= if_dr;
+    -- A LATE ext[15:12] op-discrimination slot (Group 3 bit-mem RMW modify) needs
+    -- word2 too, but by then if_dr has advanced. Capture if_dr at the ext slot
+    -- (op.addr=1, the imm_from_ext slot) and hold it; present the live if_dr in
+    -- that slot itself (slot1's disp needs the combinational value), the held copy
+    -- afterward. op.addr=1 is the ext slot because SH-2A always binds the DIRECT
+    -- decoder (cpu_decode_direct_sh2a / _mmu_sh2a; the ROM decoder is J1/J4-only,
+    -- never SH-2A), whose sequencer is 0-based: slot0=latch_ext, slot1=imm_from_ext.
+    ext_reg : process(clk, rst)
+    begin
+      if rst = '1' then
+        ext_hold_r <= (others => '0');
+      elsif clk = '1' and clk'event then
+        if slot = '1' and this'register.op.addr(3 downto 0) = x"1" then
+          ext_hold_r <= if_dr;
+        end if;
+      end if;
+    end process;
+    ext_word_o <= if_dr when this'register.op.addr(3 downto 0) = x"1"
+                  else ext_hold_r;
   end generate g_ext_word;
   g_ext_word_off : if not SH2A_ARCH generate
     ext_word_o <= (others => '0');

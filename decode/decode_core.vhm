@@ -40,6 +40,13 @@ entity decode_core is
     p : in pipeline_t;
     rst : in std_logic;
     slot : in std_logic;
+    -- SH-2A only: decode_table's imm_from_ext for the current slot, fed back so the
+    -- ext-word capture register (below) triggers on the actual ext-consume slot --
+    -- decoder-INDEPENDENT (works for direct AND rom, unlike an op.addr compare).
+    -- Plain std_logic with a default so base builds (which don't wire it, and whose
+    -- pipeline_id_t lacks imm_from_ext) still analyse; only the two-word template
+    -- branch wires it to id.imm_from_ext.
+    imm_from_ext_i : in std_logic := '0';
     t_bcc : in std_logic;
     tlb_exc_en : in std_logic;
     tlb_exc_kind : in tlb_exc_kind_t;
@@ -254,21 +261,24 @@ begin
     -- word2 too, but by then if_dr has advanced. Capture if_dr at the ext slot
     -- (op.addr=1, the imm_from_ext slot) and hold it; present the live if_dr in
     -- that slot itself (slot1's disp needs the combinational value), the held copy
-    -- afterward. op.addr=1 is the ext slot because SH-2A always binds the DIRECT
-    -- decoder (cpu_decode_direct_sh2a / _mmu_sh2a; the ROM decoder is J1/J4-only,
-    -- never SH-2A), whose sequencer is 0-based: slot0=latch_ext, slot1=imm_from_ext.
+    -- afterward. The trigger is imm_from_ext (the decode_table control that marks
+    -- the ext-consume slot) rather than an op.addr value, so it is decoder-
+    -- independent: it fires on the right slot for BOTH the direct and the rom
+    -- sequencer (whose op.addr numbering differs). (NOTE: the rom decoder cannot
+    -- runtime-discriminate ext_word[15:12] anyway -- predecode keys on word1 only,
+    -- shadowing same-word1 ext variants -- so two-word ext-discriminated SH-2A ops
+    -- are direct-decoder-only; this capture is nonetheless kept decoder-neutral.)
     ext_reg : process(clk, rst)
     begin
       if rst = '1' then
         ext_hold_r <= (others => '0');
       elsif clk = '1' and clk'event then
-        if slot = '1' and this'register.op.addr(3 downto 0) = x"1" then
+        if slot = '1' and imm_from_ext_i = '1' then
           ext_hold_r <= if_dr;
         end if;
       end if;
     end process;
-    ext_word_o <= if_dr when this'register.op.addr(3 downto 0) = x"1"
-                  else ext_hold_r;
+    ext_word_o <= if_dr when imm_from_ext_i = '1' else ext_hold_r;
   end generate g_ext_word;
   g_ext_word_off : if not SH2A_ARCH generate
     ext_word_o <= (others => '0');

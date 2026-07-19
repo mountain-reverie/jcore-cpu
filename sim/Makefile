@@ -25,6 +25,11 @@ CONFIG_SH2A_ARCH ?= 0
 # DSP_ALU=>true, core/dsp_arith.vhd exercised) instead of cpu_sim. Default 0
 # leaves the default sim config (and its DSP_ALU=false datapath) untouched.
 CONFIG_DSP_ALU=0
+# Base direct-vs-ROM decoder symmetry check: bind cpu_sim_rom (u_decode =
+# cpu_decode_rom) instead of cpu_sim (direct decoder). Base J2 only -- the
+# ROM decoder cannot runtime-discriminate two-word SH-2A ext_word ops, so
+# never combine with CONFIG_SH2A_ARCH=1. Default 0 leaves cpu_sim unchanged.
+CONFIG_DECODE_ROM ?= 0
 
 GHDL_EXISTS := $(shell sh -c 'which $(GHDL) >/dev/null && echo true')
 IVERILOG_EXISTS := $(shell sh -c 'which $(IVERILOG) >/dev/null && echo true')
@@ -170,7 +175,7 @@ cpu_pure_tb: ram.img
 # Add dependencies to particular vhh files. TODO: how to avoid
 # repeating this rule?
 cpu_tb.vhh: cpu_tb.vhd cpu_signals.h sim/sim_macros.h
-	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -DCONFIG_SH2A_ARCH=$(CONFIG_SH2A_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -I. -I../config -Isim $< -o $@
+	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -DCONFIG_SH2A_ARCH=$(CONFIG_SH2A_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -DCONFIG_DECODE_ROM=$(CONFIG_DECODE_ROM) -I. -I../config -Isim $< -o $@
 
 cpu_cache_tb.vhh: cpu_cache_tb.vhd cpu_signals.h sim/sim_macros.h
 	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -I. -I../config -Isim $< -o $@
@@ -205,6 +210,36 @@ cpu_sim_pkg: $(PURE_SIM_VHDS) ram.img
 	cp $(TOOLS_DIR)/*.mk $@/tools
 	cp ram.img $@/
 	cp Makefile_cpu_sim_pkg $@/Makefile
+
+# Base direct-vs-ROM decoder symmetry check: the direct/simple decoder and
+# the ROM decoder are generated from ONE microcode model, so for BASE J2 they
+# must behave identically. This target builds the ROM-decoder cosim
+# (cpu_sim_rom, CONFIG_DECODE_ROM=1) and runs representative BASE test images
+# on it, asserting each prints "Test Passed" -- the same result the default
+# direct-decoder build produces. Base J2 only: never combine with
+# CONFIG_SH2A_ARCH=1 (the ROM decoder cannot runtime-discriminate the
+# ext_word of two-word SH-2A ops, so those are DIRECT-decoder-only).
+DECODE_SYMMETRY_TESTS := m8_macarith banktest
+decode-symmetry:
+	rm -f work-obj93.cf cpu_tb.vhh cpu_ctb
+	$(MAKE) CONFIG_DECODE_ROM=1 cpu_ctb work-obj93.cf
+	$(MAKE) -C tests $(addsuffix .img,$(DECODE_SYMMETRY_TESTS))
+	@fail=0; for t in $(DECODE_SYMMETRY_TESTS); do \
+	  echo "== decode-symmetry [ROM]: $$t =="; \
+	  if ./cpu_ctb --stop-time=10us -i tests/$$t.img 2>&1 | grep -q 'Test Passed'; then \
+	    echo "   PASS [$$t]"; \
+	  else \
+	    echo "   FAIL [$$t]: ROM decoder did not print 'Test Passed'" >&2; fail=1; \
+	  fi; \
+	done; \
+	rm -f work-obj93.cf cpu_tb.vhh cpu_ctb; \
+	$(MAKE) cpu_ctb work-obj93.cf >/dev/null; \
+	if [ $$fail -ne 0 ]; then \
+	  echo "decode-symmetry: base direct-vs-ROM decoder DESYNC detected" >&2; exit 1; \
+	fi; \
+	echo "decode-symmetry: base ROM decoder matches direct (all tests passed)"
+
+.PHONY: decode-symmetry
 
 clean:
 	rm -f *.o *.P *.vpi *.vvp sim/*.o sim/*.P sim/*.vpi sim/*.vvp *.vhh

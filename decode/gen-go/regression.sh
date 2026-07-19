@@ -14,6 +14,10 @@
 #      cpu_ctb; assert "Test Passed" appears in output.  Skipped if
 #      sh2-elf-gcc is absent.  Known pre-existing failures are listed in
 #      KNOWN_BROKEN_TESTS and skipped with a diagnostic.
+#   6b. Base direct-vs-ROM decoder symmetry: run base self-checking test
+#      images on the ROM-decoder cosim (cpu_sim_rom) and assert each prints
+#      "Test Passed" -- enforces direct==ROM for base J2 (dual-core FPGA runs
+#      both in sync). Stronger complement to Step 4's LED check. Needs sh2-elf-gcc.
 #   7. Synthesize the generated decode_table (both direct and ROM
 #      variants) via yosys + ghdl-yosys-plugin. Catches synthesis-only
 #      issues (latches, multi-driver nets) that simulation misses.
@@ -266,6 +270,21 @@ else
 
     if [ $sim_tests_ok -eq 0 ]; then
         echo "regression: Step 6 sim tests FAILED" >&2
+        exit 1
+    fi
+fi
+
+echo "==> Step 6b: base direct-vs-ROM decoder symmetry (cpu_sim_rom)"
+# The direct and ROM decoders are generated from ONE microcode model, so for
+# BASE J2 they must behave identically (J2 dual-core FPGA runs direct+ROM in
+# sync). This runs base self-checking test images on the ROM-decoder cosim and
+# asserts each prints "Test Passed" -- a stronger complement to Step 4's ROM
+# LED-sequence check. Needs the sim/tests images (sh2-elf-gcc).
+if ! command -v sh2-elf-gcc >/dev/null 2>&1; then
+    echo "    Step 6b skipped: sh2-elf-gcc not installed (needs test images)"
+else
+    if ! make -C "$REPO_ROOT/sim" decode-symmetry; then
+        echo "regression: Step 6b base direct-vs-ROM symmetry FAILED" >&2
         exit 1
     fi
 fi

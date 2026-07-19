@@ -92,7 +92,6 @@ begin
             delay_slot_o => delay_slot_c,
 {{- if .HasTwoWord }}
             ext_word_o => ext_word_c,
-            imm_from_ext_i => id.imm_from_ext,
 {{- end }}
             if_pc => if_pc,
             if_pc_o => if_pc_c

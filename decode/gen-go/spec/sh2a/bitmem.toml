@@ -1,0 +1,84 @@
+# SH-2A overlay: bit-manip MEMORY read-modify-write (Group 3, PR-A).
+# Two-word: word1 "0011 nnnn 0iii 1001", word2 ext[15:12] discriminates the op.
+#
+# ext_word (=if_dr) is only live during slot1 (the imm_from_ext slot), so
+# EA = Rn+disp12 MUST be captured into TEMP1 in slot1 (via the Z-bus/ALU-result
+# write path) and reused (xbus=TEMP1/XBUS) for BOTH the READ and the WRITE.
+#
+# FETCH ACCOUNTING (subtle -- the reason for the exact pc=INC placement below).
+# A two-word instruction advances PC by two words, so it emits exactly TWO
+# pc=INC pulses (each auto-carries the fetch-ahead advance). For a SHORT two-word
+# instruction (Group 1 disp12 movs, movi20) the two INCs sit on slot0 and the
+# terminal, which are adjacent, so the prefetch stays in sync. For this LONG
+# two-word RMW the two INCs must be placed at slot0 (word1) and the TERMINAL
+# store slot (word2) -- NOT slot0+slot1 -- so BOTH fetch advances sit next to
+# dispatch. imm_from_ext reads word2 combinationally off if_dr, so slot1 needs
+# no INC/if_issue to consume it. If the second INC is put on slot1 (far from the
+# terminal), the instruction prefetch drifts across the long RMW body and the
+# instruction immediately after this one is silently SWALLOWED (verified: the
+# 2nd instruction after bset dropped; a dependent `mov.b @,r0 ; extu.b r0,r0`
+# then loses the extu). This mirrors the movml/movmu long-instruction pattern:
+# all PC/fetch advances live on the dispatch-adjacent slots.
+[defaults]
+  pc = "INC"
+  if_issue = "NO"
+  sr = "HOLD"
+
+[[instr]]
+  name = "BSET.B #imm3,@(disp12,Rn)"
+  format = "nd12i3"
+  opcode = "0011 nnnn 0iii 1001"
+  opcode2 = "0001 dddd dddd dddd"
+  operation = "1 -> bit imm3 of (disp12 + Rn)"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]                 # slot0: latch ext word (INC #1 - consumes word1)
+    latch_ext = "1"
+    pc = "INC"
+    if_issue = "YES"
+  [[instr.slots]]                 # slot1: EA = Rn + disp12 -> TEMP1. imm_from_ext
+    imm_from_ext = "1"            # reads word2 combinationally off if_dr (no
+    alu_y = "U*1"                 # if_issue needed to consume it), and pc=HOLD:
+    arith = "ADD"                 # the SECOND PC-advance/fetch is deferred to the
+    xbus = "Rn"                   # terminal so it sits ADJACENT to dispatch (the
+    zbus = "TEMP1"                # movi20 pattern). A fetch-advance here, far from
+    zbus_sel = "ARITH"           # dispatch, lets the prefetch drift over the long
+    pc = "HOLD"                   # RMW body and drops an instruction after bset.
+  [[instr.slots]]                 # slot2-4: wait for TEMP1 write-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot5: READ byte @TEMP1 -> TEMP0
+    xbus = "TEMP1"
+    ma_addy = "XBUS"
+    ma_op = "READ"
+    ma_size = "8"
+    wbus = "TEMP0"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot6-8: wait for TEMP0 load-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot9: MODIFY TEMP0 |= (1<<imm3) -> TEMP0
+    logic = "OR"
+    xbus = "TEMP0"
+    ybus = "MASK3_64"
+    zbus = "TEMP0"                 # capture OR result via Z-bus (ALU-result path)
+    zbus_sel = "LOGIC"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot10-11: wait for TEMP0 commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot12: STORE byte TEMP0 -> @TEMP1 (terminal).
+    xbus = "TEMP1"                # pc=INC + auto if_issue+dispatch: the SECOND
+    ybus = "TEMP0"                # word's PC-advance/fetch happens HERE, adjacent
+    ma_addy = "XBUS"             # to dispatch, so the prefetch is exactly in sync
+    ma_data = "YBUS"            # when the next instruction is fetched (movi20/
+    ma_op = "WRITE"            # movml pattern: advances sit next to dispatch).
+    ma_size = "8"
+    pc = "INC"

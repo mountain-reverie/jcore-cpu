@@ -32,3 +32,36 @@
     sr = "LOGIC"
     xbus = "1"
     ybus = "SR"
+
+# SH-2A PREF @Rn: operand-cache prefetch HINT -- implemented as a NOP.
+#
+# Architecturally PREF has NO observable effect: its ISA operation is
+# "prefetch_operand_cache_block(R[n]); PC += 2" -- it touches only
+# (optional) cache state, never a register / memory / T. Per the SH spec a
+# prefetch is a hint that an implementation may ignore (including a PREF to
+# an unmapped address, which must NOT fault). So a NOP that just advances PC
+# is fully compliant and architecturally indistinguishable from a "real"
+# prefetch.
+#
+# A real dcache-warming implementation was considered and rejected for this
+# integer J2A variant: the functional cosim wires the CPU data master
+# straight to the data bus (no dcache in the path), so a real PREF would be
+# a discarded memory read that warms nothing -- and to a bad Rn could raise
+# a spurious bus error a NOP avoids. Even with the cache (j2ac), there is no
+# PREF->cache fill path (the dcache's pref_inc is an autonomous next-line
+# prefetch, not opcode-driven), the payoff is workload-specific and
+# unmeasured by any test/benchmark, and adding an issue-read-and-discard mem
+# mode carries cost + base-neutrality risk for zero observable gain. If a
+# perf-tuned j2ac with a cache-hit benchmark is ever pursued, revisit this.
+#
+# format="n" so Rn is recognised for disassembly/insns.json; the NOP slot
+# ignores it (no register read, just pc=INC -- exactly base NOP's slot).
+[[instr]]
+  name = "PREF @Rn"
+  format = "n"
+  opcode = "0000 nnnn 1000 0011"
+  operation = "prefetch (@Rn) -- hint, implemented as NOP"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    pc = "INC"

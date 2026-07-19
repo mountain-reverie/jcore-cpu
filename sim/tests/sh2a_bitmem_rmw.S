@@ -92,6 +92,43 @@ start:
         cmp/eq  r0, r6
         bf      _fail4
 
+        ! --- case 5: bclr.b #3,@(4,r2): 0x89 -> 0x81 (clear mid bit, disp!=0) ---
+        mov     #0x89, r0
+        mov.b   r0, @(4, r2)
+        .word   0x3239          ! word1: BCLR.B #3,@(disp12,r2)
+        .word   0x2004          ! word2: ext=0010 (bclr), disp12 = 4
+        mov.b   @(4, r2), r0
+        extu.b  r0, r0
+        mov     #0x81, r6
+        extu.b  r6, r6
+        cmp/eq  r0, r6
+        bf      _fail5
+
+        ! --- case 6: bst.b #5,@(0,r2) with T=1: 0x00 -> 0x20 (insert T into bit5) ---
+        mov     #0x00, r0
+        mov.b   r0, @(0, r2)
+        sett                     ! T = 1
+        .word   0x3259          ! word1: BST.B #5,@(disp12,r2)
+        .word   0x7000          ! word2: ext=0111 (bst), disp12 = 0
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x20, r6
+        cmp/eq  r0, r6
+        bf      _fail6
+
+        ! --- case 7: bst.b #5,@(0,r2) with T=0: 0xFF -> 0xDF (bit5 cleared) ---
+        mov     #0xFF, r0
+        mov.b   r0, @(0, r2)
+        clrt                     ! T = 0
+        .word   0x3259          ! word1: BST.B #5,@(disp12,r2)
+        .word   0x7000          ! word2: ext=0111 (bst), disp12 = 0
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0xDF, r6
+        extu.b  r6, r6
+        cmp/eq  r0, r6
+        bf      _fail7
+
         bra     _done
         nop
 
@@ -100,6 +137,43 @@ _done:
         mov.l   p_test_result, r0
         mov     #0, r9
         mov.l   r9, @r0          ! 0 = pass
+        ! --- case 5: bclr.b #3,@(4,r2): 0x89 -> 0x81 (clear mid bit, disp!=0) ---
+        mov     #0x89, r0
+        mov.b   r0, @(4, r2)
+        .word   0x3239          ! word1: BCLR.B #3,@(disp12,r2)
+        .word   0x2004          ! word2: ext=0010 (bclr), disp12 = 4
+        mov.b   @(4, r2), r0
+        extu.b  r0, r0
+        mov     #0x81, r6
+        extu.b  r6, r6
+        cmp/eq  r0, r6
+        bf      _fail5
+
+        ! --- case 6: bst.b #5,@(0,r2) with T=1: 0x00 -> 0x20 (insert T into bit5) ---
+        mov     #0x00, r0
+        mov.b   r0, @(0, r2)
+        sett                     ! T = 1
+        .word   0x3259          ! word1: BST.B #5,@(disp12,r2)
+        .word   0x7000          ! word2: ext=0111 (bst), disp12 = 0
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x20, r6
+        cmp/eq  r0, r6
+        bf      _fail6
+
+        ! --- case 7: bst.b #5,@(0,r2) with T=0: 0xFF -> 0xDF (bit5 cleared) ---
+        mov     #0xFF, r0
+        mov.b   r0, @(0, r2)
+        clrt                     ! T = 0
+        .word   0x3259          ! word1: BST.B #5,@(disp12,r2)
+        .word   0x7000          ! word2: ext=0111 (bst), disp12 = 0
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0xDF, r6
+        extu.b  r6, r6
+        cmp/eq  r0, r6
+        bf      _fail7
+
         bra     _done
         nop
 _fail1:
@@ -125,6 +199,24 @@ _fail4:
         mov     #4, r9
         mov.l   r9, @r0
         bra     _fail4
+        nop
+_fail5:
+        mov.l   p_test_result, r0
+        mov     #5, r9
+        mov.l   r9, @r0
+        bra     _fail5
+        nop
+_fail6:
+        mov.l   p_test_result, r0
+        mov     #6, r9
+        mov.l   r9, @r0
+        bra     _fail6
+        nop
+_fail7:
+        mov.l   p_test_result, r0
+        mov     #7, r9
+        mov.l   r9, @r0
+        bra     _fail7
         nop
         .align 2
 p_test_result: .long TEST_RESULT_ADDRESS

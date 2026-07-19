@@ -596,6 +596,17 @@ begin
 
   -- Detect Exception Events
   next_op <=
+    -- S-I4b: a synthesized double-fault RESET_CPU (cpu.vhd g_dblflt injects one
+    -- when a nested exception is taken at RB=1) must override even a delay slot.
+    -- The ordinary event arm below requires delay_slot='0', so without this a
+    -- nested Slot-Illegal *in a delay slot* would fall through to the
+    -- SLOT_ILLEGAL arm and clobber the first exception's SPC/SSR before the
+    -- reset. Gated on MMU_ARCH (the S-I4b build); MMU_ARCH=false prunes it, so
+    -- j1/j2 keep the exact base delay-slot reset-deferral behaviour. A plain
+    -- external RESET_CPU in a delay slot also resets immediately on MMU builds,
+    -- which is strictly safer -- a reset should not wait out a delay slot.
+    system_op(event_i)
+      when MMU_ARCH and event_i.en = '1' and event_i.cmd = RESET_CPU else
     system_op(event_i)
     -- Interrupts, (address) errors, reset and break
       when delay_slot = '0' and event_i.en = '1' and (

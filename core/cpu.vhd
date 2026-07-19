@@ -145,7 +145,7 @@ begin
 
   g_dblflt : if PRIV_ARCH generate
 
-    process (event_i, illegal_instr, dp_sr) is
+    process (event_i, illegal_instr, if_dr, dp_sr) is
     begin
 
       event_i_gated <= event_i;
@@ -159,6 +159,18 @@ begin
         elsif (illegal_instr = '1') then
           -- Nested General-Illegal-Instruction fault taken from inside a
           -- handler: synthesize the same defined-reset outcome.
+          event_i_gated.en  <= '1';
+          event_i_gated.cmd <= RESET_CPU;
+          event_i_gated.vec <= (others => '0');
+        elsif (if_dr(15 downto 8) = x"C3") then
+          -- S-I4b: a deliberately-executed nested TRAPA (opcode 0xC3nn) while
+          -- RB=1. TRAPA is a normal_op, not an illegal_instr / next_op
+          -- exception arm, so the illegal_instr term above cannot see it. Its
+          -- register-model entry would re-save SPC/SSR over the first
+          -- exception's live context. Inject RESET_CPU at this dispatch point
+          -- (before the entry commits, exactly like the illegal_instr case) so
+          -- next_op's highest-priority event arm takes the reset instead of the
+          -- TRAPA. A first-level TRAPA (syscall) runs at RB=0 and is untouched.
           event_i_gated.en  <= '1';
           event_i_gated.cmd <= RESET_CPU;
           event_i_gated.vec <= (others => '0');

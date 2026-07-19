@@ -29,11 +29,20 @@ RECORDS = {
     'cpu_debug_o_t':[('ack',1),('d',32),('rdy',1)],
     'bus_val_t':   [('en',1),('d',32)],
     # ybus_val_pipeline_t = array(2 downto 0) of bus_val_t -> handled specially
+    # MUST match core/components_pkg.vhd `type datapath_reg_t` decl order EXACTLY
+    # (ghwdump numbers leaves depth-first in declaration order). The M7/M8
+    # precise-exception fields (if_pc*, ma_*, tlb_fault_*/restore_*,
+    # data_o_unsigned) sit AFTER sr, so sr.rb (offset 41) is stable but every
+    # field from if_dr onward shifts +175 vs the pre-M7 model. Total = 997.
     'datapath_reg_t':[
         ('pc',32),('sr','sr_t'),('priv','priv_reg_t'),('mmu','mmu_reg_t'),
         ('tlb_exc_captured',1),
-        ('ma_pc',32),('tlb_exc_pc',32),('tlb_exc_sr','sr_t'),('tlb_squash',1),
-        ('mac_s',1),('data_o_size',1),('data_o_lock',1),
+        ('ma_pc',32),('if_pc_next',32),('if_pc',32),('ma_if_pc',32),
+        ('tlb_exc_pc',32),('tlb_exc_sr','sr_t'),('tlb_squash',1),
+        ('ma_numz',5),('ma_autoupd',1),('ma_predec',1),('ma_base',32),
+        ('ma_dslot',1),('tlb_fault_zreg',5),('tlb_restore_val',32),
+        ('tlb_restore_pend',1),
+        ('mac_s',1),('data_o_size',1),('data_o_unsigned',1),('data_o_lock',1),
         ('data_o','cpu_data_o_t'),('inst_o','cpu_instruction_o_t'),
         ('pc_inc',32),('if_dr',16),('if_dr_next',16),
         ('illegal_delay_slot',1),('illegal_instr',1),('if_en',1),
@@ -140,8 +149,8 @@ def dump(ghw, resolver, sigspec, lo_ps, hi_ps, clk='/cpu_tb/clk', pcsig=None, pc
         emit(pend_t)
 
 if __name__ == '__main__':
-    # quick self-test: datapath_reg_t must be 650 leaves
+    # quick self-test: datapath_reg_t leaf count must match components_pkg.vhd
     w = type_width('datapath_reg_t')
-    print(f'datapath_reg_t width = {w} (expect 822)')
-    assert w == 822, 'type model mismatch!'
+    print(f'datapath_reg_t width = {w} (expect 997)')
+    assert w == 997, 'type model mismatch!'
     print('OK')

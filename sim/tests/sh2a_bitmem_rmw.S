@@ -195,6 +195,340 @@ start:
         cmp/eq  r0, r6
         bf      _fail11
 
+        ! Also covers band.b/bandnot.b/bor.b/bornot.b/bxor.b (Group 3 PR-C):
+        ! T-combine memory bit ops. T_new = T_old <op> bit, bit = mem-bit
+        ! imm3. NO store, NO GPR write -- same 14-slot skeleton as bld/bldnot
+        ! (word1 shared "0011 nnnn 0iii 1001"), ext[15:12] = 0100 (band) /
+        ! 1100 (bandnot) / 0101 (bor) / 1101 (bornot) / 0110 (bxor),
+        ! discriminated at the modify slot. Each op is exercised with all 4
+        ! (T_old, bit) combinations, and imm3 extremes 0 (T=1 cases) and 7
+        ! (T=0 cases). Memory byte verified UNCHANGED after each op.
+
+        ! --- case 12: band.b #0,@(0,r2): T=1, bit0=1 -> T=1&1=1 ---
+        mov     #0x01, r0
+        mov.b   r0, @(0, r2)
+        sett
+        .word   0x3209          ! word1: BAND.B #0,@(disp12,r2)
+        .word   0x4000          ! word2: ext=0100 (band), disp12 = 0
+        movt    r0
+        mov     #1, r6
+        cmp/eq  r0, r6
+        bf      _fail12
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x01, r6
+        cmp/eq  r0, r6
+        bf      _fail12
+
+        ! --- case 13: band.b #0,@(0,r2): T=1, bit0=0 -> T=1&0=0 ---
+        mov     #0x00, r0
+        mov.b   r0, @(0, r2)
+        sett
+        .word   0x3209
+        .word   0x4000
+        movt    r0
+        mov     #0, r6
+        cmp/eq  r0, r6
+        bf      _fail13
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x00, r6
+        cmp/eq  r0, r6
+        bf      _fail13
+
+        ! --- case 14: band.b #7,@(0,r2): T=0, bit7=1 -> T=0&1=0 ---
+        mov     #0x80, r0
+        mov.b   r0, @(0, r2)
+        clrt
+        .word   0x3279          ! word1: BAND.B #7,@(disp12,r2)
+        .word   0x4000
+        movt    r0
+        mov     #0, r6
+        cmp/eq  r0, r6
+        bf      _fail14
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x80, r6
+        extu.b  r6, r6
+        cmp/eq  r0, r6
+        bf      _fail14
+
+        ! --- case 15: band.b #7,@(0,r2): T=0, bit7=0 -> T=0&0=0 ---
+        mov     #0x00, r0
+        mov.b   r0, @(0, r2)
+        clrt
+        .word   0x3279
+        .word   0x4000
+        movt    r0
+        mov     #0, r6
+        cmp/eq  r0, r6
+        bf      _fail15
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x00, r6
+        cmp/eq  r0, r6
+        bf      _fail15
+
+        ! --- case 16: bandnot.b #0,@(0,r2): T=1, bit0=1 -> T=1&~1=0 ---
+        mov     #0x01, r0
+        mov.b   r0, @(0, r2)
+        sett
+        .word   0x3209          ! word1: BANDNOT.B #0,@(disp12,r2)
+        .word   0xC000          ! word2: ext=1100 (bandnot), disp12 = 0
+        movt    r0
+        mov     #0, r6
+        cmp/eq  r0, r6
+        bf      _fail16
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x01, r6
+        cmp/eq  r0, r6
+        bf      _fail16
+
+        ! --- case 17: bandnot.b #0,@(0,r2): T=1, bit0=0 -> T=1&~0=1 ---
+        mov     #0x00, r0
+        mov.b   r0, @(0, r2)
+        sett
+        .word   0x3209
+        .word   0xC000
+        movt    r0
+        mov     #1, r6
+        cmp/eq  r0, r6
+        bf      _fail17
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x00, r6
+        cmp/eq  r0, r6
+        bf      _fail17
+
+        ! --- case 18: bandnot.b #7,@(0,r2): T=0, bit7=1 -> T=0&~1=0 ---
+        mov     #0x80, r0
+        mov.b   r0, @(0, r2)
+        clrt
+        .word   0x3279          ! word1: BANDNOT.B #7,@(disp12,r2)
+        .word   0xC000
+        movt    r0
+        mov     #0, r6
+        cmp/eq  r0, r6
+        bf      _fail18
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x80, r6
+        extu.b  r6, r6
+        cmp/eq  r0, r6
+        bf      _fail18
+
+        ! --- case 19: bandnot.b #7,@(0,r2): T=0, bit7=0 -> T=0&~0=0 ---
+        mov     #0x00, r0
+        mov.b   r0, @(0, r2)
+        clrt
+        .word   0x3279
+        .word   0xC000
+        movt    r0
+        mov     #0, r6
+        cmp/eq  r0, r6
+        bf      _fail19
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x00, r6
+        cmp/eq  r0, r6
+        bf      _fail19
+
+        ! --- case 20: bor.b #0,@(0,r2): T=1, bit0=1 -> T=1|1=1 ---
+        mov     #0x01, r0
+        mov.b   r0, @(0, r2)
+        sett
+        .word   0x3209          ! word1: BOR.B #0,@(disp12,r2)
+        .word   0x5000          ! word2: ext=0101 (bor), disp12 = 0
+        movt    r0
+        mov     #1, r6
+        cmp/eq  r0, r6
+        bf      _fail20
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x01, r6
+        cmp/eq  r0, r6
+        bf      _fail20
+
+        ! --- case 21: bor.b #0,@(0,r2): T=1, bit0=0 -> T=1|0=1 ---
+        mov     #0x00, r0
+        mov.b   r0, @(0, r2)
+        sett
+        .word   0x3209
+        .word   0x5000
+        movt    r0
+        mov     #1, r6
+        cmp/eq  r0, r6
+        bf      _fail21
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x00, r6
+        cmp/eq  r0, r6
+        bf      _fail21
+
+        ! --- case 22: bor.b #7,@(0,r2): T=0, bit7=1 -> T=0|1=1 ---
+        mov     #0x80, r0
+        mov.b   r0, @(0, r2)
+        clrt
+        .word   0x3279          ! word1: BOR.B #7,@(disp12,r2)
+        .word   0x5000
+        movt    r0
+        mov     #1, r6
+        cmp/eq  r0, r6
+        bf      _fail22
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x80, r6
+        extu.b  r6, r6
+        cmp/eq  r0, r6
+        bf      _fail22
+
+        ! --- case 23: bor.b #7,@(0,r2): T=0, bit7=0 -> T=0|0=0 ---
+        mov     #0x00, r0
+        mov.b   r0, @(0, r2)
+        clrt
+        .word   0x3279
+        .word   0x5000
+        movt    r0
+        mov     #0, r6
+        cmp/eq  r0, r6
+        bf      _fail23
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x00, r6
+        cmp/eq  r0, r6
+        bf      _fail23
+
+        ! --- case 24: bornot.b #0,@(0,r2): T=1, bit0=1 -> T=1|~1=1 ---
+        mov     #0x01, r0
+        mov.b   r0, @(0, r2)
+        sett
+        .word   0x3209          ! word1: BORNOT.B #0,@(disp12,r2)
+        .word   0xD000          ! word2: ext=1101 (bornot), disp12 = 0
+        movt    r0
+        mov     #1, r6
+        cmp/eq  r0, r6
+        bf      _fail24
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x01, r6
+        cmp/eq  r0, r6
+        bf      _fail24
+
+        ! --- case 25: bornot.b #0,@(0,r2): T=1, bit0=0 -> T=1|~0=1 ---
+        mov     #0x00, r0
+        mov.b   r0, @(0, r2)
+        sett
+        .word   0x3209
+        .word   0xD000
+        movt    r0
+        mov     #1, r6
+        cmp/eq  r0, r6
+        bf      _fail25
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x00, r6
+        cmp/eq  r0, r6
+        bf      _fail25
+
+        ! --- case 26: bornot.b #7,@(0,r2): T=0, bit7=1 -> T=0|~1=0 ---
+        mov     #0x80, r0
+        mov.b   r0, @(0, r2)
+        clrt
+        .word   0x3279          ! word1: BORNOT.B #7,@(disp12,r2)
+        .word   0xD000
+        movt    r0
+        mov     #0, r6
+        cmp/eq  r0, r6
+        bf      _fail26
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x80, r6
+        extu.b  r6, r6
+        cmp/eq  r0, r6
+        bf      _fail26
+
+        ! --- case 27: bornot.b #7,@(0,r2): T=0, bit7=0 -> T=0|~0=1 ---
+        mov     #0x00, r0
+        mov.b   r0, @(0, r2)
+        clrt
+        .word   0x3279
+        .word   0xD000
+        movt    r0
+        mov     #1, r6
+        cmp/eq  r0, r6
+        bf      _fail27
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x00, r6
+        cmp/eq  r0, r6
+        bf      _fail27
+
+        ! --- case 28: bxor.b #0,@(0,r2): T=1, bit0=1 -> T=1^1=0 ---
+        mov     #0x01, r0
+        mov.b   r0, @(0, r2)
+        sett
+        .word   0x3209          ! word1: BXOR.B #0,@(disp12,r2)
+        .word   0x6000          ! word2: ext=0110 (bxor), disp12 = 0
+        movt    r0
+        mov     #0, r6
+        cmp/eq  r0, r6
+        bf      _fail28
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x01, r6
+        cmp/eq  r0, r6
+        bf      _fail28
+
+        ! --- case 29: bxor.b #0,@(0,r2): T=1, bit0=0 -> T=1^0=1 ---
+        mov     #0x00, r0
+        mov.b   r0, @(0, r2)
+        sett
+        .word   0x3209
+        .word   0x6000
+        movt    r0
+        mov     #1, r6
+        cmp/eq  r0, r6
+        bf      _fail29
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x00, r6
+        cmp/eq  r0, r6
+        bf      _fail29
+
+        ! --- case 30: bxor.b #7,@(0,r2): T=0, bit7=1 -> T=0^1=1 ---
+        mov     #0x80, r0
+        mov.b   r0, @(0, r2)
+        clrt
+        .word   0x3279          ! word1: BXOR.B #7,@(disp12,r2)
+        .word   0x6000
+        movt    r0
+        mov     #1, r6
+        cmp/eq  r0, r6
+        bf      _fail30
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x80, r6
+        extu.b  r6, r6
+        cmp/eq  r0, r6
+        bf      _fail30
+
+        ! --- case 31: bxor.b #7,@(0,r2): T=0, bit7=0 -> T=0^0=0 ---
+        mov     #0x00, r0
+        mov.b   r0, @(0, r2)
+        clrt
+        .word   0x3279
+        .word   0x6000
+        movt    r0
+        mov     #0, r6
+        cmp/eq  r0, r6
+        bf      _fail31
+        mov.b   @(0, r2), r0
+        extu.b  r0, r0
+        mov     #0x00, r6
+        cmp/eq  r0, r6
+        bf      _fail31
+
         bra     _done
         nop
 
@@ -270,6 +604,126 @@ _fail11:
         mov     #11, r9
         mov.l   r9, @r0
         bra     _fail11
+        nop
+_fail12:
+        mov.l   p_test_result, r0
+        mov     #12, r9
+        mov.l   r9, @r0
+        bra     _fail12
+        nop
+_fail13:
+        mov.l   p_test_result, r0
+        mov     #13, r9
+        mov.l   r9, @r0
+        bra     _fail13
+        nop
+_fail14:
+        mov.l   p_test_result, r0
+        mov     #14, r9
+        mov.l   r9, @r0
+        bra     _fail14
+        nop
+_fail15:
+        mov.l   p_test_result, r0
+        mov     #15, r9
+        mov.l   r9, @r0
+        bra     _fail15
+        nop
+_fail16:
+        mov.l   p_test_result, r0
+        mov     #16, r9
+        mov.l   r9, @r0
+        bra     _fail16
+        nop
+_fail17:
+        mov.l   p_test_result, r0
+        mov     #17, r9
+        mov.l   r9, @r0
+        bra     _fail17
+        nop
+_fail18:
+        mov.l   p_test_result, r0
+        mov     #18, r9
+        mov.l   r9, @r0
+        bra     _fail18
+        nop
+_fail19:
+        mov.l   p_test_result, r0
+        mov     #19, r9
+        mov.l   r9, @r0
+        bra     _fail19
+        nop
+_fail20:
+        mov.l   p_test_result, r0
+        mov     #20, r9
+        mov.l   r9, @r0
+        bra     _fail20
+        nop
+_fail21:
+        mov.l   p_test_result, r0
+        mov     #21, r9
+        mov.l   r9, @r0
+        bra     _fail21
+        nop
+_fail22:
+        mov.l   p_test_result, r0
+        mov     #22, r9
+        mov.l   r9, @r0
+        bra     _fail22
+        nop
+_fail23:
+        mov.l   p_test_result, r0
+        mov     #23, r9
+        mov.l   r9, @r0
+        bra     _fail23
+        nop
+_fail24:
+        mov.l   p_test_result, r0
+        mov     #24, r9
+        mov.l   r9, @r0
+        bra     _fail24
+        nop
+_fail25:
+        mov.l   p_test_result, r0
+        mov     #25, r9
+        mov.l   r9, @r0
+        bra     _fail25
+        nop
+_fail26:
+        mov.l   p_test_result, r0
+        mov     #26, r9
+        mov.l   r9, @r0
+        bra     _fail26
+        nop
+_fail27:
+        mov.l   p_test_result, r0
+        mov     #27, r9
+        mov.l   r9, @r0
+        bra     _fail27
+        nop
+_fail28:
+        mov.l   p_test_result, r0
+        mov     #28, r9
+        mov.l   r9, @r0
+        bra     _fail28
+        nop
+_fail29:
+        mov.l   p_test_result, r0
+        mov     #29, r9
+        mov.l   r9, @r0
+        bra     _fail29
+        nop
+_fail30:
+        mov.l   p_test_result, r0
+        mov     #30, r9
+        mov.l   r9, @r0
+        bra     _fail30
+        nop
+_fail31:
+        mov.l   p_test_result, r0
+        mov     #31, r9
+        mov.l   r9, @r0
+        bra     _fail31
         nop
 _end:
         bra     _end

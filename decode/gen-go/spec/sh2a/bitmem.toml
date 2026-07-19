@@ -309,3 +309,336 @@
     ma_op = "WRITE"            # movml pattern: advances sit next to dispatch).
     ma_size = "8"
     pc = "INC"
+
+# --- Group 3 PR-C: T-combine memory bit ops (band.b/bandnot.b/bor.b/ ---
+# --- bornot.b/bxor.b). T_new = T_old <op> bit, bit = mem-bit imm3.    ---
+#
+# No store, no GPR write -- ONLY T changes (like bld/bldnot above), but
+# unlike bld/bldnot the new T depends on the OLD T too, and the LOGIC unit's
+# zero-test (logic_sr) only sees xbus/ybus, not sr.t. So the combine is done
+# in two steps reusing existing mechanisms (no zbus_sel/sr_sel enum
+# widening):
+#   1. A manip() case (band/bandnot/bor/bornot/bxor, core/components_pkg.vhd)
+#      takes x=TEMP0 (loaded byte), y=MASK3_64, t=sr.t, computes the
+#      1-bit T-combine result, and broadcasts it across all 32 bits (the
+#      BITSET tvec pattern) -- written back into TEMP0 via the existing
+#      zbus_sel=SEL_MANIP path (same route BST already uses).
+#   2. Once that write commits, a plain LOGIC AND self-test on TEMP0 with
+#      logic_sr=NOT_ZERO (the exact mechanism bld already uses) recovers the
+#      combined bit as the new T: TEMP0 is now either all-0s (T=0) or
+#      all-1s (T=1), so AND(TEMP0,TEMP0) NOT_ZERO gives T_new directly.
+
+[[instr]]
+  name = "BAND.B #imm3,@(disp12,Rn)"
+  format = "nd12i3"
+  opcode = "0011 nnnn 0iii 1001"
+  opcode2 = "0100 dddd dddd dddd"
+  operation = "T & bit imm3 of (disp12 + Rn) -> T"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]                 # slot0: latch ext word (INC #1 - consumes word1)
+    latch_ext = "1"
+    pc = "INC"
+    if_issue = "YES"
+  [[instr.slots]]                 # slot1: EA = Rn + disp12 -> TEMP1. imm_from_ext
+    imm_from_ext = "1"
+    alu_y = "U*1"
+    arith = "ADD"
+    xbus = "Rn"
+    zbus = "TEMP1"
+    zbus_sel = "ARITH"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot2-4: wait for TEMP1 write-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot5: READ byte @TEMP1 -> TEMP0
+    xbus = "TEMP1"
+    ma_addy = "XBUS"
+    ma_op = "READ"
+    ma_size = "8"
+    wbus = "TEMP0"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot6-8: wait for TEMP0 load-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot9: T_new = T_old & bit -> TEMP0 (broadcast)
+    manip = "band"
+    xbus = "TEMP0"
+    ybus = "MASK3_64"
+    zbus = "TEMP0"
+    zbus_sel = "MANIP"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot10-11: wait for TEMP0 commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot12: recover T_new via AND self-test AND
+                                   # terminal dispatch (NO store). merged with
+                                   # the terminal so this group stays at 13
+                                   # slots, matching bset/bclr/bld/bldnot/bst
+                                   # (word1-colliding group requires uniform
+                                   # slot count).
+    logic = "AND"
+    xbus = "TEMP0"
+    ybus = "TEMP0"
+    logic_sr = "NOT_ZERO"
+    sr = "LOGIC"
+    pc = "INC"
+
+[[instr]]
+  name = "BANDNOT.B #imm3,@(disp12,Rn)"
+  format = "nd12i3"
+  opcode = "0011 nnnn 0iii 1001"
+  opcode2 = "1100 dddd dddd dddd"
+  operation = "T & (NOT bit imm3 of (disp12 + Rn)) -> T"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]                 # slot0: latch ext word (INC #1 - consumes word1)
+    latch_ext = "1"
+    pc = "INC"
+    if_issue = "YES"
+  [[instr.slots]]                 # slot1: EA = Rn + disp12 -> TEMP1. imm_from_ext
+    imm_from_ext = "1"
+    alu_y = "U*1"
+    arith = "ADD"
+    xbus = "Rn"
+    zbus = "TEMP1"
+    zbus_sel = "ARITH"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot2-4: wait for TEMP1 write-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot5: READ byte @TEMP1 -> TEMP0
+    xbus = "TEMP1"
+    ma_addy = "XBUS"
+    ma_op = "READ"
+    ma_size = "8"
+    wbus = "TEMP0"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot6-8: wait for TEMP0 load-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot9: T_new = T_old & ~bit -> TEMP0 (broadcast)
+    manip = "bandnot"
+    xbus = "TEMP0"
+    ybus = "MASK3_64"
+    zbus = "TEMP0"
+    zbus_sel = "MANIP"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot10-11: wait for TEMP0 commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot12: recover T_new via AND self-test AND
+                                   # terminal dispatch (NO store). merged with
+                                   # the terminal so this group stays at 13
+                                   # slots, matching bset/bclr/bld/bldnot/bst
+                                   # (word1-colliding group requires uniform
+                                   # slot count).
+    logic = "AND"
+    xbus = "TEMP0"
+    ybus = "TEMP0"
+    logic_sr = "NOT_ZERO"
+    sr = "LOGIC"
+    pc = "INC"
+
+[[instr]]
+  name = "BOR.B #imm3,@(disp12,Rn)"
+  format = "nd12i3"
+  opcode = "0011 nnnn 0iii 1001"
+  opcode2 = "0101 dddd dddd dddd"
+  operation = "T | bit imm3 of (disp12 + Rn) -> T"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]                 # slot0: latch ext word (INC #1 - consumes word1)
+    latch_ext = "1"
+    pc = "INC"
+    if_issue = "YES"
+  [[instr.slots]]                 # slot1: EA = Rn + disp12 -> TEMP1. imm_from_ext
+    imm_from_ext = "1"
+    alu_y = "U*1"
+    arith = "ADD"
+    xbus = "Rn"
+    zbus = "TEMP1"
+    zbus_sel = "ARITH"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot2-4: wait for TEMP1 write-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot5: READ byte @TEMP1 -> TEMP0
+    xbus = "TEMP1"
+    ma_addy = "XBUS"
+    ma_op = "READ"
+    ma_size = "8"
+    wbus = "TEMP0"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot6-8: wait for TEMP0 load-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot9: T_new = T_old | bit -> TEMP0 (broadcast)
+    manip = "bor"
+    xbus = "TEMP0"
+    ybus = "MASK3_64"
+    zbus = "TEMP0"
+    zbus_sel = "MANIP"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot10-11: wait for TEMP0 commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot12: recover T_new via AND self-test AND
+                                   # terminal dispatch (NO store). merged with
+                                   # the terminal so this group stays at 13
+                                   # slots, matching bset/bclr/bld/bldnot/bst
+                                   # (word1-colliding group requires uniform
+                                   # slot count).
+    logic = "AND"
+    xbus = "TEMP0"
+    ybus = "TEMP0"
+    logic_sr = "NOT_ZERO"
+    sr = "LOGIC"
+    pc = "INC"
+
+[[instr]]
+  name = "BORNOT.B #imm3,@(disp12,Rn)"
+  format = "nd12i3"
+  opcode = "0011 nnnn 0iii 1001"
+  opcode2 = "1101 dddd dddd dddd"
+  operation = "T | (NOT bit imm3 of (disp12 + Rn)) -> T"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]                 # slot0: latch ext word (INC #1 - consumes word1)
+    latch_ext = "1"
+    pc = "INC"
+    if_issue = "YES"
+  [[instr.slots]]                 # slot1: EA = Rn + disp12 -> TEMP1. imm_from_ext
+    imm_from_ext = "1"
+    alu_y = "U*1"
+    arith = "ADD"
+    xbus = "Rn"
+    zbus = "TEMP1"
+    zbus_sel = "ARITH"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot2-4: wait for TEMP1 write-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot5: READ byte @TEMP1 -> TEMP0
+    xbus = "TEMP1"
+    ma_addy = "XBUS"
+    ma_op = "READ"
+    ma_size = "8"
+    wbus = "TEMP0"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot6-8: wait for TEMP0 load-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot9: T_new = T_old | ~bit -> TEMP0 (broadcast)
+    manip = "bornot"
+    xbus = "TEMP0"
+    ybus = "MASK3_64"
+    zbus = "TEMP0"
+    zbus_sel = "MANIP"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot10-11: wait for TEMP0 commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot12: recover T_new via AND self-test AND
+                                   # terminal dispatch (NO store). merged with
+                                   # the terminal so this group stays at 13
+                                   # slots, matching bset/bclr/bld/bldnot/bst
+                                   # (word1-colliding group requires uniform
+                                   # slot count).
+    logic = "AND"
+    xbus = "TEMP0"
+    ybus = "TEMP0"
+    logic_sr = "NOT_ZERO"
+    sr = "LOGIC"
+    pc = "INC"
+
+[[instr]]
+  name = "BXOR.B #imm3,@(disp12,Rn)"
+  format = "nd12i3"
+  opcode = "0011 nnnn 0iii 1001"
+  opcode2 = "0110 dddd dddd dddd"
+  operation = "T ^ bit imm3 of (disp12 + Rn) -> T"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]                 # slot0: latch ext word (INC #1 - consumes word1)
+    latch_ext = "1"
+    pc = "INC"
+    if_issue = "YES"
+  [[instr.slots]]                 # slot1: EA = Rn + disp12 -> TEMP1. imm_from_ext
+    imm_from_ext = "1"
+    alu_y = "U*1"
+    arith = "ADD"
+    xbus = "Rn"
+    zbus = "TEMP1"
+    zbus_sel = "ARITH"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot2-4: wait for TEMP1 write-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot5: READ byte @TEMP1 -> TEMP0
+    xbus = "TEMP1"
+    ma_addy = "XBUS"
+    ma_op = "READ"
+    ma_size = "8"
+    wbus = "TEMP0"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot6-8: wait for TEMP0 load-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot9: T_new = T_old ^ bit -> TEMP0 (broadcast)
+    manip = "bxor"
+    xbus = "TEMP0"
+    ybus = "MASK3_64"
+    zbus = "TEMP0"
+    zbus_sel = "MANIP"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot10-11: wait for TEMP0 commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot12: recover T_new via AND self-test AND
+                                   # terminal dispatch (NO store). merged with
+                                   # the terminal so this group stays at 13
+                                   # slots, matching bset/bclr/bld/bldnot/bst
+                                   # (word1-colliding group requires uniform
+                                   # slot count).
+    logic = "AND"
+    xbus = "TEMP0"
+    ybus = "TEMP0"
+    logic_sr = "NOT_ZERO"
+    sr = "LOGIC"
+    pc = "INC"

@@ -43,7 +43,7 @@ package cpu2j0_components_pack is
   -- for them; the actual save/restore-route behavior is implemented directly
   -- in the datapath (mac_shadow_h/l capture + SEL_MANIP restore routing).
 
-  type alumanip_t is (swap_byte, swap_word, extend_ubyte, extend_uword, extend_sbyte, extend_sword, extract, set_bit_7, bitset, clip_sb, clip_sw, clip_ub, clip_uw, mac_save, mac_restore_l, mac_restore_h);
+  type alumanip_t is (swap_byte, swap_word, extend_ubyte, extend_uword, extend_sbyte, extend_sword, extract, set_bit_7, bitset, clip_sb, clip_sw, clip_ub, clip_uw, mac_save, mac_restore_l, mac_restore_h, band, bandnot, bor, bornot, bxor);
 
   -- NOTE: the SH-2A CS bit (SR bit 2, CLIPS/CLIPU saturation) is deliberately
   -- NOT a field of sr_t. sr_t is embedded in datapath_reg_t's shared
@@ -1029,6 +1029,8 @@ return sr_t is
     variable sign_bit  : std_logic;
     variable sign_byte : std_logic_vector(7 downto 0);
     variable tvec      : std_logic_vector(31 downto 0);
+    variable bit_val    : std_logic;
+    variable result_bit : std_logic;
 
   begin
 
@@ -1039,6 +1041,26 @@ return sr_t is
       -- below (SWAP_BYTE/EXTEND_*/EXTRACT/SET_BIT_7) does not apply here.
       tvec := (others => t);
       return (x and not y) or (y and tvec);
+    end if;
+
+    if (sh2a and (func = BAND or func = BANDNOT or func = BOR or func = BORNOT or func = BXOR)) then
+      -- SH-2A band.b/bandnot.b/bor.b/bornot.b/bxor.b (T-combine memory bit
+      -- ops): x = TEMP0 (loaded byte, zero-extended), y = decode-time
+      -- one-hot mask (1 << imm3), t = sr.t (old T). bit_val = OR-reduce(x AND
+      -- y) (nonzero iff the masked bit is set). Result is broadcast across
+      -- all 32 bits (mirrors BITSET's tvec pattern) so a later logic-AND
+      -- self-test with logic_sr=NOT_ZERO can recover it as the new T value
+      -- without widening any sr_sel/zbus_sel enum.
+      bit_val := or_reduce(x and y);
+      case func is
+        when BAND    => result_bit := t and bit_val;
+        when BANDNOT => result_bit := t and (not bit_val);
+        when BOR     => result_bit := t or bit_val;
+        when BORNOT  => result_bit := t or (not bit_val);
+        when others  => result_bit := t xor bit_val;   -- BXOR
+      end case;
+      tvec := (others => result_bit);
+      return tvec;
     end if;
 
     -- SH-2A MULR MAC save/restore markers: manip() itself is a no-op for

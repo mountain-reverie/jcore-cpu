@@ -102,7 +102,7 @@ start:
         mov     #0x89, r0
         mov.b   r0, @(4, r2)
         .word   0x3239          ! word1: BCLR.B #3,@(disp12,r2)
-        .word   0x2004          ! word2: ext=0010 (bclr), disp12 = 4
+        .word   0x0004          ! word2: ext=0000 (bclr), disp12 = 4
         mov.b   @(4, r2), r0
         extu.b  r0, r0
         mov     #0x81, r6
@@ -115,7 +115,7 @@ start:
         mov.b   r0, @(0, r2)
         sett                     ! T = 1
         .word   0x3259          ! word1: BST.B #5,@(disp12,r2)
-        .word   0x7000          ! word2: ext=0111 (bst), disp12 = 0
+        .word   0x2000          ! word2: ext=0010 (bst), disp12 = 0
         mov.b   @(0, r2), r0
         extu.b  r0, r0
         mov     #0x20, r6
@@ -127,7 +127,7 @@ start:
         mov.b   r0, @(0, r2)
         clrt                     ! T = 0
         .word   0x3259          ! word1: BST.B #5,@(disp12,r2)
-        .word   0x7000          ! word2: ext=0111 (bst), disp12 = 0
+        .word   0x2000          ! word2: ext=0010 (bst), disp12 = 0
         mov.b   @(0, r2), r0
         extu.b  r0, r0
         mov     #0xDF, r6

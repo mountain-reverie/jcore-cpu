@@ -87,7 +87,7 @@
   name = "BCLR.B #imm3,@(disp12,Rn)"
   format = "nd12i3"
   opcode = "0011 nnnn 0iii 1001"
-  opcode2 = "0010 dddd dddd dddd"
+  opcode2 = "0000 dddd dddd dddd"
   operation = "0 -> bit imm3 of (disp12 + Rn)"
   table_ref = "SH-2A"
 
@@ -255,7 +255,7 @@
   name = "BST.B #imm3,@(disp12,Rn)"
   format = "nd12i3"
   opcode = "0011 nnnn 0iii 1001"
-  opcode2 = "0111 dddd dddd dddd"
+  opcode2 = "0010 dddd dddd dddd"
   operation = "T -> bit imm3 of (disp12 + Rn)"
   table_ref = "SH-2A"
 

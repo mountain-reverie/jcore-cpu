@@ -16,6 +16,8 @@
 ! case 7 skipped: CLDS CP0_Rm, CP0_COM: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 ! case 7 skipped: CLDS CPI_Rm, CPI_COM: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 ! case 7 skipped: CLRMAC: clrmac microcoded as TEMP1^TEMP1 -> 'U'/'X' in sim (MAC snapshot not comparable)
+! case 15 skipped: CMP/EQ.ASID Rn writes/needs a control register; the I-fetch-delay-slot axis sweeps the General non-memory set
+! case 15 skipped: CMP/EQ.PTEH Rn writes/needs a control register; the I-fetch-delay-slot axis sweeps the General non-memory set
 ! case 17 skipped: CSTS CP0_COM, CP0_Rn: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 ! case 17 skipped: CSTS CPI_COM, CPI_Rn: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 ! case 27 skipped: Error is a microcode-only system entry (plane=system), not a fetchable instruction

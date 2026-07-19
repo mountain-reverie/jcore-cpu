@@ -82,6 +82,45 @@
     zbus = "Rn"
     zbus_sel = "Y"
 
+# ---- TLB-miss hot-path tag compares (jcore-only, MMU_ARCH). Fuse the CSR read
+# and the tag compare that the software TSB probe does on every miss: replace
+# `STC PTEH,Rt; CMP/EQ Rn,Rt` (2 insns + a scratch reg) with one instruction
+# that compares Rn directly against the CSR and sets T. Microcode = CMP/EQ
+# (logic XOR, logic_sr ZERO) but with ybus sourced from the MMU CSR (the exact
+# ybus the matching STC uses -- SEL_MMU), so no new datapath: single-cycle, no
+# register written. Encoding co-located with the STC MMU-creg family (tail
+# 0011); the high middle-nibble bit marks the "compare" variant of the read
+# (PTEH read 0101 -> compare 1101; ASIDR read 0111 -> compare 1111). ----
+[[instr]]
+  name = "CMP/EQ.PTEH Rn"
+  privileged = true
+  format = "n"
+  opcode = "0000 nnnn 1101 0011"
+  operation = "When Rn = PTEH, 1 -> T (TSB VPN-tag compare)"
+  [[instr.slots]]
+    mask_int = "YES"
+    logic = "XOR"
+    logic_sr = "ZERO"
+    pc = "INC"
+    sr = "LOGIC"
+    xbus = "Rn"
+    ybus = "PTEH"
+
+[[instr]]
+  name = "CMP/EQ.ASID Rn"
+  privileged = true
+  format = "n"
+  opcode = "0000 nnnn 1111 0011"
+  operation = "When Rn = ASIDR, 1 -> T (TSB ASID-tag compare)"
+  [[instr.slots]]
+    mask_int = "YES"
+    logic = "XOR"
+    logic_sr = "ZERO"
+    pc = "INC"
+    sr = "LOGIC"
+    xbus = "Rn"
+    ybus = "ASIDR"
+
 # ---- STC TSBPTR, Rn: read-only TSB slot pointer (M5, hardware-spec §2.8) ----
 # Hardware computes TSBPTR on every TLB miss; software reads it on the miss hot
 # path in one cycle. Read-only: there is no LDC TSBPTR (such an encoding would

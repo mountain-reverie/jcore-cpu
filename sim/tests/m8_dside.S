@@ -28,6 +28,8 @@
 ! case 2 skipped: CMP /HI Rm, Rn has no D-side memory access
 ! case 2 skipped: CMP /HS Rm, Rn has no D-side memory access
 ! case 2 skipped: CMP /STR Rm, Rn has no D-side memory access
+! case 2 skipped: CMP/EQ.ASID Rn has no D-side memory access
+! case 2 skipped: CMP/EQ.PTEH Rn has no D-side memory access
 ! case 2 skipped: CMP/PL Rn has no D-side memory access
 ! case 2 skipped: CMP/PZ Rn has no D-side memory access
 ! case 2 skipped: CSTS CP0_COM, CP0_Rn has no D-side memory access

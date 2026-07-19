@@ -65,6 +65,8 @@
 #   CMP /HI Rm, Rn       CMP /HI Rm, Rn has no D-side memory access
 #   CMP /HS Rm, Rn       CMP /HS Rm, Rn has no D-side memory access
 #   CMP /STR Rm, Rn      CMP /STR Rm, Rn has no D-side memory access
+#   CMP/EQ.ASID Rn       CMP/EQ.ASID Rn has no D-side memory access
+#   CMP/EQ.PTEH Rn       CMP/EQ.PTEH Rn has no D-side memory access
 #   CMP/PL Rn            CMP/PL Rn has no D-side memory access
 #   CMP/PZ Rn            CMP/PZ Rn has no D-side memory access
 #   CSTS CP0_COM, CP0_Rn CSTS CP0_COM, CP0_Rn has no D-side memory access
@@ -277,6 +279,8 @@
 #   CLDS CP0_Rm, CP0_COM CLDS CP0_Rm, CP0_COM: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 #   CLDS CPI_Rm, CPI_COM CLDS CPI_Rm, CPI_COM: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 #   CLRMAC               CLRMAC: clrmac microcoded as TEMP1^TEMP1 -> 'U'/'X' in sim (MAC snapshot not comparable)
+#   CMP/EQ.ASID Rn       CMP/EQ.ASID Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   CMP/EQ.PTEH Rn       CMP/EQ.PTEH Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 #   CSTS CP0_COM, CP0_Rn CSTS CP0_COM, CP0_Rn: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 #   CSTS CPI_COM, CPI_Rn CSTS CPI_COM, CPI_Rn: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 #   Error                Error is a microcode-only system entry (plane=system), not a fetchable instruction

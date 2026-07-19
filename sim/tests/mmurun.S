@@ -197,16 +197,17 @@ _v_store:                               ! _vbase + 0x440  (DMISS_W)
         bra     _h_common
         nop
 
-        ! ---- §4.1 hot path (bank-1 scratch; AT stays ON). ----
+        ! ---- §4.1 hot path (bank-1 scratch; AT stays ON). Uses the fused
+        ! CMP/EQ.PTEH / CMP/EQ.ASID tag compares: each reads the CSR onto ybus
+        ! and compares against the loaded tag in one insn, replacing the old
+        ! STC-to-r2 + cmp/eq pair (2 insns + the r2 scratch) per compare. ----
 _h_common:
         .word   0x0043                  ! STC TSBPTR, r0
         mov.l   @r0+, r1                ! tag_hi (expected VPN)
-        .word   0x0253                  ! STC PTEH, r2
-        cmp/eq  r1, r2
+        .word   0x01D3                  ! CMP/EQ.PTEH r1   (r1 vs PTEH)
         bf      _h_slow
         mov.l   @r0+, r1                ! tag_lo (expected ASID_TAG)
-        .word   0x0273                  ! STC ASIDR, r2
-        cmp/eq  r1, r2
+        .word   0x01F3                  ! CMP/EQ.ASID r1   (r1 vs ASIDR)
         bf      _h_slow
         mov.l   @r0, r3                 ! TTE Data (PTEL image)
         ! tsb_hits++

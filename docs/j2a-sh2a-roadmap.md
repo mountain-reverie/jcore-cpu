@@ -113,12 +113,20 @@ already emitted. `movi20s` shifts the imm20 left 8 (a scaled variant, add
 `IMM_S_20_8`). Single-slot compute-and-write to Rn.
 - `movi20 #imm20,Rn`, `movi20s #imm20,Rn`
 
-### Group 3 — bit-manip memory, two-word (Mechanism A + RMW)  — effort L
-Two-word (disp12 in ext_word, imm3 in first word bits `0iii`). Each is a
-byte read-modify-write: load byte @(disp12,Rn), apply the bit op, store back.
-Multi-slot. Needs a bit-select-by-imm3 datapath path (may reuse existing
-bit-manip logic used by TAS / the register bit ops in Group 5).
-- `band.b`, `bandnot.b`, `bor.b`, `bornot.b`, `bxor.b`, `bset.b`, `bclr.b`,
+### Group 3 — bit-manip memory, two-word (Mechanism A + RMW)  — ✅ DONE
+All 10 ops shipped on branch `feat/j2a-group3-bitmem-rmw`. Two-word (disp12 in
+ext_word, imm3 in first-word bits `0iii` at op.code(6:4), new `nd12i3` format +
+`(6:4)` MASK3_64 mask). RMW stores (`bset/bclr/bst.b`) load byte @(disp12,Rn) →
+modify → store; loads (`bld/bldnot.b`) set T from the bit; T-combine
+(`band/bandnot/bor/bornot/bxor.b`) set `T = T ⟨op⟩ bit` via SH2A-gated manip
+cases. Two key mechanisms: an **SH2A ext-word capture register** (decode_core,
+triggered on `imm_from_ext`, decoder-independent) so the LATE ext[15:12]
+op-discrimination sees word2; and the manip+sr.t T-combine. Base J1/J2/J4
+decode byte-identical; base area: j2 flattened −126 LUT4, j1 +23 (alumanip_t
+4→5 bit). Also added a base direct-vs-ROM decoder symmetry test (regression
+Step 6b). ⚠️ ROM decoder can't runtime-discriminate two-word ext ops → these
+are direct-decoder-only (j2a always binds direct).
+- ✅ `band.b`, `bandnot.b`, `bor.b`, `bornot.b`, `bxor.b`, `bset.b`, `bclr.b`,
   `bst.b`, `bld.b`, `bldnot.b`  — all `#imm3,@(disp12,Rn)`
 
 ### Group 4 — multi-register pop + movmu (Mechanism B)  — effort M

@@ -50,6 +50,17 @@ entity datapath is
 		     -- the busy multiplier. '0' for mult(stru) (J2/J4 unaffected).
 		     mult_stall : in std_logic;
 		     mac_s : out std_logic;
+		     -- SH-2A DIVU/DIVS: divider unit operand/start/result ports (Task 2).
+		     -- Mirrors macin1/macin2/mach/macl above -- the divider instance
+		     -- itself lives in cpu.vhd (like u_mult), and div_o.busy is folded
+		     -- into mult_stall alongside mac_o.slot_stall at the cpu.vhd level
+		     -- (no extra stall port needed here). '0'/unused on base
+		     -- (SH2A_ARCH=false), driven by g_div/g_div_off below.
+		     div_dividend  : out std_logic_vector(31 downto 0);
+		     div_divisor   : out std_logic_vector(31 downto 0);
+		     div_start     : out std_logic;
+		     div_is_signed : out std_logic;
+		     div_quotient  : in std_logic_vector(31 downto 0) := (others => '0');
 		     t_bcc : out std_logic;
 		     ibit : out std_logic_vector(3 downto 0);
 		     if_dr : out std_logic_vector(15 downto 0);
@@ -573,6 +584,27 @@ g_macsh_off : if not SH2A_ARCH generate
   mac_shadow_h <= (others => '0');
   mac_shadow_l <= (others => '0');
 end generate;
+
+-- SH-2A DIVU/DIVS operand/start routing (Task 2). The divider unit itself
+-- lives in cpu.vhd (like u_mult); this just drives its inputs from the
+-- xbus/ybus register reads already set up by the instruction's slot0
+-- (xbus=Rn dividend, ybus=R0 divisor) and pulses start for exactly the one
+-- cycle slot0 is committed (slot_o='1'), same cadence as sr_cs/mac_shadow
+-- above. func.alu.manip = DIV_START_U/DIV_START_S is a decode-time marker
+-- only slot0 of DIVU/DIVS ever emits; is_signed picks DIVS vs DIVU.
+g_div : if SH2A_ARCH generate
+  div_dividend  <= xbus;
+  div_divisor   <= ybus;
+  div_start     <= slot_o when (func.alu.manip = DIV_START_U or
+                                 func.alu.manip = DIV_START_S) else '0';
+  div_is_signed <= '1' when func.alu.manip = DIV_START_S else '0';
+end generate;
+g_div_off : if not SH2A_ARCH generate
+  div_dividend  <= (others => '0');
+  div_divisor   <= (others => '0');
+  div_start     <= '0';
+  div_is_signed <= '0';
+end generate;
 	-- SH-4 register-bank remap on the four address ports; pass-through on J2.
 	num_x_r <= bank_remap(reg.num_x, sr.md, sr.rb) when PRIV_ARCH else reg.num_x;
 	num_y_r <= bank_remap(reg.num_y, sr.md, sr.rb) when PRIV_ARCH else reg.num_y;
@@ -706,6 +738,7 @@ end generate;
         g_msel : if SH2A_ARCH generate
           manip_sel <= mac_shadow_l when func.alu.manip = MAC_RESTORE_L else
                        mac_shadow_h when func.alu.manip = MAC_RESTORE_H else
+                       div_quotient when func.alu.manip = DIV_READ else
                        manip(xbus, ybus, sr.t, func.alu.manip, true);
         end generate;
         g_msel_off : if not SH2A_ARCH generate

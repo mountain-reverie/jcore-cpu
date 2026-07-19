@@ -759,6 +759,8 @@ var csvInstrOrder = []string{
 	"CLIPS.B Rn",
 	"CLIPS.W Rn",
 	"MULR R0, Rn",
+	"DIVU R0, Rn",
+	"DIVS R0, Rn",
 	"RTS/N",
 	"JSR/N @Rm",
 	"RTV/N Rm",

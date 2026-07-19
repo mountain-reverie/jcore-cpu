@@ -153,6 +153,7 @@ sh2a_movmu_pop_push.elf: sh2a_movmu_pop_push.o
 sh2a_bitreg.elf: sh2a_bitreg.o
 sh2a_clip.elf: sh2a_clip.o
 sh2a_mulr.elf: sh2a_mulr.o
+sh2a_divs.elf: sh2a_divs.o
 sh2a_movincdec.elf: sh2a_movincdec.o
 sh2a_movrt_nott.elf: sh2a_movrt_nott.o
 sh2a_branchn.elf: sh2a_branchn.o

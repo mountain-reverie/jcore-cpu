@@ -1,0 +1,78 @@
+# SH-2A overlay: DIVU/DIVS R0,Rn (Task 2 of the divs/divu plan).
+#
+# 32/32 -> 32 division of Rn by R0, quotient written back to Rn. SR (T/Q/M)
+# is architecturally UNAFFECTED (unlike the classic DIV1/DIV0S/DIV0U
+# multi-instruction sequence), so no sr_ctrl fields are touched here -- the
+# default sr = "HOLD" (see [defaults]) already leaves SR untouched.
+#
+# Implemented as a 2-slot sequence around the standalone sequential divider
+# unit (core/divider.vhd, core/divider_pkg.vhd -- Task 1), instantiated in
+# cpu.vhd as u_div (mirrors u_mult) and wired into datapath via
+# div_dividend/div_divisor/div_start/div_is_signed/div_quotient
+# (core/datapath.vhm g_div/g_div_off, Task 2):
+#
+#   1. start:  xbus = Rn (dividend), ybus = R0 (divisor). manip =
+#      DIV_START_U/DIV_START_S is a decode-only marker (never reaches
+#      manip()'s alumanip_t case with real effect -- see
+#      core/components_pkg.vhd) that datapath's g_div block decodes
+#      combinationally into div_i.start (pulsed for this one committed
+#      cycle) and div_i.is_signed (DIV_START_S = divs). mac_stall_sense="Y"
+#      reuses the existing mac_busy stall path (decode_core.vhm mac_stall);
+#      cpu.vhd ORs div_o.busy into the same combined_mac_busy signal mac_o.busy
+#      already drives, so decode holds here for the ~1-cycle gap between the
+#      start pulse and the divider's busy flag actually rising.
+#   2. finish: zbus_sel = MANIP with manip = DIV_READ reads div_quotient via
+#      the same SEL_MANIP mux MULR's restore slots use (manip_sel in
+#      datapath.vhm), written to Rn. mac_stall_sense="Y" here holds decode at
+#      this slot (re-presenting it, mac ctrl unchanged) for the whole ~32-cycle
+#      divide -- div_o.busy feeds combined_mult_stall too, so datapath's own
+#      state (this) freezes in lockstep, same mechanism as mult(seq)'s
+#      slot_stall. The commit (Rn write) only takes effect the cycle busy
+#      finally drops, when div_quotient is valid.
+
+[defaults]
+  pc = "HOLD"
+  if_issue = "NO"
+  sr = "HOLD"
+
+[[instr]]
+  name = "DIVU R0, Rn"
+  format = "n"
+  opcode = "0100 nnnn 1000 0100"
+  operation = "Rn / R0 -> Rn (unsigned)"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    manip = "div_start_u"
+    mac_stall_sense = "Y"
+    xbus = "Rn"
+    ybus = "R0"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    manip = "div_read"
+    mac_stall_sense = "Y"
+    zbus_sel = "MANIP"
+    zbus = "Rn"
+    pc = "INC"
+
+[[instr]]
+  name = "DIVS R0, Rn"
+  format = "n"
+  opcode = "0100 nnnn 1001 0100"
+  operation = "Rn / R0 -> Rn (signed)"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]
+    manip = "div_start_s"
+    mac_stall_sense = "Y"
+    xbus = "Rn"
+    ybus = "R0"
+    pc = "HOLD"
+
+  [[instr.slots]]
+    manip = "div_read"
+    mac_stall_sense = "Y"
+    zbus_sel = "MANIP"
+    zbus = "Rn"
+    pc = "INC"

@@ -20,4 +20,13 @@ package divider_pkg is
     quotient : std_logic_vector(31 downto 0);    -- valid when busy falls
   end record divider_o_t;
 
+  component divider is
+    port (
+      clk : in  std_logic;
+      rst : in  std_logic;
+      a   : in  divider_i_t;
+      y   : out divider_o_t
+    );
+  end component divider;
+
 end package divider_pkg;

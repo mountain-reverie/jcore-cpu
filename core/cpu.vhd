@@ -5,6 +5,7 @@ library ieee;
   use work.cpu2j0_components_pack.all;
   use work.datapath_pack.all;
   use work.mult_pkg.all;
+  use work.divider_pkg.all;
 
 entity cpu is
   generic (
@@ -38,6 +39,15 @@ architecture stru of cpu is
   signal mac_i              : mult_i_t;
   signal mac_o              : mult_o_t;
   signal dp_tlb_squash      : std_logic; -- datapath tlb_squash, gates MAC accumulate on faulting pass
+  -- SH-2A DIVU/DIVS divider unit (Task 2). div_i/div_o mirror mac_i/mac_o;
+  -- combined_mac_busy/combined_mult_stall fold div_o.busy into the same
+  -- stall paths mac_o.busy/mac_o.slot_stall already feed (decode mac_stall
+  -- and datapath mult_stall respectively), SH2A_ARCH-gated so base J1/J2/J4
+  -- see exactly mac_o.busy/mac_o.slot_stall as before.
+  signal div_i               : divider_i_t;
+  signal div_o                : divider_o_t;
+  signal combined_mac_busy   : std_logic;
+  signal combined_mult_stall : std_logic;
   signal reg                : reg_ctrl_t;
   signal func               : func_ctrl_t;
   signal mem                : mem_ctrl_t;
@@ -223,7 +233,7 @@ begin
       if_stall           => if_stall,
       illegal_delay_slot => illegal_delay_slot,
       illegal_instr      => illegal_instr,
-      mac_busy           => mac_o.busy,
+      mac_busy           => combined_mac_busy,
       reg                => reg,
       func               => func,
       sr                 => sr,
@@ -260,6 +270,29 @@ begin
   mac_i.wr_mach    <= mac.wrmach; mac_i.wr_macl <= mac.wrmacl;
   mac_i.acc_squash <= dp_tlb_squash;
 
+  -- SH-2A DIVU/DIVS divider unit (Task 2), mirroring u_mult above. Tied off
+  -- on base (sh2a_arch=false): div_i.start is driven '0' by datapath's
+  -- g_div_off, so u_div never runs there, and div_o.busy/.quotient are
+  -- excluded from the base stall/writeback paths below.
+  g_div : if sh2a_arch generate
+    u_div : component divider
+      port map (
+        clk => clk,
+        rst => rst,
+        a   => div_i,
+        y   => div_o
+      );
+  end generate g_div;
+  g_div_off : if not sh2a_arch generate
+    div_o.busy     <= '0';
+    div_o.quotient <= (others => '0');
+  end generate g_div_off;
+
+  -- div_o.busy is tied '0' by g_div_off on base (sh2a_arch=false), so these
+  -- ORs are exactly mac_o.busy/mac_o.slot_stall there -- byte-identical.
+  combined_mac_busy   <= mac_o.busy or div_o.busy;
+  combined_mult_stall <= mac_o.slot_stall or div_o.busy;
+
   u_datapath : component datapath
     generic map (
       priv_arch => priv_arch, mmu_arch => mmu_arch, sh2a_arch => sh2a_arch
@@ -290,8 +323,13 @@ begin
       macin2             => mac_i.in2,
       mach               => mac_o.mach,
       macl               => mac_o.macl,
-      mult_stall         => mac_o.slot_stall,
+      mult_stall         => combined_mult_stall,
       mac_s              => mac_i.s,
+      div_dividend       => div_i.dividend,
+      div_divisor        => div_i.divisor,
+      div_start          => div_i.start,
+      div_is_signed      => div_i.is_signed,
+      div_quotient       => div_o.quotient,
       t_bcc              => t_bcc,
       ibit               => ibit,
       if_dr              => if_dr,

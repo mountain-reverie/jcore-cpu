@@ -341,7 +341,11 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 			switch pkg.Components[ci].Name {
 			case "decode_core":
 				pkg.Components[ci].Ports = append(pkg.Components[ci].Ports,
-					Port{Name: "ext_word_o", Direction: "out", Type: "std_logic_vector(15 downto 0)"})
+					Port{Name: "ext_word_o", Direction: "out", Type: "std_logic_vector(15 downto 0)"},
+					// imm_from_ext fed back so decode_core's ext-word capture register
+					// triggers on the ext-consume slot decoder-independently. Wired in
+					// decode.vhd.tmpl's two-word branch to id.imm_from_ext.
+					Port{Name: "imm_from_ext_i", Direction: "in", Type: "std_logic"})
 			case "decode_table":
 				pkg.Components[ci].Ports = append(pkg.Components[ci].Ports,
 					Port{Name: "ext_word", Direction: "in", Type: "std_logic_vector(15 downto 0)"})

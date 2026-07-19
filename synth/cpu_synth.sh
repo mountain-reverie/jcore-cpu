@@ -70,9 +70,11 @@ FILES=(
   core/tlb.vhd
   core/mult_pkg.vhd
   core/datapath_pkg.vhd
+  core/divider_pkg.vhd
   decode/decode_pkg.vhd
   core/cpu.vhd
   core/mult.vhd
+  core/divider.vhd
   core/shifter.vhd
   core/datapath.vhd
   core/register_file.vhd

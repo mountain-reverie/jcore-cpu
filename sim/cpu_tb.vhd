@@ -191,10 +191,16 @@ begin
   -- core/cpu_config.vhd): a J1/iCESugar DSP-ALU verification-only variant
   -- that exercises core/dsp_arith.vhd through the full instruction-level
   -- test ROM. Default CONFIG_DSP_ALU=0 keeps binding cpu_sim unchanged.
+  -- CONFIG_DECODE_ROM=1 selects cpu_sim_rom (u_decode bound to
+  -- cpu_decode_rom instead of the direct decoder, see core/cpu_config.vhd):
+  -- runs the SAME base test ROM against the ROM decoder so it can be
+  -- compared against the direct-decoder run for symmetry. Base J2 only.
 #if CONFIG_DSP_ALU
   cpu1: configuration work.cpu_sim_dsp_alu
 #elif CONFIG_SH2A_ARCH
   cpu1: configuration work.cpu_sim_sh2a
+#elif CONFIG_DECODE_ROM
+  cpu1: configuration work.cpu_sim_rom
 #else
   cpu1: configuration work.cpu_sim
 #endif

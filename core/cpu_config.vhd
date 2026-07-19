@@ -184,6 +184,33 @@ generic map (
   end for;
 end configuration;
 
+-- Decoder-symmetry sim variant of cpu_sim: identical to cpu_sim (MMU-enabled,
+-- two-bank regfile, comb shifter) EXCEPT u_decode binds the ROM decoder
+-- (cpu_decode_rom) instead of the direct one. Base J2 only -- the ROM
+-- decoder cannot runtime-discriminate the ext_word of two-word SH-2A ops, so
+-- this variant must never be used with SH2A_ARCH. Selected by sim/cpu_tb.vhd
+-- when CONFIG_DECODE_ROM=1, to enforce that the direct and ROM decoders --
+-- generated from the same microcode model -- stay behaviorally identical for
+-- base instructions.
+configuration cpu_sim_rom of cpu is
+  for stru
+    for u_decode : decode
+      use configuration work.cpu_decode_rom;
+    end for;
+    for u_datapath : datapath
+      use entity work.datapath(stru);
+      for stru
+        for u_regfile : register_file
+          use entity work.register_file(two_bank);
+        end for;
+        for u_shifter : shifter
+          use entity work.shifter(comb);
+        end for;
+      end for;
+    end for;
+  end for;
+end configuration;
+
 configuration cpu_j2 of cpu is
   for stru
     for u_mult : mult use entity work.mult(stru); end for;

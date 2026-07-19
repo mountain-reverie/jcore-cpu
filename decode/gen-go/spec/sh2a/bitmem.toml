@@ -143,6 +143,115 @@
     pc = "INC"
 
 [[instr]]
+  name = "BLD.B #imm3,@(disp12,Rn)"
+  format = "nd12i3"
+  opcode = "0011 nnnn 0iii 1001"
+  opcode2 = "0011 dddd dddd dddd"
+  operation = "bit imm3 of (disp12 + Rn) -> T"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]                 # slot0: latch ext word (INC #1 - consumes word1)
+    latch_ext = "1"
+    pc = "INC"
+    if_issue = "YES"
+  [[instr.slots]]                 # slot1: EA = Rn + disp12 -> TEMP1. imm_from_ext
+    imm_from_ext = "1"            # reads word2 combinationally off if_dr (no
+    alu_y = "U*1"                 # if_issue needed to consume it), and pc=HOLD:
+    arith = "ADD"                 # the SECOND PC-advance/fetch is deferred to the
+    xbus = "Rn"                   # terminal so it sits ADJACENT to dispatch (the
+    zbus = "TEMP1"                # movi20 pattern). A fetch-advance here, far from
+    zbus_sel = "ARITH"           # dispatch, lets the prefetch drift over the long
+    pc = "HOLD"                   # RMW body and drops an instruction after bset.
+  [[instr.slots]]                 # slot2-4: wait for TEMP1 write-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot5: READ byte @TEMP1 -> TEMP0
+    xbus = "TEMP1"
+    ma_addy = "XBUS"
+    ma_op = "READ"
+    ma_size = "8"
+    wbus = "TEMP0"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot6-8: wait for TEMP0 load-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot9: extract bit imm3 of TEMP0 -> T (NO store)
+    logic = "AND"
+    xbus = "TEMP0"
+    ybus = "MASK3_64"
+    logic_sr = "NOT_ZERO"
+    sr = "LOGIC"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot10-11: filler (align with RMW ops' timing)
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot12: NO store -- just terminal dispatch.
+    pc = "INC"                    # pc=INC + auto if_issue+dispatch: the SECOND
+                                   # word's PC-advance/fetch happens HERE, adjacent
+                                   # to dispatch (same timing as the RMW ops), but
+                                   # bld/bldnot do not write memory at all.
+
+[[instr]]
+  name = "BLDNOT.B #imm3,@(disp12,Rn)"
+  format = "nd12i3"
+  opcode = "0011 nnnn 0iii 1001"
+  opcode2 = "1011 dddd dddd dddd"
+  operation = "NOT bit imm3 of (disp12 + Rn) -> T"
+  table_ref = "SH-2A"
+
+  [[instr.slots]]                 # slot0: latch ext word (INC #1 - consumes word1)
+    latch_ext = "1"
+    pc = "INC"
+    if_issue = "YES"
+  [[instr.slots]]                 # slot1: EA = Rn + disp12 -> TEMP1. imm_from_ext
+    imm_from_ext = "1"            # reads word2 combinationally off if_dr (no
+    alu_y = "U*1"                 # if_issue needed to consume it), and pc=HOLD:
+    arith = "ADD"                 # the SECOND PC-advance/fetch is deferred to the
+    xbus = "Rn"                   # terminal so it sits ADJACENT to dispatch (the
+    zbus = "TEMP1"                # movi20 pattern). A fetch-advance here, far from
+    zbus_sel = "ARITH"           # dispatch, lets the prefetch drift over the long
+    pc = "HOLD"                   # RMW body and drops an instruction after bset.
+  [[instr.slots]]                 # slot2-4: wait for TEMP1 write-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot5: READ byte @TEMP1 -> TEMP0
+    xbus = "TEMP1"
+    ma_addy = "XBUS"
+    ma_op = "READ"
+    ma_size = "8"
+    wbus = "TEMP0"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot6-8: wait for TEMP0 load-commit
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot9: extract bit imm3 of TEMP0, INVERT -> T
+    logic = "AND"                 # (NO store). logic_sr=ZERO gives T := (v == 0),
+    xbus = "TEMP0"                # the inverse sense of BLD's NOT_ZERO -- exactly
+    ybus = "MASK3_64"              # bldnot's "NOT bit -> T" semantics.
+    logic_sr = "ZERO"
+    sr = "LOGIC"
+    pc = "HOLD"
+  [[instr.slots]]                 # slot10-11: filler (align with RMW ops' timing)
+    pc = "HOLD"
+  [[instr.slots]]
+    pc = "HOLD"
+  [[instr.slots]]                 # slot12: NO store -- just terminal dispatch.
+    pc = "INC"
+
+[[instr]]
   name = "BST.B #imm3,@(disp12,Rn)"
   format = "nd12i3"
   opcode = "0011 nnnn 0iii 1001"

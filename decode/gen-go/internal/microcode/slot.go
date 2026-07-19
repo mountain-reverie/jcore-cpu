@@ -1047,6 +1047,23 @@ func manipSel(v string) (string, error) {
 		// is base-invisible). See manip() BITSET case in
 		// core/components_pkg.vhd.
 		return "BITSET", nil
+	case "band":
+		// SH-2A band.b/bandnot.b/bor.b/bornot.b/bxor.b (Group 3 PR-C):
+		// T-combine memory bit ops. Same base-invisible rationale as
+		// BITSET/CLIP_*/MAC_SAVE above -- alumanip_t is hand-maintained
+		// in core/components_pkg.vhd, not part of the generated static
+		// package, so adding BAND/BANDNOT/BOR/BORNOT/BXOR there is
+		// base-invisible. See manip() BAND/... case in
+		// core/components_pkg.vhd.
+		return "BAND", nil
+	case "bandnot":
+		return "BANDNOT", nil
+	case "bor":
+		return "BOR", nil
+	case "bornot":
+		return "BORNOT", nil
+	case "bxor":
+		return "BXOR", nil
 	case "xtract":
 		return "EXTRACT", nil
 	case "set b7":

@@ -14,7 +14,7 @@ begin
   process is
   begin
 
-    test_plan(29, "test manip()");
+    test_plan(49, "test manip()");
     -- Existing manip cases ignore the t argument (only BITSET uses it); pass '0'.
     test_equal(manip(x"ffffffff", x"12345678", '0', SWAP_BYTE, true), x"12347856", "swap byte");
     test_equal(manip(x"ffffffff", x"12345678", '0', SWAP_WORD, true), x"56781234", "swap word");
@@ -58,6 +58,36 @@ begin
     -- clipu.w: unsigned clamp [0,65535]
     test_equal(manip(x"00010000", x"00000000", '0', CLIP_UW, true), x"0000FFFF", "clipu.w 65536 -> 65535");
     test_equal((0 => clip_saturated(x"0000FFFF", CLIP_UW)), "0", "clipu.w 65535 no sat");
+    -- SH-2A band.b/bandnot.b/bor.b/bornot.b/bxor.b (T-combine memory bit
+    -- ops): x=TEMP0 (loaded byte), y=one-hot mask (1<<imm3), t=sr.t (old T).
+    -- bit = OR-reduce(x AND y). Result is broadcast across all 32 bits
+    -- (all-0s = T_new 0, all-1s = T_new 1) for the AND self-test T-recovery
+    -- slot in the generated microcode.
+    -- BAND: T_new = T_old & bit
+    test_equal(manip(x"00000008", x"00000008", '1', BAND, true), x"ffffffff", "band t1 bit1");
+    test_equal(manip(x"00000000", x"00000008", '1', BAND, true), x"00000000", "band t1 bit0");
+    test_equal(manip(x"00000008", x"00000008", '0', BAND, true), x"00000000", "band t0 bit1");
+    test_equal(manip(x"00000000", x"00000008", '0', BAND, true), x"00000000", "band t0 bit0");
+    -- BANDNOT: T_new = T_old & (NOT bit)
+    test_equal(manip(x"00000008", x"00000008", '1', BANDNOT, true), x"00000000", "bandnot t1 bit1");
+    test_equal(manip(x"00000000", x"00000008", '1', BANDNOT, true), x"ffffffff", "bandnot t1 bit0");
+    test_equal(manip(x"00000008", x"00000008", '0', BANDNOT, true), x"00000000", "bandnot t0 bit1");
+    test_equal(manip(x"00000000", x"00000008", '0', BANDNOT, true), x"00000000", "bandnot t0 bit0");
+    -- BOR: T_new = T_old | bit
+    test_equal(manip(x"00000008", x"00000008", '1', BOR, true), x"ffffffff", "bor t1 bit1");
+    test_equal(manip(x"00000000", x"00000008", '1', BOR, true), x"ffffffff", "bor t1 bit0");
+    test_equal(manip(x"00000008", x"00000008", '0', BOR, true), x"ffffffff", "bor t0 bit1");
+    test_equal(manip(x"00000000", x"00000008", '0', BOR, true), x"00000000", "bor t0 bit0");
+    -- BORNOT: T_new = T_old | (NOT bit)
+    test_equal(manip(x"00000008", x"00000008", '1', BORNOT, true), x"ffffffff", "bornot t1 bit1");
+    test_equal(manip(x"00000000", x"00000008", '1', BORNOT, true), x"ffffffff", "bornot t1 bit0");
+    test_equal(manip(x"00000008", x"00000008", '0', BORNOT, true), x"00000000", "bornot t0 bit1");
+    test_equal(manip(x"00000000", x"00000008", '0', BORNOT, true), x"ffffffff", "bornot t0 bit0");
+    -- BXOR: T_new = T_old ^ bit
+    test_equal(manip(x"00000008", x"00000008", '1', BXOR, true), x"00000000", "bxor t1 bit1");
+    test_equal(manip(x"00000000", x"00000008", '1', BXOR, true), x"ffffffff", "bxor t1 bit0");
+    test_equal(manip(x"00000008", x"00000008", '0', BXOR, true), x"ffffffff", "bxor t0 bit1");
+    test_equal(manip(x"00000000", x"00000008", '0', BXOR, true), x"00000000", "bxor t0 bit0");
     test_finished("done");
     wait;
 

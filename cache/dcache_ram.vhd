@@ -207,15 +207,18 @@ begin
       -- a real single-port macro would need a cache-side stall instead.
       chk : process (clk125) is
       begin
+
         if rising_edge(clk125) then
-          if rst /= '1' then
+          if (rst /= '1') then
             assert not (r_en = '1' and w_en = '1' and w_wr = '1')
               report "GF180-SPIKE: dcache single-port R+W collision (read load + write refill/store same cycle)"
               severity warning;
           end if;
         end if;
+
       end process chk;
-      -- pragma translate_on
+
+    -- pragma translate_on
 
     end generate sc;
 

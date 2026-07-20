@@ -45,6 +45,28 @@ begin
   tag_dw <= "0" & ra.tag;
   ry.tag <= tag_dr(14 downto 0); -- 15 b (PA[27:13], 28-bit region)
 
+  -- GF180 single-port SRAM spike note (branch spike/gf180-cache-singleport-
+  -- collision, see cache/dcache_ram.vhd for the dcache analysis): unlike
+  -- dcache_ram, icache_ram has NO CACHE_SAME_CLOCK sc/dc split -- it always
+  -- instantiates the single ram_2rw form below: port0 is read-only (fetch,
+  -- clk125, wr0 tied '0' -- there is no CPU store into the icache), port1 is
+  -- the sole write port (line refill, clk200, wr1 = ra.wr1). In a
+  -- CACHE_SAME_CLOCK=true (sc) FPGA/ASIC-proxy build, clk125 and clk200 are
+  -- the same clock net at the top level, so the collision question is
+  -- structurally the SAME shape as dcache's sc case: does a fetch read
+  -- (en0='1') ever coincide, in the same cycle, with a refill write
+  -- (en1='1' and wr1='1')? Because icache never writes port0 (no store path),
+  -- there is no dcache-style read/write MUX to build here -- the two ports
+  -- are already structurally separate (true 2-port ram_2rw), so no RTL change
+  -- or dedicated sc generate was needed to ask the question; an equivalent
+  -- sim-only assertion was not added here because icache_ram has no icache
+  -- unit-scoreboard testbench analogous to sim/cache_sim.sh's dcache_check_tb
+  -- (only FPGA-image-style tests under cache/tests/ictest*) to exercise it
+  -- against, so it was not spiked empirically in this pass. If/when an
+  -- icache scoreboard analogous to dcache_check_tb exists, the same
+  -- r_en/w_en/w_wr-style assertion should be added to this generate to
+  -- confirm (or refute) the same "transparent single-port drop-in" verdict
+  -- reached for dcache.
   ram : for i in 0 to 1 generate
 
     ram_s : component ram_2rw

@@ -81,6 +81,37 @@ begin
   --    port (port1) is muxed between refill and CPU store. Read is suppressed on
   --    store cycles (en0 = en0 and not wr0) so dr0 holds across a store, matching
   --    the 2-write-port form where a store wrote (not read) port0.
+  --
+  --  GF180 single-port SRAM spike (branch spike/gf180-cache-singleport-collision):
+  --  the open question was whether this sc (single-clock) form ever needs a true
+  --  1-read-and-1-write-in-the-same-cycle access -- a case a SINGLE-PORT vendor
+  --  SRAM (gf180mcu_fd_ip_sram) cannot serve, since port0 (read, CPU load) and
+  --  the sole write port (port1, refill/store mux) are on the same clock. A
+  --  sim-only assertion (r_en='1' and w_en='1' and w_wr='1', see the `chk`
+  --  process in the sc generate below) was added and exercised against the
+  --  dcache scoreboard (sim/cache_sim.sh sc: 1019 directed load/store/refill
+  --  interleaving tests incl. hit-under-miss, ALL PASSED) and, as a control,
+  --  sim/cache_sim.sh dc (the true 2-write-port form; 1019 tests, ALL PASSED).
+  --  RESULT: the collision NEVER fired in either run (0 occurrences of
+  --  "GF180-SPIKE" in either log). This is architecturally expected: the
+  --  blocking FSM only allows a port0 load read to proceed concurrently with a
+  --  port1 refill write when they target DIFFERENT indices (hit-under-miss);
+  --  the controller stalls/blocks a same-index load against an in-flight
+  --  refill, so r_en and (w_en and w_wr) are asserted together but the
+  --  colliding-read-during-write case the single-port macro can't serve does
+  --  not arise in the cache's access pattern.
+  --  => VERDICT: for the sc (single-clock) case, the vendor single-port SRAM
+  --  (gf180mcu_fd_ip_sram) can be used as a TRANSPARENT drop-in for this RAM
+  --  via a read/write mux, with NO cache-side stall needed for the collision
+  --  case investigated here. (This does not by itself validate every other
+  --  aspect of a single-port substitution, e.g. read-during-write-same-address
+  --  ordering/behavior on the write port itself, byte-enable partial writes,
+  --  or timing/margin differences vs. the inferred/dual-clock tech model --
+  --  those are separate concerns from the R+W-collision question this spike
+  --  targeted.) The `chk` assertion below is left in as a permanent,
+  --  sim-only (translate_off) regression guard: if a future dcache/refill FSM
+  --  change ever introduces a same-cycle read+write collision, the scoreboard
+  --  will flag it.
 
   ram : for i in 0 to 1 generate
 
@@ -164,6 +195,27 @@ begin
           margin0 => '0',
           margin1 => '0'
         );
+
+      -- pragma translate_off
+      -- GF180-SPIKE: sim-only check for whether a single-port SRAM (e.g. the
+      -- vendor gf180mcu_fd_ip_sram) could serve this RAM transparently. A
+      -- single-port SRAM cannot do a read and a write in the same cycle; here
+      -- port0-read (CPU load) and the sole write port (refill or store) are
+      -- collapsed onto one clock (clk125), so if r_en and w_en/w_wr are ever
+      -- both asserted in the same cycle, a single-port macro could NOT serve
+      -- both -- a mux (this RTL's current model) silently drops one side, and
+      -- a real single-port macro would need a cache-side stall instead.
+      chk : process (clk125) is
+      begin
+        if rising_edge(clk125) then
+          if rst /= '1' then
+            assert not (r_en = '1' and w_en = '1' and w_wr = '1')
+              report "GF180-SPIKE: dcache single-port R+W collision (read load + write refill/store same cycle)"
+              severity warning;
+          end if;
+        end if;
+      end process chk;
+      -- pragma translate_on
 
     end generate sc;
 

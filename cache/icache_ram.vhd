@@ -67,6 +67,7 @@ begin
   -- r_en/w_en/w_wr-style assertion should be added to this generate to
   -- confirm (or refute) the same "transparent single-port drop-in" verdict
   -- reached for dcache.
+
   ram : for i in 0 to 1 generate
 
     ram_s : component ram_2rw

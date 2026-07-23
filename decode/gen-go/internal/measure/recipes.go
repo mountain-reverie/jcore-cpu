@@ -5,14 +5,14 @@ import (
 )
 
 type Recipe struct {
-	Template   string
-	Ptr        string
-	Region     uint32
-	Loop       int
-	Measurable bool
-	Issue      int
-	Latency    int
-	Why        string
+	Template   string `toml:"template"`
+	Ptr        string `toml:"ptr"`
+	Region     uint32 `toml:"region"`
+	Loop       int    `toml:"loop"`
+	Measurable bool   `toml:"measurable"`
+	Issue      int    `toml:"issue"`
+	Latency    int    `toml:"latency"`
+	Why        string `toml:"why"`
 }
 
 type Recipes struct {
@@ -21,8 +21,8 @@ type Recipes struct {
 }
 
 type recipesFile struct {
-	Default   Recipe
-	Overrides map[string]Recipe
+	Default   Recipe            `toml:"default"`
+	Overrides map[string]Recipe `toml:"overrides"`
 }
 
 func LoadRecipes(path string) (*Recipes, error) {
@@ -36,7 +36,7 @@ func LoadRecipes(path string) (*Recipes, error) {
 	// bare [overrides."x"] entry names no template but measurable
 	// still means "use default template + measurable".
 	for k, v := range f.Overrides {
-		if v.Measurable == false && v.Why == "" && v.Template == "" {
+		if !v.Measurable && v.Why == "" && v.Template == "" {
 			// not hand entry, not custom template: treat as default+measurable
 			v.Measurable = true
 			v.Template = f.Default.Template

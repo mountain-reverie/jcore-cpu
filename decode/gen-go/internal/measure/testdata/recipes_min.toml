@@ -6,3 +6,6 @@ measurable = false
 issue = 3
 latency = 3
 why = "halts the core; cannot run standalone"
+
+[overrides."0000000000001001"]        # NOP (bare override)
+

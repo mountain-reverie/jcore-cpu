@@ -122,22 +122,57 @@ func isImmediate(in spec.Instr) bool {
 	return strings.Contains(in.Format, "i")
 }
 
+// isUnary reports whether in is a plain single-register-operand op (format
+// exactly "n" or "m", no memory reference) suitable for the "unary"
+// template: shift/rotate/dt/movt/cmp-style ops that take one register and
+// no other operand.
+func isUnary(in spec.Instr) bool {
+	if in.Format != "n" && in.Format != "m" {
+		return false
+	}
+	if mem, _ := isMemory(in); mem {
+		return false
+	}
+	return true
+}
+
+// isFPUOrCoprocessor reports whether in is an FPU or coprocessor op that
+// sh2-elf-as cannot assemble in this integer-variant harness: either its
+// normalized opcode pattern starts with "1111" (the SH-2/SH-4 FPU/coproc
+// opcode plane) or its mnemonic starts with "F" (FADD, FMOV, FMUL, ...).
+func isFPUOrCoprocessor(in spec.Instr) bool {
+	op := strings.ReplaceAll(in.Opcode, " ", "")
+	if strings.HasPrefix(op, "1111") {
+		return true
+	}
+	return strings.HasPrefix(leadToken(in.Name), "F")
+}
+
 // Classify derives a Recipe for in from spec metadata alone, per the
 // Task 11 plan's classify() rules (evaluated in priority order):
 //  1. Plane == "system" -> skip (microcode-internal pseudo-op, not a real
 //     DUT instruction; excluded from the measured table entirely).
-//  2. system-control (Privileged, or LDC/STC/RTE/SLEEP/TRAPA/LDTLB/
+//  2. FPU/coprocessor op (normalized opcode starts with "1111", or mnemonic
+//     starts with "F") -> skip (sh2-elf-as can't assemble these, and
+//     they aren't part of the integer variant).
+//  3. system-control (Privileged, or LDC/STC/RTE/SLEEP/TRAPA/LDTLB/
 //     *BANK) -> hand value (Measurable=false, Why set, Issue/Latency from
 //     handValues or a 2/2 provisional placeholder).
-//  3. branch mnemonic or Operation mentions "branch" -> "branch" template.
-//  4. Opcode2 present (SH-2A two-word op) -> "twoword" template.
-//  5. Operation references "@" -> "load" or "store" template, by which
+//  4. branch mnemonic or Operation mentions "branch" -> "branch" template.
+//  5. Opcode2 present (SH-2A two-word op) -> "twoword" template.
+//  6. Operation references "@" -> "load" or "store" template, by which
 //     side of the arrow the memory operand is on.
-//  6. Format contains "i" (immediate) with no memory operand -> "imm"
+//  7. Format contains "i" (immediate) with no memory operand -> "imm"
 //     template.
-//  7. else (plain register-register op) -> "default" template.
+//  8. Format is exactly "n" or "m" with no memory operand -> "unary"
+//     template (single-register ops: shll, dt, movt, cmp/pl, ...).
+//  9. else (plain register-register op) -> "default" template.
 func Classify(in spec.Instr) Recipe {
 	if in.Plane == "system" {
+		return Recipe{Template: "skip"}
+	}
+
+	if isFPUOrCoprocessor(in) {
 		return Recipe{Template: "skip"}
 	}
 
@@ -176,6 +211,10 @@ func Classify(in spec.Instr) Recipe {
 
 	if isImmediate(in) {
 		return Recipe{Template: "imm", Measurable: true}
+	}
+
+	if isUnary(in) {
+		return Recipe{Template: "unary", Measurable: true}
 	}
 
 	return Recipe{Template: "default", Measurable: true}

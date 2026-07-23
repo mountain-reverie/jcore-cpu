@@ -62,6 +62,23 @@ func TestClassify(t *testing.T) {
 			wantHand: true,
 		},
 		{
+			name: "shll Rn -> unary",
+			in: spec.Instr{
+				Name: "SHLL Rn", Format: "n",
+				Operation: "T ? Rn ? MSB, Rn << 1",
+			},
+			wantTmpl: "unary",
+		},
+		{
+			name: "fadd (FPU) -> skip",
+			in: spec.Instr{
+				Name: "FADD FRm, FRn", Format: "nm",
+				Opcode:    "1111nnnnmmmm0000",
+				Operation: "FRn + FRm ? FRn",
+			},
+			wantTmpl: "skip",
+		},
+		{
 			name: "two-word @Rn+ -> twoword",
 			in: spec.Instr{
 				Name: "MOV.L @(disp12,Rm),Rn", Format: "nmd12",

@@ -164,6 +164,8 @@ func Gen(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, error) {
 		return genRegReg(in, count, ledAddr)
 	case "imm":
 		return GenDefault(in, count, ledAddr)
+	case "unary":
+		return genUnary(in, count, ledAddr)
 	case "load":
 		return genLoad(in, rec, count, ledAddr)
 	case "store":
@@ -220,6 +222,53 @@ func genRegReg(in spec.Instr, count int, ledAddr uint32) (string, error) {
 	marker(&body, 0x55)
 	body.WriteString("        .rept " + fmt.Sprint(count) + "\n")
 	body.WriteString(instrLine(mn, fmt.Sprintf("%s, %s", src, dst)))
+	body.WriteString("        .endr\n")
+	marker(&body, 0x66)
+
+	return fmt.Sprintf(headerTmpl, ledAddr, ledAddr, body.String()), nil
+}
+
+// genUnary emits the "unary" template: <mn> rn, a single-register-operand
+// form (shll rn, dt rn, movt rn, cmp/pl rn, ...) with no memory reference.
+// No operand needs preloading: shift/rotate/dt/movt/cmp-style ops read and
+// write the same register (or need no meaningful initial value for a
+// latency measurement). The independent chain rotates the operand register
+// over r1..r8 so consecutive ops don't share a register (no dependency);
+// the dependent chain runs count copies all through r1 so each op depends
+// on the previous op's result.
+func genUnary(in spec.Instr, count int, ledAddr uint32) (string, error) {
+	if count <= 0 {
+		return "", fmt.Errorf("count must be positive, got %d", count)
+	}
+	mn := mnemonic(in)
+	if mn == "" {
+		return "", fmt.Errorf("could not derive mnemonic from instruction name %q", in.Name)
+	}
+
+	var body strings.Builder
+
+	// --- calibration A: 100 nops ---
+	marker(&body, 0x11)
+	body.WriteString("        .rept 100\n        nop\n        .endr\n")
+	marker(&body, 0x12)
+
+	// --- calibration B: 200 nops ---
+	marker(&body, 0x13)
+	body.WriteString("        .rept 200\n        nop\n        .endr\n")
+	marker(&body, 0x14)
+
+	// --- independent chain: count ops, rotating disjoint operand regs ---
+	marker(&body, 0x33)
+	for i := 0; i < count; i++ {
+		reg := indepRegs[i%len(indepRegs)]
+		body.WriteString(instrLine(mn, reg))
+	}
+	marker(&body, 0x44)
+
+	// --- dependent chain: count ops, all chained through r1 ---
+	marker(&body, 0x55)
+	body.WriteString("        .rept " + fmt.Sprint(count) + "\n")
+	body.WriteString(instrLine(mn, depReg))
 	body.WriteString("        .endr\n")
 	marker(&body, 0x66)
 

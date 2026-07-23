@@ -1,0 +1,10 @@
+[default]
+template = "default"
+measurable = true
+latency = 1
+
+[overrides."0000000000011011"]        # SLEEP
+measurable = false
+issue = 3
+latency = 3
+why = "halts the core; cannot run standalone"

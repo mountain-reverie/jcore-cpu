@@ -28,6 +28,7 @@ begin:
         .align 2
 ptr_lit:        .long   0x00008000
 1:
+        mov.l   r10, @r10
         mov     #0x11, r0
         mov.b   r0, @r14
         .rept 100
@@ -99,8 +100,7 @@ ptr_lit:        .long   0x00008000
         mov     #0x55, r0
         mov.b   r0, @r14
         .rept 50
-        mov.l   @r10, r1
-        mov     r1, r10
+        mov.l   @r10, r10
         .endr
         mov     #0x66, r0
         mov.b   r0, @r14

@@ -228,10 +228,17 @@ func genRegReg(in spec.Instr, count int, ledAddr uint32) (string, error) {
 
 // genLoad emits the "load" template: a pointer register is preloaded (via a
 // branch-around literal pool, same trick the header uses for led) from
-// rec.Ptr/rec.Region, then the independent chain issues count loads into
+// rec.Ptr/rec.Region, then memory at that address is seeded to point at
+// itself (mem[region] == region) so the pointer can safely "chase itself"
+// across an arbitrary number of dependent loads without ever faulting.
+//
+// The independent chain issues count loads from the fixed pointer into
 // rotating disjoint dest regs (no register dependency between them, only
-// structural issue rate), while the dependent chain feeds each loaded value
-// back into the pointer register to expose the load-use hazard.
+// structural issue rate; the pointer register itself is never touched).
+// The dependent chain issues count loads that each use the previous load's
+// result as the next address (@ptr, ptr) -- because mem[region] == region,
+// the reloaded value is always the valid pointer again, so the chain is
+// both execution-safe and a genuine load-use latency measurement.
 func genLoad(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, error) {
 	if count <= 0 {
 		return "", fmt.Errorf("count must be positive, got %d", count)
@@ -244,7 +251,6 @@ func genLoad(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, erro
 	if ptr == "" {
 		ptr = "r10"
 	}
-	loadReg := depReg
 
 	var body strings.Builder
 
@@ -257,6 +263,12 @@ func genLoad(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, erro
 	fmt.Fprintf(&body, "ptr_lit:        .long   0x%08X\n", rec.Region)
 	body.WriteString("1:\n")
 
+	// --- self-pointer-chase seed: mem[region] = region ---
+	// after this, @ptr always reloads a valid pointer to itself, so a
+	// dependent chain of loads-through-ptr can run for any count without
+	// ever dereferencing garbage.
+	body.WriteString(instrLine("mov.l", fmt.Sprintf("%s, @%s", ptr, ptr)))
+
 	// --- calibration A: 100 nops ---
 	marker(&body, 0x11)
 	body.WriteString("        .rept 100\n        nop\n        .endr\n")
@@ -268,6 +280,7 @@ func genLoad(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, erro
 	marker(&body, 0x14)
 
 	// --- independent chain: count loads into rotating disjoint dest regs ---
+	// ptr is never overwritten, so every load reads the same valid address.
 	marker(&body, 0x33)
 	for i := 0; i < count; i++ {
 		reg := indepRegs[i%len(indepRegs)]
@@ -275,11 +288,11 @@ func genLoad(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, erro
 	}
 	marker(&body, 0x44)
 
-	// --- dependent chain: load-use, each load feeds the next address ---
+	// --- dependent chain: load-use, each load's result is the next address ---
+	// execution-safe self-chase: mem[region] == region, so ptr stays valid.
 	marker(&body, 0x55)
 	body.WriteString("        .rept " + fmt.Sprint(count) + "\n")
-	body.WriteString(instrLine(mn, fmt.Sprintf("@%s, %s", ptr, loadReg)))
-	body.WriteString(instrLine("mov", fmt.Sprintf("%s, %s", loadReg, ptr)))
+	body.WriteString(instrLine(mn, fmt.Sprintf("@%s, %s", ptr, ptr)))
 	body.WriteString("        .endr\n")
 	marker(&body, 0x66)
 
@@ -354,8 +367,13 @@ func genBranch(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, er
 		return "", fmt.Errorf("could not derive mnemonic from instruction name %q", in.Name)
 	}
 
+	trips := count
+	if rec.Loop > 0 {
+		trips = rec.Loop
+	}
+
 	branchBracket := func(body *strings.Builder) {
-		body.WriteString("        .rept " + fmt.Sprint(count) + "\n")
+		body.WriteString("        .rept " + fmt.Sprint(trips) + "\n")
 		body.WriteString(instrLine(mn, "1f"))
 		body.WriteString("1:\n")
 		body.WriteString("        .endr\n")

@@ -59,12 +59,12 @@ func TestJ1TimingModel(t *testing.T) {
 			got := tab.For(tc.instr)
 			switch tc.cmp {
 			case ">=":
-				if got.Latency < tc.wantLatency {
-					t.Errorf("latency %d < %d", got.Latency, tc.wantLatency)
+				if got.Latency.N < tc.wantLatency {
+					t.Errorf("latency %d < %d", got.Latency.N, tc.wantLatency)
 				}
 			default: // "=="
-				if got.Latency != tc.wantLatency {
-					t.Errorf("latency %d != %d", got.Latency, tc.wantLatency)
+				if got.Latency.N != tc.wantLatency {
+					t.Errorf("latency %d != %d", got.Latency.N, tc.wantLatency)
 				}
 			}
 		})

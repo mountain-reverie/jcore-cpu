@@ -220,8 +220,8 @@ func setCols(r *Row, vd VariantData, in spec.Instr) {
 	name := vd.Variant.Name
 	tm := vd.Tab.For(in)
 	r.Set(name, true)
-	r.Set(name+".issue", intToNum(tm.Issue))
-	r.Set(name+".latency", intToNum(tm.Latency))
+	r.Set(name+".issue", tm.Issue.jsonValue())
+	r.Set(name+".latency", tm.Latency.jsonValue())
 }
 
 func setColsFalse(r *Row, name string) {

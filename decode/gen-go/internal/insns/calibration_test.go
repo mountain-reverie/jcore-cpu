@@ -50,10 +50,10 @@ func TestJ2DerivedMatchesCommitted(t *testing.T) {
 			continue
 		}
 		got := tab.For(in)
-		if got.Issue != want.Issue || got.Latency != want.Latency {
+		if got.Issue.N != want.Issue || got.Latency.N != want.Latency {
 			diffs++
 			t.Logf("MISMATCH %s: got issue=%d latency=%d  want issue=%d latency=%d",
-				code, got.Issue, got.Latency, want.Issue, want.Latency)
+				code, got.Issue.N, got.Latency.N, want.Issue, want.Latency)
 		}
 	}
 	if diffs != 0 {

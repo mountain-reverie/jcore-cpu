@@ -364,20 +364,34 @@ func genNullary(in spec.Instr, count int, ledAddr uint32) (string, error) {
 // op, so issue and latency are expected to measure equal by construction
 // (mirrors genNullary's rationale).
 // genDivFixed emits the "divfixed" template for SH-2A DIVS/DIVU R0,Rn: the
-// divisor is hard-wired to R0. Preload R0=1 (divide-by-1 keeps the dividend
-// stable, so the multi-cycle divider op is exercised without operands drifting)
-// and re-set it AFTER each marker (marker() clobbers r0 as scratch). Both
-// brackets serialize on the single divider unit, so issue==latency==divider
-// occupancy (~33 cycles).
+// divisor is hard-wired to R0. The SH-2A divs/divu mnemonics are NOT known to
+// the base sh2-elf assembler (like the two-word ops), so each instruction is
+// emitted directly as a .word with the destination register folded into the
+// opcode's nnnn field (bits 11:8) -- using the mnemonic would silently assemble
+// a different instruction. Preload R0=1 (divide-by-1 keeps the dividend stable
+// and never faults) and re-set it AFTER each marker (marker() clobbers r0). The
+// dividend registers rotate over r1..r8 (independent) / chain through r1
+// (dependent); both serialize on the single divider unit, so issue==latency==
+// divider occupancy (~33 cycles).
 func genDivFixed(in spec.Instr, count int, ledAddr uint32) (string, error) {
 	if count <= 0 {
 		return "", fmt.Errorf("count must be positive, got %d", count)
 	}
-	mn := mnemonic(in)
-	if mn == "" {
-		return "", fmt.Errorf("could not derive mnemonic from name %q", in.Name)
+	base, err := opcodeToWord(strings.ReplaceAll(in.Opcode, " ", "")) // divs -> 0x4094, divu -> 0x4084 (nnnn=0)
+	if err != nil {
+		return "", fmt.Errorf("divfixed opcode %q: %w", in.Opcode, err)
 	}
+	// word folds the destination register number into the nnnn field (bits 11:8).
+	word := func(regNum int) uint16 { return base | uint16(regNum)<<8 }
 	var body strings.Builder
+	// Preload the dividend registers to a known non-zero value: at reset they are
+	// 'U' in the sim, and dividing an undefined value makes the divider FSM
+	// never terminate (X-propagation) -> the pipeline stalls forever and the end
+	// marker is never reached. dividing by R0=1 leaves each register unchanged,
+	// so a single init keeps them stable across the whole chain.
+	for _, r := range indepRegs {
+		body.WriteString(instrLine("mov", "#100, "+r))
+	}
 	// calibration brackets (nops)
 	marker(&body, 0x11)
 	body.WriteString("        .rept 100\n        nop\n        .endr\n")
@@ -385,18 +399,28 @@ func genDivFixed(in spec.Instr, count int, ledAddr uint32) (string, error) {
 	marker(&body, 0x13)
 	body.WriteString("        .rept 200\n        nop\n        .endr\n")
 	marker(&body, 0x14)
-	// independent chain: rotating dividend regs, fixed divisor r0=1
+	// Prime the data address bus with a valid address before each divs chain:
+	// while the divider stalls the pipeline the data-address bus is otherwise
+	// undriven (X after the long nop brackets), and the sim's bus monitor traps
+	// an X address. A dummy load from the (valid) stack pointer parks a real
+	// address on the bus so the stall is clean. This does not affect the divs
+	// timing being measured.
+	primeAddr := instrLine("mov.l", "@r15, r9")
+	// independent chain: rotating dividend regs r1..r8, fixed divisor r0=1
 	marker(&body, 0x33)
 	body.WriteString(instrLine("mov", "#1, r0")) // reset divisor (marker clobbered r0)
+	body.WriteString(primeAddr)
 	for i := 0; i < count; i++ {
-		body.WriteString(instrLine(mn, "r0, "+indepRegs[i%len(indepRegs)]))
+		regNum := (i % len(indepRegs)) + 1 // indepRegs[0]="r1" -> reg 1
+		fmt.Fprintf(&body, "        .word   0x%04X\n", word(regNum))
 	}
 	marker(&body, 0x44)
-	// dependent chain: chain through r1, fixed divisor r0=1
+	// dependent chain: dividend r1, fixed divisor r0=1
 	marker(&body, 0x55)
 	body.WriteString(instrLine("mov", "#1, r0"))
+	body.WriteString(primeAddr)
 	body.WriteString("        .rept " + fmt.Sprint(count) + "\n")
-	body.WriteString(instrLine(mn, "r0, r1"))
+	fmt.Fprintf(&body, "        .word   0x%04X\n", word(1))
 	body.WriteString("        .endr\n")
 	marker(&body, 0x66)
 	return fmt.Sprintf(headerTmpl, ledAddr, ledAddr, body.String()), nil

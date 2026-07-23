@@ -47,18 +47,29 @@ insns-check:
 # built-then-swept sequentially (make clean between). J1 is NOT measured -- its
 # sequential shifter/mult aren't bound in any cosim config (Finding B) -- so it
 # keeps its hand-authored timing/j1.toml.
+#
+# IMPORTANT: the sim compiles the *committed* decode/*.vhd verbatim -- it does
+# NOT regenerate them. The committed tables are the BASE (no-overlay) generation,
+# so a variant-specific op (e.g. SH-2A divs/divu, decoded only under the sh2a
+# overlay) has NO microcode in them: on the J2A cosim such an op mis-decodes, the
+# functional unit never engages, and the microbenchmark faults instead of
+# measuring. So each variant must regenerate decode/*.vhd WITH its overlay
+# ($(gen) below) BEFORE building the sim, then we restore the base generation at
+# the end so the working tree is not left dirty. Fields: name|CONFIG flag|gen target.
 measure-timing:
 	@set -e; root=$$(cd .. && pwd); \
-	for cfg in "j2:" "j2a:CONFIG_SH2A_ARCH=1" "j4:CONFIG_PRIV_ARCH=1"; do \
-	  v=$${cfg%%:*}; flag=$${cfg#*:}; \
+	for cfg in "j2||generate" "j2a|CONFIG_SH2A_ARCH=1|generate-j2a" "j4|CONFIG_PRIV_ARCH=1|generate-j4"; do \
+	  v=$${cfg%%|*}; rest=$${cfg#*|}; flag=$${rest%%|*}; gen=$${rest##*|}; \
 	  V=$$(echo $$v | tr a-z A-Z); \
-	  echo "=== $$V: build ($$flag) + sweep ==="; \
+	  echo "=== $$V: regen decode ($$gen) + build ($$flag) + sweep ==="; \
+	  $(MAKE) $$gen ROM_WIDTH=$(ROM_WIDTH); \
 	  $(MAKE) -C $$root/sim clean >/dev/null 2>&1; \
 	  $(MAKE) -C $$root/sim $$flag TOOLS_DIR=$(TOOLS_DIR) >/dev/null; \
 	  go -C $(GEN_DIR) run ./cmd/measure -variant $$V \
 	    -cosim $$root/sim/cpu_ctb -simdir $$root/sim \
 	    -out $$root/decode/$(GEN_DIR)/timing/$$v.measured.toml; \
 	done; \
+	$(MAKE) generate ROM_WIDTH=$(ROM_WIDTH); \
 	$(MAKE) insns
 
 # m8gen: regenerate the M8 batched fault-test images + manifest into sim/tests.

@@ -212,3 +212,66 @@ func TestClassifyPrivilegedLdcStc(t *testing.T) {
 		}
 	}
 }
+
+func TestClassifySpecialRegMove(t *testing.T) {
+	// Plain register forms -> "sreg" template, measurable.
+	for _, tc := range []struct{ name, format string }{
+		{"STS MACH, Rn", "n"},
+		{"STS MACL, Rn", "n"},
+		{"STS PR, Rn", "n"},
+		{"LDS Rm, MACH", "m"},
+		{"LDS Rm, MACL", "m"},
+		{"LDS Rm, PR", "m"},
+	} {
+		rec := Classify(spec.Instr{Name: tc.name, Format: tc.format})
+		if rec.Template != "sreg" || !rec.Measurable {
+			t.Errorf("Classify(%q) = %+v, want Template=sreg, Measurable=true", tc.name, rec)
+		}
+	}
+
+	// Coprocessor STS/LDS forms -> hand.
+	for _, name := range []string{"STS CPI_COM, Rn", "STS CP0_COM, Rn", "LDS Rm, CPI_COM", "LDS Rm, CP0_COM"} {
+		rec := Classify(spec.Instr{Name: name})
+		if rec.Measurable || rec.Why == "" {
+			t.Errorf("Classify(%q) = %+v, want hand (Measurable=false, Why set)", name, rec)
+		}
+	}
+
+	// .L pre-dec/post-inc memory forms -> hand, not skip.
+	for _, name := range []string{"STS.L MACH, @-Rn", "LDS.L @Rm+, MACH"} {
+		rec := Classify(spec.Instr{Name: name, Format: "n"})
+		if rec.Measurable || rec.Why == "" {
+			t.Errorf("Classify(%q) = %+v, want hand (Measurable=false, Why set)", name, rec)
+		}
+		if rec.Template == "skip" {
+			t.Errorf("Classify(%q).Template = skip, want hand entry not skip", name)
+		}
+	}
+}
+
+func TestClassifyImmR0(t *testing.T) {
+	for _, name := range []string{"AND #imm, R0", "OR #imm, R0", "XOR #imm, R0", "TST #imm, R0", "CMP /EQ #imm, R0"} {
+		rec := Classify(spec.Instr{Name: name, Format: "i8"})
+		if rec.Template != "immr0" || !rec.Measurable {
+			t.Errorf("Classify(%q) = %+v, want Template=immr0, Measurable=true", name, rec)
+		}
+	}
+	// General immediate ops (Rn destination) still use "imm".
+	rec := Classify(spec.Instr{Name: "ADD #imm, Rn", Format: "ni"})
+	if rec.Template != "imm" {
+		t.Errorf("Classify(%q).Template = %q, want imm", "ADD #imm, Rn", rec.Template)
+	}
+}
+
+func TestClassifyHandOverrides(t *testing.T) {
+	for _, name := range []string{"TAS.B @Rn", "XTRACT Rm, Rn", "MAC.W @Rm+, @Rn+", "MAC.L @Rm+, @Rn+",
+		"TST.B #imm, @(R0, GBR)", "AND.B #imm, @(R0, GBR)", "XOR.B #imm, @(R0, GBR)", "OR.B #imm, @(R0, GBR)"} {
+		rec := Classify(spec.Instr{Name: name, Format: "i8"})
+		if rec.Measurable || rec.Why == "" {
+			t.Errorf("Classify(%q) = %+v, want hand (Measurable=false, Why set)", name, rec)
+		}
+		if rec.Template == "skip" {
+			t.Errorf("Classify(%q).Template = skip, want hand entry not skip", name)
+		}
+	}
+}

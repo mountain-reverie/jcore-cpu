@@ -186,6 +186,10 @@ func Gen(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, error) {
 		return genBranch(in, rec, count, ledAddr)
 	case "twoword":
 		return genTwoWord(in, rec, count, ledAddr)
+	case "sreg":
+		return genSreg(in, count, ledAddr)
+	case "immr0":
+		return genImmR0(in, count, ledAddr)
 	default:
 		return "", fmt.Errorf("unknown template %q", rec.Template)
 	}
@@ -327,6 +331,102 @@ func genNullary(in spec.Instr, count int, ledAddr uint32) (string, error) {
 	marker(&body, 0x55)
 	body.WriteString("        .rept " + fmt.Sprint(count) + "\n")
 	body.WriteString(instrLine(mn, ""))
+	body.WriteString("        .endr\n")
+	marker(&body, 0x66)
+
+	return fmt.Sprintf(headerTmpl, ledAddr, ledAddr, body.String()), nil
+}
+
+// genImmR0 emits the "immr0" template: <mn> #1, r0 -- immediate ops whose
+// destination is hard-wired to R0 (AND/OR/XOR/TST #imm,R0; CMP/EQ #imm,R0).
+// Unlike the general "imm" template, the destination register can't be
+// rotated in the independent chain (there is only ever r0), so both
+// brackets emit the identical back-to-back sequence through r0 -- there is
+// no distinguishable independent-vs-dependent shape for a fixed-register
+// op, so issue and latency are expected to measure equal by construction
+// (mirrors genNullary's rationale).
+func genImmR0(in spec.Instr, count int, ledAddr uint32) (string, error) {
+	if count <= 0 {
+		return "", fmt.Errorf("count must be positive, got %d", count)
+	}
+	mn := mnemonic(in)
+	if mn == "" {
+		return "", fmt.Errorf("could not derive mnemonic from instruction name %q", in.Name)
+	}
+
+	var body strings.Builder
+
+	marker(&body, 0x11)
+	body.WriteString("        .rept 100\n        nop\n        .endr\n")
+	marker(&body, 0x12)
+
+	marker(&body, 0x13)
+	body.WriteString("        .rept 200\n        nop\n        .endr\n")
+	marker(&body, 0x14)
+
+	// --- independent chain: count copies, fixed r0 (can't rotate) ---
+	marker(&body, 0x33)
+	body.WriteString("        .rept " + fmt.Sprint(count) + "\n")
+	body.WriteString(instrLine(mn, "#1, r0"))
+	body.WriteString("        .endr\n")
+	marker(&body, 0x44)
+
+	// --- dependent chain: identical (r0 is always the operand) ---
+	marker(&body, 0x55)
+	body.WriteString("        .rept " + fmt.Sprint(count) + "\n")
+	body.WriteString(instrLine(mn, "#1, r0"))
+	body.WriteString("        .endr\n")
+	marker(&body, 0x66)
+
+	return fmt.Sprintf(headerTmpl, ledAddr, ledAddr, body.String()), nil
+}
+
+// genSreg emits the "sreg" template: STS <SPECIAL>, Rn / LDS Rm, <SPECIAL>
+// for the special-register move ops (MACH/MACL/PR). The special register
+// is a fixed operand (source for STS, destination for LDS) with no
+// data-dependent chain possible across successive copies, so -- like
+// genImmR0/genNullary -- both brackets emit the identical sequence and
+// issue/latency are expected to measure equal by construction.
+func genSreg(in spec.Instr, count int, ledAddr uint32) (string, error) {
+	if count <= 0 {
+		return "", fmt.Errorf("count must be positive, got %d", count)
+	}
+	mn := mnemonic(in)
+	if mn == "" {
+		return "", fmt.Errorf("could not derive mnemonic from instruction name %q", in.Name)
+	}
+	special, stsDirection, ok := specialRegOperand(in)
+	if !ok {
+		return "", fmt.Errorf("could not derive special-register operand from instruction name %q", in.Name)
+	}
+	var operand string
+	if stsDirection {
+		operand = fmt.Sprintf("%s, %s", special, depReg)
+	} else {
+		operand = fmt.Sprintf("%s, %s", depReg, special)
+	}
+
+	var body strings.Builder
+
+	marker(&body, 0x11)
+	body.WriteString("        .rept 100\n        nop\n        .endr\n")
+	marker(&body, 0x12)
+
+	marker(&body, 0x13)
+	body.WriteString("        .rept 200\n        nop\n        .endr\n")
+	marker(&body, 0x14)
+
+	// --- independent chain: count copies, fixed operand (no rotation possible) ---
+	marker(&body, 0x33)
+	body.WriteString("        .rept " + fmt.Sprint(count) + "\n")
+	body.WriteString(instrLine(mn, operand))
+	body.WriteString("        .endr\n")
+	marker(&body, 0x44)
+
+	// --- dependent chain: identical (special register is a fixed operand) ---
+	marker(&body, 0x55)
+	body.WriteString("        .rept " + fmt.Sprint(count) + "\n")
+	body.WriteString(instrLine(mn, operand))
 	body.WriteString("        .endr\n")
 	marker(&body, 0x66)
 

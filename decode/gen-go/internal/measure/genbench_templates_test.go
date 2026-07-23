@@ -98,6 +98,30 @@ func TestMnemonicSlashOps(t *testing.T) {
 	}
 }
 
+func TestGenSregTemplate(t *testing.T) {
+	in := spec.Instr{Name: "STS MACL, Rn", Format: "n", Opcode: "0000nnnn00011010"}
+	got, err := Gen(in, Recipe{Template: "sreg", Measurable: true}, 50, 0xABCD0000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _ := os.ReadFile("testdata/sts_macl_sreg_golden.S")
+	if got != string(want) {
+		t.Fatalf("sreg .S mismatch:\n%s", got)
+	}
+}
+
+func TestGenImmR0Template(t *testing.T) {
+	in := spec.Instr{Name: "AND #imm, R0", Format: "i8", Opcode: "11001001iiiiiiii"}
+	got, err := Gen(in, Recipe{Template: "immr0", Measurable: true}, 50, 0xABCD0000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _ := os.ReadFile("testdata/and_immr0_golden.S")
+	if got != string(want) {
+		t.Fatalf("immr0 .S mismatch:\n%s", got)
+	}
+}
+
 func TestGenBranchTemplate(t *testing.T) {
 	in := spec.Instr{Name: "BT label", Opcode: "10001001dddddddd"}
 	rec := Recipe{Template: "branch", Loop: 50}

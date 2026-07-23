@@ -46,6 +46,55 @@ var handValues = map[string]struct {
 	// same bus/pipeline shape, no reason to expect a different cost.
 	"STC":   {1, 2, "hand: control-register read, not standalone-runnable"},
 	"LDC.L": {1, 3, "hand: control-register post-increment load, not standalone-runnable"},
+
+	// XTRACT (J2 custom instruction) -- curated in timing/j2.toml.
+	"XTRACT": {1, 4, "hand: J2 custom XTRACT, curated value from timing/j2.toml"},
+
+	// MAC.W/MAC.L @Rm+,@Rn+ -- dual-pointer post-increment
+	// read-modify-write into the MAC accumulator; not faithfully
+	// representable by the plain-indirect load/store templates.
+	"MAC.W": {2, 2, "hand: dual-pointer post-increment RMW into MAC accumulator"},
+	"MAC.L": {2, 2, "hand: dual-pointer post-increment RMW into MAC accumulator"},
+
+	// Byte RMW to GBR: TST.B/AND.B/XOR.B/OR.B #imm,@(R0,GBR) -- curated
+	// in timing/j2.toml.
+	"TST.B": {2, 3, "hand: byte read-modify-write to @(R0,GBR), curated value from timing/j2.toml"},
+	"AND.B": {2, 3, "hand: byte read-modify-write to @(R0,GBR), curated value from timing/j2.toml"},
+	"XOR.B": {2, 3, "hand: byte read-modify-write to @(R0,GBR), curated value from timing/j2.toml"},
+	"OR.B":  {2, 3, "hand: byte read-modify-write to @(R0,GBR), curated value from timing/j2.toml"},
+}
+
+// specialRegKind classifies STS/LDS special-register-move instructions
+// (MACH/MACL/PR/CPI_COM/CP0_COM) into one of:
+//   - "sreg": plain register form (STS <SPECIAL>, Rn / LDS Rm, <SPECIAL>),
+//     measurable via the "sreg" template (issue-only; source/dest is a
+//     fixed special register so no data-dependent chain is possible).
+//   - "coproc": coprocessor STS/LDS CPI_COM/CP0_COM forms -- hand value.
+//   - "stsl": STS.L <SPECIAL>, @-Rn (pre-decrement store) -- hand value,
+//     reusing the STC-analog (issue=1, latency=2).
+//   - "ldsl": LDS.L @Rm+, <SPECIAL> (post-increment load) -- hand value,
+//     reusing the LDC.L-analog (issue=1, latency=3).
+//   - "" if in is not an STS/LDS special-register-move instruction.
+func specialRegKind(in spec.Instr) string {
+	tok := leadToken(in.Name)
+	coproc := strings.Contains(in.Name, "CPI_COM") || strings.Contains(in.Name, "CP0_COM")
+	switch tok {
+	case "STS":
+		if coproc {
+			return "coproc"
+		}
+		return "sreg"
+	case "LDS":
+		if coproc {
+			return "coproc"
+		}
+		return "sreg"
+	case "STS.L":
+		return "stsl"
+	case "LDS.L":
+		return "ldsl"
+	}
+	return ""
 }
 
 // leadToken returns the first whitespace-delimited token of a spec.Instr
@@ -173,6 +222,42 @@ func isImmediate(in spec.Instr) bool {
 	return strings.Contains(in.Format, "i")
 }
 
+// isR0FixedImmediate reports whether in is an immediate op whose
+// destination is hard-wired to R0 (AND/OR/XOR/TST #imm,R0; CMP/EQ #imm,R0)
+// rather than a general Rn -- the gas mnemonic table only accepts "r0" as
+// the destination for these encodings ("and #1, r1" is rejected), so they
+// need the "immr0" template instead of the general "imm" template. Excludes
+// the @(R0,GBR) byte-RMW forms (those are routed to hand values earlier by
+// their distinct .B mnemonic token, before this check is reached).
+func isR0FixedImmediate(in spec.Instr) bool {
+	if !isImmediate(in) {
+		return false
+	}
+	parts := splitTopLevelCommas(operandText(in))
+	if len(parts) == 0 {
+		return false
+	}
+	return strings.TrimSpace(parts[len(parts)-1]) == "R0"
+}
+
+// specialRegOperand returns the gas-syntax lowercase special-register token
+// (mach, macl, pr) for an STS/LDS "sreg"-template instruction, plus
+// stsDirection reporting whether the special register is the source
+// operand (STS: special -> Rn) as opposed to the destination (LDS: Rm ->
+// special). ok is false if no special-register operand token could be
+// found (defensive; specialRegKind should already have filtered to
+// STS/LDS forms before this is called).
+func specialRegOperand(in spec.Instr) (special string, stsDirection bool, ok bool) {
+	parts := splitTopLevelCommas(operandText(in))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "Rn" && p != "Rm" && p != "" {
+			return strings.ToLower(p), leadToken(in.Name) == "STS", true
+		}
+	}
+	return "", false, false
+}
+
 // isUnary reports whether in is a plain single-register-operand op (format
 // exactly "n" or "m", no memory reference) suitable for the "unary"
 // template: shift/rotate/dt/movt/cmp-style ops that take one register and
@@ -244,18 +329,25 @@ func isFPUOrCoprocessor(in spec.Instr) bool {
 //  2. FPU/coprocessor op (normalized opcode starts with "1111", or mnemonic
 //     starts with "F") -> skip (sh2-elf-as can't assemble these, and
 //     they aren't part of the integer variant).
-//  3. system-control (Privileged, or LDC/STC/RTE/SLEEP/TRAPA/LDTLB/
-//     *BANK) -> hand value (Measurable=false, Why set, Issue/Latency from
-//     handValues or a 2/2 provisional placeholder).
-//  4. branch mnemonic or Operation mentions "branch" -> "branch" template.
-//  5. Opcode2 present (SH-2A two-word op) -> "twoword" template.
-//  6. Operation references "@" -> "load" or "store" template, by which
+//  3. STS/LDS special-register move (MACH/MACL/PR/CPI_COM/CP0_COM) ->
+//     "sreg" template (plain register form) or a hand value (coprocessor
+//     form, or .L pre-dec/post-inc memory form).
+//  4. leading mnemonic token has a curated handValues entry (TAS.B,
+//     XTRACT, MAC.W/MAC.L, byte-RMW-to-GBR, STC/LDC.L/RTE/SLEEP/TRAPA/
+//     LDTLB) -> hand value (Measurable=false, Why set).
+//  5. system-control (Privileged, or LDC/STC/RTE/SLEEP/TRAPA/LDTLB/
+//     *BANK) with no curated entry -> hand value with a 2/2 provisional
+//     placeholder.
+//  6. branch mnemonic or Operation mentions "branch" -> "branch" template.
+//  7. Opcode2 present (SH-2A two-word op) -> "twoword" template.
+//  8. Operation references "@" -> "load" or "store" template, by which
 //     side of the arrow the memory operand is on.
-//  7. Format contains "i" (immediate) with no memory operand -> "imm"
-//     template.
-//  8. Format is exactly "n" or "m" with no memory operand -> "unary"
+//  9. Format contains "i" (immediate) with no memory operand -> "imm"
+//     template, or "immr0" if the destination is hard-wired to R0
+//     (AND/OR/XOR/TST #imm,R0; CMP/EQ #imm,R0).
+//  10. Format is exactly "n" or "m" with no memory operand -> "unary"
 //     template (single-register ops: shll, dt, movt, cmp/pl, ...).
-//  9. else (plain register-register op) -> "default" template.
+//  11. else (plain register-register op) -> "default" template.
 func Classify(in spec.Instr) Recipe {
 	if in.Plane == "system" {
 		return Recipe{Template: "skip"}
@@ -265,21 +357,52 @@ func Classify(in spec.Instr) Recipe {
 		return Recipe{Template: "skip"}
 	}
 
-	if isSystemControl(in) {
-		tok := leadToken(in.Name)
-		if hv, ok := handValues[tok]; ok {
-			return Recipe{
-				Measurable: false,
-				Issue:      hv.issue,
-				Latency:    hv.latency,
-				Why:        hv.why,
-			}
+	switch specialRegKind(in) {
+	case "sreg":
+		return Recipe{Template: "sreg", Measurable: true}
+	case "coproc":
+		return Recipe{
+			Measurable: false,
+			Issue:      1,
+			Latency:    2,
+			Why:        "hand: coprocessor STS/LDS CPI_COM/CP0_COM, not standalone-runnable",
 		}
+	case "stsl":
+		return Recipe{
+			Measurable: false,
+			Issue:      1,
+			Latency:    2,
+			Why:        "hand: STS.L special-reg pre-decrement store, reuses STC-analog value",
+		}
+	case "ldsl":
+		return Recipe{
+			Measurable: false,
+			Issue:      1,
+			Latency:    3,
+			Why:        "hand: LDS.L special-reg post-increment load, reuses LDC.L-analog value",
+		}
+	}
+
+	// Direct hand-value lookup by leading mnemonic token, independent of
+	// isSystemControl (privileged-register moves) below: covers
+	// non-privileged ops with well-established hand values (TAS.B,
+	// XTRACT, MAC.W/MAC.L, byte-RMW-to-GBR forms) that would otherwise
+	// mis-measure through the generic memory/immediate templates.
+	if hv, ok := handValues[leadToken(in.Name)]; ok {
+		return Recipe{
+			Measurable: false,
+			Issue:      hv.issue,
+			Latency:    hv.latency,
+			Why:        hv.why,
+		}
+	}
+
+	if isSystemControl(in) {
 		return Recipe{
 			Measurable: false,
 			Issue:      2,
 			Latency:    2,
-			Why:        "hand: provisional placeholder, no curated value for " + tok,
+			Why:        "hand: provisional placeholder, no curated value for " + leadToken(in.Name),
 		}
 	}
 
@@ -310,6 +433,9 @@ func Classify(in spec.Instr) Recipe {
 	}
 
 	if isImmediate(in) {
+		if isR0FixedImmediate(in) {
+			return Recipe{Template: "immr0", Measurable: true}
+		}
 		return Recipe{Template: "imm", Measurable: true}
 	}
 

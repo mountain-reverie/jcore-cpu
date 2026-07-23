@@ -276,6 +276,54 @@ func TestSyncAppendedRowMarksAllVariants(t *testing.T) {
 	}
 }
 
+// TestInsnsCheckAcceptsStringLatency: the "n+" variable-latency form must
+// survive the actual path insns-check exercises — Sync writing a Cell into
+// a Row, Doc.Bytes() marshaling it, and Load() reading it back — with no
+// data loss and no error. There is no separate validateRow function in this
+// codebase; the "check" performed by `cpugen insns --check` is a byte-diff
+// of Doc.Bytes() against the on-disk insns.json (see runInsns in
+// cmd/cpugen/main.go), and jsondoc.go decodes/encodes row values generically
+// via `any`, so a string cell must round-trip untouched alongside int cells.
+func TestInsnsCheckAcceptsStringLatency(t *testing.T) {
+	d := &Doc{}
+	op := spec.Instr{Name: "SHLL_LIKE", Opcode: "0000000001101000", Format: "shll.like", Slots: []spec.Slot{{}}}
+	j2a := &InstrSet{ByKey: map[Key]spec.Instr{}}
+	k, _ := KeyOf(op.Opcode)
+	j2a.ByKey[k] = op
+	j2a.Order = append(j2a.Order, op)
+
+	tab := &Table{Overrides: map[string]Timing{
+		normOpcode(op.Opcode): {Issue: II(1), Latency: ParseCell("2+")},
+	}}
+
+	if _, err := Sync(d, []VariantData{{Variant{Name: "J2A"}, j2a, tab}}); err != nil {
+		t.Fatalf("string latency rejected by Sync: %v", err)
+	}
+
+	out, err := d.Bytes()
+	if err != nil {
+		t.Fatalf("string latency rejected by Doc.Bytes: %v", err)
+	}
+
+	reloaded, err := Load(bytesToTempFile(t, out))
+	if err != nil {
+		t.Fatalf("string latency rejected on reload: %v", err)
+	}
+	lat, ok := reloaded.Rows[0].Get("J2A.latency")
+	if !ok || lat != "2+" {
+		t.Fatalf("want J2A.latency = \"2+\", got %v (ok=%v)", lat, ok)
+	}
+}
+
+func bytesToTempFile(t *testing.T, b []byte) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "insns.json")
+	if err := os.WriteFile(p, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
 // TestSyncTwoWordMatch: a two-word (Opcode2) spec instruction must MATCH the
 // existing two-word insns.json row (set its variant column), not append a
 // duplicate. Regression for the disp12 mov J2A-column sync.

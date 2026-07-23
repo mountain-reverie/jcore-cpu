@@ -190,6 +190,22 @@ func Gen(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, error) {
 		return genSreg(in, count, ledAddr)
 	case "immr0":
 		return genImmR0(in, count, ledAddr)
+	case "loaddisp":
+		return genLoadDisp(in, rec, count, ledAddr)
+	case "storedisp":
+		return genStoreDisp(in, rec, count, ledAddr)
+	case "loaddispr0":
+		return genLoadDispR0(in, rec, count, ledAddr)
+	case "storedispr0":
+		return genStoreDispR0(in, rec, count, ledAddr)
+	case "loadr0idx":
+		return genLoadR0Idx(in, rec, count, ledAddr)
+	case "storer0idx":
+		return genStoreR0Idx(in, rec, count, ledAddr)
+	case "loadinc":
+		return genLoadInc(in, rec, count, ledAddr)
+	case "storedec":
+		return genStoreDec(in, rec, count, ledAddr)
 	default:
 		return "", fmt.Errorf("unknown template %q", rec.Template)
 	}
@@ -665,6 +681,424 @@ func genTwoWord(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, e
 	body.WriteString("        .rept " + fmt.Sprint(count) + "\n")
 	twoWordOp(&body)
 	body.WriteString("        .endr\n")
+	marker(&body, 0x66)
+
+	return fmt.Sprintf(headerTmpl, ledAddr, ledAddr, body.String()), nil
+}
+
+// dispOffset is the fixed displacement (in bytes) used by every
+// displacement-addressed template below. It is small, word-aligned, and
+// well within any reasonable RAM region, so no bounds arithmetic is needed.
+const dispOffset = 4
+
+// emitPtrSetup emits the branch-around-literal-pool sequence that loads ptr
+// with the 32-bit constant region, the same trick the header uses for led
+// (pc-relative mov.l needs a forward literal). literalLabel must be unique
+// within the emitted .S if emitPtrSetup is called more than once (e.g. to
+// reset ptr mid-body for the "loadinc"/"storedec" templates); the "1:"/"1f"
+// branch target is a numeric local label and may be freely redefined by gas.
+func emitPtrSetup(body *strings.Builder, ptr, literalLabel string, region uint32) {
+	body.WriteString(instrLine("mov.l", fmt.Sprintf("%s, %s", literalLabel, ptr)))
+	body.WriteString("        bra     1f\n        nop\n        .align 2\n")
+	fmt.Fprintf(body, "%s:        .long   0x%08X\n", literalLabel, region)
+	body.WriteString("1:\n")
+}
+
+// genLoadDisp emits the "loaddisp" template: <mn> @(4, Rm), Rn -- the
+// general-register displacement load (MOV.L @(disp,Rm),Rn). disp is fixed
+// (dispOffset) so ptr never moves: independent chain rotates the
+// destination over disjoint regs with ptr untouched; dependent chain
+// self-chases through dest=ptr (mem[ptr+disp] is seeded to ptr itself, so
+// each reload keeps ptr valid), giving a genuine load-use latency
+// measurement without ever drifting the address.
+func genLoadDisp(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, error) {
+	if count <= 0 {
+		return "", fmt.Errorf("count must be positive, got %d", count)
+	}
+	mn := mnemonic(in)
+	if mn == "" {
+		return "", fmt.Errorf("could not derive mnemonic from instruction name %q", in.Name)
+	}
+	ptr := rec.Ptr
+	if ptr == "" {
+		ptr = "r10"
+	}
+
+	var body strings.Builder
+	emitPtrSetup(&body, ptr, "ptr_lit", rec.Region)
+
+	// --- self-chase seed: mem[ptr+disp] = ptr ---
+	body.WriteString(instrLine("mov.l", fmt.Sprintf("%s, @(%d, %s)", ptr, dispOffset, ptr)))
+
+	marker(&body, 0x11)
+	body.WriteString("        .rept 100\n        nop\n        .endr\n")
+	marker(&body, 0x12)
+
+	marker(&body, 0x13)
+	body.WriteString("        .rept 200\n        nop\n        .endr\n")
+	marker(&body, 0x14)
+
+	// --- independent chain: count loads into rotating disjoint dest regs ---
+	marker(&body, 0x33)
+	for i := 0; i < count; i++ {
+		reg := indepRegs[i%len(indepRegs)]
+		body.WriteString(instrLine(mn, fmt.Sprintf("@(%d, %s), %s", dispOffset, ptr, reg)))
+	}
+	marker(&body, 0x44)
+
+	// --- dependent chain: load-use, self-chase through dest=ptr ---
+	marker(&body, 0x55)
+	body.WriteString(" .rept " + fmt.Sprint(count) + "\n")
+	body.WriteString(instrLine(mn, fmt.Sprintf("@(%d, %s), %s", dispOffset, ptr, ptr)))
+	body.WriteString(" .endr\n")
+	marker(&body, 0x66)
+
+	return fmt.Sprintf(headerTmpl, ledAddr, ledAddr, body.String()), nil
+}
+
+// genStoreDisp emits the "storedisp" template: <mn> Rm, @(4, Rn) -- the
+// general-register displacement store (MOV.L Rm,@(disp,Rn)). Same shape as
+// genStore, just with the fixed-disp address form.
+func genStoreDisp(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, error) {
+	if count <= 0 {
+		return "", fmt.Errorf("count must be positive, got %d", count)
+	}
+	mn := mnemonic(in)
+	if mn == "" {
+		return "", fmt.Errorf("could not derive mnemonic from instruction name %q", in.Name)
+	}
+	ptr := rec.Ptr
+	if ptr == "" {
+		ptr = "r10"
+	}
+	valReg := depReg
+
+	var body strings.Builder
+	emitPtrSetup(&body, ptr, "ptr_lit", rec.Region)
+	body.WriteString(instrLine("mov", fmt.Sprintf("#1, %s", valReg)))
+
+	marker(&body, 0x11)
+	body.WriteString("        .rept 100\n        nop\n        .endr\n")
+	marker(&body, 0x12)
+
+	marker(&body, 0x13)
+	body.WriteString("        .rept 200\n        nop\n        .endr\n")
+	marker(&body, 0x14)
+
+	// --- independent chain: count back-to-back stores, fixed address ---
+	marker(&body, 0x33)
+	for i := 0; i < count; i++ {
+		body.WriteString(instrLine(mn, fmt.Sprintf("%s, @(%d, %s)", valReg, dispOffset, ptr)))
+	}
+	marker(&body, 0x44)
+
+	// --- dependent chain: store then read back to force ordering ---
+	marker(&body, 0x55)
+	body.WriteString(" .rept " + fmt.Sprint(count) + "\n")
+	body.WriteString(instrLine(mn, fmt.Sprintf("%s, @(%d, %s)", valReg, dispOffset, ptr)))
+	body.WriteString(instrLine("mov.l", fmt.Sprintf("@(%d, %s), %s", dispOffset, ptr, valReg)))
+	body.WriteString(" .endr\n")
+	marker(&body, 0x66)
+
+	return fmt.Sprintf(headerTmpl, ledAddr, ledAddr, body.String()), nil
+}
+
+// genLoadDispR0 emits the "loaddispr0" template: <mn> @(4, Rm), R0 -- the
+// R0-fixed-destination displacement load (MOV.B/W @(disp,Rm),R0). Like
+// genImmR0/genSreg, the destination is hard-wired to R0 so no rotation is
+// possible: both brackets emit the identical back-to-back sequence, so
+// issue rate is what's measured. Memory is seeded with a known value (not
+// used as a chase pointer, just so no uninitialized read propagates X).
+func genLoadDispR0(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, error) {
+	if count <= 0 {
+		return "", fmt.Errorf("count must be positive, got %d", count)
+	}
+	mn := mnemonic(in)
+	if mn == "" {
+		return "", fmt.Errorf("could not derive mnemonic from instruction name %q", in.Name)
+	}
+	ptr := rec.Ptr
+	if ptr == "" {
+		ptr = "r10"
+	}
+
+	var body strings.Builder
+	emitPtrSetup(&body, ptr, "ptr_lit", rec.Region)
+	body.WriteString(instrLine("mov", "#0, r0"))
+	body.WriteString(instrLine("mov.l", fmt.Sprintf("r0, @(%d, %s)", dispOffset, ptr)))
+
+	marker(&body, 0x11)
+	body.WriteString("        .rept 100\n        nop\n        .endr\n")
+	marker(&body, 0x12)
+
+	marker(&body, 0x13)
+	body.WriteString("        .rept 200\n        nop\n        .endr\n")
+	marker(&body, 0x14)
+
+	operand := fmt.Sprintf("@(%d, %s), r0", dispOffset, ptr)
+
+	marker(&body, 0x33)
+	body.WriteString(" .rept " + fmt.Sprint(count) + "\n")
+	body.WriteString(instrLine(mn, operand))
+	body.WriteString(" .endr\n")
+	marker(&body, 0x44)
+
+	marker(&body, 0x55)
+	body.WriteString(" .rept " + fmt.Sprint(count) + "\n")
+	body.WriteString(instrLine(mn, operand))
+	body.WriteString(" .endr\n")
+	marker(&body, 0x66)
+
+	return fmt.Sprintf(headerTmpl, ledAddr, ledAddr, body.String()), nil
+}
+
+// genStoreDispR0 emits the "storedispr0" template: <mn> R0, @(4, Rn) -- the
+// R0-fixed-source displacement store (MOV.B/W R0,@(disp,Rn)). Source is
+// hard-wired to R0, so like genLoadDispR0 both brackets are identical.
+func genStoreDispR0(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, error) {
+	if count <= 0 {
+		return "", fmt.Errorf("count must be positive, got %d", count)
+	}
+	mn := mnemonic(in)
+	if mn == "" {
+		return "", fmt.Errorf("could not derive mnemonic from instruction name %q", in.Name)
+	}
+	ptr := rec.Ptr
+	if ptr == "" {
+		ptr = "r10"
+	}
+
+	var body strings.Builder
+	emitPtrSetup(&body, ptr, "ptr_lit", rec.Region)
+	body.WriteString(instrLine("mov", "#1, r0"))
+
+	marker(&body, 0x11)
+	body.WriteString("        .rept 100\n        nop\n        .endr\n")
+	marker(&body, 0x12)
+
+	marker(&body, 0x13)
+	body.WriteString("        .rept 200\n        nop\n        .endr\n")
+	marker(&body, 0x14)
+
+	operand := fmt.Sprintf("r0, @(%d, %s)", dispOffset, ptr)
+
+	marker(&body, 0x33)
+	body.WriteString(" .rept " + fmt.Sprint(count) + "\n")
+	body.WriteString(instrLine(mn, operand))
+	body.WriteString(" .endr\n")
+	marker(&body, 0x44)
+
+	marker(&body, 0x55)
+	body.WriteString(" .rept " + fmt.Sprint(count) + "\n")
+	body.WriteString(instrLine(mn, operand))
+	body.WriteString(" .endr\n")
+	marker(&body, 0x66)
+
+	return fmt.Sprintf(headerTmpl, ledAddr, ledAddr, body.String()), nil
+}
+
+// genLoadR0Idx emits the "loadr0idx" template: <mn> @(r0, Rm), Rn -- the
+// R0-indexed load (MOV.B/W/L @(R0,Rm),Rn). r0 is preloaded to 0 and never
+// touched again, so @(r0,ptr) behaves exactly like the plain-indirect
+// @ptr self-chase in genLoad: mem[ptr] is seeded to ptr, and the dependent
+// chain reloads through dest=ptr to stay valid indefinitely.
+func genLoadR0Idx(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, error) {
+	if count <= 0 {
+		return "", fmt.Errorf("count must be positive, got %d", count)
+	}
+	mn := mnemonic(in)
+	if mn == "" {
+		return "", fmt.Errorf("could not derive mnemonic from instruction name %q", in.Name)
+	}
+	ptr := rec.Ptr
+	if ptr == "" {
+		ptr = "r10"
+	}
+
+	var body strings.Builder
+	emitPtrSetup(&body, ptr, "ptr_lit", rec.Region)
+	// NOTE: r0 must be re-set to 0 immediately before each bracket, not just
+	// once up front -- marker() clobbers r0 as scratch (mov #0xNN, r0), so a
+	// one-time preload here would leave a stale marker byte in r0 as the
+	// address offset by the time the load loop runs (@(r0,ptr) then reads
+	// from the wrong -- and potentially misaligned -- address).
+	body.WriteString(instrLine("mov", "#0, r0"))
+	body.WriteString(instrLine("mov.l", fmt.Sprintf("%s, @(r0, %s)", ptr, ptr)))
+
+	marker(&body, 0x11)
+	body.WriteString("        .rept 100\n        nop\n        .endr\n")
+	marker(&body, 0x12)
+
+	marker(&body, 0x13)
+	body.WriteString("        .rept 200\n        nop\n        .endr\n")
+	marker(&body, 0x14)
+
+	// --- independent chain: count loads into rotating disjoint dest regs ---
+	marker(&body, 0x33)
+	body.WriteString(instrLine("mov", "#0, r0"))
+	for i := 0; i < count; i++ {
+		reg := indepRegs[i%len(indepRegs)]
+		body.WriteString(instrLine(mn, fmt.Sprintf("@(r0, %s), %s", ptr, reg)))
+	}
+	marker(&body, 0x44)
+
+	// --- dependent chain: load-use, self-chase through dest=ptr ---
+	marker(&body, 0x55)
+	body.WriteString(instrLine("mov", "#0, r0"))
+	body.WriteString(" .rept " + fmt.Sprint(count) + "\n")
+	body.WriteString(instrLine(mn, fmt.Sprintf("@(r0, %s), %s", ptr, ptr)))
+	body.WriteString(" .endr\n")
+	marker(&body, 0x66)
+
+	return fmt.Sprintf(headerTmpl, ledAddr, ledAddr, body.String()), nil
+}
+
+// genStoreR0Idx emits the "storer0idx" template: <mn> Rm, @(r0, Rn) -- the
+// R0-indexed store (MOV.B/W/L Rm,@(R0,Rn)). r0 preloaded to 0, ptr never
+// touched; shape mirrors genStore (back-to-back independent, store+readback
+// dependent).
+func genStoreR0Idx(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, error) {
+	if count <= 0 {
+		return "", fmt.Errorf("count must be positive, got %d", count)
+	}
+	mn := mnemonic(in)
+	if mn == "" {
+		return "", fmt.Errorf("could not derive mnemonic from instruction name %q", in.Name)
+	}
+	ptr := rec.Ptr
+	if ptr == "" {
+		ptr = "r10"
+	}
+	valReg := depReg
+
+	var body strings.Builder
+	emitPtrSetup(&body, ptr, "ptr_lit", rec.Region)
+	body.WriteString(instrLine("mov", fmt.Sprintf("#1, %s", valReg)))
+
+	marker(&body, 0x11)
+	body.WriteString("        .rept 100\n        nop\n        .endr\n")
+	marker(&body, 0x12)
+
+	marker(&body, 0x13)
+	body.WriteString("        .rept 200\n        nop\n        .endr\n")
+	marker(&body, 0x14)
+
+	// r0 is re-set to 0 immediately before each bracket -- marker() clobbers
+	// r0 as scratch, so a one-time preload up front would leave a stale
+	// marker byte as the address offset for @(r0,ptr) (see genLoadR0Idx).
+	marker(&body, 0x33)
+	body.WriteString(instrLine("mov", "#0, r0"))
+	for i := 0; i < count; i++ {
+		body.WriteString(instrLine(mn, fmt.Sprintf("%s, @(r0, %s)", valReg, ptr)))
+	}
+	marker(&body, 0x44)
+
+	marker(&body, 0x55)
+	body.WriteString(instrLine("mov", "#0, r0"))
+	body.WriteString(" .rept " + fmt.Sprint(count) + "\n")
+	body.WriteString(instrLine(mn, fmt.Sprintf("%s, @(r0, %s)", valReg, ptr)))
+	body.WriteString(instrLine("mov.l", fmt.Sprintf("@(r0, %s), %s", ptr, valReg)))
+	body.WriteString(" .endr\n")
+	marker(&body, 0x66)
+
+	return fmt.Sprintf(headerTmpl, ledAddr, ledAddr, body.String()), nil
+}
+
+// genLoadInc emits the "loadinc" template: <mn> @Rm+, Rn -- post-increment
+// load (MOV.B/W/L @Rm+,Rn). Every copy reads and rewrites ptr (structural
+// RAW/WAW hazard on the base register itself), so the two brackets are
+// necessarily identical in shape regardless of which dest reg is used --
+// there's no distinct dest-value dependency to isolate for a "dependent"
+// bracket here, so latency == issue by construction. ptr is reset (via a
+// second literal pool) before the second bracket so the total advance
+// across both brackets never has to be bounded by count alone.
+func genLoadInc(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, error) {
+	if count <= 0 {
+		return "", fmt.Errorf("count must be positive, got %d", count)
+	}
+	mn := mnemonic(in)
+	if mn == "" {
+		return "", fmt.Errorf("could not derive mnemonic from instruction name %q", in.Name)
+	}
+	ptr := rec.Ptr
+	if ptr == "" {
+		ptr = "r10"
+	}
+
+	var body strings.Builder
+	emitPtrSetup(&body, ptr, "ptr_lit", rec.Region)
+
+	marker(&body, 0x11)
+	body.WriteString("        .rept 100\n        nop\n        .endr\n")
+	marker(&body, 0x12)
+
+	marker(&body, 0x13)
+	body.WriteString("        .rept 200\n        nop\n        .endr\n")
+	marker(&body, 0x14)
+
+	marker(&body, 0x33)
+	for i := 0; i < count; i++ {
+		reg := indepRegs[i%len(indepRegs)]
+		body.WriteString(instrLine(mn, fmt.Sprintf("@%s+, %s", ptr, reg)))
+	}
+	marker(&body, 0x44)
+
+	// --- reset ptr: post-inc has no dest-value dependency, both brackets
+	// are structurally identical; reset keeps the address bounded ---
+	marker(&body, 0x55)
+	emitPtrSetup(&body, ptr, "ptr_lit2", rec.Region)
+	for i := 0; i < count; i++ {
+		reg := indepRegs[i%len(indepRegs)]
+		body.WriteString(instrLine(mn, fmt.Sprintf("@%s+, %s", ptr, reg)))
+	}
+	marker(&body, 0x66)
+
+	return fmt.Sprintf(headerTmpl, ledAddr, ledAddr, body.String()), nil
+}
+
+// genStoreDec emits the "storedec" template: <mn> Rm, @-Rn -- pre-decrement
+// store (MOV.B/W/L Rm,@-Rn). Same structural-hazard reasoning as genLoadInc
+// applies (every copy reads/rewrites ptr), so both brackets are identical
+// and ptr is reset between them. rec.Region is expected to already be a
+// base high enough that count pre-decrements stay within RAM (classify sets
+// it to the load/store region plus a safety margin).
+func genStoreDec(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, error) {
+	if count <= 0 {
+		return "", fmt.Errorf("count must be positive, got %d", count)
+	}
+	mn := mnemonic(in)
+	if mn == "" {
+		return "", fmt.Errorf("could not derive mnemonic from instruction name %q", in.Name)
+	}
+	ptr := rec.Ptr
+	if ptr == "" {
+		ptr = "r10"
+	}
+	valReg := depReg
+
+	var body strings.Builder
+	emitPtrSetup(&body, ptr, "ptr_lit", rec.Region)
+	body.WriteString(instrLine("mov", fmt.Sprintf("#1, %s", valReg)))
+
+	marker(&body, 0x11)
+	body.WriteString("        .rept 100\n        nop\n        .endr\n")
+	marker(&body, 0x12)
+
+	marker(&body, 0x13)
+	body.WriteString("        .rept 200\n        nop\n        .endr\n")
+	marker(&body, 0x14)
+
+	marker(&body, 0x33)
+	for i := 0; i < count; i++ {
+		body.WriteString(instrLine(mn, fmt.Sprintf("%s, @-%s", valReg, ptr)))
+	}
+	marker(&body, 0x44)
+
+	marker(&body, 0x55)
+	emitPtrSetup(&body, ptr, "ptr_lit2", rec.Region)
+	for i := 0; i < count; i++ {
+		body.WriteString(instrLine(mn, fmt.Sprintf("%s, @-%s", valReg, ptr)))
+	}
 	marker(&body, 0x66)
 
 	return fmt.Sprintf(headerTmpl, ledAddr, ledAddr, body.String()), nil

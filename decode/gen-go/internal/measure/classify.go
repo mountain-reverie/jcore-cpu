@@ -290,9 +290,11 @@ func isNullary(in spec.Instr) bool {
 // register-indirect memory operand (@Rm / @Rn), in an exactly-2-operand
 // form, with no displacement, R0-indexed, post-increment, pre-decrement, or
 // RMW (1- or 3-operand, e.g. TAS.B @Rn / CAS.L Rm,Rn,@R0) shape -- the only
-// memory shape the "load"/"store" templates can faithfully emit. Any other
-// addressing mode is left unmeasured (see Classify) rather than mis-measure
-// the wrong instruction shape.
+// memory shape the "load"/"store" templates can faithfully emit. Other
+// addressing modes are routed by classifyMemoryMode to their own dedicated
+// templates (displacement, R0-indexed, post-increment, pre-decrement); any
+// mode still not representable is left unmeasured (see Classify) rather
+// than mis-measure the wrong instruction shape.
 func isPlainIndirect(in spec.Instr) bool {
 	name := in.Name
 	if strings.Contains(name, "(disp") || strings.Contains(name, "(R0") {
@@ -308,6 +310,78 @@ func isPlainIndirect(in spec.Instr) bool {
 		return false
 	}
 	return true
+}
+
+// storeDecRegion is the base pointer value used by the "storedec" template:
+// high enough above the plain-indirect load/store region that count
+// pre-decrements (any of the B/W/L strides) never run outside RAM, even
+// without a mid-body reset (genStoreDec resets between brackets anyway, but
+// the margin is kept generous for defense in depth).
+const storeDecRegion = 0x00008000 + 0x400
+
+// classifyMemoryMode classifies a memory-referencing instruction (isMemory
+// already reported mem==true and isPlainIndirect==false, i.e. it's some
+// non-plain addressing mode) into one of the dedicated iteration-4
+// templates, or leaves it as a "skip"/hand entry if the mode still isn't
+// faithfully representable:
+//   - GBR-relative (@(disp,GBR)): dedicated base register with a different
+//     scale factor per size -- not covered by these templates, skip.
+//   - PC-relative (@(disp,PC)): PC as the base register moves every
+//     instruction issued before it, so a fixed disp doesn't stay valid the
+//     same way -- not covered, skip.
+//   - Not exactly 2 top-level operands (e.g. CAS.L Rm,Rn,@R0): a genuine
+//     multi-operand RMW shape the load/store family can't express, skip.
+//   - @(disp,Rm) with a general Rn destination or Rm source (format "nmd")
+//     -> "loaddisp"/"storedisp".
+//   - @(disp,Rm)/(disp,Rn) with a fixed R0 (format "md" load-into-R0 or
+//     "nd4" store-from-R0) -> "loaddispr0"/"storedispr0".
+//   - @(R0,Rm)/(R0,Rn) -> "loadr0idx"/"storer0idx".
+//   - @Rm+ (post-increment) -> "loadinc".
+//   - Rm,@-Rn (pre-decrement) -> "storedec".
+func classifyMemoryMode(in spec.Instr, isLoad bool) Recipe {
+	name := in.Name
+	switch {
+	case strings.Contains(name, "GBR"):
+		return Recipe{
+			Template: "skip",
+			Why:      "hand: GBR-relative displacement addressing uses a dedicated base register with distinct per-size scaling; not covered by iter4 templates for " + name,
+		}
+	case strings.Contains(name, ", PC)") || strings.Contains(name, "(disp, PC)"):
+		return Recipe{
+			Template: "skip",
+			Why:      "hand: PC-relative displacement addressing (PC as base) is not faithfully representable in the auto-chain microbenchmark; not covered by iter4 templates for " + name,
+		}
+	case len(splitTopLevelCommas(operandText(in))) != 2:
+		return Recipe{
+			Template: "skip",
+			Why:      "hand: multi-operand memory RMW shape not representable by the load/store template family for " + name,
+		}
+	case strings.Contains(name, "(disp"):
+		if in.Format == "md" || in.Format == "nd4" {
+			if isLoad {
+				return Recipe{Template: "loaddispr0", Measurable: true, Ptr: "r10", Region: 0x00008000}
+			}
+			return Recipe{Template: "storedispr0", Measurable: true, Ptr: "r10", Region: 0x00008000}
+		}
+		if isLoad {
+			return Recipe{Template: "loaddisp", Measurable: true, Ptr: "r10", Region: 0x00008000}
+		}
+		return Recipe{Template: "storedisp", Measurable: true, Ptr: "r10", Region: 0x00008000}
+	case strings.Contains(name, "(R0"):
+		if isLoad {
+			return Recipe{Template: "loadr0idx", Measurable: true, Ptr: "r10", Region: 0x00008000}
+		}
+		return Recipe{Template: "storer0idx", Measurable: true, Ptr: "r10", Region: 0x00008000}
+	case strings.Contains(name, "Rm+") || strings.Contains(name, "Rn+"):
+		return Recipe{Template: "loadinc", Measurable: true, Ptr: "r10", Region: 0x00008000}
+	case strings.Contains(name, "-Rn") || strings.Contains(name, "-Rm"):
+		return Recipe{Template: "storedec", Measurable: true, Ptr: "r10", Region: storeDecRegion}
+	default:
+		return Recipe{
+			Template: "skip",
+			Why:      "hand: non-plain memory addressing not faithfully representable by any iter4 template for " + name,
+		}
+	}
 }
 
 // isFPUOrCoprocessor reports whether in is an FPU or coprocessor op that
@@ -340,8 +414,13 @@ func isFPUOrCoprocessor(in spec.Instr) bool {
 //     placeholder.
 //  6. branch mnemonic or Operation mentions "branch" -> "branch" template.
 //  7. Opcode2 present (SH-2A two-word op) -> "twoword" template.
-//  8. Operation references "@" -> "load" or "store" template, by which
-//     side of the arrow the memory operand is on.
+//  8. Operation references "@" -> "load" or "store" template for the plain
+//     register-indirect (@Rm/@Rn) shape, by which side of the arrow the
+//     memory operand is on; other addressing modes (displacement,
+//     R0-indexed, post-increment, pre-decrement) route through
+//     classifyMemoryMode to their own dedicated templates, or a hand/skip
+//     entry if genuinely un-representable (GBR-relative, PC-relative,
+//     multi-operand RMW).
 //  9. Format contains "i" (immediate) with no memory operand -> "imm"
 //     template, or "immr0" if the destination is hard-wired to R0
 //     (AND/OR/XOR/TST #imm,R0; CMP/EQ #imm,R0).
@@ -421,10 +500,7 @@ func Classify(in spec.Instr) Recipe {
 
 	if mem, isLoad := isMemory(in); mem {
 		if !isPlainIndirect(in) {
-			return Recipe{
-				Template: "skip",
-				Why:      "hand: non-plain memory addressing (disp/R0-indexed/post-inc/pre-dec) not faithfully representable by the register-indirect load/store template; left unmeasured for " + in.Name,
-			}
+			return classifyMemoryMode(in, isLoad)
 		}
 		if isLoad {
 			return Recipe{Template: "load", Measurable: true, Ptr: "r10", Region: 0x00008000}

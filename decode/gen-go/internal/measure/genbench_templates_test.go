@@ -122,6 +122,58 @@ func TestGenImmR0Template(t *testing.T) {
 	}
 }
 
+func TestGenLoadDispTemplate(t *testing.T) {
+	in := spec.Instr{Name: "MOV.L @(disp, Rm), Rn", Opcode: "0101nnnnmmmmdddd"}
+	rec := Recipe{Template: "loaddisp", Ptr: "r10", Region: 0x00008000}
+	got, err := Gen(in, rec, 50, 0xABCD0000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _ := os.ReadFile("testdata/movl_loaddisp_golden.S")
+	if got != string(want) {
+		t.Fatalf("loaddisp .S mismatch:\n%s", got)
+	}
+}
+
+func TestGenLoadR0IdxTemplate(t *testing.T) {
+	in := spec.Instr{Name: "MOV.L @(R0, Rm), Rn", Opcode: "0000nnnnmmmm1110"}
+	rec := Recipe{Template: "loadr0idx", Ptr: "r10", Region: 0x00008000}
+	got, err := Gen(in, rec, 50, 0xABCD0000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _ := os.ReadFile("testdata/movl_loadr0idx_golden.S")
+	if got != string(want) {
+		t.Fatalf("loadr0idx .S mismatch:\n%s", got)
+	}
+}
+
+func TestGenLoadIncTemplate(t *testing.T) {
+	in := spec.Instr{Name: "MOV.L @Rm+, Rn", Opcode: "0110nnnnmmmm0110"}
+	rec := Recipe{Template: "loadinc", Ptr: "r10", Region: 0x00008000}
+	got, err := Gen(in, rec, 50, 0xABCD0000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _ := os.ReadFile("testdata/movl_loadinc_golden.S")
+	if got != string(want) {
+		t.Fatalf("loadinc .S mismatch:\n%s", got)
+	}
+}
+
+func TestGenStoreDecTemplate(t *testing.T) {
+	in := spec.Instr{Name: "MOV.L Rm, @-Rn", Opcode: "0010nnnnmmmm0110"}
+	rec := Recipe{Template: "storedec", Ptr: "r10", Region: 0x00008400}
+	got, err := Gen(in, rec, 50, 0xABCD0000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _ := os.ReadFile("testdata/movl_storedec_golden.S")
+	if got != string(want) {
+		t.Fatalf("storedec .S mismatch:\n%s", got)
+	}
+}
+
 func TestGenBranchTemplate(t *testing.T) {
 	in := spec.Instr{Name: "BT label", Opcode: "10001001dddddddd"}
 	rec := Recipe{Template: "branch", Loop: 50}

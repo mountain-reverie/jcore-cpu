@@ -46,36 +46,36 @@ func TestClassify(t *testing.T) {
 			wantTmpl: "store",
 		},
 		{
-			name: "mov.l @(disp,Rm),Rn -> skip (disp addressing not templated)",
+			name: "mov.l @(disp,Rm),Rn -> loaddisp",
 			in: spec.Instr{
 				Name: "MOV.L @(disp, Rm), Rn", Format: "nmd",
 				Operation: "(disp × 4+ Rm) ? Rn",
 			},
-			wantTmpl: "skip",
+			wantTmpl: "loaddisp",
 		},
 		{
-			name: "mov.b Rm,@(R0,Rn) -> skip (R0-indexed not templated)",
+			name: "mov.b Rm,@(R0,Rn) -> storer0idx",
 			in: spec.Instr{
 				Name: "MOV.B Rm, @(R0, Rn)", Format: "nm",
 				Operation: "Rm?(R0 +Rn)",
 			},
-			wantTmpl: "skip",
+			wantTmpl: "storer0idx",
 		},
 		{
-			name: "mov.l @Rm+,Rn -> skip (post-inc not templated)",
+			name: "mov.l @Rm+,Rn -> loadinc",
 			in: spec.Instr{
 				Name: "MOV.L @Rm+, Rn", Format: "nm",
 				Operation: "(Rm) ? Rn, Rm + 4 ? Rm",
 			},
-			wantTmpl: "skip",
+			wantTmpl: "loadinc",
 		},
 		{
-			name: "mov.l Rm,@-Rn -> skip (pre-dec not templated)",
+			name: "mov.l Rm,@-Rn -> storedec",
 			in: spec.Instr{
 				Name: "MOV.L Rm,@-Rn", Format: "nm",
 				Operation: "Rn – 4 ? Rn, Rm ? (Rn)",
 			},
-			wantTmpl: "skip",
+			wantTmpl: "storedec",
 		},
 		{
 			name: "cmp/eq -> default (slash mnemonic doesn't affect classify)",
@@ -273,5 +273,68 @@ func TestClassifyHandOverrides(t *testing.T) {
 		if rec.Template == "skip" {
 			t.Errorf("Classify(%q).Template = skip, want hand entry not skip", name)
 		}
+	}
+}
+
+// TestClassifyMemoryAddressingModes covers the iter4 memory-addressing-mode
+// templates (displacement, R0-indexed, post-increment, pre-decrement) and
+// the residual modes that remain genuinely un-representable (GBR-relative,
+// PC-relative, multi-operand RMW).
+func TestClassifyMemoryAddressingModes(t *testing.T) {
+	cases := []struct {
+		name     string
+		in       spec.Instr
+		wantTmpl string
+	}{
+		{"disp load general -> loaddisp", spec.Instr{Name: "MOV.L @(disp, Rm), Rn", Format: "nmd"}, "loaddisp"},
+		{"disp store general -> storedisp", spec.Instr{Name: "MOV.L Rm, @(disp, Rn)", Format: "nmd"}, "storedisp"},
+		{"disp load fixed-R0 (md) -> loaddispr0", spec.Instr{Name: "MOV.B @(disp, Rm), R0", Format: "md"}, "loaddispr0"},
+		{"disp load fixed-R0 word (md) -> loaddispr0", spec.Instr{Name: "MOV.W @(disp, Rm), R0", Format: "md"}, "loaddispr0"},
+		{"disp store fixed-R0 (nd4) -> storedispr0", spec.Instr{Name: "MOV.B R0, @(disp, Rn)", Format: "nd4"}, "storedispr0"},
+		{"disp store fixed-R0 word (nd4) -> storedispr0", spec.Instr{Name: "MOV.W R0, @(disp, Rn)", Format: "nd4"}, "storedispr0"},
+		{"R0-indexed load -> loadr0idx", spec.Instr{Name: "MOV.L @(R0, Rm), Rn", Format: "nm"}, "loadr0idx"},
+		{"R0-indexed load byte -> loadr0idx", spec.Instr{Name: "MOV.B @(R0, Rm), Rn", Format: "nm"}, "loadr0idx"},
+		{"R0-indexed store -> storer0idx", spec.Instr{Name: "MOV.L Rm, @(R0, Rn)", Format: "nm"}, "storer0idx"},
+		{"post-inc load byte -> loadinc", spec.Instr{Name: "MOV.B @Rm+, Rn", Format: "nm"}, "loadinc"},
+		{"post-inc load word -> loadinc", spec.Instr{Name: "MOV.W @Rm+, Rn", Format: "nm"}, "loadinc"},
+		{"post-inc load long -> loadinc", spec.Instr{Name: "MOV.L @Rm+, Rn", Format: "nm"}, "loadinc"},
+		{"pre-dec store byte -> storedec", spec.Instr{Name: "MOV.B Rm, @-Rn", Format: "nm"}, "storedec"},
+		{"pre-dec store word -> storedec", spec.Instr{Name: "MOV.W Rm, @-Rn", Format: "nm"}, "storedec"},
+		{"pre-dec store long -> storedec", spec.Instr{Name: "MOV.L Rm, @-Rn", Format: "nm"}, "storedec"},
+		{"GBR-relative store -> skip", spec.Instr{Name: "MOV.L R0, @(disp, GBR)", Format: "d8"}, "skip"},
+		{"GBR-relative load -> skip", spec.Instr{Name: "MOV.L @(disp, GBR), R0", Format: "d8"}, "skip"},
+		{"PC-relative load -> skip", spec.Instr{Name: "MOV.L @(disp, PC), Rn", Format: "nd8"}, "skip"},
+		{"PC-relative load word -> skip", spec.Instr{Name: "MOV.W @(disp, PC), Rn", Format: "nd8"}, "skip"},
+		{"multi-operand RMW -> skip", spec.Instr{Name: "CAS.L Rm, Rn, @R0", Format: "nm"}, "skip"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rec := Classify(c.in)
+			if rec.Template != c.wantTmpl {
+				t.Fatalf("Classify(%q).Template = %q, want %q (rec=%+v)", c.in.Name, rec.Template, c.wantTmpl, rec)
+			}
+			if c.wantTmpl == "skip" {
+				if rec.Measurable {
+					t.Fatalf("Classify(%q) skip entry should not be Measurable", c.in.Name)
+				}
+			} else {
+				if !rec.Measurable {
+					t.Fatalf("Classify(%q) = %+v, want Measurable=true", c.in.Name, rec)
+				}
+				if rec.Ptr != "r10" {
+					t.Fatalf("Classify(%q).Ptr = %q, want r10", c.in.Name, rec.Ptr)
+				}
+			}
+		})
+	}
+}
+
+// TestClassifyStoreDecRegion ensures the "storedec" recipe uses a
+// high-enough base region (not the plain load/store 0x8000) so
+// pre-decrements never run outside RAM even without the mid-body reset.
+func TestClassifyStoreDecRegion(t *testing.T) {
+	rec := Classify(spec.Instr{Name: "MOV.L Rm, @-Rn", Format: "nm"})
+	if rec.Region <= 0x00008000 {
+		t.Fatalf("storedec Region = %#x, want > 0x8000", rec.Region)
 	}
 }

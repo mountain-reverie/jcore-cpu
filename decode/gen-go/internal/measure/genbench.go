@@ -605,11 +605,13 @@ func genStore(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, err
 	}
 	marker(&body, 0x44)
 
-	// --- dependent chain: store then read back to force ordering ---
+	// --- dependent chain: a store produces NO register result, so there is no
+	// producer-latency to measure; report latency == issue (store throughput).
+	// Back-to-back stores, no read-back (a store->load round-trip would conflate
+	// the load-use cost into the store and disagree with pre-dec stores). ---
 	marker(&body, 0x55)
 	body.WriteString("        .rept " + fmt.Sprint(count) + "\n")
 	body.WriteString(instrLine(mn, fmt.Sprintf("%s, @%s", valReg, ptr)))
-	body.WriteString(instrLine("mov.l", fmt.Sprintf("@%s, %s", ptr, valReg)))
 	body.WriteString("        .endr\n")
 	marker(&body, 0x66)
 
@@ -833,11 +835,10 @@ func genStoreDisp(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string,
 	}
 	marker(&body, 0x44)
 
-	// --- dependent chain: store then read back to force ordering ---
+	// --- dependent chain: back-to-back stores, no read-back (store has no register result -> latency == issue) ---
 	marker(&body, 0x55)
 	body.WriteString(" .rept " + fmt.Sprint(count) + "\n")
 	body.WriteString(instrLine(mn, fmt.Sprintf("%s, @(%d, %s)", valReg, dispOffset, ptr)))
-	body.WriteString(instrLine("mov.l", fmt.Sprintf("@(%d, %s), %s", dispOffset, ptr, valReg)))
 	body.WriteString(" .endr\n")
 	marker(&body, 0x66)
 
@@ -1038,7 +1039,6 @@ func genStoreR0Idx(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string
 	body.WriteString(instrLine("mov", "#0, r0"))
 	body.WriteString(" .rept " + fmt.Sprint(count) + "\n")
 	body.WriteString(instrLine(mn, fmt.Sprintf("%s, @(r0, %s)", valReg, ptr)))
-	body.WriteString(instrLine("mov.l", fmt.Sprintf("@(r0, %s), %s", ptr, valReg)))
 	body.WriteString(" .endr\n")
 	marker(&body, 0x66)
 

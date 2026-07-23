@@ -40,6 +40,18 @@ func TestGenLoadTemplate(t *testing.T) {
 	}
 }
 
+func TestGenHandValueSentinel(t *testing.T) {
+	in := spec.Instr{Name: "TRAPA #imm", Opcode: "11000011iiiiiiii"}
+	rec := Recipe{Measurable: false, Why: "halts"}
+	got, err := Gen(in, rec, 50, 0xABCD0000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
+		t.Fatalf("expected empty string sentinel, got %q", got)
+	}
+}
+
 func TestGenBranchTemplate(t *testing.T) {
 	in := spec.Instr{Name: "BT label", Opcode: "10001001dddddddd"}
 	rec := Recipe{Template: "branch", Loop: 50}

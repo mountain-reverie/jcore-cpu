@@ -85,11 +85,12 @@ func main() {
 		return
 	}
 
-	results, measuredN, skippedN, err := runMeasured(set, recipes, want, *count, *simDir, *cosimBin)
+	results, stats, err := runMeasured(set, recipes, want, *count, *simDir, *cosimBin)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
-	log.Printf("%s: measured=%d skipped(hand)=%d", *variant, measuredN, skippedN)
+	log.Printf("%s: measured=%d hand=%d unmeasured=%d skipped=%d",
+		*variant, stats.measured, stats.hand, stats.unmeasured, stats.skipped)
 
 	if err := os.MkdirAll(filepath.Dir(*out), 0o755); err != nil && filepath.Dir(*out) != "." {
 		log.Fatalf("mkdir %s: %v", filepath.Dir(*out), err)
@@ -163,10 +164,29 @@ var calKnown = map[string]float64{
 	"add": 1.0,
 }
 
-func runMeasured(set *insns.InstrSet, recipes *measure.Recipes, want map[string]bool, count int, simDir, cosimBin string) (results []measure.Result, measuredN, skippedN int, err error) {
+// sweepStats tallies how each instruction in the sweep was disposed of, for
+// the final summary log line.
+type sweepStats struct {
+	measured   int // successfully gen+assemble+run+measured
+	hand       int // hand value from recipes.toml or Classify (system-control)
+	unmeasured int // gen/assemble/run/measure failed for this op; logged + skipped
+	skipped    int // Plane=="system" pseudo-ops dropped entirely (not in output)
+}
+
+// recipeFor returns the explicit recipes.toml override for code if one was
+// authored, else falls back to Classify(in) (auto-derived from spec
+// metadata). This lets recipes.toml stay "exceptions only".
+func recipeFor(recipes *measure.Recipes, code string, in spec.Instr) measure.Recipe {
+	if rec, ok := recipes.ByOpcode[code]; ok {
+		return rec
+	}
+	return measure.Classify(in)
+}
+
+func runMeasured(set *insns.InstrSet, recipes *measure.Recipes, want map[string]bool, count int, simDir, cosimBin string) (results []measure.Result, stats sweepStats, err error) {
 	tmp, err := os.MkdirTemp("", "measure-*")
 	if err != nil {
-		return nil, 0, 0, fmt.Errorf("mkdtemp: %w", err)
+		return nil, stats, fmt.Errorf("mkdtemp: %w", err)
 	}
 	defer os.RemoveAll(tmp)
 
@@ -184,7 +204,14 @@ func runMeasured(set *insns.InstrSet, recipes *measure.Recipes, want map[string]
 		if !included(want, code) {
 			continue
 		}
-		rec := recipes.For(code)
+
+		rec := recipeFor(recipes, code, in)
+
+		if rec.Template == "skip" {
+			stats.skipped++
+			continue
+		}
+
 		if !rec.Measurable && rec.Why != "" {
 			results = append(results, measure.Result{
 				Opcode:  code,
@@ -192,13 +219,15 @@ func runMeasured(set *insns.InstrSet, recipes *measure.Recipes, want map[string]
 				Latency: float64(rec.Latency),
 				Source:  "hand",
 			})
-			skippedN++
+			stats.hand++
 			continue
 		}
 
 		src, err := measure.Gen(in, rec, count, ledAddr)
 		if err != nil {
-			return nil, 0, 0, fmt.Errorf("gen %s (%s): %w", in.Name, code, err)
+			log.Printf("skip %s (%s): gen: %v", in.Name, code, err)
+			stats.unmeasured++
+			continue
 		}
 		if src == "" {
 			// sentinel: hand entry despite falling through (shouldn't
@@ -209,23 +238,29 @@ func runMeasured(set *insns.InstrSet, recipes *measure.Recipes, want map[string]
 				Latency: float64(rec.Latency),
 				Source:  "hand",
 			})
-			skippedN++
+			stats.hand++
 			continue
 		}
 
 		trace, err := assembleAndRun(src, code, tmp, simDir, cosimBin)
 		if err != nil {
-			return nil, 0, 0, fmt.Errorf("assemble/run %s (%s): %w", in.Name, code, err)
+			log.Printf("skip %s (%s): assemble/run: %v", in.Name, code, err)
+			stats.unmeasured++
+			continue
 		}
 
 		m := measure.ParseMarkers(trace)
 		ns, err := measure.NSPerCycle(m, 100, 200)
 		if err != nil {
-			return nil, 0, 0, fmt.Errorf("nsPerCycle %s (%s): %w", in.Name, code, err)
+			log.Printf("skip %s (%s): nsPerCycle: %v", in.Name, code, err)
+			stats.unmeasured++
+			continue
 		}
 		iss, lat, err := measure.Measure(m, ns, count, 2)
 		if err != nil {
-			return nil, 0, 0, fmt.Errorf("measure %s (%s): %w", in.Name, code, err)
+			log.Printf("skip %s (%s): measure: %v", in.Name, code, err)
+			stats.unmeasured++
+			continue
 		}
 
 		mn := mnemonicOf(in)
@@ -233,15 +268,16 @@ func runMeasured(set *insns.InstrSet, recipes *measure.Recipes, want map[string]
 			calMeasured[mn] = iss
 		}
 		raw = append(raw, measured{code: code, mnemVal: mn, issue: iss, latency: lat})
-		measuredN++
+		stats.measured++
 	}
 
 	// Calibration gate: only gate on add/nop==1, never on multi-cycle hand
-	// values (Finding A). If either wasn't in the subset, we can't gate --
-	// treat as a hard failure rather than silently skipping the gate, since
-	// the whole point of the gate is to catch a broken measurement pipeline.
+	// values (Finding A). If the calibration anchor wasn't measured, that's
+	// still a hard failure -- the whole point of the gate is to catch a
+	// broken measurement pipeline, and per-op resilience above must not mask
+	// that.
 	if err := measure.CalibrationOK(calKnown, calMeasured, 0.2); err != nil {
-		return nil, measuredN, skippedN, fmt.Errorf("calibration gate failed: %w", err)
+		return nil, stats, fmt.Errorf("calibration gate failed: %w", err)
 	}
 
 	for _, r := range raw {
@@ -252,7 +288,7 @@ func runMeasured(set *insns.InstrSet, recipes *measure.Recipes, want map[string]
 			Source:  "measured",
 		})
 	}
-	return results, measuredN, skippedN, nil
+	return results, stats, nil
 }
 
 func mnemonicOf(in spec.Instr) string {

@@ -26,7 +26,7 @@
   },
   "0000000000011011": {
     "J2": true,
-    "issue": 1,
+    "issue": 3,
     "latency": 3
   },
   "0000000000101000": {
@@ -57,7 +57,7 @@
   "0000nnnn00000010": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 2
   },
   "0000nnnn00001010": {
     "J2": true,
@@ -67,7 +67,7 @@
   "0000nnnn00010010": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 2
   },
   "0000nnnn00011010": {
     "J2": true,
@@ -77,7 +77,7 @@
   "0000nnnn00100010": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 2
   },
   "0000nnnn00101001": {
     "J2": true,
@@ -97,37 +97,37 @@
   "0000nnnnmmmm0100": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 4
   },
   "0000nnnnmmmm0101": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 4
   },
   "0000nnnnmmmm0110": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 4
   },
   "0000nnnnmmmm0111": {
     "J2": true,
-    "issue": 2,
-    "latency": 2
+    "issue": 4,
+    "latency": 4
   },
   "0000nnnnmmmm1100": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 3
   },
   "0000nnnnmmmm1101": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 3
   },
   "0000nnnnmmmm1110": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 3
   },
   "0000nnnnmmmm1111": {
     "J2": true,
@@ -137,22 +137,22 @@
   "0001nnnnmmmmdddd": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 4
   },
   "0010nnnnmmmm0000": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 4
   },
   "0010nnnnmmmm0001": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 4
   },
   "0010nnnnmmmm0010": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 4
   },
   "0010nnnnmmmm0011": {
     "J2": true,
@@ -211,13 +211,13 @@
   },
   "0010nnnnmmmm1110": {
     "J2": true,
-    "issue": 2,
-    "latency": 1
+    "issue": 3,
+    "latency": 3
   },
   "0010nnnnmmmm1111": {
     "J2": true,
-    "issue": 2,
-    "latency": 1
+    "issue": 3,
+    "latency": 3
   },
   "0011nnnnmmmm0000": {
     "J2": true,
@@ -241,8 +241,8 @@
   },
   "0011nnnnmmmm0101": {
     "J2": true,
-    "issue": 2,
-    "latency": 2
+    "issue": 4,
+    "latency": 4
   },
   "0011nnnnmmmm0110": {
     "J2": true,
@@ -276,8 +276,8 @@
   },
   "0011nnnnmmmm1101": {
     "J2": true,
-    "issue": 2,
-    "latency": 2
+    "issue": 4,
+    "latency": 4
   },
   "0011nnnnmmmm1110": {
     "J2": true,
@@ -292,7 +292,7 @@
   "0100mmmm00000110": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 3
   },
   "0100mmmm00000111": {
     "J2": true,
@@ -311,13 +311,13 @@
   },
   "0100mmmm00001110": {
     "J2": true,
-    "issue": 1,
-    "latency": 1
+    "issue": 2,
+    "latency": 2
   },
   "0100mmmm00010110": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 3
   },
   "0100mmmm00010111": {
     "J2": true,
@@ -337,7 +337,7 @@
   "0100mmmm00100110": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 3
   },
   "0100mmmm00100111": {
     "J2": true,
@@ -356,18 +356,18 @@
   },
   "0100mmmm00101110": {
     "J2": true,
-    "issue": 1,
-    "latency": 1
+    "issue": 2,
+    "latency": 2
   },
   "0100mmmm01011010": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 2
   },
   "0100mmmm10001000": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 2
   },
   "0100mmmm10001001": {
     "J2": true,
@@ -387,11 +387,11 @@
   "0100nnnn00000010": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 2
   },
   "0100nnnn00000011": {
     "J2": true,
-    "issue": 1,
+    "issue": 2,
     "latency": 2
   },
   "0100nnnn00000100": {
@@ -427,7 +427,7 @@
   "0100nnnn00010010": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 2
   },
   "0100nnnn00010011": {
     "J2": true,
@@ -467,11 +467,11 @@
   "0100nnnn00100010": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 2
   },
   "0100nnnn00100011": {
     "J2": true,
-    "issue": 1,
+    "issue": 2,
     "latency": 2
   },
   "0100nnnn00100100": {
@@ -506,13 +506,13 @@
   },
   "0100nnnnmmmm1100": {
     "J2": true,
-    "issue": 0,
-    "latency": 0
+    "issue": 1,
+    "latency": 1
   },
   "0100nnnnmmmm1101": {
     "J2": true,
-    "issue": 0,
-    "latency": 0
+    "issue": 1,
+    "latency": 1
   },
   "0100nnnnmmmm1111": {
     "J2": true,
@@ -522,22 +522,22 @@
   "0101nnnnmmmmdddd": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 3
   },
   "0110nnnnmmmm0000": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 3
   },
   "0110nnnnmmmm0001": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 3
   },
   "0110nnnnmmmm0010": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 3
   },
   "0110nnnnmmmm0011": {
     "J2": true,
@@ -546,18 +546,18 @@
   },
   "0110nnnnmmmm0100": {
     "J2": true,
-    "issue": 1,
-    "latency": 1
+    "issue": 3,
+    "latency": 3
   },
   "0110nnnnmmmm0101": {
     "J2": true,
-    "issue": 1,
-    "latency": 1
+    "issue": 3,
+    "latency": 3
   },
   "0110nnnnmmmm0110": {
     "J2": true,
-    "issue": 1,
-    "latency": 1
+    "issue": 3,
+    "latency": 3
   },
   "0110nnnnmmmm0111": {
     "J2": true,
@@ -637,22 +637,22 @@
   "10001001dddddddd": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 2
   },
   "10001011dddddddd": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 2
   },
   "10001101dddddddd": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 2
   },
   "10001111dddddddd": {
     "J2": true,
     "issue": 1,
-    "latency": 1
+    "latency": 2
   },
   "1001nnnndddddddd": {
     "J2": true,

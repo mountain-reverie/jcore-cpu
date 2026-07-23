@@ -206,6 +206,8 @@ func Gen(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, error) {
 		return genLoadInc(in, rec, count, ledAddr)
 	case "storedec":
 		return genStoreDec(in, rec, count, ledAddr)
+	case "divfixed":
+		return genDivFixed(in, count, ledAddr)
 	default:
 		return "", fmt.Errorf("unknown template %q", rec.Template)
 	}
@@ -361,6 +363,45 @@ func genNullary(in spec.Instr, count int, ledAddr uint32) (string, error) {
 // no distinguishable independent-vs-dependent shape for a fixed-register
 // op, so issue and latency are expected to measure equal by construction
 // (mirrors genNullary's rationale).
+// genDivFixed emits the "divfixed" template for SH-2A DIVS/DIVU R0,Rn: the
+// divisor is hard-wired to R0. Preload R0=1 (divide-by-1 keeps the dividend
+// stable, so the multi-cycle divider op is exercised without operands drifting)
+// and re-set it AFTER each marker (marker() clobbers r0 as scratch). Both
+// brackets serialize on the single divider unit, so issue==latency==divider
+// occupancy (~33 cycles).
+func genDivFixed(in spec.Instr, count int, ledAddr uint32) (string, error) {
+	if count <= 0 {
+		return "", fmt.Errorf("count must be positive, got %d", count)
+	}
+	mn := mnemonic(in)
+	if mn == "" {
+		return "", fmt.Errorf("could not derive mnemonic from name %q", in.Name)
+	}
+	var body strings.Builder
+	// calibration brackets (nops)
+	marker(&body, 0x11)
+	body.WriteString("        .rept 100\n        nop\n        .endr\n")
+	marker(&body, 0x12)
+	marker(&body, 0x13)
+	body.WriteString("        .rept 200\n        nop\n        .endr\n")
+	marker(&body, 0x14)
+	// independent chain: rotating dividend regs, fixed divisor r0=1
+	marker(&body, 0x33)
+	body.WriteString(instrLine("mov", "#1, r0")) // reset divisor (marker clobbered r0)
+	for i := 0; i < count; i++ {
+		body.WriteString(instrLine(mn, "r0, "+indepRegs[i%len(indepRegs)]))
+	}
+	marker(&body, 0x44)
+	// dependent chain: chain through r1, fixed divisor r0=1
+	marker(&body, 0x55)
+	body.WriteString(instrLine("mov", "#1, r0"))
+	body.WriteString("        .rept " + fmt.Sprint(count) + "\n")
+	body.WriteString(instrLine(mn, "r0, r1"))
+	body.WriteString("        .endr\n")
+	marker(&body, 0x66)
+	return fmt.Sprintf(headerTmpl, ledAddr, ledAddr, body.String()), nil
+}
+
 func genImmR0(in spec.Instr, count int, ledAddr uint32) (string, error) {
 	if count <= 0 {
 		return "", fmt.Errorf("count must be positive, got %d", count)

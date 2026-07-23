@@ -436,6 +436,14 @@ func Classify(in spec.Instr) Recipe {
 		return Recipe{Template: "skip"}
 	}
 
+	// SH-2A single-instruction DIVS/DIVU R0,Rn (divisor hard-wired to R0) use
+	// the dedicated divfixed template. leadToken is exactly "DIVS"/"DIVU" and
+	// never matches the base step-division ops DIV0S/DIV0U/DIV1.
+	switch leadToken(in.Name) {
+	case "DIVS", "DIVU":
+		return Recipe{Template: "divfixed", Measurable: true}
+	}
+
 	switch specialRegKind(in) {
 	case "sreg":
 		return Recipe{Template: "sreg", Measurable: true}

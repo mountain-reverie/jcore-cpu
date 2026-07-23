@@ -725,6 +725,7 @@ var csvInstrOrder = []string{
 	"STC TSBPTR, Rn",
 	"LDTLB",
 	"LDTLB.RN",
+	"LDTLB.RN Rm",
 	// SH-2A two-word overlay (spec/sh2a, generate-j2a only): ignored by
 	// base J2 and J4 generation (not in their specs).
 	"MOV.L @(disp12,Rm),Rn",

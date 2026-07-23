@@ -383,8 +383,14 @@
 #                     DPROT_R=x"C" DPROT_W=x"D".
 # EXPEVT: IMISS=0x040 DMISS_R=0x060 DMISS_W=0x080 IPROT=0x0A0
 #         DPROT_R=0x0C0 DPROT_W=0x0C0.
-# Vectors (Option-A layout): I-fetch (IMISS/IPROT)->VBR+0x400 (=1024),
-#   D-load (DMISS_R/DPROT_R)->VBR+0x420 (=1056), D-store (DMISS_W/DPROT_W)->VBR+0x440 (=1088).
+# Vectors: ALL TLB faults -> VBR+0x400 (=1024). The earlier Option-A layout gave
+#   each access type its own vector (I=0x400, D-load=0x420, D-store=0x440) so the
+#   miss handler could branch on access type without reading EXPEVT; but the real
+#   handler is byte-identical for all three (access type only matters on the slow
+#   do_page_fault path, which reads EXPEVT anyway), so the split just triplicated
+#   the hot-path I-cache footprint. Merged to a single stock-SH-4-like vector.
+#   EXPEVT still distinguishes the six causes; SPC/SSR capture still differs by
+#   fault stage (I-side live PC vs D-side latched TLBPC/TLBSR) -- unchanged.
 #
 # S-I5 (multiple-TLB-match, see tlb.vhd i_multihit/d_multihit): the decoder's
 # system-plane immediate-value field (ROM imm-value selector, 5 bits) is
@@ -445,7 +451,7 @@
   name = "TLB DMISS R"
   format = "d8"
   opcode = "---- 1001 dddd dddd"
-  operation = "SPC<-TLBPC-4 (faulting PC); SSR<-TLBSR; MD/RB/BL; EXPEVT<-0x060; PC<-VBR+0x420"
+  operation = "SPC<-TLBPC-4 (faulting PC); SSR<-TLBSR; MD/RB/BL; EXPEVT<-0x060; PC<-VBR+0x400"
   plane = "system"
   [[instr.slots]]
     alu_y = "4"
@@ -466,7 +472,7 @@
     pc = "HOLD"
   [[instr.slots]]
     xbus = "VBR"
-    ybus = "1056"
+    ybus = "1024"
     arith = "ADD"
     zbus = "PC"
     zbus_sel = "ARITH"
@@ -485,7 +491,7 @@
   name = "TLB DMISS W"
   format = "d8"
   opcode = "---- 1010 dddd dddd"
-  operation = "SPC<-TLBPC-4 (faulting PC); SSR<-TLBSR; MD/RB/BL; EXPEVT<-0x080; PC<-VBR+0x440"
+  operation = "SPC<-TLBPC-4 (faulting PC); SSR<-TLBSR; MD/RB/BL; EXPEVT<-0x080; PC<-VBR+0x400"
   plane = "system"
   [[instr.slots]]
     alu_y = "4"
@@ -506,7 +512,7 @@
     pc = "HOLD"
   [[instr.slots]]
     xbus = "VBR"
-    ybus = "1088"
+    ybus = "1024"
     arith = "ADD"
     zbus = "PC"
     zbus_sel = "ARITH"
@@ -566,7 +572,7 @@
   name = "TLB DPROT R"
   format = "d8"
   opcode = "---- 1100 dddd dddd"
-  operation = "SPC<-TLBPC-4 (faulting PC); SSR<-TLBSR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x420"
+  operation = "SPC<-TLBPC-4 (faulting PC); SSR<-TLBSR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x400"
   plane = "system"
   [[instr.slots]]
     alu_y = "4"
@@ -587,7 +593,7 @@
     pc = "HOLD"
   [[instr.slots]]
     xbus = "VBR"
-    ybus = "1056"
+    ybus = "1024"
     arith = "ADD"
     zbus = "PC"
     zbus_sel = "ARITH"
@@ -606,7 +612,7 @@
   name = "TLB DPROT W"
   format = "d8"
   opcode = "---- 1101 dddd dddd"
-  operation = "SPC<-TLBPC-4 (faulting PC); SSR<-TLBSR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x440"
+  operation = "SPC<-TLBPC-4 (faulting PC); SSR<-TLBSR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x400"
   plane = "system"
   [[instr.slots]]
     alu_y = "4"
@@ -627,7 +633,7 @@
     pc = "HOLD"
   [[instr.slots]]
     xbus = "VBR"
-    ybus = "1088"
+    ybus = "1024"
     arith = "ADD"
     zbus = "PC"
     zbus_sel = "ARITH"

@@ -10,12 +10,12 @@
 ! Flow:
 !   - map page 0 identity (W|X|U|C), STALE=0, for code fetch under AT
 !   - install a STALE=1 entry for VPN 0x4 (VA 0x4000 -> PA 0x4000), then AT on
-!   - LOAD from VA 0x4000 -> must raise DMISS_R (EXPEVT 0x060), vector VBR+0x420
+!   - LOAD from VA 0x4000 -> must raise DMISS_R (EXPEVT 0x060), vector VBR+0x400
 !   - handler (the ONLY pass path): disable AT, write "Test Passed", spin
 !   - if the STALE entry still matches (the defect): the load completes, main
 !     path spins WITHOUT writing a result -> run times out -> RED.
 !
-! VBR = _v_load - 0x420 so the DMISS_R vector (VBR+0x420) hits _v_load.
+! VBR = _v_load - 0x400 so the DMISS_R vector (VBR+0x400) hits _v_load.
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -48,7 +48,7 @@ ENTRY(start)
         nop
         nop
 
-        ! ---- VBR = _v_load - 0x420 (so VBR+0x420 = _v_load). ----
+        ! ---- VBR = _v_load - 0x400 (so VBR+0x400 = _v_load). ----
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
@@ -77,7 +77,7 @@ ENTRY(start)
 
         ! ---- LOAD from VA 0x4000: a STALE=1 entry must NOT match -> DMISS_R. ----
         mov.l   c_page4_va, r2
-        mov.l   @r2, r3                 ! FAULTS -> _v_load (VBR+0x420), DMISS_R
+        mov.l   @r2, r3                 ! FAULTS -> _v_load (VBR+0x400), DMISS_R
 
         ! If the STALE entry still matched (the defect), we reach here. Spin
         ! WITHOUT writing any result so RED = run times out (no "Test Passed").
@@ -87,7 +87,7 @@ _silent_spin:
 
         .align 2
 p_rbclear:      .long 0xDFFFFFFF
-p_vbr_val:      .long _v_load - 0x420
+p_vbr_val:      .long _v_load - 0x400
 p_mmucr:        .long 0xFF000010
 p_ptel_page0:   .long 0x000000C8        ! U cleared: kernel code, SMEP
 p_pteh_p4:      .long 0x00004000
@@ -112,12 +112,12 @@ p_test_result: .long TEST_RESULT_ADDRESS
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 
-        ! ---- DMISS_R handler at VBR+0x420 ----
+        ! ---- DMISS_R handler at VBR+0x400 ----
         ! Pad so _v_load lands at >= 0x420.
         .balign 4
         .space 0x620, 0
         .balign 4
-_v_load:                                ! = VBR + 0x420
+_v_load:                                ! = VBR + 0x400
         mov.l   Hmmucr, r0
         mov     #0, r1
         mov.l   r1, @r0                 ! MMUCR = 0 (disable AT)

@@ -165,8 +165,8 @@ p_test_result: .long TEST_RESULT_ADDRESS
         ! ===================== Exception vector base =====================
         .balign 4
 _vbase:
-        .space 0x420, 0
-_v_load:                                ! _vbase + 0x420  (DMISS_R)
+        .space 0x400, 0
+_v_tlb:                                 ! _vbase + 0x400  (all TLB faults)
         bra     _h_common
         nop
 

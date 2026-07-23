@@ -15,11 +15,11 @@
 !   - Leg A (ASID A): load VA 0x4000 must return the seeded sentinel (the entry
 !     IS usable under its own ASID) -- else fail 1 (over-strict / bad install).
 !   - Switch ASIDR to B.
-!   - Leg B (ASID B): load VA 0x4000 must FAULT (DMISS_R, VBR+0x420) -> the
+!   - Leg B (ASID B): load VA 0x4000 must FAULT (DMISS_R, VBR+0x400) -> the
 !     handler is the ONLY pass path. If the cross-ASID load instead completes
 !     (isolation broken), the main path spins WITHOUT a result -> timeout -> RED.
 !
-! VBR = _v_load - 0x420 so the DMISS_R vector (VBR+0x420) hits _v_load.
+! VBR = _v_load - 0x400 so the DMISS_R vector (VBR+0x400) hits _v_load.
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -52,7 +52,7 @@ ENTRY(start)
         nop
         nop
 
-        ! ---- VBR = _v_load - 0x420 (so VBR+0x420 = _v_load). ----
+        ! ---- VBR = _v_load - 0x400 (so VBR+0x400 = _v_load). ----
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
@@ -102,7 +102,7 @@ ENTRY(start)
 
         ! ---- Leg B (ASID B): load VA 0x4000 must FAULT (cross-ASID isolation). ----
         mov.l   c_va4, r2
-        mov.l   @r2, r8                 ! FAULTS -> _v_load (VBR+0x420), DMISS_R
+        mov.l   @r2, r8                 ! FAULTS -> _v_load (VBR+0x400), DMISS_R
 
         ! If the cross-ASID load completed (isolation broken), spin WITHOUT a
         ! result -> RED = timeout.
@@ -112,7 +112,7 @@ _silent_spin:
 
         .align 2
 p_rbclear:      .long 0xDFFFFFFF
-p_vbr_val:      .long _v_load - 0x420
+p_vbr_val:      .long _v_load - 0x400
 p_mmucr:        .long 0xFF000010
 p_ptel_page0:   .long 0x000000CC        ! W|X|C|G, U cleared (kernel global code page, SMEP)
 p_pteh_p4:      .long 0x00004000
@@ -141,11 +141,11 @@ p_test_result: .long TEST_RESULT_ADDRESS
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 
-        ! ---- DMISS_R handler at VBR+0x420 (the ONLY pass path). ----
+        ! ---- DMISS_R handler at VBR+0x400 (the ONLY pass path). ----
         .balign 4
         .space 0x620, 0
         .balign 4
-_v_load:                                ! = VBR + 0x420
+_v_load:                                ! = VBR + 0x400
         mov.l   Hmmucr, r0
         mov     #0, r1
         mov.l   r1, @r0                 ! MMUCR = 0 (disable AT)

@@ -10,7 +10,7 @@
 !       deliberately different, and the value read back is the one seeded
 !       at the PA, not at the VA;
 !   (3) a translated access to a page with NO TSB entry takes the real
-!       TLB-miss vector (VBR+0x420) -- distinguishable from (2) by two
+!       TLB-miss vector (VBR+0x400) -- distinguishable from (2) by two
 !       independent counters (install_cnt vs miss_cnt) so neither path can
 !       silently substitute for the other.
 !
@@ -148,7 +148,7 @@ kmain:
 
         ! ================= touch #1: va_A, TSB empty -> miss -> install ===
         mov.l   k_va_a, r0
-        mov.l   @r0, r8                 ! -> VBR+0x420 -> _h_slow installs
+        mov.l   @r0, r8                 ! -> VBR+0x400 -> _h_slow installs
                                          ! va_A's PTE -> LDTLB.RN resumes
                                          ! the load in place.
 
@@ -183,7 +183,7 @@ kmain:
         ! ================= touch #3: unmapped VA -> real miss, no entry ===
         mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0   ! AT|TI (fresh miss)
         mov.l   k_va_b, r0
-        mov.l   @r0, r11                ! -> VBR+0x420 -> _h_slow: VA !=
+        mov.l   @r0, r11                ! -> VBR+0x400 -> _h_slow: VA !=
                                          ! va_A -> miss_cnt++, jmp after_miss
                                          ! (load never completes/resumes)
 after_miss:
@@ -240,12 +240,12 @@ ENTRY(_fail)
 p_test_result:  .long TEST_RESULT_ADDRESS
 
 ! ===================== our own minimal miss-vector table ==================
-! VBR points at the P1 alias of _vbase; hardware adds 0x420 for a load-side
-! TLB miss. No store-side vector is needed -- every access here is a load.
+! VBR points at the P1 alias of _vbase; hardware delivers all TLB faults to
+! VBR+0x400 (I/D, miss/prot merged to one vector).
         .balign 4
 _vbase:
-        .space 0x420, 0
-_v_load:                                ! _vbase + 0x420 (DMISS_R)
+        .space 0x400, 0
+_v_tlb:                                 ! _vbase + 0x400 (all TLB faults)
         bra     _h_common
         nop
 

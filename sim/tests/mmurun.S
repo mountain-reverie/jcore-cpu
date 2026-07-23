@@ -184,16 +184,13 @@ p_test_result: .long TEST_RESULT_ADDRESS
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
         ! ===================== Exception vector base =====================
-        ! VBR points at the P1 alias of _vbase; hardware adds 0x420 (load miss)
-        ! or 0x440 (store miss). Both stubs branch to the shared hot path.
+        ! VBR points at the P1 alias of _vbase; hardware adds 0x400 for ALL
+        ! TLB faults (I/D miss/prot merged to a single vector). The one stub
+        ! branches to the shared hot path.
         .balign 4
 _vbase:
-        .space 0x420, 0
-_v_load:                                ! _vbase + 0x420  (DMISS_R)
-        bra     _h_common
-        nop
-        .space (0x440 - 0x420 - 4), 0
-_v_store:                               ! _vbase + 0x440  (DMISS_W)
+        .space 0x400, 0
+_v_tlb:                                 ! _vbase + 0x400  (all TLB faults)
         bra     _h_common
         nop
 

@@ -186,12 +186,8 @@ p_test_result: .long TEST_RESULT_ADDRESS
         ! VBR points at the P1 alias of _vbase; hardware adds 0x420 (load miss).
         .balign 4
 _vbase:
-        .space 0x420, 0
-_v_load:                                ! _vbase + 0x420  (DMISS_R)
-        bra     _h_common
-        nop
-        .space (0x440 - 0x420 - 4), 0
-_v_store:                               ! _vbase + 0x440  (DMISS_W)
+        .space 0x400, 0
+_v_tlb:                                 ! _vbase + 0x400  (all TLB faults)
         bra     _h_common
         nop
 

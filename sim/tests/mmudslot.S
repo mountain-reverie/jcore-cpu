@@ -18,7 +18,7 @@
 !   BUGGY  : SPC = delay-slot PC -> load re-executes, then falls THROUGH the
 !            (already-executed) branch -> fall-through path -> FAIL (2)
 !
-! VBR layout: VBR = _v_load - 0x420 so VBR+0x420 = _v_load (D-load handler).
+! VBR layout: VBR = _v_load - 0x400 so VBR+0x400 = _v_load (D-load handler).
 !
 ! Result codes:
 !   0  PASS  (branch taken after fault serviced)
@@ -60,7 +60,7 @@ ENTRY(start)
         nop
         nop
 
-        ! ---- VBR = _v_load - 0x420 (so VBR+0x420 = _v_load). ----
+        ! ---- VBR = _v_load - 0x400 (so VBR+0x400 = _v_load). ----
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
@@ -113,7 +113,7 @@ _dslot_skipped:
         ! ============================================================
         .align 2
 p_rbclear:      .long 0xDFFFFFFF
-p_vbr_val:      .long _v_load - 0x420
+p_vbr_val:      .long _v_load - 0x400
 p_mmucr:        .long 0xFF000010
 p_ptel_page0:   .long 0x000000C8        ! W|X|C (U cleared: kernel code, SMEP)
 c_page1_va:     .long 0x00001000
@@ -137,12 +137,12 @@ p_test_result:  .long TEST_RESULT_ADDRESS
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 
         ! ================================================================
-        ! DMISS_R / DPROT_R handler at VBR+0x420 = _v_load.
+        ! DMISS_R / DPROT_R handler at VBR+0x400 = _v_load.
         ! Installs a full-access mapping for page 1 and RTEs to the
         ! hardware-saved SPC (NO manual SPC override).
         ! ================================================================
         .balign 4
-_v_load:                                ! = VBR + 0x420
+_v_load:                                ! = VBR + 0x400
         mov.l   Hpteh1, r0
         .word   0x405E                  ! LDC r0, PTEH  (VPN=1, ASID=0)
         mov.l   Hptel1, r0

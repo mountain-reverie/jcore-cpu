@@ -74,7 +74,7 @@ ENTRY(start)
         nop
         nop
 
-        ! ---- VBR = _v_load - 0x420 (so VBR+0x420 = _v_load). ----
+        ! ---- VBR = _v_load - 0x400 (so VBR+0x400 = _v_load). ----
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
@@ -143,7 +143,7 @@ ENTRY(start)
 
         ! ==============================================================
         ! Case B/C: take a DMISS_R on VA 0x00100000 (bit 20 set, unmapped).
-        ! The handler (VBR+0x420) performs the computed reads.
+        ! The handler (VBR+0x400) performs the computed reads.
         ! ==============================================================
         mov     #4, r9                  ! sentinel: handler not reached -> 4
         mov.l   p_fault_va, r2
@@ -167,7 +167,7 @@ _fail_at:
 
         .align 2
 p_rbclear:    .long 0xDFFFFFFF
-p_vbr_val:    .long _v_load - 0x420
+p_vbr_val:    .long _v_load - 0x400
 p_mmucr:      .long 0xFF000010
 p_ptel_page0: .long 0x000000C8        ! U cleared: kernel code, SMEP
 p_data_base:  .long 0x00010000
@@ -203,7 +203,7 @@ p_test_result: .long TEST_RESULT_ADDRESS
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
         ! ================================================================
-        ! DMISS_R handler at VBR+0x420 (_v_load).
+        ! DMISS_R handler at VBR+0x400 (_v_load).
         ! On entry: AT is still on. We do NOT disable AT (the mmurun bug
         ! manifested with AT still on inside the handler). We perform the
         ! computed-address reads of the IDENTITY-MAPPED data page and the
@@ -211,7 +211,7 @@ p_test_result: .long TEST_RESULT_ADDRESS
         ! to resume past the faulting access, and RTE.
         ! ================================================================
         .balign 4
-_v_load:                                ! = VBR + 0x420
+_v_load:                                ! = VBR + 0x400
         ! --- B.1: plain @Rn of data page (sanity; should be clean) ---
         mov.l   H_data_base, r2
         mov.l   @r2, r5

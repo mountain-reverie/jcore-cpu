@@ -10,11 +10,11 @@
 // measure.Gen), assembles+links+objcopies it to a raw image, runs it against
 // the cosim binary (measure.RunOne), parses the LED markers it emits
 // (measure.ParseMarkers), and computes issue/latency (measure.NSPerCycle +
-// measure.Measure). A calibration gate — nop/add both == 1 cycle within
-// tolerance, using the two-bracket difference method — must pass before any
-// output file is written; the gate deliberately does NOT anchor on
-// multi-cycle hand values (mul.l/tas/divs), which the Task-1 spike proved
-// wrong for at least mul.l.
+// measure.Measure). A calibration gate — DUT `add` == 1 cycle within tolerance,
+// using the two-bracket difference method (nop is the bracket FILLER, not a DUT)
+// — must pass before any output file is written; the gate deliberately does NOT
+// anchor on multi-cycle hand values (mul.l/tas/divs), which the Task-1 spike
+// proved wrong: the harness itself measures mul.l ~= 4, not the hand table's 2.
 package main
 
 import (
@@ -154,10 +154,13 @@ func handTableJ1(set *insns.InstrSet, recipes *measure.Recipes, want map[string]
 	return results
 }
 
-// calibration knowns: only add/nop are trustworthy per Finding A.
+// calibration known: only `add` == 1 is a trustworthy DUT anchor (Finding A).
+// `nop` is the calibration FILLER inside the difference-method brackets (100/200
+// nops), not a benchmarkable DUT instruction — it has no operand form — so it is
+// deliberately NOT a DUT anchor. NSPerCycle succeeding (calA/calB present) plus
+// add==1 validates the whole measurement chain.
 var calKnown = map[string]float64{
 	"add": 1.0,
-	"nop": 1.0,
 }
 
 func runMeasured(set *insns.InstrSet, recipes *measure.Recipes, want map[string]bool, count int, simDir, cosimBin string) (results []measure.Result, measuredN, skippedN int, err error) {
@@ -226,7 +229,7 @@ func runMeasured(set *insns.InstrSet, recipes *measure.Recipes, want map[string]
 		}
 
 		mn := mnemonicOf(in)
-		if mn == "add" || mn == "nop" {
+		if mn == "add" {
 			calMeasured[mn] = iss
 		}
 		raw = append(raw, measured{code: code, mnemVal: mn, issue: iss, latency: lat})

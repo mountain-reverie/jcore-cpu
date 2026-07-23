@@ -24,10 +24,10 @@ func TestJ4TimingMatchesJ2(t *testing.T) {
 	}
 	j4tm := j4tab.For(mulL)
 	j2tm := j2tab.For(mulL)
-	if j4tm.Latency != j2tm.Latency {
-		t.Errorf("mul.l: J4 latency %d != J2 latency %d (want equal, not J1's ~34)", j4tm.Latency, j2tm.Latency)
+	if j4tm.Latency.N != j2tm.Latency.N {
+		t.Errorf("mul.l: J4 latency %d != J2 latency %d (want equal, not J1's ~34)", j4tm.Latency.N, j2tm.Latency.N)
 	}
-	if j4tm.Latency != 2 {
-		t.Errorf("mul.l: J4 latency %d, want 2 (array multiplier)", j4tm.Latency)
+	if j4tm.Latency.N != 2 {
+		t.Errorf("mul.l: J4 latency %d, want 2 (array multiplier)", j4tm.Latency.N)
 	}
 }

@@ -13,16 +13,16 @@ func TestTimingBaseIsFlat(t *testing.T) {
 	// to encode the handful of multi-cycle instructions.
 	tab := &Table{}
 	in := spec.Instr{Opcode: "0110nnnnmmmm0011", Slots: []spec.Slot{{}, {}}}
-	if got := tab.For(in); got.Issue != 1 || got.Latency != 1 {
+	if got := tab.For(in); got.Issue.N != 1 || got.Latency.N != 1 {
 		t.Fatalf("base 2-slot: got %+v want issue1 latency1", got)
 	}
 }
 
 func TestTimingOverrideWins(t *testing.T) {
-	tab := &Table{Overrides: map[string]Timing{"11000011iiiiiiii": {Issue: 2, Latency: 8}}}
+	tab := &Table{Overrides: map[string]Timing{"11000011iiiiiiii": {Issue: II(2), Latency: II(8)}}}
 	in := spec.Instr{Opcode: "1100 0011 iiii iiii", Slots: []spec.Slot{{}}}
 	got := tab.For(in)
-	if got.Issue != 2 || got.Latency != 8 {
+	if got.Issue.N != 2 || got.Latency.N != 8 {
 		t.Fatalf("override: got %+v want 2/8", got)
 	}
 }
@@ -46,7 +46,7 @@ func TestTimingMultUnit(t *testing.T) {
 		Slots:  []spec.Slot{{"mac_op": "MULL", "mac_stage": "EX"}},
 	}
 	got := tab.For(in)
-	if got.Issue != 3 || got.Latency != 3 {
+	if got.Issue.N != 3 || got.Latency.N != 3 {
 		t.Fatalf("mult unit: got %+v want issue=3 latency=3", got)
 	}
 }

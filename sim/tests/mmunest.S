@@ -17,15 +17,17 @@
 ! next_op RB-aware for nested Slot-Illegal / TRAPA): if that change ever broke
 ! the RB-gated suppression or clean handler resumption, this guard goes red.
 !
-! Flow (single D-load-miss handler at VBR+0x420, minimal LDTLB install):
+! Flow (single merged TLB-fault handler at VBR+0x400, minimal LDTLB install):
 !   setup (RB=0, AT off): VBR; pre-install VA_Y=0x00200000 as a READ-ONLY
 !     (W=0), identity page via a direct LDTLB; seed backing pages; zero the
 !     handler entry counter. Enable AT.
-!   outer: RB=0 code loads VA_X=0x00100000 (UNMAPPED) -> D-load miss -> 0x420.
+!   outer: RB=0 code loads VA_X=0x00100000 (UNMAPPED) -> D-load miss -> 0x400.
 !   handler (RB=1): (1) entry_count++ (via P1 alias -- untranslated);
-!     (2) PROBE: STORE to VA_Y (a translated P0 access to the R/O page). At
-!     MD=1 the kernel still honours W, so this is a DPROT_W condition -- which,
-!     because RB=1, must be SUPPRESSED (no nested 0x440 entry). (3) LDC the
+!     (2) re-entry check: entry_count>1 means a nested fault re-dispatched to
+!     this same 0x400 vector -> suppression broken -> Result=3; (3) PROBE:
+!     STORE to VA_Y (a translated P0 access to the R/O page). At MD=1 the kernel
+!     still honours W, so this is a DPROT_W condition -- which, because RB=1,
+!     must be SUPPRESSED (no re-dispatch to this handler). (4) LDC the
 !     precomputed PTEL for VA_X and LDTLB.RN -- installs VA_X (PTEH already
 !     holds the faulting VPN) and returns atomically.
 !   resume (RB=0): the VA_X load re-executes and now HITS -> r8 = seed_X.
@@ -34,13 +36,13 @@
 !   the handler -- suppression held), and r8 == seed_X (SPC/SSR were intact, so
 !   the outer instruction re-ran and read the freshly-installed page).
 !
-!   BROKEN core (suppression gate removed): the in-handler probe store
-!   dispatches a DPROT_W -> vector 0x440 -> _h_store_fault -> deterministic
-!   Result=3 (and, in practice, SPC/SSR clobber would also corrupt the resume).
+!   BROKEN core (suppression gate removed): the in-handler probe store's DPROT_W
+!   re-dispatches to VBR+0x400 -> the handler re-enters -> entry_count becomes 2
+!   -> the re-entry check falls to _h_store_fault -> deterministic Result=3.
 !
-! Non-vacuity (verified): dropping the `dp_sr.rb = '0'` term from cpu.vhd's
-! D-side dispatch gate makes this guard fail (the probe store's DPROT_W then
-! dispatches to 0x440).
+! Non-vacuity (verified previously): dropping the `dp_sr.rb = '0'` term from
+! cpu.vhd's D-side dispatch gate makes the probe store's DPROT_W re-dispatch,
+! re-entering the handler (entry_count>1) -> this guard fails.
 !
 ! PTEL flag bits (core/tlb.vhd): bit7=W bit6=X bit5=U bit4=D bit3=C bit2=G
 !                                 bit1=STALE bit0=V.  Identity PTE PA==VA.
@@ -49,7 +51,7 @@
 !   0  pass
 !   1  entry_count != 1  -- handler not entered exactly once
 !   2  r8 != seed_X      -- outer fault did not resume cleanly (context lost)
-!   3  in-handler DPROT_W dispatched to 0x440 -- RB=1 suppression is broken
+!   3  in-handler DPROT_W re-entered handler (entry_count>1) -- RB=1 suppression broken
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -116,7 +118,7 @@ ENTRY(start)
         mov.l   k_mmucr, r0 ; mov #1, r1 ; mov.l r1, @r0
 
         ! ================= OUTER FAULT =================
-        ! VA_X is unmapped -> D-load miss -> vector 0x420 -> handler.
+        ! VA_X is unmapped -> D-load miss -> vector 0x400 -> handler.
         mov.l   va_x, r0
         mov.l   @r0, r8                 ! outer load; re-executes after install
 
@@ -166,20 +168,18 @@ p_test_result: .long TEST_RESULT_ADDRESS
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
         ! ===================== Exception vector base =====================
-        ! VBR -> P1 alias of _vbase; hardware adds 0x420 (D-load miss) or, ONLY
-        ! on a broken core, 0x440 (D-store miss/prot). On the correct core the
-        ! in-handler probe store's DPROT_W is suppressed (RB=1), so 0x440 is
-        ! NEVER taken; wiring it to a deterministic fail makes the non-vacuity
-        ! case a clean Result=3 rather than a derail.
+        ! VBR -> P1 alias of _vbase; hardware adds 0x400 for ALL TLB faults (the
+        ! per-access-type vectors are merged). The outer D-load miss enters the
+        ! handler here. On a BROKEN core the in-handler probe store's DPROT_W is
+        ! NOT suppressed and re-dispatches to this SAME 0x400 vector -> the
+        ! handler re-enters, which the entry_count>1 check below turns into a
+        ! deterministic Result=3 (see _h_store_fault). On the correct core RB=1
+        ! suppresses it, so the handler is entered exactly once.
         .balign 4
 _vbase:
-        .space 0x420, 0
-_v_load:                                ! _vbase + 0x420  (DMISS_R)
+        .space 0x400, 0
+_v_tlb:                                 ! _vbase + 0x400  (all TLB faults, merged)
         bra     _h_common
-        nop
-        .space (0x440 - 0x420 - 4), 0
-_v_store:                               ! _vbase + 0x440  (DMISS_W / DPROT_W)
-        bra     _h_store_fault          ! reached only if RB=1 suppression is broken
         nop
 
         ! ---- Minimal miss handler (bank-1 scratch; RB=1; AT stays on). ----
@@ -190,8 +190,17 @@ _h_common:
         add     #1, r5
         mov.l   r5, @r4
 
+        ! Re-entry detector (replaces the old distinct-0x440 detector): with all
+        ! TLB faults merged onto VBR+0x400, a NON-suppressed in-handler DPROT_W
+        ! would re-dispatch to THIS handler. entry_count>1 therefore means the
+        ! RB=1 suppression is broken -> deterministic fail (Result=3), instead of
+        ! an unbounded re-entry loop.
+        mov     #1, r6
+        cmp/eq  r6, r5
+        bf      _h_store_fault
+
         ! PROBE: store to VA_Y (translated P0, read-only page) -> DPROT_W that
-        ! must be SUPPRESSED because RB=1 (no nested 0x440 entry).
+        ! must be SUPPRESSED because RB=1 (no re-dispatch to this handler).
         mov.l   H_va_y, r0
         mov.l   H_probeval, r1
         mov.l   r1, @r0                 ! in-handler prot-violating store

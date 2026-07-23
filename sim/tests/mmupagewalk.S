@@ -3,8 +3,8 @@
 ! Flow:
 !   1. Clear SR.RB=0. Install page 0 (VA 0x0->PA 0x0, 4 KB, C=1) for code.
 !      Seed PA 0x10000 = 0, PA 0x11000 = 0 via P2 alias (AT off).
-!      Set VBR so VBR+0x440 = _v_store (placed after .space 0x380 pad so
-!      VBR = _v_store - 0x440 is a positive address).
+!      Set VBR so VBR+0x400 = _v_store (placed after .space 0x380 pad so
+!      VBR = _v_store - 0x400 is a positive address).
 !   2. Enable AT (no mapping for VA 0x11000).
 !      Store sentinel to VA 0x11000 -> DMISS_W -> _v_store.
 !   3. Handler (bank-1 scratch, SR.BL=1):
@@ -70,7 +70,7 @@ ENTRY(start)
         mov.l   p_p2_sub,  r3   ! 0xA0011000  (P2 alias of PA 0x11000)
         mov.l   r1, @r3
 
-        ! ---- VBR = _v_store - 0x440  (so VBR+0x440 = _v_store within page 0) ----
+        ! ---- VBR = _v_store - 0x400  (so VBR+0x400 = _v_store within page 0) ----
         mov.l   k_vbr, r0
         .word   0x402E          ! LDC r0, VBR
 
@@ -117,7 +117,7 @@ p_rbclear:   .long 0xDFFFFFFF
 p_ptel_p0:   .long 0x000000C8   ! page 0: PA=0x0 | W|X|C, U cleared: kernel code, SMEP
 p_p2_base:   .long 0xA0010000   ! P2 alias of PA 0x10000
 p_p2_sub:    .long 0xA0011000   ! P2 alias of PA 0x11000
-k_vbr:       .long _v_store - 0x440
+k_vbr:       .long _v_store - 0x400
 p_mmucr:     .long 0xFF000010
 p_sentinel:  .long 0x5E91A16C
 p_va_sub:    .long 0x00011000
@@ -138,9 +138,9 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
-        ! ===================== DMISS_W handler at VBR+0x440 =====================
+        ! ===================== DMISS_W handler at VBR+0x400 =====================
         ! Pad so _v_store lands past 0x440 from binary start, keeping VBR
-        ! = _v_store - 0x440 as a positive address (avoiding 32-bit wrap, which
+        ! = _v_store - 0x400 as a positive address (avoiding 32-bit wrap, which
         ! is legal but mmustore.S style is simpler to reason about).
         ! _v_store must remain within page 0 (VA < 0x1000) for I-fetch to work
         ! with AT=1.  With ~0x1A0 bytes before this #if, padding 0x2C0 bytes

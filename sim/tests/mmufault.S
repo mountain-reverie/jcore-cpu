@@ -1,18 +1,15 @@
 ! mmufault.S -- comprehensive TLB fault coverage test (J4 + MMU_ARCH).
 !
-! Exercises all six TLB fault kinds, asserting EXPEVT, TEA, and correct
-! access-type vector for each.
+! Exercises all six TLB fault kinds, asserting EXPEVT and TEA for each.
+! All TLB faults (I/D, miss/prot) vector to the single merged VBR+0x400.
 !
-! VBR layout strategy (no stubs, no dispatch indirection):
-!   Set VBR = _v_ifetch - 0x400 so:
-!     VBR+0x400 = _v_ifetch  (I-fetch handler:  IMISS=0x040, IPROT=0x0A0)
-!     VBR+0x420 = _v_load    (D-load handler:   DMISS_R=0x060, DPROT_R=0x0C0)
-!     VBR+0x440 = _v_store   (D-store handler:  DMISS_W=0x080, DPROT_W=0x0C0)
-!
-!   Each handler block is exactly 0x20 bytes (16 instructions):
-!     disable AT + check EXPEVT + check TEA + set SPC=resume + RTE
-!   They are placed with explicit .space to enforce the 0x20 spacing.
-!   All three reside in the code section (page 0, VA 0x0000-0x0FFF).
+! VBR layout (no stubs, no dispatch indirection):
+!   Set VBR = _v_tlb - 0x400 so VBR+0x400 = _v_tlb, the ONE handler for all
+!   six fault kinds. It reads EXPEVT (STC EXPEVT) and compares it against the
+!   per-sub-test g_exp_expevt global, so the access type is distinguished by
+!   EXPEVT (0x040/0x060/0x080/0x0A0/0x0C0), not by the vector address -- which
+!   is exactly the property the vector merge relies on. The handler resides in
+!   the code section (page 0, VA 0x0000-0x0FFF).
 !
 ! All TLB exceptions save SPC<-PC-2 (faulting instruction restart).
 ! The handler overwrites SPC with the per-sub-test resume label and RTE,
@@ -91,7 +88,7 @@ ENTRY(start)
         nop
         nop
 
-        ! ---- VBR = _v_ifetch - 0x400 (so VBR+0x400=_v_ifetch). ----
+        ! ---- VBR = _v_tlb - 0x400 (so VBR+0x400=_v_tlb). ----
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
@@ -110,7 +107,7 @@ ENTRY(start)
         mov.l   r1, @r0
 
         ! ==============================================================
-        ! Sub-test A: DMISS_R (EXPEVT=0x060) -> VBR+0x420 (_v_load)
+        ! Sub-test A: DMISS_R (EXPEVT=0x060) -> VBR+0x400 (_v_tlb)
         ! Load from VA 0x1000 (page 1: in bus range, not in TLB).
         ! ==============================================================
         mov.l   p_g_exp_expevt, r0
@@ -131,14 +128,14 @@ ENTRY(start)
 
         mov     #1, r9                  ! sentinel: no exception = result 1
         mov.l   c_page1_va, r2
-        mov.l   @r2, r3                 ! FAULTS -> _v_load (VBR+0x420), DMISS_R
+        mov.l   @r2, r3                 ! FAULTS -> _v_tlb (VBR+0x400), DMISS_R
 
         bra     _fail
         nop
 
 ENTRY(after_a)
         ! ==============================================================
-        ! Sub-test B: DMISS_W (EXPEVT=0x080) -> VBR+0x440 (_v_store)
+        ! Sub-test B: DMISS_W (EXPEVT=0x080) -> VBR+0x400 (_v_tlb)
         ! Store to VA 0x1000 (page 1, unmapped).
         ! ==============================================================
         ! Handler disabled AT; re-enable so the store below faults via MMU.
@@ -165,14 +162,14 @@ ENTRY(after_a)
         mov     #4, r9
         mov     #0x55, r3
         mov.l   c_page1_va, r2
-        mov.l   r3, @r2                 ! FAULTS -> _v_store (VBR+0x440), DMISS_W
+        mov.l   r3, @r2                 ! FAULTS -> _v_tlb (VBR+0x400), DMISS_W
 
         bra     _fail
         nop
 
 ENTRY(after_b)
         ! ==============================================================
-        ! Sub-test C: IMISS (EXPEVT=0x040) -> VBR+0x400 (_v_ifetch)
+        ! Sub-test C: IMISS (EXPEVT=0x040) -> VBR+0x400 (_v_tlb)
         ! Jump to VA 0x1000 (page 1, unmapped) -> I-fetch miss.
         ! ==============================================================
         ! Handler disabled AT; re-enable so the jump below faults via MMU.
@@ -198,7 +195,7 @@ ENTRY(after_b)
 
         mov     #7, r9
         mov.l   c_page1_va, r0
-        jmp     @r0                     ! FAULTS -> _v_ifetch (VBR+0x400), IMISS
+        jmp     @r0                     ! FAULTS -> _v_tlb (VBR+0x400), IMISS
         nop
 
         bra     _fail
@@ -206,7 +203,7 @@ ENTRY(after_b)
 
 ENTRY(after_c)
         ! ==============================================================
-        ! Sub-test D: DPROT_W (EXPEVT=0x0C0) -> VBR+0x440 (_v_store)
+        ! Sub-test D: DPROT_W (EXPEVT=0x0C0) -> VBR+0x400 (_v_tlb)
         ! Map page 2 (VA 0x2000) read-only (W=0, X|U|C = 0x68).
         ! Supervisor: d_we=1 AND w=0 fires DPROT_W (no user mode needed).
         ! ==============================================================
@@ -242,14 +239,14 @@ ENTRY(after_c)
         mov     #10, r9
         mov     #0x66, r3
         mov.l   c_page2_va, r2
-        mov.l   r3, @r2                 ! FAULTS -> _v_store (VBR+0x440), DPROT_W
+        mov.l   r3, @r2                 ! FAULTS -> _v_tlb (VBR+0x400), DPROT_W
 
         bra     _fail
         nop
 
 ENTRY(after_d)
         ! ==============================================================
-        ! Sub-test E: IPROT (EXPEVT=0x0A0) -> VBR+0x400 (_v_ifetch)
+        ! Sub-test E: IPROT (EXPEVT=0x0A0) -> VBR+0x400 (_v_tlb)
         ! Map page 3 (VA 0x3000) no-execute (X=0, W|U|C = 0xA8).
         ! Drop to user mode; I-prot fires when x=0.
         ! ==============================================================
@@ -294,7 +291,7 @@ ENTRY(after_d)
         ! In user mode: jump to VA 0x3000 (X=0) -> IPROT.
         mov     #13, r9
         mov.l   c_page3_va, r0
-        jmp     @r0                     ! FAULTS -> _v_ifetch (VBR+0x400), IPROT
+        jmp     @r0                     ! FAULTS -> _v_tlb (VBR+0x400), IPROT
         nop
 
         bra     _fail
@@ -302,7 +299,7 @@ ENTRY(after_d)
 
 ENTRY(after_e)
         ! ==============================================================
-        ! Sub-test F: DPROT_R (EXPEVT=0x0C0) -> VBR+0x420 (_v_load)
+        ! Sub-test F: DPROT_R (EXPEVT=0x0C0) -> VBR+0x400 (_v_tlb)
         ! Map page 4 (VA 0x4000) supervisor-only (U=0, W|X|C = 0xC8).
         ! Drop to user mode; D-prot fires when u=0 AND md=0 on load.
         ! ==============================================================
@@ -347,7 +344,7 @@ ENTRY(after_e)
         ! In user mode: load from VA 0x4000 (U=0) -> DPROT_R.
         mov     #16, r9
         mov.l   c_page4_va, r2
-        mov.l   @r2, r3                 ! FAULTS -> _v_load (VBR+0x420), DPROT_R
+        mov.l   @r2, r3                 ! FAULTS -> _v_tlb (VBR+0x400), DPROT_R
 
         bra     _fail
         nop
@@ -362,7 +359,7 @@ ENTRY(after_f)
         .align 2
 p_rbclear:          .long 0xDFFFFFFF
 p_mdmask:           .long 0xBFFFFFFF
-p_vbr_val:          .long _v_ifetch - 0x400 ! VBR so VBR+0x400 = _v_ifetch
+p_vbr_val:          .long _v_tlb - 0x400 ! VBR so VBR+0x400 = _v_tlb
 p_mmucr:            .long 0xFF000010
 p_ptel_page0:       .long 0x000000E8   ! W|X|U|C
 p_ptel_ro:          .long 0x00000068   ! X|U|C  (W=0 -> DPROT_W)
@@ -430,7 +427,7 @@ p_test_result: .long TEST_RESULT_ADDRESS
         ! Plan: Each handler disables AT and then branches (bra + delay
         ! slot nop) to a SHARED handler body. The bra is a PC-relative
         ! short branch (within +-0x7FF bytes). The shared body sits
-        ! immediately before _v_ifetch (NOT between handlers) so it's
+        ! immediately before _v_tlb (NOT between handlers) so it's
         ! not subject to the 0x20 constraint.
         !
         ! Stub layout (exactly 0x20 bytes = 16 instructions = 32 bytes):
@@ -472,16 +469,10 @@ p_test_result: .long TEST_RESULT_ADDRESS
         !   handler is 0x20 apart). The SAME literal constants can be shared.
         !   Place a SHARED literal pool after the three stubs.
         !
-        ! Revised layout (each stub is 0x20 bytes = all instructions, NO local literal):
-        !   The literal pool is placed immediately after _v_store (at _v_ifetch+0x60+).
-        !   Each stub uses mov.l @(disp,PC) to reach shared literals.
-        !   _v_ifetch is at address X. Literals are at X+0x60 or thereabouts.
-        !   From _v_ifetch: disp = (X+0x60 - (X+4))/4 = 0x5C/4 = 23. ✓ (0-255 range)
-        !   From _v_load (X+0x20): disp = (X+0x60 - (X+0x20+4))/4 = 0x3C/4 = 15. ✓
-        !   From _v_store (X+0x40): disp = (X+0x60 - (X+0x40+4))/4 = 0x1C/4 = 7. ✓
-        !   All within range!
+        ! Layout: ONE handler at _v_tlb (= VBR+0x400) followed by its literal
+        ! pool; the mov.l @(disp,PC) loads reach the pool (well within range).
         !
-        ! Stub body (16 instrs = 0x20 bytes, literals shared after _v_store):
+        ! Handler body (checks EXPEVT then TEA, both vs per-sub-test globals):
         !   +0  mov.l Hmmucr, r0      [2] -- MMUCR ptr
         !   +2  mov   #0, r1          [2]
         !   +4  mov.l r1, @r0         [2] -- disable AT
@@ -500,7 +491,7 @@ p_test_result: .long TEST_RESULT_ADDRESS
         !  +30  nop                   [2]
         !   = 16 instructions = 32 bytes = 0x20 ✓
         !
-        ! Shared literal pool (at _v_ifetch + 0x60, must be 4-byte aligned):
+        ! Shared literal pool (at _v_tlb + 0x60, must be 4-byte aligned):
         !   Hmmucr:        .long 0xFF000010
         !   Hexp_expevt:   .long _g_exp_expevt
         !   Htea_addr:     .long 0xFF00000C
@@ -511,13 +502,13 @@ p_test_result: .long TEST_RESULT_ADDRESS
         !   _h_resume: loads g_resume, sets SPC, RTE
         !   _h_bad_expevt / _h_bad_tea: loads fail code, branches to _fail
         !
-        ! PC-relative disp for Hmmucr from _v_ifetch (at offset X+0):
+        ! PC-relative disp for Hmmucr from _v_tlb (at offset X+0):
         !   instruction at +0, PC at +4, literal at X+0x60.
         !   disp = (X+0x60 - (X+4)) / 4 = 0x5C/4 = 23. ✓
         ! ================================================================
 
         .balign 4
-_v_ifetch:                             ! = VBR + 0x400
+_v_tlb:                                ! = VBR + 0x400 (ALL TLB faults; EXPEVT distinguishes)
         mov.l   Hmmucr, r0             ! +0  load MMUCR addr
         mov     #0, r1                 ! +2
         mov.l   r1, @r0               ! +4  MMUCR = 0 (disable AT)
@@ -535,43 +526,7 @@ _v_ifetch:                             ! = VBR + 0x400
         bra     _h_resume              ! +28
         nop                            ! +30
 
-_v_load:                               ! = VBR + 0x420 = _v_ifetch + 0x20
-        mov.l   Hmmucr, r0
-        mov     #0, r1
-        mov.l   r1, @r0
-        .word   0x0052                 ! STC EXPEVT, r0
-        mov.l   Hexp_expevt, r1
-        mov.l   @r1, r1
-        cmp/eq  r0, r1
-        bf      _h_bad_expevt
-        mov.l   Htea_addr, r0
-        mov.l   @r0, r2
-        mov.l   Hexp_tea, r1
-        mov.l   @r1, r1
-        cmp/eq  r1, r2
-        bf      _h_bad_tea
-        bra     _h_resume
-        nop
-
-_v_store:                              ! = VBR + 0x440 = _v_ifetch + 0x40
-        mov.l   Hmmucr, r0
-        mov     #0, r1
-        mov.l   r1, @r0
-        .word   0x0052                 ! STC EXPEVT, r0
-        mov.l   Hexp_expevt, r1
-        mov.l   @r1, r1
-        cmp/eq  r0, r1
-        bf      _h_bad_expevt
-        mov.l   Htea_addr, r0
-        mov.l   @r0, r2
-        mov.l   Hexp_tea, r1
-        mov.l   @r1, r1
-        cmp/eq  r1, r2
-        bf      _h_bad_tea
-        bra     _h_resume
-        nop
-
-        ! ---- Shared literal pool (at _v_ifetch + 0x60, 4-byte aligned) ----
+        ! ---- Shared literal pool (at _v_tlb + 0x60, 4-byte aligned) ----
         .balign 4
 Hmmucr:         .long 0xFF000010       ! P4 MMUCR
 Hexp_expevt:    .long _g_exp_expevt    ! ptr to expected EXPEVT global

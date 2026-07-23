@@ -25,7 +25,7 @@
 ! RED before M5: STC TSBPTR (0x0043) is undefined -> garbage compare -> the
 ! handler writes FAIL (or, if it traps, times out). GREEN: TSBPTR == expected.
 !
-! VBR = _v_load - 0x420 so the DMISS_R vector (VBR+0x420) hits _v_load.
+! VBR = _v_load - 0x400 so the DMISS_R vector (VBR+0x400) hits _v_load.
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -60,7 +60,7 @@ ENTRY(start)
         nop
         nop
 
-        ! ---- VBR = _v_load - 0x420. ----
+        ! ---- VBR = _v_load - 0x400. ----
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
@@ -98,7 +98,7 @@ ENTRY(start)
 
         .align 2
 p_rbclear:      .long 0xDFFFFFFF
-p_vbr_val:      .long _v_load - 0x420
+p_vbr_val:      .long _v_load - 0x400
 p_pteh_code:    .long start
 p_ptel_code:    .long start + 0x000000C8        ! U cleared: kernel code, SMEP
 p_mmucr:        .long 0xFF000010
@@ -126,11 +126,11 @@ p_test_result: .long TEST_RESULT_ADDRESS
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 
-        ! ---- DMISS_R handler at VBR+0x420 ----
+        ! ---- DMISS_R handler at VBR+0x400 ----
         .balign 4
         .space 0x600, 0
         .balign 4
-_v_load:                                ! = VBR + 0x420
+_v_load:                                ! = VBR + 0x400
         ! Read hardware-computed TSBPTR and compare to the expected value.
         .word   0x0043                  ! STC TSBPTR, r0   (read-only, new in M5)
         mov.l   He_tsbptr, r1

@@ -30,7 +30,7 @@
 !     all global hits.
 !
 !   Leg A (ASID A): load VA 0x4000 (the G=1,U=1 entry) -- must FAULT
-!     (DPROT_R, VBR+0x420), even though we are in KERNEL mode (MD=1) and
+!     (DPROT_R, VBR+0x400), even though we are in KERNEL mode (MD=1) and
 !     the plain "u=0 and md=0" rule would never have fired here.
 !   Leg B (ASID B): same entry, different ASID -- since G=1, the entry
 !     still matches (ASID irrelevant to global lookup); must ALSO FAULT.
@@ -40,7 +40,7 @@
 !     ASID B, proving the fix is scoped to U=1 and does not break ordinary
 !     global-kernel-page semantics.
 !
-! VBR = _v_load - 0x420 so the DMISS_R/DPROT_R vector (VBR+0x420) hits
+! VBR = _v_load - 0x400 so the DMISS_R/DPROT_R vector (VBR+0x400) hits
 ! _v_load, mirroring mmuasid.S / mmufault.S conventions.
 !
 ! PTEL flag bit layout (core/tlb.vhd): bit7=W bit6=X bit5=U bit4=D bit3=C
@@ -87,7 +87,7 @@ ENTRY(start)
         nop
         nop
 
-        ! ---- VBR = _v_load - 0x420 (so VBR+0x420 = _v_load). ----
+        ! ---- VBR = _v_load - 0x400 (so VBR+0x400 = _v_load). ----
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
@@ -154,7 +154,7 @@ ENTRY(start)
         ! ---- Leg A (ASID A): load VA 0x4000 (G=1,U=1 entry) -- must FAULT. ----
         mov     #1, r9                  ! sentinel: no exception -> result 1
         mov.l   c_va4, r2
-        mov.l   @r2, r8                 ! FAULTS -> _v_load (VBR+0x420), DPROT_R
+        mov.l   @r2, r8                 ! FAULTS -> _v_load (VBR+0x400), DPROT_R
         bra     _fail                   ! reached only if the load did NOT fault
         nop
 ENTRY(leg_a_after)
@@ -183,7 +183,7 @@ ENTRY(leg_a_after)
         ! does not rescue it under a different ASID). ----
         mov     #3, r9                  ! sentinel: no exception -> result 3
         mov.l   c_va4, r2
-        mov.l   @r2, r8                 ! FAULTS -> _v_load (VBR+0x420), DPROT_R
+        mov.l   @r2, r8                 ! FAULTS -> _v_load (VBR+0x400), DPROT_R
         bra     _fail                   ! reached only if the load did NOT fault
         nop
 ENTRY(leg_b_after)
@@ -219,7 +219,7 @@ ENTRY(leg_b_after)
 
         .align 2
 p_rbclear:              .long 0xDFFFFFFF
-p_vbr_val:               .long _v_load - 0x420
+p_vbr_val:               .long _v_load - 0x400
 p_mmucr:                  .long 0xFF000010
 p_ptel_page0:             .long 0x000000CC        ! W|X|C|G, U=0 (kernel global code page)
 p_pteh_p4:                .long 0x00004000
@@ -259,14 +259,14 @@ p_test_result: .long TEST_RESULT_ADDRESS
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 
-        ! ---- DMISS_R/DPROT_R handler at VBR+0x420 (the ONLY pass path for
+        ! ---- DMISS_R/DPROT_R handler at VBR+0x400 (the ONLY pass path for
         ! Legs A and B). Disables AT, verifies EXPEVT == DPROT_R (0x0C0)
         ! -- distinguishing a real protection fault from a plain miss --
         ! then resumes at the caller-selected _g_resume label. ----
         .balign 4
         .space 0x620, 0
         .balign 4
-_v_load:                                ! = VBR + 0x420
+_v_load:                                ! = VBR + 0x400
         mov.l   Hmmucr, r0
         mov     #0, r1
         mov.l   r1, @r0                 ! MMUCR = 0 (disable AT)

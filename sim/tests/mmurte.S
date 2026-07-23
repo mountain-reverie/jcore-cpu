@@ -13,7 +13,7 @@
 !   - if RTE redirects (correct): _resume runs -> result 0 (PASS)
 !   - if RTE falls through (defect): lands on `bra _fail` -> result 1 (FAIL)
 !
-! VBR = _v_load - 0x420 so the DMISS_R vector (VBR+0x420) hits _v_load.
+! VBR = _v_load - 0x400 so the DMISS_R vector (VBR+0x400) hits _v_load.
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -46,7 +46,7 @@ ENTRY(start)
         nop
         nop
 
-        ! ---- VBR = _v_load - 0x420 (so VBR+0x420 = _v_load). ----
+        ! ---- VBR = _v_load - 0x400 (so VBR+0x400 = _v_load). ----
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
@@ -67,7 +67,7 @@ ENTRY(start)
         ! ---- Take a DMISS_R: load from VA 0x1000 (page 1, unmapped). ----
         mov     #1, r9                  ! sentinel: if no fault, fail code 1
         mov.l   c_page1_va, r2
-        mov.l   @r2, r3                 ! FAULTS -> _v_load (VBR+0x420), DMISS_R
+        mov.l   @r2, r3                 ! FAULTS -> _v_load (VBR+0x400), DMISS_R
 
         ! If RTE redirects correctly, we never reach here (we land on _resume).
         bra     _fail
@@ -86,7 +86,7 @@ pr_test_result: .long TEST_RESULT_ADDRESS
 
         .align 2
 p_rbclear:      .long 0xDFFFFFFF
-p_vbr_val:      .long _v_load - 0x420
+p_vbr_val:      .long _v_load - 0x400
 p_mmucr:        .long 0xFF000010
 p_ptel_page0:   .long 0x000000C8
 c_page1_va:     .long 0x00001000
@@ -109,13 +109,13 @@ p_test_result: .long TEST_RESULT_ADDRESS
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 
-        ! ---- DMISS_R handler at VBR+0x420 ----
+        ! ---- DMISS_R handler at VBR+0x400 ----
         ! Pad so _v_load lands at >= 0x420 (so VBR = _v_load-0x420 is positive
         ! and the handler sits clear of page 0's code).
         .balign 4
         .space 0x600, 0
         .balign 4
-_v_load:                                ! = VBR + 0x420
+_v_load:                                ! = VBR + 0x400
         mov.l   Hmmucr, r0
         mov     #0, r1
         mov.l   r1, @r0                 ! MMUCR = 0 (disable AT)

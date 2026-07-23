@@ -21,7 +21,7 @@
 ! 4 KB) and installs an identity PTE = (PTEH_page | 0xE8). One handler services
 ! both pages, so the test does not depend on TSB/walker/flush machinery.
 !
-! VBR = _v_store - 0x440 so DMISS_W (VBR+0x440) lands on _v_store.
+! VBR = _v_store - 0x400 so DMISS_W (VBR+0x400) lands on _v_store.
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -57,7 +57,7 @@ ENTRY(start)
         nop
         nop
 
-        ! ---- VBR = _v_store - 0x440. ----
+        ! ---- VBR = _v_store - 0x400. ----
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
@@ -112,7 +112,7 @@ pr_test_result: .long TEST_RESULT_ADDRESS
 
         .align 2
 p_rbclear:      .long 0xDFFFFFFF
-p_vbr_val:      .long _v_store - 0x440
+p_vbr_val:      .long _v_store - 0x400
 p_mmucr:        .long 0xFF000010
 p_pteh_code:    .long start
 p_ptel_code:    .long start + 0x000000C8        ! U cleared: kernel code, SMEP
@@ -139,13 +139,13 @@ p_test_result: .long TEST_RESULT_ADDRESS
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 
-        ! ---- VA-driven DMISS_W handler at VBR+0x440 ----
+        ! ---- VA-driven DMISS_W handler at VBR+0x400 ----
         ! Reads faulting VPN from PTEH, installs identity PTE = (page | 0xE8),
         ! LDTLB.RN to resume. Bank-1 scratch; AT stays on.
         .balign 4
-        .space 0x440, 0
+        .space 0x400, 0
         .balign 4
-_v_store:                               ! = VBR + 0x440
+_v_store:                               ! = VBR + 0x400
         ! HW captured PTEH = faulting page VPN (4 KB). Leave PTEH as-is (it is
         ! the LDTLB tag); just derive the identity PTEL from it.
         .word   0x0153                  ! STC PTEH, r1   (faulting page VPN, 4KB)

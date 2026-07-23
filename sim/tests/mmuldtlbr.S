@@ -22,7 +22,7 @@
 ! RED before change: 0x0078 (was 0x0068) is a delayed branch, so the slot (mov #1,r9)
 ! executes -> r9==1 -> the no-delay-slot guard trips -> "Test failed. Result=1".
 !
-! VBR = _v_load - 0x420 so the DMISS_R vector (VBR+0x420) hits _v_load.
+! VBR = _v_load - 0x400 so the DMISS_R vector (VBR+0x400) hits _v_load.
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -57,7 +57,7 @@ ENTRY(start)
         nop
         nop
 
-        ! ---- VBR = _v_load - 0x420 (so VBR+0x420 = _v_load). ----
+        ! ---- VBR = _v_load - 0x400 (so VBR+0x400 = _v_load). ----
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
@@ -106,7 +106,7 @@ pr_test_result: .long TEST_RESULT_ADDRESS
 
         .align 2
 p_rbclear:      .long 0xDFFFFFFF
-p_vbr_val:      .long _v_load - 0x420
+p_vbr_val:      .long _v_load - 0x400
 p_mmucr:        .long 0xFF000010
 p_pteh_code:    .long start                     ! code page base (4KB-aligned), ASID=0
 p_ptel_code:    .long start + 0x000000C8        ! identity PPN | (W+X+C) U cleared: kernel code, SMEP
@@ -131,12 +131,12 @@ p_test_result: .long TEST_RESULT_ADDRESS
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 
-        ! ---- DMISS_R handler at VBR+0x420 ----
+        ! ---- DMISS_R handler at VBR+0x400 ----
         ! Pad so _v_load lands at >= 0x420 and clear of page 0's code.
         .balign 4
         .space 0x600, 0
         .balign 4
-_v_load:                                ! = VBR + 0x420
+_v_load:                                ! = VBR + 0x400
         ! Map the faulting page identity (W+X+U+C = 0xE8) using the page's VPN.
         ! _sentinel lives in the page-1 region; PTEH.VPN must name that page.
         mov.l   Hpteh, r0               ! r0 = _sentinel page base (VPN<<12, 4KB page)

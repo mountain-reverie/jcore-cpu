@@ -16,7 +16,7 @@
 !       read seed 0      -> fail code 2 (resumed store DID NOT WRITE)
 !       read other       -> fail code 4 (wrote wrong)
 !
-! VBR = _v_store - 0x440 so the DMISS_W vector (VBR+0x440) hits _v_store.
+! VBR = _v_store - 0x400 so the DMISS_W vector (VBR+0x400) hits _v_store.
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -51,7 +51,7 @@ ENTRY(start)
         nop
         nop
 
-        ! ---- VBR = _v_store - 0x440. ----
+        ! ---- VBR = _v_store - 0x400. ----
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
@@ -108,7 +108,7 @@ pr_test_result: .long TEST_RESULT_ADDRESS
 
         .align 2
 p_rbclear:      .long 0xDFFFFFFF
-p_vbr_val:      .long _v_store - 0x440
+p_vbr_val:      .long _v_store - 0x400
 p_mmucr:        .long 0xFF000010
 p_pteh_code:    .long start
 p_ptel_code:    .long start + 0x000000C8        ! U cleared: kernel code, SMEP
@@ -139,11 +139,11 @@ p_test_result: .long TEST_RESULT_ADDRESS
         .align 2
 _ctrl_word:     .long 0
 
-        ! ---- DMISS_W handler at VBR+0x440 ----
+        ! ---- DMISS_W handler at VBR+0x400 ----
         .balign 4
-        .space 0x440, 0
+        .space 0x400, 0
         .balign 4
-_v_store:                               ! = VBR + 0x440
+_v_store:                               ! = VBR + 0x400
         mov.l   Hpteh, r0
         .word   0x405E                  ! LDC r0, PTEH
         mov.l   Hptel, r0

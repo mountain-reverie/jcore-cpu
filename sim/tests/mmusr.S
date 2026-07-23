@@ -12,7 +12,7 @@
 !
 ! Flow:
 !   - map page 0 identity, enable AT, seed bank-0 R3 = 0x5A
-!   - load VA 0x1000 (unmapped) -> DMISS_R -> handler at VBR+0x420
+!   - load VA 0x1000 (unmapped) -> DMISS_R -> handler at VBR+0x400
 !   - handler (entered with MD=RB=BL=1): assert (SR & 0x70000000)==0x70000000;
 !     clobber bank-1 R3=0x77 (uses bank-1 scratch); LDC SPC=_resume; RTE
 !   - _resume (RB restored to 0): assert bank-0 R3 still 0x5A -> bank-1 was a
@@ -21,7 +21,7 @@
 ! result 0 = pass; 1 = no exception fired; 2 = SR.{MD,RB,BL} not all set on
 ! entry; 3 = bank-0 R3 corrupted (handler's bank-1 write leaked to bank 0).
 !
-! VBR = _v_load - 0x420 so the DMISS_R vector (VBR+0x420) hits _v_load.
+! VBR = _v_load - 0x400 so the DMISS_R vector (VBR+0x400) hits _v_load.
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -54,7 +54,7 @@ ENTRY(start)
         nop
         nop
 
-        ! ---- VBR = _v_load - 0x420 (so VBR+0x420 = _v_load). ----
+        ! ---- VBR = _v_load - 0x400 (so VBR+0x400 = _v_load). ----
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
@@ -76,7 +76,7 @@ ENTRY(start)
         mov     #0x5A, r3               ! bank-0 R3 sentinel
         mov     #1, r9                  ! sentinel: if no fault, fail code 1
         mov.l   c_page1_va, r2
-        mov.l   @r2, r4                 ! FAULTS -> _v_load (VBR+0x420), DMISS_R
+        mov.l   @r2, r4                 ! FAULTS -> _v_load (VBR+0x400), DMISS_R
 
         bra     _fail
         nop
@@ -102,7 +102,7 @@ _rbspin: bra    _rbspin
         .align 2
 pr_test_result: .long TEST_RESULT_ADDRESS
 p_rbclear:      .long 0xDFFFFFFF
-p_vbr_val:      .long _v_load - 0x420
+p_vbr_val:      .long _v_load - 0x400
 p_mmucr:        .long 0xFF000010
 p_ptel_page0:   .long 0x000000C8
 c_page1_va:     .long 0x00001000
@@ -125,11 +125,11 @@ p_test_result: .long TEST_RESULT_ADDRESS
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 
-        ! ---- DMISS_R handler at VBR+0x420 ----
+        ! ---- DMISS_R handler at VBR+0x400 ----
         .balign 4
         .space 0x600, 0
         .balign 4
-_v_load:                                ! = VBR + 0x420, entered MD=RB=BL=1
+_v_load:                                ! = VBR + 0x400, entered MD=RB=BL=1
         mov.l   Hmmucr, r0
         mov     #0, r1
         mov.l   r1, @r0                 ! MMUCR = 0 (disable AT) -- bank-1 scratch r0/r1

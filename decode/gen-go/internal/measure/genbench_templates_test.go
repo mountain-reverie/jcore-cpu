@@ -27,6 +27,19 @@ func TestGenRegRegSub(t *testing.T) {
 	}
 }
 
+func TestGenUnaryShll(t *testing.T) {
+	// single-register-operand form: shll Rn (format "n", no memory ref).
+	in := spec.Instr{Name: "SHLL Rn", Format: "n", Opcode: "0100nnnn00000000"}
+	got, err := Gen(in, Recipe{Template: "unary", Measurable: true}, 50, 0xABCD0000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _ := os.ReadFile("testdata/shll_unary_golden.S")
+	if got != string(want) {
+		t.Fatalf("unary .S mismatch:\n%s", got)
+	}
+}
+
 func TestGenLoadTemplate(t *testing.T) {
 	in := spec.Instr{Name: "MOV.L @Rm, Rn", Opcode: "0110nnnnmmmm0010"}
 	rec := Recipe{Template: "load", Ptr: "r10", Region: 0x00008000}

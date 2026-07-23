@@ -69,13 +69,23 @@ func marker(sb *strings.Builder, id uint8) {
 }
 
 // mnemonic extracts the gas mnemonic from a spec.Instr.Name, e.g.
-// "ADD Rm, Rn" -> "add".
+// "ADD Rm, Rn" -> "add". Slash-suffixed forms ("CMP /EQ Rm, Rn", "CMP /PL
+// Rn") are spec-table shorthand for gas's "cmp/eq", "cmp/pl" mnemonics: if
+// the token immediately following the leading mnemonic starts with "/",
+// join it (lowercased, no space) rather than discarding it -- discarding it
+// silently emits the base mnemonic ("cmp r9,r1"), which gas rejects (or
+// worse, assembles a different instruction than intended).
 func mnemonic(in spec.Instr) string {
 	name := strings.TrimSpace(in.Name)
-	if i := strings.IndexAny(name, " \t"); i >= 0 {
-		name = name[:i]
+	fields := strings.Fields(name)
+	if len(fields) == 0 {
+		return ""
 	}
-	return strings.ToLower(name)
+	mn := strings.ToLower(fields[0])
+	if len(fields) > 1 && strings.HasPrefix(fields[1], "/") {
+		mn += strings.ToLower(fields[1])
+	}
+	return mn
 }
 
 // operandRegs returns the register operand names used to build the
@@ -166,6 +176,8 @@ func Gen(in spec.Instr, rec Recipe, count int, ledAddr uint32) (string, error) {
 		return GenDefault(in, count, ledAddr)
 	case "unary":
 		return genUnary(in, count, ledAddr)
+	case "nullary":
+		return genNullary(in, count, ledAddr)
 	case "load":
 		return genLoad(in, rec, count, ledAddr)
 	case "store":
@@ -269,6 +281,52 @@ func genUnary(in spec.Instr, count int, ledAddr uint32) (string, error) {
 	marker(&body, 0x55)
 	body.WriteString("        .rept " + fmt.Sprint(count) + "\n")
 	body.WriteString(instrLine(mn, depReg))
+	body.WriteString("        .endr\n")
+	marker(&body, 0x66)
+
+	return fmt.Sprintf(headerTmpl, ledAddr, ledAddr, body.String()), nil
+}
+
+// genNullary emits the "nullary" template: <mn> with no operand at all
+// (CLRT, SETT, CLRMAC, DIV0U, ...). There is no data dependency possible
+// between successive copies (no register/memory operand carries state), so
+// independent and dependent chains are identical back-to-back sequences;
+// only the issue-rate bracket is a meaningful measurement, and latency is
+// reported equal to issue (no distinguishable load-use-style delay to
+// isolate for a zero-operand op).
+func genNullary(in spec.Instr, count int, ledAddr uint32) (string, error) {
+	if count <= 0 {
+		return "", fmt.Errorf("count must be positive, got %d", count)
+	}
+	mn := mnemonic(in)
+	if mn == "" {
+		return "", fmt.Errorf("could not derive mnemonic from instruction name %q", in.Name)
+	}
+
+	var body strings.Builder
+
+	// --- calibration A: 100 nops ---
+	marker(&body, 0x11)
+	body.WriteString("        .rept 100\n        nop\n        .endr\n")
+	marker(&body, 0x12)
+
+	// --- calibration B: 200 nops ---
+	marker(&body, 0x13)
+	body.WriteString("        .rept 200\n        nop\n        .endr\n")
+	marker(&body, 0x14)
+
+	// --- independent chain: count copies, no operand ---
+	marker(&body, 0x33)
+	body.WriteString("        .rept " + fmt.Sprint(count) + "\n")
+	body.WriteString(instrLine(mn, ""))
+	body.WriteString("        .endr\n")
+	marker(&body, 0x44)
+
+	// --- dependent chain: identical to independent (no data dependency
+	// possible for a zero-operand op) ---
+	marker(&body, 0x55)
+	body.WriteString("        .rept " + fmt.Sprint(count) + "\n")
+	body.WriteString(instrLine(mn, ""))
 	body.WriteString("        .endr\n")
 	marker(&body, 0x66)
 

@@ -46,12 +46,68 @@ func TestClassify(t *testing.T) {
 			wantTmpl: "store",
 		},
 		{
-			name: "bt -> branch",
+			name: "mov.l @(disp,Rm),Rn -> skip (disp addressing not templated)",
+			in: spec.Instr{
+				Name: "MOV.L @(disp, Rm), Rn", Format: "nmd",
+				Operation: "(disp × 4+ Rm) ? Rn",
+			},
+			wantTmpl: "skip",
+		},
+		{
+			name: "mov.b Rm,@(R0,Rn) -> skip (R0-indexed not templated)",
+			in: spec.Instr{
+				Name: "MOV.B Rm, @(R0, Rn)", Format: "nm",
+				Operation: "Rm?(R0 +Rn)",
+			},
+			wantTmpl: "skip",
+		},
+		{
+			name: "mov.l @Rm+,Rn -> skip (post-inc not templated)",
+			in: spec.Instr{
+				Name: "MOV.L @Rm+, Rn", Format: "nm",
+				Operation: "(Rm) ? Rn, Rm + 4 ? Rm",
+			},
+			wantTmpl: "skip",
+		},
+		{
+			name: "mov.l Rm,@-Rn -> skip (pre-dec not templated)",
+			in: spec.Instr{
+				Name: "MOV.L Rm,@-Rn", Format: "nm",
+				Operation: "Rn – 4 ? Rn, Rm ? (Rn)",
+			},
+			wantTmpl: "skip",
+		},
+		{
+			name: "cmp/eq -> default (slash mnemonic doesn't affect classify)",
+			in: spec.Instr{
+				Name: "CMP /EQ Rm, Rn", Format: "nm",
+				Operation: "If Rn = Rm, 1 ? T",
+			},
+			wantTmpl: "default",
+		},
+		{
+			name: "clrt -> nullary",
+			in: spec.Instr{
+				Name: "CLRT", Format: "0",
+				Operation: "0 -> T",
+			},
+			wantTmpl: "nullary",
+		},
+		{
+			name: "nop -> skip (calibration filler, not a DUT)",
+			in: spec.Instr{
+				Name: "NOP", Format: "0",
+				Operation: "no operation",
+			},
+			wantTmpl: "skip",
+		},
+		{
+			name: "bt -> hand (branch redirect penalty, not isolatable)",
 			in: spec.Instr{
 				Name: "BT label", Format: "d8",
 				Operation: "When T=1, disp ?PC; T=0, nop",
 			},
-			wantTmpl: "branch",
+			wantHand: true,
 		},
 		{
 			name: "rte -> hand",
@@ -127,6 +183,21 @@ func TestClassifySkipDropsMeasurable(t *testing.T) {
 	}
 	if rec.Why != "" {
 		t.Fatalf("skip recipe should not set Why (that's the hand-entry sentinel)")
+	}
+}
+
+// TestClassifyLoadStorePtrRegion ensures plain register-indirect load/store
+// recipes carry a concrete Ptr/Region (matching movl_load_golden.S), not an
+// empty pointer that would emit an unassemblable/wrong-instruction
+// benchmark.
+func TestClassifyLoadStorePtrRegion(t *testing.T) {
+	load := Classify(spec.Instr{Name: "MOV.L @Rm, Rn", Format: "nm", Operation: "@Rm ? Rn"})
+	if load.Ptr != "r10" || load.Region != 0x00008000 {
+		t.Fatalf("load recipe Ptr/Region = %q/%#x, want r10/0x8000", load.Ptr, load.Region)
+	}
+	store := Classify(spec.Instr{Name: "MOV.L Rm, @Rn", Format: "nm", Operation: "Rm ? @Rn"})
+	if store.Ptr != "r10" || store.Region != 0x00008000 {
+		t.Fatalf("store recipe Ptr/Region = %q/%#x, want r10/0x8000", store.Ptr, store.Region)
 	}
 }
 

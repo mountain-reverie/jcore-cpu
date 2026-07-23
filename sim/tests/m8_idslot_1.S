@@ -45,6 +45,7 @@
 ! case 29 skipped: LDS.L @Rm+, PR accesses memory; the I-fetch-delay-slot axis is fetch-only (data-access-in-delay-slot precision is the DSideDSlot axis)
 ! case 29 skipped: LDTLB is Bespoke (dedicated guard)
 ! case 29 skipped: LDTLB.RN is Bespoke (dedicated guard)
+! case 29 skipped: LDTLB.RN Rm writes/needs a control register; the I-fetch-delay-slot axis sweeps the General non-memory set
 ! case 29 skipped: MAC.L @Rm+, @Rn+ accesses memory; the I-fetch-delay-slot axis is fetch-only (data-access-in-delay-slot precision is the DSideDSlot axis)
 ! case 29 skipped: MAC.W @Rm+, @Rn+ accesses memory; the I-fetch-delay-slot axis is fetch-only (data-access-in-delay-slot precision is the DSideDSlot axis)
 ! case 31 skipped: MOV.B @(R0, Rm), Rn accesses memory; the I-fetch-delay-slot axis is fetch-only (data-access-in-delay-slot precision is the DSideDSlot axis)

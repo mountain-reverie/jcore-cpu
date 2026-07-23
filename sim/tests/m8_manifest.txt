@@ -102,6 +102,7 @@
 #   LDS Rm, PR           LDS Rm, PR has no D-side memory access
 #   LDTLB                LDTLB is Bespoke (dedicated guard)
 #   LDTLB.RN             LDTLB.RN is Bespoke (dedicated guard)
+#   LDTLB.RN Rm          LDTLB.RN Rm has no D-side memory access
 #   MOV #imm, Rn         MOV #imm, Rn has no D-side memory access
 #   MOV Rm, Rn           MOV Rm, Rn has no D-side memory access
 #   MOV.B @(R0, Rm), Rn  MOV.B @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
@@ -308,6 +309,7 @@
 #   LDS.L @Rm+, PR       LDS.L @Rm+, PR accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 #   LDTLB                LDTLB is Bespoke (dedicated guard)
 #   LDTLB.RN             LDTLB.RN is Bespoke (dedicated guard)
+#   LDTLB.RN Rm          LDTLB.RN Rm writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 #   MAC.L @Rm+, @Rn+     MAC.L @Rm+, @Rn+ accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 #   MAC.W @Rm+, @Rn+     MAC.W @Rm+, @Rn+ accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 #   MOV.B @(R0, Rm), Rn  MOV.B @(R0, Rm), Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)

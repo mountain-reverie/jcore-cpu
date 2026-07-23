@@ -185,6 +185,47 @@
     if_issue = "YES"
     pc = "INC"
 
+# ---- LDTLB.RN Rm: LDTLB.RN with PTEL sourced from a GPR (jcore-only) ----
+# Same install+return as LDTLB.RN, but slot 0 first does PTEL := Rm (fused
+# LDC Rm,PTEL) so the TLB-miss HOT PATH -- which already has the TTE data in a
+# register from the TSB prefetch -- installs in one instruction instead of
+# `ldc Rm,ptel; ldtlb.rn`. The parameterless LDTLB.RN (0x0078) is retained for
+# the slow path / setup code, where PTEL naturally lands in the CSR (the C
+# walker writes it there). Encoding = LDTLB.RN's tail with nibble1 1111 (vs the
+# parameterless 0111) so m=0 does not alias 0x0078.
+[[instr]]
+  name = "LDTLB.RN Rm"
+  privileged = true
+  format = "m"
+  opcode = "0000 mmmm 1111 1011"
+  operation = "Rm -> PTEL; PTEH/PTEL/ASIDR -> TLB; SR<-SSR, PC<-SPC (no delay slot)"
+
+  [[instr.slots]]
+    mask_int = "YES"
+    ybus = "Rm"
+    zbus = "PTEL"
+    zbus_sel = "Y"
+    pc = "HOLD"
+  [[instr.slots]]
+    tlb_wr = "YES"
+    ybus = "SSR"
+    zbus_sel = "Y"
+    sr = "Z"
+    pc = "HOLD"
+  [[instr.slots]]
+    ybus = "SPC"
+    zbus = "PC"
+    zbus_sel = "Y"
+    pc = "HOLD"
+  [[instr.slots]]
+    if_addy = "ZBUS"
+    if_issue = "YES"
+    pc = "HOLD"
+  [[instr.slots]]
+    dispatch = "YES"
+    if_issue = "YES"
+    pc = "INC"
+
 # ---- Break / Reset CPU: bit-11 pin (J4+MMU_ARCH overlay only) ----
 # The base spec uses don't-care bit 11 (---- -010 / ---- -011). That is correct
 # for J1/J2/J4 without MMU, because no TLB exception opcodes exist to alias with.

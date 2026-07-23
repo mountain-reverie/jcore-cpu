@@ -33,6 +33,11 @@ issue = 1
 latency = 4
 source = "hand"
 
+[entries."0000000001101000"]
+issue = 1
+latency = 1
+source = "measured"
+
 [entries."0000000001101011"]
 issue = 1
 latency = 2
@@ -86,6 +91,11 @@ source = "measured"
 [entries."0000nnnn00101010"]
 issue = 1
 latency = 1
+source = "measured"
+
+[entries."0000nnnn00111001"]
+issue = 2
+latency = 2
 source = "measured"
 
 [entries."0000nnnn01011010"]
@@ -493,9 +503,39 @@ issue = 1
 latency = 1
 source = "measured"
 
+[entries."0100nnnn10000001"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn10000100"]
+issue = 35
+latency = 35
+source = "measured"
+
+[entries."0100nnnn10000101"]
+issue = 1
+latency = 1
+source = "measured"
+
 [entries."0100nnnn10001011"]
 issue = 3
 latency = 3
+source = "measured"
+
+[entries."0100nnnn10010001"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn10010100"]
+issue = 35
+latency = 35
+source = "measured"
+
+[entries."0100nnnn10010101"]
+issue = 1
+latency = 1
 source = "measured"
 
 [entries."0100nnnn10011011"]
@@ -634,6 +674,26 @@ latency = 1
 source = "measured"
 
 [entries."10000101mmmmdddd"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."10000110nnnn0iii"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."10000110nnnn1iii"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."10000111nnnn0iii"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."10000111nnnn1iii"]
 issue = 1
 latency = 1
 source = "measured"

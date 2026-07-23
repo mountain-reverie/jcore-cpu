@@ -2927,8 +2927,8 @@
       "J4.issue": 0,
       "J4.latency": 0,
       "J2A": true,
-      "J2A.issue": 1,
-      "J2A.latency": 1
+      "J2A.issue": 2,
+      "J2A.latency": 2
     },
     {
       "group": "Data Transfer Instructions",
@@ -4848,8 +4848,8 @@
       "J4.issue": 0,
       "J4.latency": 0,
       "J2A": true,
-      "J2A.issue": 1,
-      "J2A.latency": 1
+      "J2A.issue": 35,
+      "J2A.latency": 35
     },
     {
       "group": "Arithmetic Operation Instructions",
@@ -4896,8 +4896,8 @@
       "J4.issue": 0,
       "J4.latency": 0,
       "J2A": true,
-      "J2A.issue": 1,
-      "J2A.latency": 1
+      "J2A.issue": 35,
+      "J2A.latency": 35
     },
     {
       "group": "Arithmetic Operation Instructions",
@@ -22370,8 +22370,8 @@
       "J1.issue": 0,
       "J1.latency": 0,
       "J4": true,
-      "J4.issue": 1,
-      "J4.latency": 1,
+      "J4.issue": 2,
+      "J4.latency": 2,
       "J2A": false,
       "J2A.issue": 0,
       "J2A.latency": 0,
@@ -22416,8 +22416,8 @@
       "J1.issue": 0,
       "J1.latency": 0,
       "J4": true,
-      "J4.issue": 1,
-      "J4.latency": 1,
+      "J4.issue": 2,
+      "J4.latency": 2,
       "J2A": false,
       "J2A.issue": 0,
       "J2A.latency": 0
@@ -22461,8 +22461,8 @@
       "J1.issue": 0,
       "J1.latency": 0,
       "J4": true,
-      "J4.issue": 1,
-      "J4.latency": 1,
+      "J4.issue": 2,
+      "J4.latency": 2,
       "J2A": false,
       "J2A.issue": 0,
       "J2A.latency": 0

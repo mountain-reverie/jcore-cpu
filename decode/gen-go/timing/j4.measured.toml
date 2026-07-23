@@ -53,6 +53,11 @@ issue = 1
 latency = 2
 source = "hand"
 
+[entries."0000mmmm11111011"]
+issue = 2
+latency = 2
+source = "hand"
+
 [entries."0000nnnn00000010"]
 issue = 1
 latency = 2
@@ -135,6 +140,16 @@ source = "hand"
 
 [entries."0000nnnn01110011"]
 issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000nnnn11010011"]
+issue = 2
+latency = 2
+source = "hand"
+
+[entries."0000nnnn11110011"]
+issue = 2
 latency = 2
 source = "hand"
 

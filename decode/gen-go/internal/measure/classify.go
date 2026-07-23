@@ -17,6 +17,14 @@ var branchNames = map[string]bool{
 	"RTS/N": true, "RTV/N": true, "JSR/N": true,
 }
 
+// branchHandValue is the well-established branch-redirect-penalty value
+// (issue=1, latency=2), reused verbatim from decode/gen-go/timing/j2.toml's
+// branch overrides. Measuring branch redirect penalty cleanly in the
+// straight-line auto-chain microbenchmark harness is out of scope for this
+// iteration (a taken branch jumps past its own end marker) -- see Task 11
+// iter2 recipes doc.
+const branchHandIssue, branchHandLatency = 1, 2
+
 // handValues seeds latency/issue for un-measurable (system-control) ops,
 // keyed by the leading mnemonic token of Instr.Name (uppercase). Reused
 // from the already-curated timing/j2.toml + j4.toml overrides per the
@@ -79,39 +87,82 @@ func isBranch(in spec.Instr) bool {
 	return strings.Contains(strings.ToLower(in.Operation), "branch")
 }
 
-// isMemory reports whether in.Operation references a memory operand
-// (contains "@"), and if so whether the "@"-side is the source (load,
-// "@Rm -> Rn") or the destination (store, "Rn -> @Rm"). The operation
-// strings in spec/*.toml use "?" as the direction arrow (a mojibake
-// artifact of the original spreadsheet's unicode arrow surviving CSV
-// import) — split on it and see which side carries "@".
+// operandText returns in.Name with the leading mnemonic token stripped, e.g.
+// "MOV.L @Rm, Rn" -> "@Rm, Rn". Empirically, in.Operation in spec/*.toml
+// NEVER contains a literal "@" (the CSV import's arrow mojibake landed on
+// "?", not on the memory-operand marker), so the memory operand and its
+// direction must be read from Name, not Operation.
+func operandText(in spec.Instr) string {
+	name := strings.TrimSpace(in.Name)
+	if i := strings.IndexAny(name, " \t"); i >= 0 {
+		return strings.TrimSpace(name[i+1:])
+	}
+	return ""
+}
+
+// splitTopLevelCommas splits s on commas that are not nested inside
+// parentheses, e.g. "@(R0, Rm), Rn" -> ["@(R0, Rm)", " Rn"] (2 operands,
+// not 3) so displacement/indexed operand groups aren't mistaken for
+// separate operands.
+func splitTopLevelCommas(s string) []string {
+	depth := 0
+	var parts []string
+	last := 0
+	for i, r := range s {
+		switch r {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		case ',':
+			if depth == 0 {
+				parts = append(parts, s[last:i])
+				last = i + 1
+			}
+		}
+	}
+	parts = append(parts, s[last:])
+	return parts
+}
+
+// isMemory reports whether in references a memory operand (its Name, once
+// the mnemonic is stripped, contains "@"), and if so whether the "@"-side
+// is the source (load, "@Rm, Rn") or the destination (store, "Rm, @Rn").
+// MOVA computes an effective address into R0 -- it never accesses memory
+// despite its "@(disp, PC)" operand syntax -- so it's excluded explicitly.
 func isMemory(in spec.Instr) (mem bool, isLoad bool) {
-	op := in.Operation
-	if !strings.Contains(op, "@") {
+	if leadToken(in.Name) == "MOVA" {
 		return false, false
 	}
-	idx := strings.Index(op, "?")
-	if idx < 0 {
-		// No arrow found; can't tell direction reliably. Default to
-		// load (the more common case for @-bearing ops without a
-		// parsed arrow) but this should be rare/unexpected.
+	rest := operandText(in)
+	if !strings.Contains(rest, "@") {
+		return false, false
+	}
+	parts := splitTopLevelCommas(rest)
+	if len(parts) < 2 {
+		// Single-operand memory op (e.g. TAS.B @Rn): can't determine a
+		// load/store direction reliably; treat as memory so Classify
+		// routes it away from load/store's 2-operand templates instead
+		// of silently defaulting to one.
 		return true, true
 	}
-	lhs, rhs := op[:idx], op[idx+1:]
-	lhsMem := strings.Contains(lhs, "@")
-	rhsMem := strings.Contains(rhs, "@")
+	first, last := parts[0], parts[len(parts)-1]
+	firstMem := strings.Contains(first, "@")
+	lastMem := strings.Contains(last, "@")
 	switch {
-	case lhsMem && !rhsMem:
-		// @Rm (source, left of arrow) -> Rn : load. Also covers
-		// post-increment loads ("@Rm+ -> Rn").
+	case firstMem && !lastMem:
+		// @Rm (source, first operand) -> Rn : load. Also covers
+		// post-increment loads ("@Rm+, Rn").
 		return true, true
-	case rhsMem && !lhsMem:
-		// Rn -> @Rm (dest, right of arrow) : store. Also covers
-		// pre-decrement stores ("Rn -> @-Rm").
+	case lastMem && !firstMem:
+		// Rm, @Rn (dest, last operand) : store. Also covers
+		// pre-decrement stores ("Rm, @-Rn").
 		return true, false
 	default:
-		// both sides (or neither) reference "@" -- e.g. swap/RMW ops.
-		// Treat as load (read side dominates the measured latency).
+		// both sides (or neither, or >2 operands e.g. CAS.L) reference
+		// "@" -- RMW-shaped ops. Treat as load; Classify's plain-operand
+		// count/shape check routes these away from the 2-operand
+		// load/store templates regardless.
 		return true, true
 	}
 }
@@ -131,6 +182,44 @@ func isUnary(in spec.Instr) bool {
 		return false
 	}
 	if mem, _ := isMemory(in); mem {
+		return false
+	}
+	return true
+}
+
+// isNullary reports whether in takes no register/immediate operand at all
+// (format "0" or empty, no memory reference): CLRT, SETT, CLRMAC, DIV0U,
+// NOP, ... Excludes NOP itself (routed to "skip" by the caller -- NOP is
+// the calibration filler, not a DUT under measurement).
+func isNullary(in spec.Instr) bool {
+	if in.Format != "0" && in.Format != "" {
+		return false
+	}
+	if mem, _ := isMemory(in); mem {
+		return false
+	}
+	return true
+}
+
+// isPlainIndirect reports whether in expresses ONLY a plain
+// register-indirect memory operand (@Rm / @Rn), in an exactly-2-operand
+// form, with no displacement, R0-indexed, post-increment, pre-decrement, or
+// RMW (1- or 3-operand, e.g. TAS.B @Rn / CAS.L Rm,Rn,@R0) shape -- the only
+// memory shape the "load"/"store" templates can faithfully emit. Any other
+// addressing mode is left unmeasured (see Classify) rather than mis-measure
+// the wrong instruction shape.
+func isPlainIndirect(in spec.Instr) bool {
+	name := in.Name
+	if strings.Contains(name, "(disp") || strings.Contains(name, "(R0") {
+		return false
+	}
+	if strings.Contains(name, "Rm+") || strings.Contains(name, "Rn+") {
+		return false
+	}
+	if strings.Contains(name, "-Rn") || strings.Contains(name, "-Rm") {
+		return false
+	}
+	if len(splitTopLevelCommas(operandText(in))) != 2 {
 		return false
 	}
 	return true
@@ -195,7 +284,12 @@ func Classify(in spec.Instr) Recipe {
 	}
 
 	if isBranch(in) {
-		return Recipe{Template: "branch", Measurable: true}
+		return Recipe{
+			Measurable: false,
+			Issue:      branchHandIssue,
+			Latency:    branchHandLatency,
+			Why:        "branch redirect penalty; microbenchmark control-flow not isolatable",
+		}
 	}
 
 	if in.Opcode2 != "" {
@@ -203,14 +297,30 @@ func Classify(in spec.Instr) Recipe {
 	}
 
 	if mem, isLoad := isMemory(in); mem {
-		if isLoad {
-			return Recipe{Template: "load", Measurable: true}
+		if !isPlainIndirect(in) {
+			return Recipe{
+				Template: "skip",
+				Why:      "hand: non-plain memory addressing (disp/R0-indexed/post-inc/pre-dec) not faithfully representable by the register-indirect load/store template; left unmeasured for " + in.Name,
+			}
 		}
-		return Recipe{Template: "store", Measurable: true}
+		if isLoad {
+			return Recipe{Template: "load", Measurable: true, Ptr: "r10", Region: 0x00008000}
+		}
+		return Recipe{Template: "store", Measurable: true, Ptr: "r10", Region: 0x00008000}
 	}
 
 	if isImmediate(in) {
 		return Recipe{Template: "imm", Measurable: true}
+	}
+
+	// NOP is the calibration filler used inside every bracket, not a DUT
+	// under measurement -- route it to skip rather than nullary.
+	if leadToken(in.Name) == "NOP" {
+		return Recipe{Template: "skip"}
+	}
+
+	if isNullary(in) {
+		return Recipe{Template: "nullary", Measurable: true}
 	}
 
 	if isUnary(in) {

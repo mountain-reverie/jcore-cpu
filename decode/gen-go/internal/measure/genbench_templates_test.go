@@ -65,6 +65,39 @@ func TestGenHandValueSentinel(t *testing.T) {
 	}
 }
 
+func TestGenNullarySett(t *testing.T) {
+	in := spec.Instr{Name: "SETT", Format: "0", Opcode: "0000000000011000"}
+	got, err := Gen(in, Recipe{Template: "nullary", Measurable: true}, 50, 0xABCD0000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _ := os.ReadFile("testdata/sett_nullary_golden.S")
+	if got != string(want) {
+		t.Fatalf("nullary .S mismatch:\n%s", got)
+	}
+}
+
+func TestMnemonicSlashOps(t *testing.T) {
+	cases := []struct{ name, want string }{
+		{"CMP /EQ Rm, Rn", "cmp/eq"},
+		{"CMP /HS Rm, Rn", "cmp/hs"},
+		{"CMP /GE Rm, Rn", "cmp/ge"},
+		{"CMP /HI Rm, Rn", "cmp/hi"},
+		{"CMP /GT Rm, Rn", "cmp/gt"},
+		{"CMP /STR Rm, Rn", "cmp/str"},
+		{"CMP /PL Rn", "cmp/pl"},
+		{"CMP /PZ Rn", "cmp/pz"},
+		{"CMP /EQ #imm, R0", "cmp/eq"},
+		{"ADD Rm, Rn", "add"},
+	}
+	for _, c := range cases {
+		got := mnemonic(spec.Instr{Name: c.name})
+		if got != c.want {
+			t.Errorf("mnemonic(%q) = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
 func TestGenBranchTemplate(t *testing.T) {
 	in := spec.Instr{Name: "BT label", Opcode: "10001001dddddddd"}
 	rec := Recipe{Template: "branch", Loop: 50}

@@ -208,6 +208,9 @@ func runMeasured(set *insns.InstrSet, recipes *measure.Recipes, want map[string]
 		rec := recipeFor(recipes, code, in)
 
 		if rec.Template == "skip" {
+			if rec.Why != "" {
+				log.Printf("skip %s (%s): %s", in.Name, code, rec.Why)
+			}
 			stats.skipped++
 			continue
 		}

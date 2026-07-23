@@ -6,10 +6,12 @@ import (
 	"testing"
 )
 
-// TestJ2DerivedMatchesCommitted verifies that the timing heuristic + j2.toml
-// overrides reproduce the hand-authored J2 columns captured in the frozen
-// fixture. The fixture is the source of truth; docs/insns.json is NOT read
-// here to avoid comparing derived-vs-derived after regeneration.
+// TestJ2DerivedMatchesCommitted is a regression guard on the committed J2
+// timing baseline: it freezes the current per-opcode issue/latency (now sourced
+// from the measured tables, timing/j2.measured.toml, via LoadTable) in the
+// fixture and fails if a code/spec/table change silently shifts any row. When a
+// change intentionally re-measures timing, regenerate testdata/j2_committed.json
+// from the new values.
 func TestJ2DerivedMatchesCommitted(t *testing.T) {
 	type committed struct {
 		J2      bool `json:"J2"`

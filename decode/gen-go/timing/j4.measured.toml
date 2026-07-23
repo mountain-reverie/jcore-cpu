@@ -1,0 +1,769 @@
+[entries."0000000000001000"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0000000000001011"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000000000011000"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0000000000011001"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0000000000011011"]
+issue = 3
+latency = 3
+source = "hand"
+
+[entries."0000000000101000"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0000000000101011"]
+issue = 1
+latency = 4
+source = "hand"
+
+[entries."0000000000111000"]
+issue = 2
+latency = 2
+source = "hand"
+
+[entries."0000000001111000"]
+issue = 2
+latency = 2
+source = "hand"
+
+[entries."0000mmmm00000011"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000mmmm00100011"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000nnnn00000010"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000nnnn00001010"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0000nnnn00010010"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000nnnn00011010"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0000nnnn00100010"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000nnnn00101001"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0000nnnn00101010"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0000nnnn00110010"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000nnnn01000010"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000nnnn01000011"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000nnnn01010010"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000nnnn01010011"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000nnnn01011010"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000nnnn01100010"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000nnnn01100011"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000nnnn01110010"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000nnnn01110011"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000nnnn1mmm0010"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0000nnnnmmmm0100"]
+issue = 1
+latency = 4
+source = "measured"
+
+[entries."0000nnnnmmmm0101"]
+issue = 1
+latency = 4
+source = "measured"
+
+[entries."0000nnnnmmmm0110"]
+issue = 1
+latency = 4
+source = "measured"
+
+[entries."0000nnnnmmmm0111"]
+issue = 4
+latency = 4
+source = "measured"
+
+[entries."0000nnnnmmmm1100"]
+issue = 1
+latency = 3
+source = "measured"
+
+[entries."0000nnnnmmmm1101"]
+issue = 1
+latency = 3
+source = "measured"
+
+[entries."0000nnnnmmmm1110"]
+issue = 1
+latency = 3
+source = "measured"
+
+[entries."0000nnnnmmmm1111"]
+issue = 2
+latency = 2
+source = "hand"
+
+[entries."0001nnnnmmmmdddd"]
+issue = 1
+latency = 4
+source = "measured"
+
+[entries."0010nnnnmmmm0000"]
+issue = 1
+latency = 4
+source = "measured"
+
+[entries."0010nnnnmmmm0001"]
+issue = 1
+latency = 4
+source = "measured"
+
+[entries."0010nnnnmmmm0010"]
+issue = 1
+latency = 4
+source = "measured"
+
+[entries."0010nnnnmmmm0100"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0010nnnnmmmm0101"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0010nnnnmmmm0110"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0010nnnnmmmm0111"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0010nnnnmmmm1000"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0010nnnnmmmm1001"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0010nnnnmmmm1010"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0010nnnnmmmm1011"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0010nnnnmmmm1100"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0010nnnnmmmm1101"]
+issue = 1
+latency = 4
+source = "hand"
+
+[entries."0010nnnnmmmm1110"]
+issue = 3
+latency = 3
+source = "measured"
+
+[entries."0010nnnnmmmm1111"]
+issue = 3
+latency = 3
+source = "measured"
+
+[entries."0011nnnnmmmm0000"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0011nnnnmmmm0010"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0011nnnnmmmm0011"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0011nnnnmmmm0100"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0011nnnnmmmm0101"]
+issue = 4
+latency = 4
+source = "measured"
+
+[entries."0011nnnnmmmm0110"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0011nnnnmmmm0111"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0011nnnnmmmm1000"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0011nnnnmmmm1010"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0011nnnnmmmm1011"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0011nnnnmmmm1100"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0011nnnnmmmm1101"]
+issue = 4
+latency = 4
+source = "measured"
+
+[entries."0011nnnnmmmm1110"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0011nnnnmmmm1111"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100mmmm00000110"]
+issue = 1
+latency = 3
+source = "hand"
+
+[entries."0100mmmm00000111"]
+issue = 1
+latency = 3
+source = "hand"
+
+[entries."0100mmmm00001010"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100mmmm00001011"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0100mmmm00001110"]
+issue = 2
+latency = 2
+source = "hand"
+
+[entries."0100mmmm00010110"]
+issue = 1
+latency = 3
+source = "hand"
+
+[entries."0100mmmm00010111"]
+issue = 1
+latency = 3
+source = "hand"
+
+[entries."0100mmmm00011010"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100mmmm00100110"]
+issue = 1
+latency = 3
+source = "hand"
+
+[entries."0100mmmm00100111"]
+issue = 1
+latency = 3
+source = "hand"
+
+[entries."0100mmmm00101010"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100mmmm00101011"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0100mmmm00101110"]
+issue = 2
+latency = 2
+source = "hand"
+
+[entries."0100mmmm00111110"]
+issue = 2
+latency = 2
+source = "hand"
+
+[entries."0100mmmm01001110"]
+issue = 2
+latency = 2
+source = "hand"
+
+[entries."0100mmmm01011010"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0100mmmm01011110"]
+issue = 2
+latency = 2
+source = "hand"
+
+[entries."0100mmmm01101110"]
+issue = 2
+latency = 2
+source = "hand"
+
+[entries."0100mmmm01111110"]
+issue = 2
+latency = 2
+source = "hand"
+
+[entries."0100mmmm10001000"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0100mmmm1nnn1110"]
+issue = 2
+latency = 2
+source = "hand"
+
+[entries."0100nnnn00000000"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn00000001"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn00000010"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0100nnnn00000011"]
+issue = 2
+latency = 2
+source = "hand"
+
+[entries."0100nnnn00000100"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn00000101"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn00001000"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn00001001"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn00010000"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn00010001"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn00010010"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0100nnnn00010101"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn00011000"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn00011001"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn00011011"]
+issue = 2
+latency = 4
+source = "hand"
+
+[entries."0100nnnn00100000"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn00100001"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn00100010"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0100nnnn00100011"]
+issue = 2
+latency = 2
+source = "hand"
+
+[entries."0100nnnn00100100"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn00100101"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn00101000"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn00101001"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnn11001000"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."0100nnnnmmmm1100"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnnmmmm1101"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0100nnnnmmmm1111"]
+issue = 2
+latency = 2
+source = "hand"
+
+[entries."0101nnnnmmmmdddd"]
+issue = 1
+latency = 3
+source = "measured"
+
+[entries."0110nnnnmmmm0000"]
+issue = 1
+latency = 3
+source = "measured"
+
+[entries."0110nnnnmmmm0001"]
+issue = 1
+latency = 3
+source = "measured"
+
+[entries."0110nnnnmmmm0010"]
+issue = 1
+latency = 3
+source = "measured"
+
+[entries."0110nnnnmmmm0011"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0110nnnnmmmm0100"]
+issue = 3
+latency = 3
+source = "measured"
+
+[entries."0110nnnnmmmm0101"]
+issue = 3
+latency = 3
+source = "measured"
+
+[entries."0110nnnnmmmm0110"]
+issue = 3
+latency = 3
+source = "measured"
+
+[entries."0110nnnnmmmm0111"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0110nnnnmmmm1000"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0110nnnnmmmm1001"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0110nnnnmmmm1010"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0110nnnnmmmm1011"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0110nnnnmmmm1100"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0110nnnnmmmm1101"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0110nnnnmmmm1110"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0110nnnnmmmm1111"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."0111nnnniiiiiiii"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."10000000nnnndddd"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."10000001nnnndddd"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."10000100mmmmdddd"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."10000101mmmmdddd"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."10001000iiiiiiii"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."10001001dddddddd"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."10001011dddddddd"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."10001101dddddddd"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."10001111dddddddd"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."1010dddddddddddd"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."1011dddddddddddd"]
+issue = 1
+latency = 2
+source = "hand"
+
+[entries."11000011iiiiiiii"]
+issue = 2
+latency = 8
+source = "hand"
+
+[entries."11001000iiiiiiii"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."11001001iiiiiiii"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."11001010iiiiiiii"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."11001011iiiiiiii"]
+issue = 1
+latency = 1
+source = "measured"
+
+[entries."11001100iiiiiiii"]
+issue = 2
+latency = 3
+source = "hand"
+
+[entries."11001101iiiiiiii"]
+issue = 2
+latency = 3
+source = "hand"
+
+[entries."11001110iiiiiiii"]
+issue = 2
+latency = 3
+source = "hand"
+
+[entries."11001111iiiiiiii"]
+issue = 2
+latency = 3
+source = "hand"
+
+[entries."1110nnnniiiiiiii"]
+issue = 1
+latency = 1
+source = "measured"

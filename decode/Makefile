@@ -39,6 +39,28 @@ insns:
 insns-check:
 	go -C $(GEN_DIR) run ./cmd/cpugen insns -check -json ../../docs/insns.json
 
+# measure-timing: rebuild each variant's cosim and sweep every instruction's
+# real issue/latency on it, regenerating the measured timing tables + insns.json.
+# SLOW (a GHDL build + ~150 cosim runs per variant) -> run ON DEMAND, not in CI.
+# Requires TOOLS_DIR (shared GHDL build makefiles) + the sh2-elf toolchain. Each
+# variant's GHDL work library (work-obj93.cf) has a fixed name, so variants are
+# built-then-swept sequentially (make clean between). J1 is NOT measured -- its
+# sequential shifter/mult aren't bound in any cosim config (Finding B) -- so it
+# keeps its hand-authored timing/j1.toml.
+measure-timing:
+	@set -e; root=$$(cd .. && pwd); \
+	for cfg in "j2:" "j2a:CONFIG_SH2A_ARCH=1" "j4:CONFIG_PRIV_ARCH=1"; do \
+	  v=$${cfg%%:*}; flag=$${cfg#*:}; \
+	  V=$$(echo $$v | tr a-z A-Z); \
+	  echo "=== $$V: build ($$flag) + sweep ==="; \
+	  $(MAKE) -C $$root/sim clean >/dev/null 2>&1; \
+	  $(MAKE) -C $$root/sim $$flag TOOLS_DIR=$(TOOLS_DIR) >/dev/null; \
+	  go -C $(GEN_DIR) run ./cmd/measure -variant $$V \
+	    -cosim $$root/sim/cpu_ctb -simdir $$root/sim \
+	    -out $$root/decode/$(GEN_DIR)/timing/$$v.measured.toml; \
+	done; \
+	$(MAKE) insns
+
 # m8gen: regenerate the M8 batched fault-test images + manifest into sim/tests.
 # A different generator than the decoder: classifies every instruction and
 # emits self-checking fault-transparency cases (see gen-go/internal/faultgen).

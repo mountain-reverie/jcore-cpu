@@ -85,17 +85,17 @@ source = "hand"
 
 [entries."0000nnnnmmmm0100"]
 issue = 1
-latency = 4
+latency = 1
 source = "measured"
 
 [entries."0000nnnnmmmm0101"]
 issue = 1
-latency = 4
+latency = 1
 source = "measured"
 
 [entries."0000nnnnmmmm0110"]
 issue = 1
-latency = 4
+latency = 1
 source = "measured"
 
 [entries."0000nnnnmmmm0111"]
@@ -125,22 +125,22 @@ source = "hand"
 
 [entries."0001nnnnmmmmdddd"]
 issue = 1
-latency = 4
+latency = 1
 source = "measured"
 
 [entries."0010nnnnmmmm0000"]
 issue = 1
-latency = 4
+latency = 1
 source = "measured"
 
 [entries."0010nnnnmmmm0001"]
 issue = 1
-latency = 4
+latency = 1
 source = "measured"
 
 [entries."0010nnnnmmmm0010"]
 issue = 1
-latency = 4
+latency = 1
 source = "measured"
 
 [entries."0010nnnnmmmm0100"]

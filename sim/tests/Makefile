@@ -124,6 +124,9 @@ mmustres.elf: mmustres.o
 mmustr2.elf: mmustr2.o
 mmusmep.elf: mmusmep.o
 
+sh2a_%.o: sh2a_%.S
+	$(CC) $(CFLAGS) -Wa,--isa=sh2a -c $< -o $@
+
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@
 

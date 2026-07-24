@@ -48,7 +48,7 @@ start:
         ! =====================================================================
         mov     #7, r0
         mov     #100, r2
-        .word   0x4284                  ! DIVU R0,R2
+        divu    r0,r2                    ! DIVU R0,R2
         mov     #14, r5
         cmp/eq  r2, r5
         bf      _fail1
@@ -62,7 +62,7 @@ start:
         ! =====================================================================
         mov     #2, r0
         mov     #-1, r2                 ! 0xFFFFFFFF
-        .word   0x4284                  ! DIVU R0,R2
+        divu    r0,r2                    ! DIVU R0,R2
         mov.l   p_0x7FFFFFFF, r5
         cmp/eq  r2, r5
         bf      _fail2
@@ -76,7 +76,7 @@ start:
         ! =====================================================================
         mov     #1, r0
         mov     #12, r2
-        .word   0x4284                  ! DIVU R0,R2
+        divu    r0,r2                    ! DIVU R0,R2
         mov     #12, r5
         cmp/eq  r2, r5
         bf      _fail3
@@ -90,7 +90,7 @@ start:
         ! =====================================================================
         mov     #7, r0
         mov     #-100, r2
-        .word   0x4294                  ! DIVS R0,R2
+        divs    r0,r2                    ! DIVS R0,R2
         mov     #-14, r5
         cmp/eq  r2, r5
         bf      _fail4
@@ -104,7 +104,7 @@ start:
         ! =====================================================================
         mov     #-7, r0
         mov     #100, r2
-        .word   0x4294                  ! DIVS R0,R2
+        divs    r0,r2                    ! DIVS R0,R2
         mov     #-14, r5
         cmp/eq  r2, r5
         bf      _fail5
@@ -118,7 +118,7 @@ start:
         ! =====================================================================
         mov     #-7, r0
         mov     #-100, r2
-        .word   0x4294                  ! DIVS R0,R2
+        divs    r0,r2                    ! DIVS R0,R2
         mov     #14, r5
         cmp/eq  r2, r5
         bf      _fail6
@@ -132,7 +132,7 @@ start:
         ! =====================================================================
         mov     #-1, r0
         mov     #42, r2
-        .word   0x4294                  ! DIVS R0,R2
+        divs    r0,r2                    ! DIVS R0,R2
         mov     #-42, r5
         cmp/eq  r2, r5
         bf      _fail7

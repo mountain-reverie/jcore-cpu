@@ -5,10 +5,10 @@
 -- not as part of the design under test).
 
 library ieee;
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
-use work.divider_pkg.all;
-use work.test_pkg.all;
+  use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
+  use work.divider_pkg.all;
+  use work.test_pkg.all;
 
 entity divider_unit_tap is
 end entity divider_unit_tap;
@@ -18,53 +18,58 @@ architecture tb of divider_unit_tap is
   signal clk : std_logic := '0';
   signal rst : std_logic := '1';
 
-  signal din : divider_i_t := (
-    start     => '0',
-    dividend  => (others => '0'),
-    divisor   => (others => '0'),
-    is_signed => '0'
-  );
+  signal din  : divider_i_t := (
+                                start     => '0',
+                                dividend  => (others => '0'),
+                                divisor   => (others => '0'),
+                                is_signed => '0'
+                               );
   signal dout : divider_o_t;
 
   shared variable endsim : boolean := false;
 
   -- Pulse start with the given operands, wait for completion, and
   -- return the resulting quotient.
+
   procedure do_div (
-    signal clk_s  : in std_logic;
-    signal din_s  : out divider_i_t;
-    signal dout_s : in divider_o_t;
-    dividend      : in std_logic_vector(31 downto 0);
-    divisor       : in std_logic_vector(31 downto 0);
-    is_signed     : in std_logic;
+    signal clk_s    : in std_logic;
+    signal din_s    : out divider_i_t;
+    signal dout_s   : in divider_o_t;
+    dividend        : in std_logic_vector(31 downto 0);
+    divisor         : in std_logic_vector(31 downto 0);
+    is_signed       : in std_logic;
     variable result : out std_logic_vector(31 downto 0)
   ) is
   begin
+
     din_s.dividend  <= dividend;
     din_s.divisor   <= divisor;
     din_s.is_signed <= is_signed;
     din_s.start     <= '1';
     wait until rising_edge(clk_s);
-    din_s.start <= '0';
+    din_s.start     <= '0';
 
     -- wait for busy to assert then de-assert
     wait until rising_edge(clk_s) and dout_s.busy = '1';
     wait until rising_edge(clk_s) and dout_s.busy = '0';
 
     result := dout_s.quotient;
+
   end procedure do_div;
 
 begin
 
   clk_gen : process is
   begin
+
     if (not endsim) then
-      clk <= '0';
+      clk                <= '0';
       wait for 5 ns; clk <= '1';
       wait for 5 ns;
     else
       wait;
     end if;
+
   end process;
 
   u_div : entity work.divider(rtl)
@@ -86,8 +91,10 @@ begin
       desc     : string
     ) is
     begin
+
       do_div(clk, din, dout, dividend, divisor, '0', result);
       test_equal(result, expected, desc);
+
     end procedure check_u;
 
     procedure check_s (
@@ -97,23 +104,30 @@ begin
       desc     : string
     ) is
     begin
+
       do_div(clk, din, dout, dividend, divisor, '1', result);
       test_equal(result, expected, desc);
+
     end procedure check_s;
 
     -- record-only case (div by zero): just confirm it terminates and
     -- produces a stable, deterministic value on repeat.
+
     procedure check_terminates (
       dividend  : std_logic_vector(31 downto 0);
       divisor   : std_logic_vector(31 downto 0);
       is_signed : std_logic;
       desc      : string
     ) is
+
       variable r1, r2 : std_logic_vector(31 downto 0);
+
     begin
+
       do_div(clk, din, dout, dividend, divisor, is_signed, r1);
       do_div(clk, din, dout, dividend, divisor, is_signed, r2);
       test_equal(r1, r2, desc & " : deterministic");
+
     end procedure check_terminates;
 
   begin

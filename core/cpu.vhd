@@ -35,41 +35,41 @@ end entity cpu;
 
 architecture stru of cpu is
 
-  signal slot, if_stall     : std_logic;
-  signal mac_i              : mult_i_t;
-  signal mac_o              : mult_o_t;
-  signal dp_tlb_squash      : std_logic; -- datapath tlb_squash, gates MAC accumulate on faulting pass
+  signal slot, if_stall : std_logic;
+  signal mac_i          : mult_i_t;
+  signal mac_o          : mult_o_t;
+  signal dp_tlb_squash  : std_logic; -- datapath tlb_squash, gates MAC accumulate on faulting pass
   -- SH-2A DIVU/DIVS divider unit (Task 2). div_i/div_o mirror mac_i/mac_o;
   -- combined_mac_busy/combined_mult_stall fold div_o.busy into the same
   -- stall paths mac_o.busy/mac_o.slot_stall already feed (decode mac_stall
   -- and datapath mult_stall respectively), SH2A_ARCH-gated so base J1/J2/J4
   -- see exactly mac_o.busy/mac_o.slot_stall as before.
   signal div_i               : divider_i_t;
-  signal div_o                : divider_o_t;
+  signal div_o               : divider_o_t;
   signal combined_mac_busy   : std_logic;
   signal combined_mult_stall : std_logic;
-  signal reg                : reg_ctrl_t;
-  signal func               : func_ctrl_t;
-  signal mem                : mem_ctrl_t;
-  signal instr              : instr_ctrl_t;
-  signal mac                : mac_ctrl_t;
-  signal pc                 : pc_ctrl_t;
-  signal buses              : buses_ctrl_t;
-  signal t_bcc              : std_logic;
-  signal ibit               : std_logic_vector(3 downto 0);
-  signal if_dr              : std_logic_vector(15 downto 0);
-  signal if_dr_next         : std_logic_vector(15 downto 0);
-  signal enter_debug        : std_logic;
-  signal debug              : std_logic;
-  signal mask_int           : std_logic;
-  signal event_ack          : std_logic;
-  signal slp_o              : std_logic;
-  signal sr                 : sr_ctrl_t;
-  signal illegal_delay_slot : std_logic;
-  signal illegal_instr      : std_logic;
-  signal coproc             : coproc_ctrl_t;
-  signal coproc_decode      : coproc_ctrl_t;
-  signal copreg             : std_logic_vector(7 downto 0);
+  signal reg                 : reg_ctrl_t;
+  signal func                : func_ctrl_t;
+  signal mem                 : mem_ctrl_t;
+  signal instr               : instr_ctrl_t;
+  signal mac                 : mac_ctrl_t;
+  signal pc                  : pc_ctrl_t;
+  signal buses               : buses_ctrl_t;
+  signal t_bcc               : std_logic;
+  signal ibit                : std_logic_vector(3 downto 0);
+  signal if_dr               : std_logic_vector(15 downto 0);
+  signal if_dr_next          : std_logic_vector(15 downto 0);
+  signal enter_debug         : std_logic;
+  signal debug               : std_logic;
+  signal mask_int            : std_logic;
+  signal event_ack           : std_logic;
+  signal slp_o               : std_logic;
+  signal sr                  : sr_ctrl_t;
+  signal illegal_delay_slot  : std_logic;
+  signal illegal_instr       : std_logic;
+  signal coproc              : coproc_ctrl_t;
+  signal coproc_decode       : coproc_ctrl_t;
+  signal copreg              : std_logic_vector(7 downto 0);
   -- Intermediate bus signals so TLB can read addresses (VHDL-93: out ports unreadable).
   signal sig_db_o   : cpu_data_o_t;
   signal sig_inst_o : cpu_instruction_o_t;
@@ -274,7 +274,9 @@ begin
   -- on base (sh2a_arch=false): div_i.start is driven '0' by datapath's
   -- g_div_off, so u_div never runs there, and div_o.busy/.quotient are
   -- excluded from the base stall/writeback paths below.
+
   g_div : if sh2a_arch generate
+
     u_div : component divider
       port map (
         clk => clk,
@@ -282,7 +284,9 @@ begin
         a   => div_i,
         y   => div_o
       );
+
   end generate g_div;
+
   g_div_off : if not sh2a_arch generate
     div_o.busy     <= '0';
     div_o.quotient <= (others => '0');

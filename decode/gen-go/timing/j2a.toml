@@ -24,6 +24,17 @@ mult = 2          # mac.*, mul.l, dmul*.l → issue 2, latency max(2,1)=2
 "0100mmmm00010111" = { issue = 1, latency = 3 }   # ldc.l @Rm+,GBR
 "0100mmmm00100111" = { issue = 1, latency = 3 }   # ldc.l @Rm+,VBR
 
+# TBR (table base register): ldc/stc mirror the GBR register-form timing
+# (0100mmmm00011110 ldc Rm,GBR = issue 1/latency 1; 0000nnnn00010010
+# stc GBR,Rn = issue 1/latency 2 in the committed J2 timing table).
+# jsr/n @@(disp8,TBR) is a load-and-branch: PR-save + address calc + 32-bit
+# memory read of the table entry + fetch redirect, hand-valued at issue 1,
+# latency 6 (no measured/cosim-timed data available for this multi-cycle
+# memory-indirect call).
+"0100mmmm01001010" = { issue = 1, latency = 1 }   # ldc Rm,TBR
+"0000nnnn01001010" = { issue = 1, latency = 2 }   # stc TBR,Rn
+"10000011dddddddd" = { issue = 1, latency = 6 }   # jsr/n @@(disp8,TBR)
+
 # TAS.B (read-modify-write bus cycle)
 "0100nnnn00011011" = { issue = 2, latency = 4 }   # tas.b @Rn
 

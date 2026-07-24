@@ -286,3 +286,19 @@ Each group is a PR against master, gated behind `SH2A_ARCH`, with in-pipeline
 
 ### Group 8 — arithmetic — ✅ COMPLETE (2026-07-19)
 clips/clipu (PR-A) + mulr (PR-B) + **divs/divu (PR-C)** all shipped. divs/divu = an isolated SH2A_ARCH-gated sequential divider (`core/divider.vhd`, unit-tested via `divider_unit_tap`), wired like `mult(seq)` (busy→stall), ~33-cycle. Base J1/J2/J4 byte-identical (only illegal-routing terms; the g_div datapath prunes on base — verified: isolated illegal-routing j1 +87, full branch +70, divider adds nothing). Completes the J2A INTEGER instruction set (remaining SH-2A = FPU, out of scope; register banking descoped).
+
+### TBR group — ✅ COMPLETE (2026-07-24) — J2A INTEGER SET COMPLETE
+`ldc Rm,TBR`, `stc TBR,Rn`, `jsr/n @@(disp8,TBR)` shipped (branch feat/j2a-tbr).
+TBR is a named register at extended-register-file **index 23** (`"10111"`) — the free
+slot in the full privileged layout, so a future J4A (PRIV_ARCH ∧ SH2A_ARCH) never
+collides. `rf_depth` SH2A-gated (`priv→32; sh2a→24; else→21`), so J1/J2 stay 21 and
+J4 stays 32 (const-fold, base-neutral); only J2A grows to 24 (slots 21–22 dead —
+the deliberate ASIC-register-file cost). `ldc/stc TBR` are pure spec rows mirroring
+`ldc/stc GBR` (`zbus_sel="Y"`); `jsr/n @@(disp8,TBR)` is a 6-slot memory-indirect
+delay-slot-less call composed from proven patterns (Group 9 PR-save + `@(disp,GBR)`
+base+disp read + RTE mem→PC), robust under memory wait states via the existing
+slot-stretch. Base J1/J2/J4 byte-identical except the illegal-routing line for the 3
+opcodes. Cosim `sh2a_tbr.S` Test Passed; opus whole-branch review clean.
+
+**This completes the J2A INTEGER instruction set.** Remaining SH-2A = register
+banking (descoped: compiler never emits it) + FPU (out of scope: a separate variant).

@@ -344,7 +344,7 @@ jobs:
           # fi
 
           [ "$fail" = 0 ] || { echo "==> functional guards FAILED" >&2; exit 1; }
-          echo "==> all 47 priv-arch + MMU functional guards PASSED"
+          echo "==> all 50 priv-arch + MMU functional guards PASSED"
 
   # SP3-d: the 2-core SMP-bring-up guard (spin-table secondary release + IPI via
   # the real icache_modereg) runs on cpu_dualcore_tb. It is a BASE-J2 SMP test

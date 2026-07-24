@@ -28,8 +28,8 @@ start:
         mov.l   p_s1, r1
         mov.l   p_s2, r2
         nop
-        .word   0x42F1           ! push R2,R1,R0 (R15 -= 12)
-        .word   0x42F5           ! IMMEDIATE pop R0..R2, NO nops between loops
+        movml.l r2,@-r15         ! push R2,R1,R0 (R15 -= 12)
+        movml.l @r15+,r2         ! IMMEDIATE pop R0..R2, NO nops between loops
 
         mov.l   p_s0, r7
         cmp/eq  r0, r7

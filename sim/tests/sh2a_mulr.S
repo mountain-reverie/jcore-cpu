@@ -7,9 +7,8 @@
 ! MAC_RESTORE_H shadow-register mechanism (core/datapath.vhm,
 ! core/components_pkg.vhd, Task 1).
 !
-! sh2-elf-as (plain -m2) does not know the SH-2A MULR opcode, so it is
-! hand-encoded via .word. Encoding: nnnn = op.code(11:8) (Rn), R0 is the
-! fixed second operand:
+! Uses the native SH-2A mulr mnemonic (requires -Wa,--isa=sh2a). Encoding:
+! nnnn = op.code(11:8) (Rn), R0 is the fixed second operand:
 !   MULR R0,Rn = 0100 nnnn 1000 0000
 !
 ! Marker convention mirrors sim/tests/sh2a_bitreg.S: 0 = pass at
@@ -42,7 +41,7 @@ start:
 ! =====================================================================
         mov     #3, r0
         mov     #5, r2
-        .word   0x4280          ! MULR R0,R2
+        mulr    r0, r2
         mov     #15, r5
         cmp/eq  r2, r5
         bf      _fail1
@@ -52,7 +51,7 @@ start:
 ! =====================================================================
         mov.l   p_0x10000, r0
         mov.l   p_0x10000, r1
-        .word   0x4180          ! MULR R0,R1
+        mulr    r0, r1
         mov     #0, r5
         cmp/eq  r1, r5
         bf      _fail2
@@ -61,7 +60,7 @@ start:
 ! case 3: Rn == R0 -- mulr R0,R0 -> R0 == R0^2 (low 32)
 ! =====================================================================
         mov     #3, r0
-        .word   0x4080          ! MULR R0,R0
+        mulr    r0, r0
         mov     #9, r5
         cmp/eq  r0, r5
         bf      _fail3
@@ -74,7 +73,7 @@ start:
         mov     r15, r8         ! save real SP
         mov     #6, r0
         mov     #7, r15
-        .word   0x4F80          ! MULR R0,R15
+        mulr    r0, r15
         mov     #42, r5
         cmp/eq  r15, r5
         bf      _fail4
@@ -91,7 +90,7 @@ start:
         lds     r0, macl
         mov     #4, r0
         mov     #6, r3
-        .word   0x4380          ! MULR R0,R3
+        mulr    r0, r3
         mov     #24, r5
         cmp/eq  r3, r5
         bf      _fail5
@@ -133,11 +132,11 @@ start:
         mac.l   @r2+, @r1+
         mov     #3, r0
         mov     #5, r4
-        .word   0x4480          ! MULR R0,R4 (in-flight, between iter 1/2)
+        mulr    r0, r4          ! (in-flight, between iter 1/2)
         mac.l   @r2+, @r1+
         mov     #9, r0
         mov     #9, r4
-        .word   0x4480          ! MULR R0,R4 (in-flight, between iter 2/3)
+        mulr    r0, r4          ! (in-flight, between iter 2/3)
         mac.l   @r2+, @r1+
         sts     mach, r8        ! interleaved-run MACH
         sts     macl, r9        ! interleaved-run MACL

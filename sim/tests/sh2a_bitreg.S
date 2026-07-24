@@ -4,10 +4,10 @@
 ! IMM_BIT3_MASK/IMM_BIT3_MASK_INV masks (BSET/BCLR/BLD) and the new
 ! zbus_sel=SEL_BITSET datapath path (BST) added in core/datapath.vhm.
 !
-! sh2-elf-as (plain -m2) does not know the SH-2A "ni3" format, so every
-! bit-op opcode is hand-encoded via .word. Encoding: nnnn = op.code(11:8)
-! (Rn), iii = op.code(2:0) (imm3), and op.code(3) distinguishes
-! BCLR/BST (0) from BSET/BLD (1):
+! These bit-ops use native SH-2A assembler mnemonics (BSET/BCLR/BST/BLD
+! #imm3,Rn), assembled with -Wa,--isa=sh2a. Encoding reference:
+! nnnn = op.code(11:8) (Rn), iii = op.code(2:0) (imm3), and op.code(3)
+! distinguishes BCLR/BST (0) from BSET/BLD (1):
 !   BCLR #imm3,Rn = 1000 0110 nnnn 0iii
 !   BSET #imm3,Rn = 1000 0110 nnnn 1iii
 !   BST  #imm3,Rn = 1000 0111 nnnn 0iii
@@ -38,14 +38,14 @@ _sim_instr_end: .long 0
 start:
         ! --- case 1: BSET #3,r1 (r1=0 -> expect bit3 set = 8) ---
         mov     #0, r1
-        .word   0x861B          ! BSET #3,r1
+        bset    #3, r1
         nop
         mov     #8, r5
         cmp/eq  r1, r5
         bf      _fail1
 
         ! --- case 2: BCLR #3,r1 (r1=8 -> expect cleared = 0) ---
-        .word   0x8613          ! BCLR #3,r1
+        bclr    #3, r1
         nop
         mov     #0, r5
         cmp/eq  r1, r5
@@ -53,7 +53,7 @@ start:
 
         ! --- case 3: BSET #0,r1 boundary (r1=0 -> expect 1) ---
         mov     #0, r1
-        .word   0x8618          ! BSET #0,r1
+        bset    #0, r1
         nop
         mov     #1, r5
         cmp/eq  r1, r5
@@ -61,7 +61,7 @@ start:
 
         ! --- case 4: BSET #7,r1 boundary (r1=0 -> expect 0x80) ---
         mov     #0, r1
-        .word   0x861F          ! BSET #7,r1
+        bset    #7, r1
         nop
         mov.l   p_0x80, r5
         cmp/eq  r1, r5
@@ -69,7 +69,7 @@ start:
 
         ! --- case 5: BLD #3,r2 with bit clear -> T=0 ---
         mov     #0, r2
-        .word   0x872B          ! BLD #3,r2
+        bld     #3, r2
         nop
         movt    r0
         mov     #0, r5
@@ -78,7 +78,7 @@ start:
 
         ! --- case 6: BLD #3,r2 with bit set -> T=1 ---
         mov     #8, r2
-        .word   0x872B          ! BLD #3,r2
+        bld     #3, r2
         nop
         movt    r0
         mov     #1, r5
@@ -88,7 +88,7 @@ start:
         ! --- case 7: BST #5,r3 with T=1 -> bit5 set (r3=0 -> 0x20) ---
         sett
         mov     #0, r3
-        .word   0x8735          ! BST #5,r3
+        bst     #5, r3
         nop
         mov     #0x20, r5
         cmp/eq  r3, r5
@@ -97,7 +97,7 @@ start:
         ! --- case 8: BST #5,r3 with T=0 -> bit5 cleared (r3=-1 -> ~0x20) ---
         clrt
         mov     #-1, r3
-        .word   0x8735          ! BST #5,r3
+        bst     #5, r3
         nop
         mov.l   p_not_0x20, r5
         cmp/eq  r3, r5

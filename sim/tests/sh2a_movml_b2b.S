@@ -23,7 +23,7 @@ start:
         mov.l   p_s1, r1
         mov.l   p_s2, r2
         nop
-        .word   0x42F1           ! movml.l r2,@-r15  (push R2,R1,R0; R15-=12)
+        movml.l r2,@-r15         ! push R2,R1,R0; R15-=12
         mov.l   @r15+, r5        ! IMMEDIATE R15 read, NO nops -> tests post-loop interlock. r5=R0
         nop
         mov.l   p_s0, r6

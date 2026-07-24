@@ -59,12 +59,13 @@
 !   9     DMISS TEA wrong (handler-side guard)
 !  15     unexpected trap / fell through to _fail
 !
-! sh2-elf-as (-m2) does not know SH-2A MOVML.L or the J4 LDC/STC MMU control
-! forms, so both are hand-encoded via .word (mirrors sh2a_movml_pop.S and
-! mmufault.S / mmustore.S):
+! MOVML.L @r15+,r4 (pop R0..R4, 0x44F5) and LDC r0,VBR (0x402E) now use
+! native sh2-elf-as (-Wa,--isa=sh2a) mnemonics. sh2-elf-as still does not
+! know the J4 LDC/STC MMU control-register forms below, so those remain
+! hand-encoded via .word (mirrors sh2a_movml_pop.S and mmufault.S /
+! mmustore.S):
 !   LDC r0,PTEH=0x405E  LDC r0,PTEL=0x406E  LDC r0,ASIDR=0x407E
-!   LDTLB=0x0038        LDC r0,VBR=0x402E   STC EXPEVT,r0=0x0052
-!   MOVML.L @r15+,r4 (pop R0..R4) = 0x44F5
+!   LDTLB=0x0038        STC EXPEVT,r0=0x0052
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -103,7 +104,7 @@ ENTRY(start)
         !      vector layout is I-fetch->VBR+0x400, D-load->VBR+0x420,
         !      D-store->VBR+0x440; see decode/gen-go/spec/sh4/exceptions.toml). ----
         mov.l   p_vbr_val, r0
-        .word   0x402E                  ! LDC r0, VBR
+        ldc     r0, vbr
 
         ! ---- Clear fault counter and set up R15 for the stack region. ----
         mov.l   p_g_fault_count, r0
@@ -154,7 +155,7 @@ ENTRY(start)
         ! First attempt: loads 0..3 succeed, load 4 (VA 0x1000) DMISSes.
         ! The handler maps page 1 and RTEs with hardware-captured SPC still
         ! pointing at THIS instruction, so it restarts from load 0.
-        .word   0x44F5
+        movml.l @r15+,r4
 
         ! ---- Verify every popped register against its sentinel. ----
         mov.l   p_s0, r7

@@ -12,7 +12,7 @@
 ! verifies the SECOND round-trip's registers/PR/R15. Without the fix the
 ! second push hangs / corrupts and the checks fail.
 !
-! Opcodes hand-encoded (sh2-elf-as -m2 does not know SH-2A MOVMU.L):
+! Native SH-2A MOVMU.L mnemonics (requires -Wa,--isa=sh2a):
 !   MOVMU.L Rm,@-R15 : 0100 mmmm 1111 0000   (push PR, then Rm..R0)
 !   MOVMU.L @R15+,Rn : 0100 nnnn 1111 0100   (pop R0..Rn, then PR)
 ! Marker convention: 0 = pass, non-zero = fail.
@@ -46,14 +46,14 @@ start:
         mov.l   q_spr, r6
         lds     r6, pr
         nop
-        .word   0x44F0        ! movmu.l r4,@-r15  (push PR,R4..R0)
+        movmu.l r4,@-r15      ! (push PR,R4..R0)
         mov     #0, r0
         mov     #0, r1
         mov     #0, r2
         mov     #0, r3
         mov     #0, r4
         nop
-        .word   0x44F4        ! movmu.l @r15+,r4  (pop R0..R4,PR) -> idx_r=4
+        movmu.l @r15+,r4      ! (pop R0..R4,PR) -> idx_r=4
         nop
 
         ! ---- round 2: fresh sentinels, push+pop, then verify ----
@@ -65,7 +65,7 @@ start:
         mov.l   p_spr, r6
         lds     r6, pr
         nop
-        .word   0x44F0        ! movmu.l r4,@-r15  (push PR,R4..R0) -- mupush after stale pop
+        movmu.l r4,@-r15      ! (push PR,R4..R0) -- mupush after stale pop
         mov     #0, r0
         mov     #0, r1
         mov     #0, r2
@@ -74,7 +74,7 @@ start:
         mov     #0, r6
         lds     r6, pr
         nop
-        .word   0x44F4        ! movmu.l @r15+,r4  (pop R0..R4,PR)
+        movmu.l @r15+,r4      ! (pop R0..R4,PR)
         nop
 
         mov.l   p_s0, r7

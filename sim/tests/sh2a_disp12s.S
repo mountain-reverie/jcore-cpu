@@ -9,10 +9,10 @@
 ! table) could not distinguish the two -- one instruction's microcode
 ! silently executed in place of the other.
 !
-! sh2-elf-as (plain -m2) does not know the SH-2A "nmd12" format, so both
-! two-word opcodes are hand-encoded via .word:
-!   store: word1 = 0x3n m1 (0011 nnnn mmmm 0001), word2 = 0x2ddd (disp12)
-!   load:  word1 = 0x3n m1 (0011 nnnn mmmm 0001), word2 = 0x6ddd (disp12)
+! These use the native SH-2A two-word mnemonics (assemble with
+! -Wa,--isa=sh2a). The gas disp operand is the byte offset (disp12 field * 4):
+!   store: MOV.L Rm,@(disp,Rn)  -> word1 = 0x3nm1, word2 = 0x2ddd
+!   load:  MOV.L @(disp,Rm),Rn  -> word1 = 0x3nm1, word2 = 0x6ddd
 !
 ! Two cases:
 !   1. disp12 = 0: store r1 -> @(0,r2), then load @(0,r4),r5 back from the
@@ -59,12 +59,12 @@ start:
         !   word1 = 0011 0010 0001 0001 = 0x3211
         ! load:  MOV.L @(0,r2),r5 ->  n=5(Rn=r5 dest), m=2(Rm=r2 base)
         !   word1 = 0011 0101 0010 0001 = 0x3521
-        .word   0x3211                  ! word1: MOV.L Rm,@(disp12,Rn) n=2(r2) m=1(r1)
-        .word   0x2000                  ! word2: disp12 = 0  -> store r1 @ (r2+0)
+        .word   0x3211 ! mov.l r1,@(0,r2) — encodes differently (gas picks 1-word 0x1210) — see sync report
+        .word   0x2000 ! word2: disp12 = 0 (store)
         nop
         nop
-        .word   0x3521                  ! word1: MOV.L @(disp12,Rm),Rn n=5(r5) m=2(r2)
-        .word   0x6000                  ! word2: disp12 = 0  -> load (r2+0) into r5
+        .word   0x3521 ! mov.l @(0,r2),r5 — encodes differently (gas picks 1-word 0x5520) — see sync report
+        .word   0x6000 ! word2: disp12 = 0 (load)
         nop
         nop
 
@@ -75,16 +75,11 @@ start:
         mov.l   p_seed2, r1              ! new seed value
         mov.l   p_scratch2_base, r2      ! r2 = base such that base+0x3FFC is writable scratch
 
-        ! store: MOV.L r1,@(0xFFF,r2)  -> n=2(Rn=r2 base), m=1(Rm=r1 data)
-        !   word1 = 0x3211 (same register assignment as case 1)
-        .word   0x3211
-        .word   0x2fff                   ! word2: disp12 = 0xFFF (store)
+        ! disp12=0xFFF -> byte offset 0xFFF*4 = 16380 (0x3FFC)
+        mov.l   r1, @(16380, r2)         ! store r1 -> (r2+0x3FFC)
         nop
         nop
-        ! load: MOV.L @(0xFFF,r2),r6 -> n=6(r6 dest), m=2(Rm=r2 base)
-        !   word1 = 0011 0110 0010 0001 = 0x3621
-        .word   0x3621
-        .word   0x6fff                   ! word2: disp12 = 0xFFF (load)
+        mov.l   @(16380, r2), r6         ! load (r2+0x3FFC) into r6
         nop
         nop
 

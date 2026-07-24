@@ -11,10 +11,9 @@
 ! would be corrupted. A non-zero disp (0x100 -> byte offset 0x400) makes any
 ! ext_word corruption produce a clearly wrong address (and a mismatch).
 !
-! sh2-elf-as (-m2) does not know the SH-2A "nmd12" format, so the two-word
-! opcodes are hand-encoded via .word:
-!   store: word1 = 0011 nnnn mmmm 0001 (n=Rn base, m=Rm data), word2 = 0x2ddd
-!   load:  word1 = 0011 nnnn mmmm 0001 (n=Rn dest, m=Rm base), word2 = 0x6ddd
+! Assembled with native SH-2A mnemonics (-Wa,--isa=sh2a): the two-word
+! MOV.L @(disp12,Rm),Rn form is emitted directly (gas disp = disp12 field x4,
+! so a disp12 field of 0x100 is written as @(0x400,Rn)).
 !
 ! Three interlock shapes, each preceding the disp12 load so the base reg is
 ! produced by a slow (memory-load) instruction right before its use:
@@ -56,8 +55,7 @@ start:
         mov.l   p_seed1, r1
         mov.l   p_scratch1, r2
         nop
-        .word   0x3211                  ! MOV.L r1,@(0x100,r2)
-        .word   0x2100
+        mov.l   r1,@(0x400,r2)
         nop
         nop
 
@@ -65,8 +63,7 @@ start:
         mov.l   p_seed2, r1
         mov.l   p_scratch2, r2
         nop
-        .word   0x3211                  ! MOV.L r1,@(0x100,r2)
-        .word   0x2100
+        mov.l   r1,@(0x400,r2)
         nop
         nop
 
@@ -74,8 +71,7 @@ start:
         mov.l   p_seed3, r1
         mov.l   p_scratch3, r2
         nop
-        .word   0x3211                  ! MOV.L r1,@(0x100,r2)
-        .word   0x2100
+        mov.l   r1,@(0x400,r2)
         nop
         nop
 
@@ -86,8 +82,7 @@ start:
         ! disp12 load word1 n=5(Rn=r5 dest) m=4(Rm=r4 base)
         !   = 0011 0101 0100 0001 = 0x3541, word2 = 0x6100.
         mov.l   p_scratch1, r4          ! r4 = base (slow: memory load)
-        .word   0x3541                  ! MOV.L @(0x100,r4),r5  -- slot1 stalls on r4
-        .word   0x6100
+        mov.l   @(0x400,r4),r5
         nop
         nop
         mov.l   p_seed1, r0
@@ -99,8 +94,7 @@ start:
         ! window (the load's slot1 lands while r4 is being written back).
         mov.l   p_scratch2, r4
         nop
-        .word   0x3541                  ! MOV.L @(0x100,r4),r5
-        .word   0x6100
+        mov.l   @(0x400,r4),r5
         nop
         nop
         mov.l   p_seed2, r0
@@ -114,8 +108,7 @@ start:
         nop
         nop
         mov.l   @r6+, r4                ! r4 = scratch3 (post-inc load)
-        .word   0x3541                  ! MOV.L @(0x100,r4),r5  -- slot1 stalls on r4
-        .word   0x6100
+        mov.l   @(0x400,r4),r5
         nop
         nop
         mov.l   p_seed3, r0

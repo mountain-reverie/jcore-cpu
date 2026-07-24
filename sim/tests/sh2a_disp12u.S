@@ -8,9 +8,8 @@
 !   byte load (sign)   = 0100   byte load (unsigned) = 1000
 !   word load (sign)   = 0101   word load (unsigned) = 1001
 !
-! sh2-elf-as (plain -m2) does not know the SH-2A "nmd12" format, so all
-! opcodes below are hand-encoded via .word (word1 then word2/disp12).
-! Stores use the ordinary MOV.B/MOV.W Rm,@(disp12,Rn) (already available).
+! Uses native SH-2A MOVU.B/MOVU.W @(disp12,Rm),Rn and MOV.B/MOV.W
+! Rm,@(disp12,Rn) mnemonics (requires -Wa,--isa=sh2a).
 !
 ! Cases:
 !   1. byte round-trip, disp12=0, positive value (baseline, no extension
@@ -52,16 +51,10 @@ start:
         mov.l   p_seed1, r1              ! r1 = 0x00000045
         mov.l   p_scratch_b1, r2         ! r2 = byte scratch addr
 
-        ! store: MOV.B r1,@(0,r2)  n=2(Rn=r2 base) m=1(Rm=r1 data)
-        !   word1 = 0011 0010 0001 0001 = 0x3211
-        .word   0x3211
-        .word   0x0000                   ! ext: byte store, disp12=0
+        mov.b   r1,@(0,r2)
         nop
         nop
-        ! load: MOVU.B @(0,r2),r5  n=5(Rn=r5 dest) m=2(Rm=r2 base)
-        !   word1 = 0011 0101 0010 0001 = 0x3521
-        .word   0x3521
-        .word   0x8000                   ! ext: ubyte load, disp12=0
+        movu.b  @(0,r2),r5
         nop
         nop
 
@@ -72,16 +65,10 @@ start:
         mov.l   p_seed2, r1              ! r1 = 0x00001234
         mov.l   p_scratch_w1, r3         ! r3 = word scratch addr
 
-        ! store: MOV.W r1,@(0,r3)  n=3(Rn=r3 base) m=1(Rm=r1 data)
-        !   word1 = 0011 0011 0001 0001 = 0x3311
-        .word   0x3311
-        .word   0x1000                   ! ext: word store, disp12=0
+        mov.w   r1,@(0,r3)
         nop
         nop
-        ! load: MOVU.W @(0,r3),r6  n=6(Rn=r6 dest) m=3(Rm=r3 base)
-        !   word1 = 0011 0110 0011 0001 = 0x3631
-        .word   0x3631
-        .word   0x9000                   ! ext: uword load, disp12=0
+        movu.w  @(0,r3),r6
         nop
         nop
 
@@ -92,14 +79,10 @@ start:
         mov.l   p_seed3, r1              ! r1 = 0x00000080
         mov.l   p_scratch_b2, r2         ! r2 = byte scratch addr
 
-        ! store: MOV.B r1,@(0,r2)  n=2 m=1  word1 = 0x3211
-        .word   0x3211
-        .word   0x0000                   ! ext: byte store, disp12=0
+        mov.b   r1,@(0,r2)
         nop
         nop
-        ! load: MOVU.B @(0,r2),r7  n=7 m=2  word1 = 0x3721
-        .word   0x3721
-        .word   0x8000                   ! ext: ubyte load, disp12=0
+        movu.b  @(0,r2),r7
         nop
         nop
 
@@ -111,14 +94,10 @@ start:
         mov.l   p_seed4, r1              ! r1 = 0x00008000
         mov.l   p_scratch_w2, r3         ! r3 = word scratch addr
 
-        ! store: MOV.W r1,@(0,r3)  n=3 m=1  word1 = 0x3311
-        .word   0x3311
-        .word   0x1000                   ! ext: word store, disp12=0
+        mov.w   r1,@(0,r3)
         nop
         nop
-        ! load: MOVU.W @(0,r3),r8  n=8 m=3  word1 = 0011 1000 0011 0001 = 0x3831
-        .word   0x3831
-        .word   0x9000                   ! ext: uword load, disp12=0
+        movu.w  @(0,r3),r8
         nop
         nop
 

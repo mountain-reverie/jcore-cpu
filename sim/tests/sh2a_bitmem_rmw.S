@@ -5,10 +5,11 @@
 ! the byte is READ into TEMP0, OR'd with the decode-time one-hot MASK3_64 mask,
 ! then WRITTEN back.
 !
-! sh2-elf-as (plain -m2) does not know the SH-2A "nd12i3" format, so the two-word
-! opcode is hand-encoded via .word:
+! Assembled with native SH-2A nd12i3 mnemonics (bset.b/bclr.b/bst.b/bld.b/
+! bldnot.b/band.b/bandnot.b/bor.b/bornot.b/bxor.b #imm3,@(disp12,Rn)); gas
+! requires -Wa,--isa=sh2a to accept this format. The encoding is:
 !   word1 = 0011 nnnn 0iii 1001  (n = Rn, iii = imm3)
-!   word2 = 0001 dddd dddd dddd  (disp12, byte-scaled x1)
+!   word2 = eeee dddd dddd dddd  (eeee = op-select, disp12, byte-scaled x1)
 !
 ! Cases (bit-position extremes + disp=0 vs disp!=0):
 !   1. bset.b #3,@(4,r2)   0x81 -> 0x89   (mid bit, disp!=0)
@@ -54,8 +55,7 @@ start:
         ! --- case 1: bset.b #3,@(4,r2): 0x81 -> 0x89 (mid bit, disp!=0) ---
         mov     #0x81, r0
         mov.b   r0, @(4, r2)     ! seed target byte
-        .word   0x3239          ! word1: BSET.B #3,@(disp12,r2)
-        .word   0x1004          ! word2: disp12 = 4
+        bset.b  #3, @(4, r2)
         mov.b   @(4, r2), r0     ! mov.b @(disp,Rn) targets R0 only
         extu.b  r0, r0
         mov     #0x89, r6       ! 0x89 has bit7 set -> mov # sign-extends;
@@ -66,8 +66,7 @@ start:
         ! --- case 2: bset.b #0,@(0,r2): 0x00 -> 0x01 (bit0, disp=0) ---
         mov     #0x00, r0
         mov.b   r0, @(0, r2)
-        .word   0x3209          ! word1: BSET.B #0,@(disp12,r2)
-        .word   0x1000          ! word2: disp12 = 0
+        bset.b  #0, @(0, r2)
         mov.b   @(0, r2), r0
         extu.b  r0, r0
         mov     #0x01, r6
@@ -77,8 +76,7 @@ start:
         ! --- case 3: bset.b #7,@(0,r2): 0x7F -> 0xFF (bit7, disp=0) ---
         mov     #0x7F, r0
         mov.b   r0, @(0, r2)
-        .word   0x3279          ! word1: BSET.B #7,@(disp12,r2)
-        .word   0x1000          ! word2: disp12 = 0
+        bset.b  #7, @(0, r2)
         mov.b   @(0, r2), r0
         extu.b  r0, r0
         mov     #0xFF, r6       ! mov #0xFF sign-extends to 0xFFFFFFFF;
@@ -89,8 +87,7 @@ start:
         ! --- case 4: load-use with NO filler (fetch/prefetch fix guard) ---
         mov     #0x7F, r0
         mov.b   r0, @(8, r2)
-        .word   0x3279          ! word1: BSET.B #7,@(disp12,r2)
-        .word   0x1008          ! word2: disp12 = 8
+        bset.b  #7, @(8, r2)
         mov.b   @(8, r2), r0     ! LOAD  (immediately follows the RMW)
         extu.b  r0, r0           ! USE   (must NOT be swallowed by the RMW)
         mov     #0xFF, r6
@@ -101,8 +98,7 @@ start:
         ! --- case 5: bclr.b #3,@(4,r2): 0x89 -> 0x81 (clear mid bit, disp!=0) ---
         mov     #0x89, r0
         mov.b   r0, @(4, r2)
-        .word   0x3239          ! word1: BCLR.B #3,@(disp12,r2)
-        .word   0x0004          ! word2: ext=0000 (bclr), disp12 = 4
+        bclr.b  #3, @(4, r2)
         mov.b   @(4, r2), r0
         extu.b  r0, r0
         mov     #0x81, r6
@@ -114,8 +110,7 @@ start:
         mov     #0x00, r0
         mov.b   r0, @(0, r2)
         sett                     ! T = 1
-        .word   0x3259          ! word1: BST.B #5,@(disp12,r2)
-        .word   0x2000          ! word2: ext=0010 (bst), disp12 = 0
+        bst.b   #5, @(0, r2)
         mov.b   @(0, r2), r0
         extu.b  r0, r0
         mov     #0x20, r6
@@ -126,8 +121,7 @@ start:
         mov     #0xFF, r0
         mov.b   r0, @(0, r2)
         clrt                     ! T = 0
-        .word   0x3259          ! word1: BST.B #5,@(disp12,r2)
-        .word   0x2000          ! word2: ext=0010 (bst), disp12 = 0
+        bst.b   #5, @(0, r2)
         mov.b   @(0, r2), r0
         extu.b  r0, r0
         mov     #0xDF, r6
@@ -138,8 +132,7 @@ start:
         ! --- case 8: bld.b #0,@(0,r2): byte=0x01 (bit0 SET) -> T=1, mem unchanged ---
         mov     #0x01, r0
         mov.b   r0, @(0, r2)
-        .word   0x3209          ! word1: BLD.B #0,@(disp12,r2)
-        .word   0x3000          ! word2: ext=0011 (bld), disp12 = 0
+        bld.b   #0, @(0, r2)
         movt    r0
         mov     #1, r6
         cmp/eq  r0, r6
@@ -153,8 +146,7 @@ start:
         ! --- case 9: bld.b #7,@(0,r2): byte=0x7F (bit7 CLEAR) -> T=0, mem unchanged ---
         mov     #0x7F, r0
         mov.b   r0, @(0, r2)
-        .word   0x3279          ! word1: BLD.B #7,@(disp12,r2)
-        .word   0x3000          ! word2: ext=0011 (bld), disp12 = 0
+        bld.b   #7, @(0, r2)
         movt    r0
         mov     #0, r6
         cmp/eq  r0, r6
@@ -168,8 +160,7 @@ start:
         ! --- case 10: bldnot.b #0,@(0,r2): byte=0x01 (bit0 SET) -> T=0 (inverted) ---
         mov     #0x01, r0
         mov.b   r0, @(0, r2)
-        .word   0x3209          ! word1: BLDNOT.B #0,@(disp12,r2)
-        .word   0xB000          ! word2: ext=1011 (bldnot), disp12 = 0
+        bldnot.b #0, @(0, r2)
         movt    r0
         mov     #0, r6
         cmp/eq  r0, r6
@@ -183,8 +174,7 @@ start:
         ! --- case 11: bldnot.b #7,@(0,r2): byte=0x7F (bit7 CLEAR) -> T=1 (inverted) ---
         mov     #0x7F, r0
         mov.b   r0, @(0, r2)
-        .word   0x3279          ! word1: BLDNOT.B #7,@(disp12,r2)
-        .word   0xB000          ! word2: ext=1011 (bldnot), disp12 = 0
+        bldnot.b #7, @(0, r2)
         movt    r0
         mov     #1, r6
         cmp/eq  r0, r6
@@ -208,8 +198,7 @@ start:
         mov     #0x01, r0
         mov.b   r0, @(0, r2)
         sett
-        .word   0x3209          ! word1: BAND.B #0,@(disp12,r2)
-        .word   0x4000          ! word2: ext=0100 (band), disp12 = 0
+        band.b  #0, @(0, r2)
         movt    r0
         mov     #1, r6
         cmp/eq  r0, r6
@@ -224,8 +213,7 @@ start:
         mov     #0x00, r0
         mov.b   r0, @(0, r2)
         sett
-        .word   0x3209
-        .word   0x4000
+        band.b  #0, @(0, r2)
         movt    r0
         mov     #0, r6
         cmp/eq  r0, r6
@@ -240,8 +228,7 @@ start:
         mov     #0x80, r0
         mov.b   r0, @(0, r2)
         clrt
-        .word   0x3279          ! word1: BAND.B #7,@(disp12,r2)
-        .word   0x4000
+        band.b  #7, @(0, r2)
         movt    r0
         mov     #0, r6
         cmp/eq  r0, r6
@@ -257,8 +244,7 @@ start:
         mov     #0x00, r0
         mov.b   r0, @(0, r2)
         clrt
-        .word   0x3279
-        .word   0x4000
+        band.b  #7, @(0, r2)
         movt    r0
         mov     #0, r6
         cmp/eq  r0, r6
@@ -273,8 +259,7 @@ start:
         mov     #0x01, r0
         mov.b   r0, @(0, r2)
         sett
-        .word   0x3209          ! word1: BANDNOT.B #0,@(disp12,r2)
-        .word   0xC000          ! word2: ext=1100 (bandnot), disp12 = 0
+        bandnot.b #0, @(0, r2)
         movt    r0
         mov     #0, r6
         cmp/eq  r0, r6
@@ -289,8 +274,7 @@ start:
         mov     #0x00, r0
         mov.b   r0, @(0, r2)
         sett
-        .word   0x3209
-        .word   0xC000
+        bandnot.b #0, @(0, r2)
         movt    r0
         mov     #1, r6
         cmp/eq  r0, r6
@@ -305,8 +289,7 @@ start:
         mov     #0x80, r0
         mov.b   r0, @(0, r2)
         clrt
-        .word   0x3279          ! word1: BANDNOT.B #7,@(disp12,r2)
-        .word   0xC000
+        bandnot.b #7, @(0, r2)
         movt    r0
         mov     #0, r6
         cmp/eq  r0, r6
@@ -322,8 +305,7 @@ start:
         mov     #0x00, r0
         mov.b   r0, @(0, r2)
         clrt
-        .word   0x3279
-        .word   0xC000
+        bandnot.b #7, @(0, r2)
         movt    r0
         mov     #0, r6
         cmp/eq  r0, r6
@@ -338,8 +320,7 @@ start:
         mov     #0x01, r0
         mov.b   r0, @(0, r2)
         sett
-        .word   0x3209          ! word1: BOR.B #0,@(disp12,r2)
-        .word   0x5000          ! word2: ext=0101 (bor), disp12 = 0
+        bor.b   #0, @(0, r2)
         movt    r0
         mov     #1, r6
         cmp/eq  r0, r6
@@ -354,8 +335,7 @@ start:
         mov     #0x00, r0
         mov.b   r0, @(0, r2)
         sett
-        .word   0x3209
-        .word   0x5000
+        bor.b   #0, @(0, r2)
         movt    r0
         mov     #1, r6
         cmp/eq  r0, r6
@@ -370,8 +350,7 @@ start:
         mov     #0x80, r0
         mov.b   r0, @(0, r2)
         clrt
-        .word   0x3279          ! word1: BOR.B #7,@(disp12,r2)
-        .word   0x5000
+        bor.b   #7, @(0, r2)
         movt    r0
         mov     #1, r6
         cmp/eq  r0, r6
@@ -387,8 +366,7 @@ start:
         mov     #0x00, r0
         mov.b   r0, @(0, r2)
         clrt
-        .word   0x3279
-        .word   0x5000
+        bor.b   #7, @(0, r2)
         movt    r0
         mov     #0, r6
         cmp/eq  r0, r6
@@ -403,8 +381,7 @@ start:
         mov     #0x01, r0
         mov.b   r0, @(0, r2)
         sett
-        .word   0x3209          ! word1: BORNOT.B #0,@(disp12,r2)
-        .word   0xD000          ! word2: ext=1101 (bornot), disp12 = 0
+        bornot.b #0, @(0, r2)
         movt    r0
         mov     #1, r6
         cmp/eq  r0, r6
@@ -419,8 +396,7 @@ start:
         mov     #0x00, r0
         mov.b   r0, @(0, r2)
         sett
-        .word   0x3209
-        .word   0xD000
+        bornot.b #0, @(0, r2)
         movt    r0
         mov     #1, r6
         cmp/eq  r0, r6
@@ -435,8 +411,7 @@ start:
         mov     #0x80, r0
         mov.b   r0, @(0, r2)
         clrt
-        .word   0x3279          ! word1: BORNOT.B #7,@(disp12,r2)
-        .word   0xD000
+        bornot.b #7, @(0, r2)
         movt    r0
         mov     #0, r6
         cmp/eq  r0, r6
@@ -452,8 +427,7 @@ start:
         mov     #0x00, r0
         mov.b   r0, @(0, r2)
         clrt
-        .word   0x3279
-        .word   0xD000
+        bornot.b #7, @(0, r2)
         movt    r0
         mov     #1, r6
         cmp/eq  r0, r6
@@ -468,8 +442,7 @@ start:
         mov     #0x01, r0
         mov.b   r0, @(0, r2)
         sett
-        .word   0x3209          ! word1: BXOR.B #0,@(disp12,r2)
-        .word   0x6000          ! word2: ext=0110 (bxor), disp12 = 0
+        bxor.b  #0, @(0, r2)
         movt    r0
         mov     #0, r6
         cmp/eq  r0, r6
@@ -484,8 +457,7 @@ start:
         mov     #0x00, r0
         mov.b   r0, @(0, r2)
         sett
-        .word   0x3209
-        .word   0x6000
+        bxor.b  #0, @(0, r2)
         movt    r0
         mov     #1, r6
         cmp/eq  r0, r6
@@ -500,8 +472,7 @@ start:
         mov     #0x80, r0
         mov.b   r0, @(0, r2)
         clrt
-        .word   0x3279          ! word1: BXOR.B #7,@(disp12,r2)
-        .word   0x6000
+        bxor.b  #7, @(0, r2)
         movt    r0
         mov     #1, r6
         cmp/eq  r0, r6
@@ -517,8 +488,7 @@ start:
         mov     #0x00, r0
         mov.b   r0, @(0, r2)
         clrt
-        .word   0x3279
-        .word   0x6000
+        bxor.b  #7, @(0, r2)
         movt    r0
         mov     #0, r6
         cmp/eq  r0, r6

@@ -1,7 +1,5 @@
-! SH-2A movi20 / movi20s bring-up. Hand-encoded (.word) — -m2 lacks SH-2A.
-!   movi20  #imm20,Rn = 0000 nnnn iiii 0000 | iiii iiii iiii iiii
-!   movi20s #imm20,Rn = 0000 nnnn iiii 0001 | iiii iiii iiii iiii
-!   Rn=op.code(11:8); imm[19:16]=op.code(7:4); imm[15:0]=word2; sign=bit19.
+! SH-2A movi20 / movi20s bring-up. Uses native movi20/movi20s mnemonics
+! (requires -Wa,--isa=sh2a).
 #include "sim_instr.h"
 
         .section .vect
@@ -23,50 +21,43 @@ _sim_instr_end: .long 0
         .global start
 start:
         ! (1) movi20 #0x00012,r1 -> 0x00000012
-        .word 0x0100            ! n=1, imm[19:16]=0
-        .word 0x0012
+        movi20  #0x00012,r1
         nop
         mov.l   e1, r8
         cmp/eq  r1, r8
         bf      _fail1
 
         ! (2) movi20 #0x80000,r2 -> 0xFFF80000 (sign-extend)
-        .word 0x0280            ! n=2, imm[19:16]=8
-        .word 0x0000
+        movi20  #-524288,r2
         nop
         mov.l   e2, r8
         cmp/eq  r2, r8
         bf      _fail2
 
         ! (3) movi20 #0x7FFFF,r3 -> 0x0007FFFF (max positive)
-        .word 0x0370            ! n=3, imm[19:16]=7
-        .word 0xFFFF
+        movi20  #524287,r3
         nop
         mov.l   e3, r8
         cmp/eq  r3, r8
         bf      _fail3
 
         ! (4) movi20s #0x00123,r6 -> 0x00012300 (<<8)
-        .word 0x0601            ! n=6, imm[19:16]=0, s
-        .word 0x0123
+        movi20s #74496,r6
         nop
         mov.l   e6, r8
         cmp/eq  r6, r8
         bf      _fail6
 
         ! (5) movi20s #0x80000,r7 -> 0xF8000000 (sign-extend then <<8)
-        .word 0x0781            ! n=7, imm[19:16]=8, s
-        .word 0x0000
+        movi20s #-134217728,r7
         nop
         mov.l   e7, r8
         cmp/eq  r7, r8
         bf      _fail7
 
         ! (6) back-to-back movi20 (no nop between) -> r10=1, r11=2
-        .word 0x0A00            ! movi20 #1,r10
-        .word 0x0001
-        .word 0x0B00            ! movi20 #2,r11
-        .word 0x0002
+        movi20  #1,r10
+        movi20  #2,r11
         nop
         mov     #1, r8
         cmp/eq  r10, r8

@@ -5,8 +5,8 @@
 ! (opcode 0100 0100 1111 0001 = 0x44F1) pushes R4,R3,R2,R1,R0 (m+1 = 5 longs),
 ! R4 at the highest address, R0 at the lowest, and leaves R15 -= 20.
 !
-! sh2-elf-as (-m2) does not know the SH-2A MOVML.L mnemonic, so the opcode is
-! hand-encoded with .word 0x44F1.
+! sh2-elf-as now assembles the SH-2A MOVML.L mnemonic natively when built
+! with -Wa,--isa=sh2a.
 !
 ! Strategy: seed R0..R4 with distinct sentinels, push them with MOVML.L,
 ! clobber R0..R4, then pop them back with plain "mov.l @r15+,rk" (lowest
@@ -44,7 +44,7 @@ start:
         nop
 
         ! --- instruction under test: MOVML.L r4,@-r15 (push R4,R3,R2,R1,R0) ---
-        .word   0x44F1
+        movml.l r4,@-r15
 
         ! Clobber R0..R4 so the pop-back genuinely reads memory.
         mov     #0, r0

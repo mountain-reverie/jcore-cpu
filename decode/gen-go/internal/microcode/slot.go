@@ -362,7 +362,7 @@ func AssignSlot(instr spec.Instr, slot spec.Slot) (AssignMap, error) {
 // assignXBus, assignYBus, assignZBus, and assignWBus. Adding a new named
 // register requires updating this slice, RegnumVHDL, and the VHDL enum —
 // the bus functions themselves need no further edits.
-var namedRegs = []string{"R0", "R15", "GBR", "VBR", "PR", "TEMP0", "TEMP1", "RBANK", "SPC", "SSR"}
+var namedRegs = []string{"R0", "R15", "GBR", "VBR", "PR", "TEMP0", "TEMP1", "RBANK", "SPC", "SSR", "TBR"}
 
 // isNamedReg reports whether the (already upper-cased) value is one of
 // the canonical named registers in namedRegs.
@@ -1245,6 +1245,7 @@ var namedRegVHDL = map[string]string{
 	"TEMP1": `"10100"`,
 	"SPC":   `"10101"`, // 21 — saved PC (J4 exception model; unbanked "10xxx")
 	"SSR":   `"10110"`, // 22 — saved SR
+	"TBR":   `"10111"`, // 23 — SH-2A Table Base Register (free slot in the priv layout; J4A-safe)
 }
 
 // RegnumVHDL translates a regnum tag to the VHDL std_logic_vector(4 downto 0)

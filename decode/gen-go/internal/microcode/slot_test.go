@@ -574,3 +574,13 @@ func TestAssignZBus_MMU(t *testing.T) {
 		}
 	}
 }
+
+// TestTBRRegnum tests TBR register as a recognized named register.
+func TestTBRRegnum(t *testing.T) {
+	if got := RegnumVHDL("TBR"); got != `"10111"` {
+		t.Fatalf("RegnumVHDL(TBR) = %q, want \"10111\" (index 23)", got)
+	}
+	if !isNamedReg("TBR") {
+		t.Fatal("TBR must be a recognized named register")
+	}
+}

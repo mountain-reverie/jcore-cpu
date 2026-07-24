@@ -240,10 +240,11 @@ signal manip_sel : std_logic_vector(31 downto 0);
         end to_slv;
 
         -- Regfile depth: J4 (PRIV_ARCH) needs 8 extra slots for bank-1 R0-R7
-        -- at indices 24-31; J2 keeps 21 (bit-identical).
-        function rf_depth(priv : boolean) return integer is
+        -- at indices 24-31; J2A (SH2A_ARCH) needs index 23 for TBR, so 24;
+        -- J2 keeps 21 (bit-identical).
+        function rf_depth(priv : boolean; sh2a : boolean) return integer is
         begin
-          if priv then return 32; else return 21; end if;
+          if priv then return 32; elsif sh2a then return 24; else return 21; end if;
         end function;
 
         -- SH-4 register banking: when privileged and RB=1, architectural R0-R7
@@ -261,7 +262,7 @@ signal manip_sel : std_logic_vector(31 downto 0);
           end if;
           return r;
         end function;
-        constant REGFILE_DEPTH : integer := rf_depth(PRIV_ARCH);
+        constant REGFILE_DEPTH : integer := rf_depth(PRIV_ARCH, SH2A_ARCH);
 	-- A bit vector from a single bit
 	function to_slv(b : std_logic; s : integer) return std_logic_vector is
 	  variable r : std_logic_vector(s-1 downto 0);

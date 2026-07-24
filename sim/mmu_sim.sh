@@ -65,8 +65,11 @@ run_guard() {  # <name> <sim_top-or-default> [stop-time] [wall-timeout-s]
   rm -f tests/$t.img tests/$t.o tests/$t.elf
   make CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 -C tests $t.img >/dev/null 2>&1
   local out
+  # MMU_VCD=<path> dumps a VCD of the run (used by sim/bench_tlb_hotpath.sh to
+  # trace the PC through the TLB-miss hot path). The sim exits at "Test Passed",
+  # so the VCD's final timestamp is the pass-time.
   out="$(SIM_TOP="$top" timeout "$wall" ./cpu_ctb --stop-time="$stoptime" \
-         -i tests/$t.img --ieee-asserts=disable 2>&1 || true)"
+         ${MMU_VCD:+--vcd="$MMU_VCD"} -i tests/$t.img --ieee-asserts=disable 2>&1 || true)"
   if echo "$out" | grep -qi 'Test Passed'; then
     echo "  PASS  $t${top:+ [$top]}"
   else

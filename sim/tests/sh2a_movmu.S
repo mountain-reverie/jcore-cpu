@@ -7,7 +7,7 @@
 ! movmu shapes: mupush = pre-loop PR store slot + register store loop;
 ! mupop = register load loop + PR-load slot + terminal R15 adjust slot.
 !
-! sh2-elf-as (-m2) does not know SH-2A MOVMU.L, so opcodes are hand-encoded:
+! Uses the native SH-2A MOVMU.L mnemonics (requires -Wa,--isa=sh2a):
 !   MOVMU.L Rm,@-R15   : 0100 mmmm 1111 0000  (push PR, then Rm..R0)
 !   MOVMU.L @R15+,Rn   : 0100 nnnn 1111 0100  (pop R0..Rn, then PR)
 ! Marker convention mirrors sim/tests/sh2a_movml_pop.S: 0 = pass, non-zero =
@@ -43,7 +43,7 @@ start:
         nop
 
         ! push PR,R4,R3,R2,R1,R0 (R15 -= 24)
-        .word   0x44F0
+        movmu.l r4,@-r15
 
         ! clobber so the pop genuinely reads memory
         mov     #0, r0
@@ -56,7 +56,7 @@ start:
         nop
 
         ! --- instruction under test: MOVMU.L @r15+,r4 (pop R0..R4,PR) ---
-        .word   0x44F4
+        movmu.l @r15+,r4
         nop
 
         mov.l   p_s0, r7

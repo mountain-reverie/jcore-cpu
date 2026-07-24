@@ -4,8 +4,7 @@
 ! T in place. Both reuse existing microcode vocabulary (ARITH carry-in for
 ! MOVRT; LOGIC ZERO-rule for NOTT) -- no new datapath/enum.
 !
-! sh2-elf-as (plain -m2) does not know these SH-2A opcodes, so they are
-! hand-encoded via .word:
+! Uses the native SH-2A movrt/nott mnemonics (requires -Wa,--isa=sh2a):
 !   MOVRT Rn = 0000 nnnn 0011 1001   (nnnn = op.code(11:8) = Rn)
 !   NOTT     = 0000 0000 0110 1000
 !
@@ -34,27 +33,27 @@ _sim_instr_end: .long 0
 start:
         ! --- case 1: SETT (T=1), MOVRT R1 -> expect R1==0 ---
         sett
-        .word   0x0139          ! MOVRT R1
+        movrt   r1
         mov     #0, r5
         cmp/eq  r1, r5
         bf      _fail1
 
         ! --- case 2: CLRT (T=0), MOVRT R1 -> expect R1==1 ---
         clrt
-        .word   0x0139          ! MOVRT R1
+        movrt   r1
         mov     #1, r5
         cmp/eq  r1, r5
         bf      _fail2
 
         ! --- case 3: CLRT (T=0), NOTT -> expect T==1 (branch-on-T) ---
         clrt
-        .word   0x0068          ! NOTT
+        nott
         bf      _fail3          ! T should now be 1; bf taken means fail
         nop
 
         ! --- case 4: SETT (T=1), NOTT -> expect T==0 (branch-on-T) ---
         sett
-        .word   0x0068          ! NOTT
+        nott
         bt      _fail4          ! T should now be 0; bt taken means fail
         nop
 

@@ -5,9 +5,8 @@
 ! the "n"-format spec rows in decode/gen-go/spec/sh2a/arith.toml and the
 ! sticky CS bit (SR bit 2) set in core/datapath.vhm.
 !
-! sh2-elf-as (plain -m2) does not know the SH-2A CLIPS/CLIPU or LDC/STC-SR
-! opcodes needed here in this exact bit pattern, so everything is
-! hand-encoded via .word. Encoding: nnnn = op.code(11:8) (Rn):
+! This test uses native SH-2A mnemonics (assemble with -Wa,--isa=sh2a).
+! The CLIPS/CLIPU and LDC/STC-SR ops encode as (nnnn = Rn):
 !   CLIPU.B Rn    = 0100 nnnn 1000 0001
 !   CLIPU.W Rn    = 0100 nnnn 1000 0101
 !   CLIPS.B Rn    = 0100 nnnn 1001 0001
@@ -48,14 +47,14 @@ start:
 
         ! case 1: in-range (0x50) -> unchanged, CS stays 0
         mov     #0, r2
-        .word   0x420E          ! LDC r2,SR  (clear SR incl. CS)
+        ldc     r2, sr          ! clear SR incl. CS
         mov     #0x50, r1
-        .word   0x4181          ! CLIPU.B r1
+        clipu.b r1
         nop
         mov     #0x50, r5
         cmp/eq  r1, r5
         bf      _fail1
-        .word   0x0002          ! STC SR,r0
+        stc     sr, r0
         mov     #4, r5
         and     r5, r0
         mov     #0, r5
@@ -64,14 +63,14 @@ start:
 
         ! case 2: CS pre-set to 1, in-range clip -> CS stays 1 (sticky)
         mov     #4, r2
-        .word   0x420E          ! LDC r2,SR  (CS=1)
+        ldc     r2, sr          ! CS=1
         mov     #0x50, r1
-        .word   0x4181          ! CLIPU.B r1
+        clipu.b r1
         nop
         mov     #0x50, r5
         cmp/eq  r1, r5
         bf      _fail3
-        .word   0x0002          ! STC SR,r0
+        stc     sr, r0
         mov     #4, r5
         and     r5, r0
         cmp/eq  r0, r5
@@ -79,14 +78,14 @@ start:
 
         ! case 3: over-high -> Rn == 0xFF, CS == 1
         mov     #0, r2
-        .word   0x420E          ! LDC r2,SR (clear CS)
+        ldc     r2, sr          ! clear CS
         mov.l   p_0x1FF, r1
-        .word   0x4181          ! CLIPU.B r1
+        clipu.b r1
         nop
         mov.l   p_0xFF, r5
         cmp/eq  r1, r5
         bf      _fail5
-        .word   0x0002          ! STC SR,r0
+        stc     sr, r0
         mov     #4, r5
         and     r5, r0
         cmp/eq  r0, r5
@@ -98,14 +97,14 @@ start:
 
         ! case 4: in-range (0x1234) -> unchanged, CS stays 0
         mov     #0, r2
-        .word   0x420E          ! LDC r2,SR
+        ldc     r2, sr
         mov.l   p_0x1234, r1
-        .word   0x4185          ! CLIPU.W r1
+        clipu.w r1
         nop
         mov.l   p_0x1234, r5
         cmp/eq  r1, r5
         bf      _fail7
-        .word   0x0002          ! STC SR,r0
+        stc     sr, r0
         mov     #4, r5
         and     r5, r0
         mov     #0, r5
@@ -114,14 +113,14 @@ start:
 
         ! case 5: CS pre-set to 1, in-range clip -> CS stays 1
         mov     #4, r2
-        .word   0x420E          ! LDC r2,SR (CS=1)
+        ldc     r2, sr          ! CS=1
         mov.l   p_0x1234, r1
-        .word   0x4185          ! CLIPU.W r1
+        clipu.w r1
         nop
         mov.l   p_0x1234, r5
         cmp/eq  r1, r5
         bf      _fail9
-        .word   0x0002          ! STC SR,r0
+        stc     sr, r0
         mov     #4, r5
         and     r5, r0
         cmp/eq  r0, r5
@@ -129,14 +128,14 @@ start:
 
         ! case 6: over-high -> Rn == 0xFFFF, CS == 1
         mov     #0, r2
-        .word   0x420E          ! LDC r2,SR (clear CS)
+        ldc     r2, sr          ! clear CS
         mov.l   p_0x10000, r1
-        .word   0x4185          ! CLIPU.W r1
+        clipu.w r1
         nop
         mov.l   p_0xFFFF, r5
         cmp/eq  r1, r5
         bf      _fail11
-        .word   0x0002          ! STC SR,r0
+        stc     sr, r0
         mov     #4, r5
         and     r5, r0
         cmp/eq  r0, r5
@@ -148,14 +147,14 @@ start:
 
         ! case 7: in-range (0x50) -> unchanged, CS stays 0
         mov     #0, r2
-        .word   0x420E          ! LDC r2,SR
+        ldc     r2, sr
         mov     #0x50, r1
-        .word   0x4191          ! CLIPS.B r1
+        clips.b r1
         nop
         mov     #0x50, r5
         cmp/eq  r1, r5
         bf      _fail13
-        .word   0x0002          ! STC SR,r0
+        stc     sr, r0
         mov     #4, r5
         and     r5, r0
         mov     #0, r5
@@ -164,14 +163,14 @@ start:
 
         ! case 8: CS pre-set to 1, in-range clip -> CS stays 1
         mov     #4, r2
-        .word   0x420E          ! LDC r2,SR (CS=1)
+        ldc     r2, sr          ! CS=1
         mov     #0x50, r1
-        .word   0x4191          ! CLIPS.B r1
+        clips.b r1
         nop
         mov     #0x50, r5
         cmp/eq  r1, r5
         bf      _fail15
-        .word   0x0002          ! STC SR,r0
+        stc     sr, r0
         mov     #4, r5
         and     r5, r0
         cmp/eq  r0, r5
@@ -179,14 +178,14 @@ start:
 
         ! case 9: over-high (200) -> Rn == 0x7F, CS == 1
         mov     #0, r2
-        .word   0x420E          ! LDC r2,SR (clear CS)
+        ldc     r2, sr          ! clear CS
         mov.l   p_200, r1
-        .word   0x4191          ! CLIPS.B r1
+        clips.b r1
         nop
         mov     #0x7F, r5
         cmp/eq  r1, r5
         bf      _fail17
-        .word   0x0002          ! STC SR,r0
+        stc     sr, r0
         mov     #4, r5
         and     r5, r0
         cmp/eq  r0, r5
@@ -194,14 +193,14 @@ start:
 
         ! case 10: under-low (-200) -> Rn == 0xFFFFFF80, CS == 1
         mov     #0, r2
-        .word   0x420E          ! LDC r2,SR (clear CS)
+        ldc     r2, sr          ! clear CS
         mov.l   p_neg200, r1
-        .word   0x4191          ! CLIPS.B r1
+        clips.b r1
         nop
         mov.l   p_neg128, r5
         cmp/eq  r1, r5
         bf      _fail19
-        .word   0x0002          ! STC SR,r0
+        stc     sr, r0
         mov     #4, r5
         and     r5, r0
         cmp/eq  r0, r5
@@ -213,14 +212,14 @@ start:
 
         ! case 11: in-range (0x1234) -> unchanged, CS stays 0
         mov     #0, r2
-        .word   0x420E          ! LDC r2,SR
+        ldc     r2, sr
         mov.l   p_0x1234, r1
-        .word   0x4195          ! CLIPS.W r1
+        clips.w r1
         nop
         mov.l   p_0x1234, r5
         cmp/eq  r1, r5
         bf      _fail21
-        .word   0x0002          ! STC SR,r0
+        stc     sr, r0
         mov     #4, r5
         and     r5, r0
         mov     #0, r5
@@ -229,14 +228,14 @@ start:
 
         ! case 12: CS pre-set to 1, in-range clip -> CS stays 1
         mov     #4, r2
-        .word   0x420E          ! LDC r2,SR (CS=1)
+        ldc     r2, sr          ! CS=1
         mov.l   p_0x1234, r1
-        .word   0x4195          ! CLIPS.W r1
+        clips.w r1
         nop
         mov.l   p_0x1234, r5
         cmp/eq  r1, r5
         bf      _fail23
-        .word   0x0002          ! STC SR,r0
+        stc     sr, r0
         mov     #4, r5
         and     r5, r0
         cmp/eq  r0, r5
@@ -244,14 +243,14 @@ start:
 
         ! case 13: over-high (40000) -> Rn == 0x00007FFF, CS == 1
         mov     #0, r2
-        .word   0x420E          ! LDC r2,SR (clear CS)
+        ldc     r2, sr          ! clear CS
         mov.l   p_40000, r1
-        .word   0x4195          ! CLIPS.W r1
+        clips.w r1
         nop
         mov.l   p_0x7FFF, r5
         cmp/eq  r1, r5
         bf      _fail25
-        .word   0x0002          ! STC SR,r0
+        stc     sr, r0
         mov     #4, r5
         and     r5, r0
         cmp/eq  r0, r5
@@ -259,14 +258,14 @@ start:
 
         ! case 14: under-low (-40000) -> Rn == 0xFFFF8000, CS == 1
         mov     #0, r2
-        .word   0x420E          ! LDC r2,SR (clear CS)
+        ldc     r2, sr          ! clear CS
         mov.l   p_neg40000, r1
-        .word   0x4195          ! CLIPS.W r1
+        clips.w r1
         nop
         mov.l   p_neg32768, r5
         cmp/eq  r1, r5
         bf      _fail27
-        .word   0x0002          ! STC SR,r0
+        stc     sr, r0
         mov     #4, r5
         and     r5, r0
         cmp/eq  r0, r5

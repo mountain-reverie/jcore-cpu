@@ -6,10 +6,8 @@
 ! and slot1 performs the actual load using imm_from_ext to source the
 ! disp12*4 immediate.
 !
-! sh2-elf-as (plain -m2) does not know the SH-2A "nmd12" format, so the
-! two-word opcode is hand-encoded via .word:
-!   word1 = 0x3121  (0011 nnnn mmmm 0001, n=1(r1) m=2(r2))
-!   word2 = 0x6000  (0110 dddd dddd dddd, disp12=0)
+! Uses the native SH-2A MOV.L @(disp12,Rm),Rn mnemonic (requires
+! -Wa,--isa=sh2a):
 ! -> MOV.L @(0,r2),r1  i.e. r1 = *(uint32_t*)(r2 + 0*4)
 !
 ! Known-open questions this test is designed to surface (see brief):
@@ -46,8 +44,8 @@ start:
         nop                      ! avoid load-use hazard confound (SH-2 load delay)
 
         ! --- the instruction under test: MOV.L @(0,r2),r1 (two-word SH-2A form) ---
-        .word   0x3121          ! word1: MOV.L @(disp12,Rm),Rn  n=1 m=2
-        .word   0x6000          ! word2: disp12 = 0
+        .word   0x3121          ! MOV.L @(disp12,Rm),Rn n=1 m=2, disp12=0 -- no gas mnemonic (small disp fits base short disp4 form, gas prefers that; two-word form needed to test disp12 extension path)
+        .word   0x6000
         ! --- instructions AFTER the two-word insn: if PC lands correctly at
         !     the instr after word2, these execute in order; if word2 gets
         !     mis-executed as its own instruction, behavior diverges here.
@@ -66,8 +64,8 @@ start:
         ! sentinel. MOV.L @(3,r4),r6 -> r6 = *(r4 + 3*4).
         mov.l   p_base2, r4
         nop
-        .word   0x3641          ! word1: MOV.L @(disp12,Rm),Rn  n=6(r6) m=4(r4)
-        .word   0x6003          ! word2: disp12 = 3  (-> byte offset 3*4 = 12)
+        .word   0x3641          ! MOV.L @(disp12,Rm),Rn n=6 m=4, disp12=3 -- no gas mnemonic / encodes differently, see sync report
+        .word   0x6003
         nop
         nop
         mov.l   p_sentinel2_val, r5

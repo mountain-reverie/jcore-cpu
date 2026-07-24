@@ -31,8 +31,8 @@ start:
         mov.l   p_spr, r6
         lds     r6, pr
         nop
-        .word   0x42F0           ! push PR,R2,R1,R0 (R15 -= 16)
-        .word   0x42F4           ! IMMEDIATE pop R0..R2,PR, NO nops between loops
+        movmu.l r2,@-r15         ! push PR,R2,R1,R0 (R15 -= 16)
+        movmu.l @r15+,r2         ! IMMEDIATE pop R0..R2,PR, NO nops between loops
         mov     #7, r3           ! must not be skipped by the pop's terminal slot
 
         mov.l   p_s0, r7

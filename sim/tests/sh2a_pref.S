@@ -3,8 +3,8 @@
 ! PREF has no architectural effect (touches only optional cache state; never a
 ! register/memory/T). This test proves the J2A decode is a true no-op: it must
 ! NOT alter any register or T, must NOT trap/hang, and the instruction after it
-! must run normally. PREF @R1 = 0000 0001 1000 0011 = 0x0183 (hand-encoded, the
-! plain -m2 assembler does not know it).
+! must run normally. PREF @R1 = 0000 0001 1000 0011 = 0x0183 (native mnemonic,
+! requires -Wa,--isa=sh2a).
 !
 ! Marker: 0 = pass at TEST_RESULT_ADDRESS, non-zero = distinct fail code.
 
@@ -33,7 +33,7 @@ start:
         mov.l   p_ram, r1        ! a valid address (PREF ignores it anyway)
         sett                     ! T = 1, must survive
 
-        .word   0x0183           ! PREF @R1  -- must be a pure NOP
+        pref    @r1               ! must be a pure NOP
         mov     #0x77, r3        ! the instruction after PREF must run (r3=0x77)
         movt    r6               ! capture T IMMEDIATELY (before any cmp clobbers it)
 

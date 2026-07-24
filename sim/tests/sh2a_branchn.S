@@ -7,8 +7,8 @@
 ! JSR/N @Rm = PC -> PR, Rm -> PC, no delay slot (like JSR but no delay slot).
 ! RTV/N Rm  = Rm -> R0, PR -> PC, no delay slot.
 !
-! sh2-elf-as (plain -m2) does not know these SH-2A opcodes, so they are
-! hand-encoded via .word:
+! These SH-2A opcodes are written as native mnemonics; assemble with
+! -Wa,--isa=sh2a so the assembler accepts them. Encodings for reference:
 !   RTS/N     = 0000 0000 0110 1011  (0x006B)
 !   JSR/N @Rm = 0100 mmmm 0100 1011
 !   RTV/N Rm  = 0000 mmmm 0111 1011
@@ -49,9 +49,9 @@ start:
         mov     #0x5A, r10      ! sentinel: must survive if no delay slot
 
         mov.l   p_rts_target, r1
-        .word   0x412A          ! LDS R1,PR
+        lds     r1, pr
 
-        .word   0x006B          ! RTS/N: PR -> PC, no delay slot
+        rts/n                   ! RTS/N: PR -> PC, no delay slot
         mov     #0xFF, r10      ! POISON: must NOT execute (no delay slot)
         bra     _fail2          ! must NOT execute either (fell through)
         nop
@@ -76,12 +76,12 @@ _rts_target:
 ! T is forced to 0 first: jsr/n is UNCONDITIONAL, so it must still jump and
 ! suppress its "delay slot" even at T=0 (proves dispatch=NT was removed).
 _jsrn_test:
-        .word   0x0008          ! CLRT: force T=0
+        clrt                    ! CLRT: force T=0
         mov     #0, r11         ! delay-slot-execution counter (must stay 0)
         mov     #0x5A, r10      ! sentinel: must survive if no delay slot
 
         mov.l   p_jsrn_target, r1
-        .word   0x414B          ! JSR/N @R1
+        jsr/n   @r1             ! JSR/N @R1
 p_jsrn_ret2:
         add     #1, r11         ! call+2: benign bump, must NOT run as delay slot
         bra     _fail4          ! call+4: must NOT run (total fallthrough)
@@ -99,7 +99,7 @@ _jsrn_target:
         cmp/eq  r11, r5
         bf      _fail8          ! r11 != 0 -> call+2 ran as delay slot -> fail
 
-        .word   0x062A          ! STS PR,R6
+        sts     pr, r6          ! STS PR,R6
         mov.l   p_jsrn_ret2_val, r5
         cmp/eq  r5, r6
         bf      _fail5          ! PR != call+2 -> wrong return address -> fail
@@ -118,9 +118,9 @@ _rtvn_test:
         mov     #0x77, r0       ! sentinel: must be overwritten by Rm
 
         mov.l   p_rtvn_target, r1
-        .word   0x412A          ! LDS R1,PR
+        lds     r1, pr
 
-        .word   0x027B          ! RTV/N R2: R2 -> R0, PR -> PC, no delay slot
+        rtv/n   r2              ! RTV/N R2: R2 -> R0, PR -> PC, no delay slot
         mov     #0xFF, r0       ! POISON: must NOT execute (no delay slot)
         bra     _fail6          ! must NOT execute either (fell through)
         nop

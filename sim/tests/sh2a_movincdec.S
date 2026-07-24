@@ -7,10 +7,10 @@
 !   mov.w @-rm,r0  = 0100 mmmm 1101 1011   (Rm-2 -> Rm, (Rm) -> sign_ext -> R0)
 !   mov.l @-rm,r0  = 0100 mmmm 1110 1011   (Rm-4 -> Rm, (Rm) -> R0)
 !
-! sh2-elf-as (-m2) does not know these SH-2A opcodes, so they are hand-encoded
-! with .word. Post-inc store instructions use Rn=r2; pre-dec load instructions
-! use Rm=r3. All addressing operands are computed into registers at runtime
-! (mov.l <label>,rk) so no relocations are needed against the .word opcodes.
+! Uses native SH-2A post-inc-store / pre-dec-load mnemonics (requires
+! -Wa,--isa=sh2a). Post-inc store instructions use Rn=r2; pre-dec load
+! instructions use Rm=r3. All addressing operands are computed into
+! registers at runtime (mov.l <label>,rk) so no relocations are needed.
 !
 ! Marker convention: 0 = pass at TEST_RESULT_ADDRESS, non-zero = fail code.
 
@@ -40,7 +40,7 @@ start:
         mov.l   p_buf_b, r2
         mov     r2, r4          ! r4 = saved original address
         mov.l   p_val_b, r0     ! r0 = 0x0000007A
-        .word   0x428B          ! mov.b r0,@r2+  (Rn=r2)
+        mov.b   r0,@r2+
         nop
 
         mov.b   @r4, r8         ! read back (sign-extended) via base mov.b
@@ -58,7 +58,7 @@ start:
         mov.l   p_buf_w, r2
         mov     r2, r4
         mov.l   p_val_w, r0     ! r0 = 0x00001234
-        .word   0x429B          ! mov.w r0,@r2+  (Rn=r2)
+        mov.w   r0,@r2+
         nop
 
         mov.w   @r4, r8
@@ -76,7 +76,7 @@ start:
         mov.l   p_buf_l, r2
         mov     r2, r4
         mov.l   p_val_l, r0     ! r0 = 0x89ABCDEF
-        .word   0x42AB          ! mov.l r0,@r2+  (Rn=r2)
+        mov.l   r0,@r2+
         nop
 
         mov.l   @r4, r8
@@ -98,7 +98,7 @@ start:
 
         mov.l   p_addr_lb1, r3  ! r3 = buf_lb + 1
         mov     #0, r0
-        .word   0x43CB          ! mov.b @-r3,r0  (Rm=r3)
+        mov.b   @-r3,r0
         nop
 
         mov.l   p_valx_lb, r7   ! expected R0 = sign_extend(0x80) = 0xFFFFFF80
@@ -117,7 +117,7 @@ start:
 
         mov.l   p_addr_lw1, r3  ! r3 = buf_lw + 2
         mov     #0, r0
-        .word   0x43DB          ! mov.w @-r3,r0  (Rm=r3)
+        mov.w   @-r3,r0
         nop
 
         mov.l   p_valx_lw, r7   ! expected R0 = sign_extend(0x8001) = 0xFFFF8001
@@ -137,7 +137,7 @@ start:
 
         mov.l   p_addr_ll1, r3  ! r3 = buf_ll + 4
         mov     #0, r0
-        .word   0x43EB          ! mov.l @-r3,r0  (Rm=r3)
+        mov.l   @-r3,r0
         nop
 
         mov.l   p_val_ll, r7

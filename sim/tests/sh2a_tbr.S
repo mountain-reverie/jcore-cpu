@@ -3,8 +3,7 @@
 ! TBR is a named register at extended-register-file index 23 ("10111"),
 ! SH2A_ARCH-gated (rf_depth=24). ldc/stc TBR mirror ldc/stc GBR exactly.
 !
-! sh2-elf-as (plain -m2) does not know the SH-2A TBR mnemonic, so both
-! instructions are hand-encoded via .word.
+! Uses the native SH-2A TBR / jsr/n mnemonics (requires -Wa,--isa=sh2a).
 !   LDC Rm, TBR = 0100 mmmm 0100 1010  ->  ldc r1, TBR = 0x414A
 !   STC TBR, Rn = 0000 nnnn 0100 1010  ->  stc TBR, r2 = 0x024A
 
@@ -27,8 +26,8 @@ _sim_instr_end: .long 0
         .global start
 start:
         mov.l   p_val, r1        ! r1 = 0xABCD1234
-        .word   0x414A           ! ldc r1, TBR   (0100 0001 0100 1010)
-        .word   0x024A           ! stc TBR, r2   (0000 0010 0100 1010)
+        ldc     r1, tbr           ! (0100 0001 0100 1010)
+        stc     tbr, r2           ! (0000 0010 0100 1010)
         mov.l   p_val, r3
         cmp/eq  r2, r3
         bf      _fail
@@ -40,9 +39,9 @@ start:
         mov.l   tbl_addr, r4     ! r4 = &jumptbl (in RAM)
         mov.l   sub1_addr, r5    ! r5 = &sub1
         mov.l   r5, @r4          ! jumptbl[0] = &sub1
-        .word   0x444A           ! ldc r4, TBR   (0100 0100 0100 1010)
+        ldc     r4, tbr           ! (0100 0100 0100 1010)
         mov     #0x55, r6        ! r6 = 0x55 (cleared by sub1 if reached)
-        .word   0x8300           ! jsr/n @@(0, TBR) -> PC = mem[TBR+0] = sub1
+        jsr/n   @@(0,tbr)         ! -> PC = mem[TBR+0] = sub1
         ! (no delay slot) execution returns here via sub1's rts
         mov     r6, r0
         cmp/eq  #0, r0           ! sub1 set r6 = 0 ?

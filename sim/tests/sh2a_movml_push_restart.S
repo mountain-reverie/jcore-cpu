@@ -51,9 +51,11 @@
 !  10     DMISS_W TEA wrong (handler-side guard)
 !  15     unexpected trap / fell through to _fail
 !
-! Hand-encoded (sh2-elf-as -m2 lacks these): MOVML.L r4,@-r15=0x44F1;
+! MOVML.L r4,@-r15 (0x44F1) and LDC r0,VBR (0x402E) now use native
+! sh2-elf-as (-Wa,--isa=sh2a) mnemonics. sh2-elf-as still lacks the J4
+! LDC/STC MMU control-register forms below, so those remain hand-encoded:
 !   LDC r0,PTEH=0x405E  LDC r0,PTEL=0x406E  LDC r0,ASIDR=0x407E  LDTLB=0x0038
-!   LDC r0,VBR=0x402E   STC EXPEVT,r0=0x0052
+!   STC EXPEVT,r0=0x0052
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -88,7 +90,7 @@ ENTRY(start)
 
         ! ---- VBR = _v_dstore - 0x440 (VBR+0x440 = D-store vector = _v_dstore). ----
         mov.l   p_vbr_val, r0
-        .word   0x402E                  ! LDC r0, VBR
+        ldc     r0, vbr
 
         ! ---- Clear fault counter. ----
         mov.l   p_g_fault_count, r0
@@ -136,7 +138,7 @@ ENTRY(start)
         ! First attempt: idx0 (R0->0x0FFC) commits, idx1 (R1->0x1000) DMISSes.
         ! Handler maps page 1, runs a leak-detecting SP store, RTEs with SPC
         ! still at THIS instruction, so it restarts from idx0.
-        .word   0x44F1
+        movml.l r4,@-r15
 
         ! ---- Verify each register landed at push_ptr + idx*4. ----
         mov.l   p_ppc, r6              ! r6 = push_ptr = 0x0FFC

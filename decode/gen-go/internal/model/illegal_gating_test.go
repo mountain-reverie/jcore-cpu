@@ -27,6 +27,9 @@ func TestIllegalInstrPerVariant(t *testing.T) {
 		sh4LDTLB  = 0x0038 // SH-4 LDTLB
 		rts       = 0x000B // base J2 RTS
 		addR0R0   = 0x300C // base J2 ADD Rm,Rn
+		ldcTBR    = 0x404A // SH-2A ldc Rm,TBR (0100 mmmm 0100 1010, m=0)
+		stcTBR    = 0x004A // SH-2A stc TBR,Rn (0000 nnnn 0100 1010, n=0)
+		jsrnAtTBR = 0x8300 // SH-2A jsr/n @@(disp8,TBR) (1000 0011 dddddddd)
 	)
 
 	build := func(t *testing.T, overlays ...string) *Decoder {
@@ -115,11 +118,21 @@ func TestIllegalInstrPerVariant(t *testing.T) {
 		{"base", base, rts, "RTS", false},
 		{"base", base, addR0R0, "ADD R0,R0", false},
 
+		{"base", base, ldcTBR, "ldc Rm,TBR", true},
+		{"base", base, stcTBR, "stc TBR,Rn", true},
+		{"base", base, jsrnAtTBR, "jsr/n @@(disp8,TBR)", true},
+
 		{"j2a", j2a, sh2aWord1, "sh2a disp12 word1", false},
 		{"j2a", j2a, sh4LDTLB, "sh4 LDTLB", true},
+		{"j2a", j2a, ldcTBR, "ldc Rm,TBR", false},
+		{"j2a", j2a, stcTBR, "stc TBR,Rn", false},
+		{"j2a", j2a, jsrnAtTBR, "jsr/n @@(disp8,TBR)", false},
 
 		{"j4", j4, sh2aWord1, "sh2a disp12 word1", true},
 		{"j4", j4, sh4LDTLB, "sh4 LDTLB", false},
+		{"j4", j4, ldcTBR, "ldc Rm,TBR", true},
+		{"j4", j4, stcTBR, "stc TBR,Rn", true},
+		{"j4", j4, jsrnAtTBR, "jsr/n @@(disp8,TBR)", true},
 	}
 
 	for _, c := range cases {

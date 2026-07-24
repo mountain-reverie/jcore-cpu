@@ -329,6 +329,14 @@ jobs:
           # translated access relocates, an absent-page access hits the miss
           # vector. Same LINUX_SRC/J4GAS/J4LD/J4BIN + sh32_p1.x link.
           run_guard mmuboot "" 200us 120
+          # J4-TLB SP2 Task 6: mmuhuge links the same REAL linux@jcore MMU
+          # TLB-miss handler objects and proves the REAL __jcore_tlb_walk()
+          # installs a multi-size huge TLB entry (PageMask != base 16 KB)
+          # from a PTE carrying a page-size slot -- 64 KB (slot 1) and 1 MB
+          # (slot 3), each verified by both a cross-16KB-sub-page masked-
+          # compare hit and the installed TSB PTEL encoding. Same
+          # LINUX_SRC/J4GAS/J4LD/J4BIN + sh32_p1.x link as mmulinux/mmuboot.
+          run_guard mmuhuge "" 200us 120
           # Scenarios 4-5 (deferred) and any exhaustive/slow mmulinux variant
           # would run only on the nightly schedule, e.g.:
           # if [ "${{ github.event_name }}" = "schedule" ]; then

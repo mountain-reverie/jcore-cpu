@@ -1,0 +1,30 @@
+# SH-2A overlay: TBR (Table Base Register) group. TBR is a named register at
+# extended-register-file index 23 ("10111"), SH2A_ARCH-gated (rf_depth=24).
+# ldc/stc TBR mirror ldc/stc GBR exactly (TBR routes through the register file
+# read/write ports like GBR).
+
+[[instr]]
+  name = "LDC Rm, TBR"
+  format = "m"
+  opcode = "0100 mmmm 0100 1010"
+  operation = "Rm -> TBR"
+
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "Rm"
+    zbus = "TBR"
+    zbus_sel = "Y"
+
+[[instr]]
+  name = "STC TBR, Rn"
+  format = "n"
+  opcode = "0000 nnnn 0100 1010"
+  operation = "TBR -> Rn"
+
+  [[instr.slots]]
+    mask_int = "YES"
+    pc = "INC"
+    ybus = "TBR"
+    zbus = "Rn"
+    zbus_sel = "Y"

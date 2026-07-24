@@ -28,3 +28,55 @@
     ybus = "TBR"
     zbus = "Rn"
     zbus_sel = "Y"
+
+[[instr]]
+  name = "JSR/N @@(disp8, TBR)"
+  format = "d8"
+  opcode = "1000 0011 dddd dddd"
+  operation = "PR <- call+2; PC <- mem[TBR + disp8*4], no delay slot"
+
+  # 1. save PR = call+2 (no delay slot, mirrors Group 9 jsr/n @Rm pr="RD Z").
+  [[instr.slots]]
+    xbus = "PC"
+    alu_y = "0"
+    arith = "ADD"
+    zbus_sel = "ARITH"
+    pr = "RD Z"
+    if_issue = "YES"
+    pc = "HOLD"
+
+  # 2. address TBR + disp8*4, issue 32-bit read (mirrors mov.l @(disp,GBR),R0).
+  [[instr.slots]]
+    xbus = "TBR"
+    alu_y = "U*4"
+    arith = "ADD"
+    zbus_sel = "ARITH"
+    ma_addy = "ZBUS"
+    ma_op = "READ"
+    ma_size = "32"
+    if_issue = "YES"
+    pc = "HOLD"
+
+  # 3. wait one cycle for the ARITH-addressed read to land on W.
+  [[instr.slots]]
+    if_issue = "YES"
+    pc = "HOLD"
+
+  # 4. capture memory data into PC (mirrors RTE stack->PC capture).
+  [[instr.slots]]
+    zbus = "PC"
+    zbus_sel = "W"
+    if_issue = "YES"
+    pc = "HOLD"
+
+  # 5. redirect fetch to the captured PC (mirrors jsr/n @Rm no-delay redirect).
+  [[instr.slots]]
+    if_addy = "ZBUS"
+    if_issue = "YES"
+    pc = "HOLD"
+
+  # 6. terminal: dispatch next instruction (mirrors jsr/n @Rm terminal slot).
+  [[instr.slots]]
+    dispatch = "YES"
+    if_issue = "YES"
+    pc = "INC"

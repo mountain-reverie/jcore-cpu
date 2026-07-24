@@ -777,6 +777,7 @@ var csvInstrOrder = []string{
 	"PREF @Rn",
 	"LDC Rm, TBR",
 	"STC TBR, Rn",
+	"JSR/N @@(disp8, TBR)",
 	// System-plane instructions (at end, in CSV row order):
 	"General Illegal",
 	"Slot Illegal",

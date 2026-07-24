@@ -32,10 +32,33 @@ start:
         mov.l   p_val, r3
         cmp/eq  r2, r3
         bf      _fail
+
+        ! jsr/n @@(disp8,TBR): memory-indirect table-jump, no delay slot.
+        ! Build an in-memory jump table at tbl_addr, load TBR with its
+        ! address, then jsr/n @@(0,TBR) should call sub1 via mem[TBR+0];
+        ! PR must hold call+2 so the following rts returns here.
+        mov.l   tbl_addr, r4     ! r4 = &jumptbl (in RAM)
+        mov.l   sub1_addr, r5    ! r5 = &sub1
+        mov.l   r5, @r4          ! jumptbl[0] = &sub1
+        .word   0x444A           ! ldc r4, TBR   (0100 0100 0100 1010)
+        mov     #0x55, r6        ! r6 = 0x55 (cleared by sub1 if reached)
+        .word   0x8300           ! jsr/n @@(0, TBR) -> PC = mem[TBR+0] = sub1
+        ! (no delay slot) execution returns here via sub1's rts
+        mov     r6, r0
+        cmp/eq  #0, r0           ! sub1 set r6 = 0 ?
+        bf      _fail
+
         bra     _done
         nop
         .align 2
 p_val:  .long   0xABCD1234
+tbl_addr: .long 0x00008000       ! jumptbl location in RAM
+sub1_addr: .long sub1
+sub1:
+        mov     #0, r6           ! marker: reached
+        rts
+        nop
+        .align 2
 _done:  mov.l   p_res, r0
         mov     #0, r9
         mov.l   r9, @r0

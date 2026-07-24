@@ -283,7 +283,7 @@ echo "==> Step 6b: base direct-vs-ROM decoder symmetry (cpu_sim_rom)"
 if ! command -v sh2-elf-gcc >/dev/null 2>&1; then
     echo "    Step 6b skipped: sh2-elf-gcc not installed (needs test images)"
 else
-    if ! make -C "$REPO_ROOT/sim" decode-symmetry; then
+    if ! make -C "$REPO_ROOT/sim" decode-symmetry TOOLS_DIR="$TOOLS_DIR"; then
         echo "regression: Step 6b base direct-vs-ROM symmetry FAILED" >&2
         exit 1
     fi

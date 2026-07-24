@@ -69,8 +69,8 @@ package datapath_pack is
       mach        : in    std_logic_vector(31 downto 0);
       macl        : in    std_logic_vector(31 downto 0);
       -- J1: high while mult(seq) iterates -> stretch the slot. '0' for mult(stru).
-      mult_stall         : in    std_logic;
-      mac_s              : out   std_logic;
+      mult_stall : in    std_logic;
+      mac_s      : out   std_logic;
       -- SH-2A DIVU/DIVS divider unit ports (Task 2); mirrors macin1/macin2/
       -- mach/macl above. '0'/unused on base (sh2a_arch=false).
       div_dividend       : out   std_logic_vector(31 downto 0);

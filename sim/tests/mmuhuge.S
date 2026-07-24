@@ -27,18 +27,34 @@
 !   SAME entry, translating to PA_base+0x4000, with the walker-invocation
 !   counter unchanged) is the only path that reaches "Test Passed".
 !
-! Two huge sizes are exercised (both fit comfortably inside the GHDL cosim's
-! 16 MB anonymous backing region right past the loaded image -- see
+! Three huge sizes are exercised. All three fit comfortably inside the GHDL
+! cosim's 16 MB anonymous backing region right past the loaded image -- see
 ! sim/cpu_ctb.c's `mmap_ptr2`/mem_bus_stack_map -- so no huge span needs to
 ! be fully backed by real RAM, only the handful of words this harness
-! actually touches):
+! actually touches:
 !
-!   - slot 1 -> PageMask pm=2 -> 64 KB  (jcore_pm_for_slot[1] == 2)
-!   - slot 3 -> PageMask pm=4 -> 1 MB   (jcore_pm_for_slot[3] == 4)
+!   - slot 1 -> PageMask pm=2 -> 64 KB   (jcore_pm_for_slot[1] == 2)
+!   - slot 3 -> PageMask pm=4 -> 1 MB    (jcore_pm_for_slot[3] == 4)
+!   - slot 7 -> PageMask pm=8 -> 256 MB  (jcore_pm_for_slot[7] == 8)
 !
-! These bracket the size range with the smallest non-base huge size and a
+! H1/H2 bracket the size range with the smallest non-base huge size and a
 ! size two hardware PageMask steps larger, while both base VAs/PAs stay
-! well under 4 MB -- comfortably inside the 16 MB backed window.
+! well under 4 MB -- comfortably inside the 16 MB backed window. H3 proves
+! the opposite end: the LARGEST PageMask the J4 TLB supports installs
+! correctly as one entry.
+!
+! H3/pm=8 has a hardware wrinkle worth documenting (core/tlb.vhd,
+! core/cpu.vhd's `g_dstore_squash`/PIPT relocation): the design caps
+! physical addresses at 28 bits (PA[31:28] is unconditionally forced to
+! "0000" on every TLB hit, not just for huge pages), and page_offset_mask()
+! for pm=8 sets n=16, i.e. ALL 16 bits of the PPN[27:12] field become
+! "in-page offset -> use VA", none come from the PTE's stored PPN. So for
+! a 256 MB page the PTE's PPN bits are architecturally inert: the
+! translated PA is always VA & 0x0FFFFFFF, independent of what physical
+! frame the PTE names. In other words, the 256 MB size is only usable as
+! an identity-style window (VA[27:0] == PA[27:0]) -- there are no frame-
+! select bits left once a huge page spans the CPU's entire 256 MB physical
+! range. VA_H3 is chosen equal to PA_H3 for exactly this reason.
 !
 ! Memory map (P1 = 0x80000000 | physical offset; P0 addresses are genuine,
 ! translated by the walker):
@@ -50,8 +66,11 @@
 !   0x0002A000  stack            (P1 0x8002A000, SP set near top)
 !   0x00100000  H1 backing page  (64 KB huge page's PFN, slot 1)
 !   0x00200000  H2 backing page  (1 MB huge page's PFN, slot 3)
+!   0x00300000  H3 backing page + VA_H3 (256 MB huge page's PFN==VA, slot 7,
+!                                  see the pm=8 wrinkle above)
 !   0x00200000 (P0) VA_H1        pgd_index=0, pte_index=0x80
 !   0x00400000 (P0) VA_H2        pgd_index=0, pte_index=0x100
+!   0x00300000 (P0) VA_H3        pgd_index=0, pte_index=0xC0
 !
 ! Assertions (distinct r9 fail codes so a regression is diagnosable):
 !   r9=1  VA_H1 base load != the sentinel seeded at PA_H1 (translation
@@ -72,8 +91,14 @@
 !         | V|C|U|W|D
 !   r9=7  VA_H2+0x4000 load != the sentinel seeded at PA_H2+0x4000
 !   r9=8  walker-invocation counter changed across the VA_H2+0x4000 touch
+!   r9=9  VA_H3 base load != the sentinel seeded at PA_H3 (256 MB huge page)
+!   r9=10 VA_H3's TSB slot PTEL image != PFN(PA_H3) | PageMask(pm=8, 256 MB)
+!         | V|C|U|W|D -- proves the LARGEST PageMask the J4 TLB supports
+!         installs correctly as one entry
+!   r9=11 VA_H3+0x4000 load != the sentinel seeded at PA_H3+0x4000
+!   r9=12 walker-invocation counter changed across the VA_H3+0x4000 touch
 !   r9=99 do_page_fault() was reached unexpectedly (this harness expects
-!         zero faults across all four touches)
+!         zero faults across all six touches)
 
 #include "sim_instr.h"
 #include <asm/pgtable-bits-jcore.h>
@@ -167,7 +192,7 @@ kmain:
         mov.l   k_ptetbl, r1
         mov.l   r1, @r0
 
-        ! ---- Build the two huge ptes. VA_H1's/VA_H2's own +0x4000
+        ! ---- Build the three huge ptes. VA_H1's/VA_H2's/VA_H3's own +0x4000
         ! sub-page pte slots are deliberately left un-populated (the
         ! underlying GHDL anon-mmap backing is zero-initialised, so those
         ! words already read as an all-zero, not-present pte -- no explicit
@@ -177,6 +202,9 @@ kmain:
         mov.l   r1, @r0
         mov.l   k_pte_h2, r0
         mov.l   v_pte_h2, r1
+        mov.l   r1, @r0
+        mov.l   k_pte_h3, r0
+        mov.l   v_pte_h3, r1
         mov.l   r1, @r0
 
         ! ---- Zero the do_page_fault handshake globals; point the fault
@@ -197,11 +225,13 @@ kmain:
         dt      r2
         bf      1b
 
-        ! ---- Seed the four backing words directly (P1, untranslated). ----
+        ! ---- Seed the six backing words directly (P1, untranslated). ----
         mov.l   k_backing_h1,  r0 ; mov.l v_seed_h1,  r1 ; mov.l r1, @r0
         mov.l   k_backing_h1b, r0 ; mov.l v_seed_h1b, r1 ; mov.l r1, @r0
         mov.l   k_backing_h2,  r0 ; mov.l v_seed_h2,  r1 ; mov.l r1, @r0
         mov.l   k_backing_h2b, r0 ; mov.l v_seed_h2b, r1 ; mov.l r1, @r0
+        mov.l   k_backing_h3,  r0 ; mov.l v_seed_h3,  r1 ; mov.l r1, @r0
+        mov.l   k_backing_h3b, r0 ; mov.l v_seed_h3b, r1 ; mov.l r1, @r0
 
         ! ---- Point MMU_TTB at our pgd. ----
         mov.l   k_ttb_a, r0 ; mov.l k_pgd, r1 ; mov.l r1, @r0
@@ -280,6 +310,37 @@ kmain:
         mov.l   k_wcnt, r0 ; mov.l @r0, r5
         cmp/eq  r4, r5 ; mov #8, r9 ; bf _fail
 
+        ! ============= SCENARIO H3: 256 MB huge page (slot 7, pm=8) =========
+        ! Largest PageMask the J4 TLB supports -- proves it installs as ONE
+        ! entry, same single-slot / cross-16KB-subpage-hit technique as H1/H2.
+        mov.l   k_mmucr, r0 ; mov #1, r1 ; mov.l r1, @r0   ! AT back on
+        nop
+        nop
+
+        mov.l   va_h3, r0
+        mov.l   @r0, r8                 ! load -> TLB miss -> walker installs
+                                         ! the 256 MB huge entry from k_pte_h3
+
+        stc     tsbptr, r3
+        mov.l   k_wcnt, r0 ; mov.l @r0, r4
+
+        mov.l   va_h3b, r0
+        mov.l   @r0, r11                ! own pte slot un-populated -> must
+                                         ! be a masked-compare HIT
+
+        mov.l   k_mmucr, r0 ; mov #0, r1 ; mov.l r1, @r0   ! AT off for readback
+
+        mov.l   v_seed_h3, r1 ; cmp/eq r1, r8 ; mov #9, r9 ; bf _fail
+
+        mov.l   @(8, r3), r2
+        mov.l   v_ptel_expect_h3, r1
+        cmp/eq  r1, r2 ; mov #10, r9 ; bf _fail
+
+        mov.l   v_seed_h3b, r1 ; cmp/eq r1, r11 ; mov #11, r9 ; bf _fail
+
+        mov.l   k_wcnt, r0 ; mov.l @r0, r5
+        cmp/eq  r4, r5 ; mov #12, r9 ; bf _fail
+
         mov     #0, r9
         bra     _done
         nop
@@ -335,6 +396,28 @@ k_backing_h2b:  .long 0x80204000
 v_seed_h2:      .long 0xC0FFEE10        ! 1 MB scenario sentinel
 v_seed_h2b:     .long 0xC0FFEE11
 v_ptel_expect_h2: .long 0x002004B9      ! PFN(0x00200000)|PageMask(pm=4,0x400)|V|C|U|W|D
+
+! ---- Scenario H3: 256 MB huge page, size slot 7 (pte bits10,12,13 all set
+! (0x400 | 0x1000 | 0x2000 == 0x3400) -> jcore_pte_size_slot() == 7 ->
+! jcore_pm_for_slot[7] == 8 -> PTEL PageMask == 8 -> page size 4 KB<<(2*8)
+! == 256 MB, the LARGEST size the J4 TLB supports). At pm=8,
+! page_offset_mask() makes ALL 16 bits of PPN[27:12] "in-page offset ->
+! use VA" (see the file header): the PTE's PPN is architecturally inert
+! for this size, so the translated PA is always VA & 0x0FFFFFFF. VA_H3 is
+! therefore chosen numerically equal to PA_H3 (0x00300000); pgd_index =
+! VA_H3>>26 == 0 (fits pgd[0], same table as H1/H2) and pte_index =
+! (VA_H3 >> 14) & 0xFFF == 0xC0 -> k_ptetbl + 0x300. VA_H3's own +0x4000
+! sub-page (VA 0x00304000) is pte_index 0xC1 -- deliberately left
+! un-populated. ----
+va_h3:          .long 0x00300000
+va_h3b:         .long 0x00304000
+k_pte_h3:       .long 0x80024300
+v_pte_h3:       .long 0x003034B9        ! PFN(0x00300000)|slot7(0x3400)|V|C|U|W|D(0xB9)
+k_backing_h3:   .long 0x80300000
+k_backing_h3b:  .long 0x80304000
+v_seed_h3:      .long 0xC0FFEE01        ! 256 MB scenario sentinel
+v_seed_h3b:     .long 0xC0FFEE02
+v_ptel_expect_h3: .long 0x003008B9      ! PFN(0x00300000)|PageMask(pm=8,0x800)|V|C|U|W|D
 
 ENTRY(_done)
         mov.l   p_test_result, r0

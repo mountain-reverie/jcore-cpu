@@ -56,6 +56,21 @@ mmulinux.img: mmulinux.elf
 	$(J4OBJCOPY) -v -S -O binary --srec-forceS3 $< $@
 
 # ---------------------------------------------------------------------------
+# J4-TLB SP2 Task 6: mmuhuge -- like mmulinux, but proves the REAL walker
+# installs a multi-size huge TLB entry (PageMask != 16 KB base) from a
+# huge-page PTE size slot. See sim/tests/mmuhuge.S.
+# ---------------------------------------------------------------------------
+mmuhuge.o: mmuhuge.S
+	mkdir -p $(J4BIN) && ln -sf $(abspath $(J4GAS)) $(J4BIN)/as
+	$(CC) $(CFLAGS) -D__ASSEMBLY__ -I$(LINUX_SRC)/arch/sh/include -B$(J4BIN) -Wa,--isa=any -c $< -o $@
+
+mmuhuge.elf: mmuhuge.o $(TLBJCORE_O) $(EX_O) $(ENTRY_O)
+	$(J4LD) -T sh32_p1.x -Map main.map $^ $(LIBGCC) -o $@
+
+mmuhuge.img: mmuhuge.elf
+	$(J4OBJCOPY) -v -S -O binary --srec-forceS3 $< $@
+
+# ---------------------------------------------------------------------------
 # SP3-c Task 3: mmuboot links the REAL jcore_mmu_enable (Task 2) and drives
 # it through the cosim; the TLB-miss handler itself is hand-rolled in
 # mmuboot.S (Task 2 only factored the boot enable stub, not a full walker).

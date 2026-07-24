@@ -31,6 +31,12 @@ end configuration;
 configuration cpu_synth_j2a of cpu is
   for stru
     for u_mult : mult use entity work.mult(stru); end for;
+    -- The SH-2A divider (u_div) lives in the g_div : if SH2A_ARCH generate; bind
+    -- its component to the entity so synth_ecp5 elaborates it into LUTs rather
+    -- than leaving a black-box `divider` cell that nextpnr rejects.
+    for g_div
+      for u_div : divider use entity work.divider(rtl); end for;
+    end for;
     for u_decode : decode use configuration work.cpu_decode_direct_sh2a; end for;
     for u_datapath : datapath use entity work.datapath(stru);
       for stru

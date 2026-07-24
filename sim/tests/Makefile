@@ -159,6 +159,7 @@ sh2a_movrt_nott.elf: sh2a_movrt_nott.o
 sh2a_branchn.elf: sh2a_branchn.o
 sh2a_bitmem_rmw.elf: sh2a_bitmem_rmw.o
 sh2a_pref.elf: sh2a_pref.o
+sh2a_tbr.elf: sh2a_tbr.o
 j4_illegal_trap.elf: j4_illegal_trap.o
 mmurun.elf: mmurun.o tlbwalk.o
 mmuirun.elf: mmuirun.o tlbwalk.o

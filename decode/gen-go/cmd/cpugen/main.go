@@ -85,7 +85,21 @@ func main() {
 		"'all' (default) emits every table (the sim selects one via decode_config). "+
 		"'rom' additionally guards against two-word instructions sharing word1, which the "+
 		"word1-only ROM predecode cannot discriminate (ROM + SH-2A two-word ops is unsupported).")
+	illegal := flag.String("illegal", "full", "illegal-instruction detection: full|none. "+
+		"'full' (default) traps every encoding the loaded spec does not define. "+
+		"'none' compiles the check out entirely (returns '0'), for area-critical builds.")
 	flag.Parse()
+
+	var illegalMode model.IllegalMode
+	switch *illegal {
+	case "full":
+		illegalMode = model.IllegalFull
+	case "none":
+		illegalMode = model.IllegalNone
+	default:
+		fmt.Fprintf(os.Stderr, "invalid -illegal=%q: want full or none\n", *illegal)
+		os.Exit(1)
+	}
 
 	var s *spec.Spec
 	var err error
@@ -111,7 +125,7 @@ func main() {
 			len(s.Instrs), *specDir)
 		return
 	}
-	d, err := model.Build(s, *width)
+	d, err := model.Build(s, *width, illegalMode)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "build:", err)
 		os.Exit(1)

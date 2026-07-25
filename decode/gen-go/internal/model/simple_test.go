@@ -11,7 +11,7 @@ func TestBuildSimpleProductionInstructionCount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := Build(s, 72)
+	d, err := Build(s, 72, IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}

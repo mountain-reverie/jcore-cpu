@@ -18,7 +18,7 @@ func TestCheckROMTwoWordFiresOnCollision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := Build(s, 72)
+	d, err := Build(s, 72, IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestCheckROMTwoWordSilentOnBase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := Build(s, 72)
+	d, err := Build(s, 72, IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestCheckROMTwoWordSilentOnJ4(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := Build(s, 72)
+	d, err := Build(s, 72, IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}

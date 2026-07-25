@@ -27,7 +27,7 @@ func TestROMBitPatternEquality72(t *testing.T) {
 	if err := spec.Validate(s); err != nil {
 		t.Fatal(err)
 	}
-	d, err := model.Build(s, 72)
+	d, err := model.Build(s, 72, model.IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestDecodeTableROMAgainstClojureGolden(t *testing.T) {
 	if err := spec.Validate(s); err != nil {
 		t.Fatal(err)
 	}
-	d, err := model.Build(s, 72)
+	d, err := model.Build(s, 72, model.IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestDecodeTableROMAgainstClojureGolden(t *testing.T) {
 // path by asserting structural invariants that any correct ROM must
 // satisfy, even if we can't verify byte-equality against Clojure:
 //
-//   - Build(s, 64) succeeds.
+//   - Build(s, 64, IllegalFull) succeeds.
 //   - The ROM is 256 entries.
 //   - Every ROM word is the same width (66 bits for our current cs64).
 //   - Width-64 ROM is narrower than width-72 ROM (this is the whole point).
@@ -159,11 +159,11 @@ func TestROMStructuralIntegrityWidth64(t *testing.T) {
 	if err := spec.Validate(s); err != nil {
 		t.Fatal(err)
 	}
-	d64, err := model.Build(s, 64)
+	d64, err := model.Build(s, 64, model.IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}
-	d72, err := model.Build(s, 72)
+	d72, err := model.Build(s, 72, model.IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,7 +12,7 @@ func TestBuildDirectProducesImpBits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := Build(s, 72)
+	d, err := Build(s, 72, IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestBuildDirectSemanticSpotChecks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := Build(s, 72)
+	d, err := Build(s, 72, IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}

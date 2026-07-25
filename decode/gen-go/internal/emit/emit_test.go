@@ -30,7 +30,7 @@ func renderTemplateForFixture(t *testing.T, fixturePath, tmplName string) []byte
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := model.Build(s, 72)
+	d, err := model.Build(s, 72, model.IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}

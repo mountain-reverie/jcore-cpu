@@ -29,7 +29,7 @@ func TestSh2instrAgainstClojureGolden(t *testing.T) {
 	if err := spec.Validate(s); err != nil {
 		t.Fatal(err)
 	}
-	d, err := model.Build(s, 72)
+	d, err := model.Build(s, 72, model.IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}

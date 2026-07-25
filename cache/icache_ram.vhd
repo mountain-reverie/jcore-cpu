@@ -26,7 +26,7 @@ begin
     generic map (
      SUBWORD_WIDTH => 8,
      SUBWORD_NUM   => 2,
-     ADDR_WIDTH    => 8)
+     ADDR_WIDTH    => CACHE_INDEX_BITS)
     port map(
      rst => rst,
      clk => clk125,
@@ -47,7 +47,7 @@ begin
      generic map (
      SUBWORD_WIDTH => 8,
      SUBWORD_NUM   => 2,
-     ADDR_WIDTH    => 11)
+     ADDR_WIDTH    => CACHE_INDEX_BITS + CACHE_LINE_WIDTH_BITS - CACHE_MEM_WIDTH_BITS)
      port map(
      rst0 => rst, clk0 => clk125,
      en0  => ra.en0,

@@ -57,11 +57,27 @@ type PredecodeBitAssign struct {
 //
 // writesPC is the set of instruction names that write PC (branches);
 // drives check_illegal_delay_slot.
-func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, writesPC map[string]bool, privileged map[string]bool, addrBits int, excludedIllegal map[string]logic.LogicMap) *Body {
+// IllegalMode selects how check_illegal_instruction is generated.
+//
+//	IllegalFull — trap every encoding not defined by the loaded spec.
+//	IllegalNone — never trap; the function returns '0' unconditionally.
+//	              A zero-cost opt-out for area-critical builds (J1).
+type IllegalMode string
+
+const (
+	IllegalFull IllegalMode = "full"
+	IllegalNone IllegalMode = "none"
+)
+
+func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, writesPC map[string]bool, privileged map[string]bool, addrBits int, excludedIllegal map[string]logic.LogicMap, mode IllegalMode) *Body {
 	body := &Body{}
 	body.Predecode = buildPredecode(instrAddrs, instrLogic, addrBits)
 	body.IllegalSlot = buildIllegalSlot(instrLogic, writesPC)
-	body.IllegalInstr = buildIllegalInstr(excludedIllegal)
+	if mode == IllegalNone {
+		body.IllegalInstr = "false"
+	} else {
+		body.IllegalInstr = buildIllegalInstr(excludedIllegal)
+	}
 	body.Privileged = buildPrivileged(instrLogic, privileged)
 	body.AddrSentinel = addrLit((1<<addrBits)-1, addrBits)
 	return body

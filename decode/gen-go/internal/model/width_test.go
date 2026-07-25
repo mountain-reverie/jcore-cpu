@@ -61,12 +61,12 @@ func TestAddrLit(t *testing.T) {
 // the all-ones address rendered at the active width.
 func TestBuildBodyAddrSentinel(t *testing.T) {
 	empty := func() *Body {
-		return BuildBody(map[string]int{}, map[string]logic.LogicMap{}, map[string]bool{}, map[string]bool{}, 8, map[string]logic.LogicMap{})
+		return BuildBody(map[string]int{}, map[string]logic.LogicMap{}, map[string]bool{}, map[string]bool{}, 8, map[string]logic.LogicMap{}, IllegalFull)
 	}
 	if got := empty().AddrSentinel; got != `x"ff"` {
 		t.Errorf("8-bit AddrSentinel = %q, want %q", got, `x"ff"`)
 	}
-	b9 := BuildBody(map[string]int{}, map[string]logic.LogicMap{}, map[string]bool{}, map[string]bool{}, 9, map[string]logic.LogicMap{})
+	b9 := BuildBody(map[string]int{}, map[string]logic.LogicMap{}, map[string]bool{}, map[string]bool{}, 9, map[string]logic.LogicMap{}, IllegalFull)
 	if got := b9.AddrSentinel; got != `"111111111"` {
 		t.Errorf("9-bit AddrSentinel = %q, want %q", got, `"111111111"`)
 	}
@@ -122,7 +122,7 @@ func TestProductionBuildIsEightBit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := Build(s, 72)
+	d, err := Build(s, 72, IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}

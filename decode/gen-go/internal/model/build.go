@@ -82,7 +82,7 @@ func setOpAddrNextWidth(pkg *Package, addrBits int) error {
 // canonicalization. Returns an error if any retained instruction has
 // a malformed opcode; callers that ran spec.Validate first will not
 // hit this path, but Build does not assume Validate ran.
-func Build(s *spec.Spec, width int) (*Decoder, error) {
+func Build(s *spec.Spec, width int, mode IllegalMode) (*Decoder, error) {
 	d := &Decoder{}
 	for i := range d.Lines {
 		d.Lines[i].Line = i
@@ -471,7 +471,7 @@ func Build(s *spec.Spec, width int) (*Decoder, error) {
 		excludedIllegal[ei.Name] = logic.OpToLogicMap("0", ei.Opcode)
 	}
 
-	d.Body = BuildBody(instrAddrs, instrLogicNormal, writesPC, privileged, addrBits, excludedIllegal)
+	d.Body = BuildBody(instrAddrs, instrLogicNormal, writesPC, privileged, addrBits, excludedIllegal, mode)
 	d.Simple = BuildSimple(s, instrLogicAll, slotAssigns)
 	d.Direct = BuildDirect(s, instrLogicAll, slotAssigns)
 	d.Entity = BuildEntity(d.Package)

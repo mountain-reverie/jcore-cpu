@@ -37,7 +37,7 @@ func TestBuildFiltersSystemPlane(t *testing.T) {
 		{Name: "CLRT", Format: "0", Opcode: "0000 0000 0000 1000"},
 		{Name: "Interrupt", Format: "d8", Opcode: "---- -000 dddd dddd", Plane: "system"},
 	}}
-	d, err := Build(s, 72)
+	d, err := Build(s, 72, IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestBuildNormalizesFormatMNToNM(t *testing.T) {
 	s := &spec.Spec{Instrs: []spec.Instr{
 		{Name: "ADD Rm, Rn", Format: "mn", Opcode: "0011 nnnn mmmm 1100"},
 	}}
-	d, err := Build(s, 72)
+	d, err := Build(s, 72, IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestBuildGroupsByTopNibbleAndSorts(t *testing.T) {
 		{Name: "B", Format: "n", Opcode: "0011 0000 0000 0001"},
 		{Name: "C", Format: "n", Opcode: "0001 0000 0000 0000"},
 	}}
-	d, err := Build(s, 72)
+	d, err := Build(s, 72, IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestBuildReturnsErrorOnBadOpcode(t *testing.T) {
 	s := &spec.Spec{Instrs: []spec.Instr{
 		{Name: "BAD", Format: "0", Opcode: "totally not 16 bits"},
 	}}
-	if _, err := Build(s, 72); err == nil {
+	if _, err := Build(s, 72, IllegalFull); err == nil {
 		t.Error("want error on malformed opcode")
 	}
 }
@@ -104,7 +104,7 @@ func TestBuildProductionSpec(t *testing.T) {
 	if err := spec.Validate(s); err != nil {
 		t.Fatal(err)
 	}
-	d, err := Build(s, 72)
+	d, err := Build(s, 72, IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestBuildProductionImmVals(t *testing.T) {
 	if err := spec.Validate(s); err != nil {
 		t.Fatal(err)
 	}
-	d, err := Build(s, 72)
+	d, err := Build(s, 72, IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestBaseBuildHasNoLatchExtFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := Build(s, 72)
+	d, err := Build(s, 72, IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestJ2AOverlayAddsLatchExtFieldsAndSeedSlot0(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := Build(s, 72)
+	d, err := Build(s, 72, IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +283,7 @@ func TestBaseBuildHasNoExtWordPorts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := Build(s, 72)
+	d, err := Build(s, 72, IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestJ2AOverlayAddsExtWordPorts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := Build(s, 72)
+	d, err := Build(s, 72, IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -14,7 +14,7 @@ func TestPrivilegedFunctionEmitted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := model.Build(s, 72)
+	d, err := model.Build(s, 72, model.IllegalFull)
 	if err != nil {
 		t.Fatal(err)
 	}

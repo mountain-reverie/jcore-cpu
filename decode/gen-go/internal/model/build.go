@@ -461,17 +461,8 @@ func Build(s *spec.Spec, width int, mode IllegalMode) (*Decoder, error) {
 			}
 		}
 	}
-	// Excluded overlay opcodes (spec.InjectOverlayIllegals) never become
-	// dispatched microcode -- they only feed check_illegal_instruction so
-	// they trap via the existing General-Illegal exception path instead of
-	// being cloned into the decode tables' minterm reduction (see
-	// internal/spec/overlay_illegal.go for the bisection that found this).
-	excludedIllegal := make(map[string]logic.LogicMap, len(s.ExcludedIllegal))
-	for _, ei := range s.ExcludedIllegal {
-		excludedIllegal[ei.Name] = logic.OpToLogicMap("0", ei.Opcode)
-	}
 
-	d.Body = BuildBody(instrAddrs, instrLogicNormal, writesPC, privileged, addrBits, excludedIllegal, mode)
+	d.Body = BuildBody(instrAddrs, instrLogicNormal, writesPC, privileged, addrBits, mode)
 	d.Simple = BuildSimple(s, instrLogicAll, slotAssigns)
 	d.Direct = BuildDirect(s, instrLogicAll, slotAssigns)
 	d.Entity = BuildEntity(d.Package)

@@ -6,9 +6,9 @@ import (
 	"github.com/j-core/jcore-cpu/decode/gen-go/internal/spec"
 )
 
-// TestIllegalInstrPerVariant verifies Phase 0's per-variant illegal-instruction
-// gating (spec.InjectOverlayIllegals -> model.BuildBody -> Body.IllegalInstr)
-// entirely at the Go unit level, independent of the C-VHDL cosim environment.
+// TestIllegalInstrPerVariant verifies per-variant illegal-instruction gating
+// (model.BuildBody -> Body.IllegalInstr) entirely at the Go unit level,
+// independent of the C-VHDL cosim environment.
 // It builds the decoder model for base J2, J2A (sh2a overlay), and J4 (sh4
 // overlay) and evaluates the generated check_illegal_instruction boolean
 // expression against representative opcodes drawn from each ISA:
@@ -41,9 +41,6 @@ func TestIllegalInstrPerVariant(t *testing.T) {
 		}
 		if err != nil {
 			t.Fatalf("load spec: %v", err)
-		}
-		if err := spec.InjectOverlayIllegals(s, "../../spec", []string{"sh2a", "sh4"}); err != nil {
-			t.Fatalf("InjectOverlayIllegals: %v", err)
 		}
 		d, err := Build(s, 72, IllegalFull)
 		if err != nil {

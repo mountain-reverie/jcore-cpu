@@ -50,6 +50,11 @@ func TestDecodeBodyStructural(t *testing.T) {
 			t.Errorf("output missing case arm %d", n)
 		}
 	}
+	// predecode_rom_addr and check_illegal_instruction both case-split on
+	// the top nibble.
+	if got := strings.Count(out, "case code(15 downto 12)"); got != 2 {
+		t.Errorf(`output contains %d occurrences of "case code(15 downto 12)"; want 2`, got)
+	}
 }
 
 // TestDecodeBodyL1BestEffort runs the L1 diff against the Clojure golden

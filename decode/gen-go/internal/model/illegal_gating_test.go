@@ -1,10 +1,8 @@
 package model
 
 import (
-	"strings"
 	"testing"
 
-	"github.com/j-core/jcore-cpu/decode/gen-go/internal/logic"
 	"github.com/j-core/jcore-cpu/decode/gen-go/internal/spec"
 )
 
@@ -51,55 +49,15 @@ func TestIllegalInstrPerVariant(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Build: %v", err)
 		}
-		if d.Body == nil || d.Body.IllegalInstr == "" {
-			t.Fatal("Build did not produce a non-empty Body.IllegalInstr")
+		if d.Body == nil {
+			t.Fatal("Build did not produce a Body")
 		}
 		return d
 	}
 
-	// stubPrefix is the hardcoded "code(15 downto 8) = x"ff"" OR-term that
-	// buildIllegalInstr (internal/model/body.go) always prepends. EvalBoolExpr's
-	// grammar (internal/logic/eval.go) only supports single-bit comparisons
-	// ("code(N) = '0'/'1'"), not VHDL "downto" range slices, so it cannot parse
-	// this term directly. None of this test's opcodes (0x3211, 0x0038, 0x000B,
-	// 0x300C) have a high byte of 0xff, so the stub term is always false for
-	// them; strip it here rather than extending EvalBoolExpr's grammar for a
-	// term whose value is fixed and irrelevant to the per-variant behavior
-	// under test.
-	const stubPrefix = `(code(15 downto 8) = x"ff") or `
-
-	// The remainder is the QMC-reduced excluded-opcode expression, always
-	// wrapped by buildIllegalInstr as "(BOOLEXPR = '1')" (a std_logic
-	// comparison of the OR-chain against '1', mirroring the pattern
-	// differential_test.go's stripStdLogicQuotes/preprocessExpr also work
-	// around). EvalBoolExpr's comparison grammar only accepts
-	// "IDENT(INT) = 'bit'", not "(expr) = 'bit'", so unwrap it: strip the
-	// outer parens and the trailing " = '1'" to recover the pure boolean
-	// OR-chain BOOLEXPR, which EvalBoolExpr parses directly.
-	unwrapEquality := func(t *testing.T, expr string) string {
-		t.Helper()
-		expr = strings.TrimPrefix(expr, "(")
-		expr = strings.TrimSuffix(expr, ")")
-		inner, ok := strings.CutSuffix(expr, " = '1'")
-		if !ok {
-			t.Fatalf("IllegalInstr expression missing expected \" = '1'\" wrapper: %q", expr)
-		}
-		return inner
-	}
-
 	evalIllegal := func(t *testing.T, d *Decoder, opcode uint16) bool {
 		t.Helper()
-		expr := unwrapEquality(t, strings.TrimPrefix(d.Body.IllegalInstr, stubPrefix))
-		got, err := logic.EvalBoolExpr(expr, func(sig string, bit int) int {
-			if sig == "code" {
-				return int((opcode >> bit) & 1)
-			}
-			return 0
-		})
-		if err != nil {
-			t.Fatalf("EvalBoolExpr(%q, opcode=%#04x): %v", d.Body.IllegalInstr, opcode, err)
-		}
-		return got
+		return d.Body.IllegalInstr.Eval(opcode)
 	}
 
 	base := build(t)

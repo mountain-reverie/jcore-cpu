@@ -62,9 +62,6 @@ func TestIllegalNeverTrapsDefinedOpcodes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("load: %v", err)
 			}
-			if err := spec.InjectOverlayIllegals(s, "../../spec", []string{"sh2a", "sh4"}); err != nil {
-				t.Fatalf("InjectOverlayIllegals: %v", err)
-			}
 			d, err := Build(s, 72, IllegalFull)
 			if err != nil {
 				t.Fatalf("Build: %v", err)

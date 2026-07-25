@@ -109,7 +109,7 @@ const (
 	IllegalNone IllegalMode = "none"
 )
 
-func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, writesPC map[string]bool, privileged map[string]bool, addrBits int, excludedIllegal map[string]logic.LogicMap, mode IllegalMode) *Body {
+func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, writesPC map[string]bool, privileged map[string]bool, addrBits int, mode IllegalMode) *Body {
 	body := &Body{}
 	body.Predecode = buildPredecode(instrAddrs, instrLogic, addrBits)
 	body.IllegalSlot = buildIllegalSlot(instrLogic, writesPC)

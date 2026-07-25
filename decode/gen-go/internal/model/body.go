@@ -13,10 +13,50 @@ import (
 type Body struct {
 	Predecode    PredecodeFunc
 	IllegalSlot  string // single boolean expression text for the function body
-	IllegalInstr string // boolean expression text for the simpler check
+	IllegalInstr IllegalFunc
 	Privileged   string // boolean expression text for the privileged() predicate
 	AddrSentinel string // VHDL literal for the predecode "unknown opcode" default
 	// (the all-ones address — a reserved, unused slot)
+}
+
+// IllegalFunc represents check_illegal_instruction's case-statement body,
+// one arm per top nibble. Mirrors PredecodeFunc, which already decomposes
+// the same encoding space the same way.
+type IllegalFunc struct {
+	Arms [16]IllegalArm
+}
+
+// IllegalArm is one case arm. Expr is a VHDL boolean expression over
+// code(11 downto 0), or the literal "true" (whole nibble undefined) or
+// "false" (whole nibble defined).
+type IllegalArm struct {
+	TopNibble int
+	Expr      string
+}
+
+// Eval evaluates the whole function for one opcode. Test-facing; keeps the
+// exhaustive tests independent of VHDL emission.
+func (f IllegalFunc) Eval(op uint16) bool {
+	arm := f.Arms[op>>12]
+	switch arm.Expr {
+	case "true":
+		return true
+	case "false":
+		return false
+	}
+	// arm.Expr ends with " = '1'" (a std_logic-to-boolean comparison wrapper
+	// around the OR-chain produced by orJoin); EvalBoolExpr's comparison
+	// grammar only accepts "IDENT(INT) = 'bit'", not "(expr) = 'bit'", so
+	// strip the wrapper before parsing — the same convention differential_test.go
+	// uses for other wrapped boolean expressions in this package.
+	trimmed := strings.TrimSuffix(arm.Expr, " = '1'")
+	v, err := logic.EvalBoolExpr(trimmed, func(sig string, bit int) int {
+		return int((op >> uint(bit)) & 1)
+	})
+	if err != nil {
+		panic(fmt.Sprintf("IllegalFunc.Eval: %v", err))
+	}
+	return v
 }
 
 // PredecodeFunc represents predecode_rom_addr's case-statement body.
@@ -74,47 +114,81 @@ func BuildBody(instrAddrs map[string]int, instrLogic map[string]logic.LogicMap, 
 	body.Predecode = buildPredecode(instrAddrs, instrLogic, addrBits)
 	body.IllegalSlot = buildIllegalSlot(instrLogic, writesPC)
 	if mode == IllegalNone {
-		body.IllegalInstr = "false"
+		for i := range body.IllegalInstr.Arms {
+			body.IllegalInstr.Arms[i] = IllegalArm{TopNibble: i, Expr: "false"}
+		}
 	} else {
-		body.IllegalInstr = buildIllegalInstr(excludedIllegal)
+		body.IllegalInstr = buildIllegalInstr(instrLogic)
 	}
 	body.Privileged = buildPrivileged(instrLogic, privileged)
 	body.AddrSentinel = addrLit((1<<addrBits)-1, addrBits)
 	return body
 }
 
-// buildIllegalInstr produces the boolean expression for
-// check_illegal_instruction: the hardcoded 0xffxx stub (kept for backward
-// compatibility) OR'd with the QMC-reduced set of opcodes excluded from this
-// build by InjectOverlayIllegals (sh2a/sh4 encodings absent from the loaded
-// spec). This function is independent of the decode tables' per-field
-// minterm reduction -- it only drives the illegal_instr signal, which the
-// existing exception path (datapath -> decode_core) already dispatches into
-// the real "General Illegal" microcode entry. Returns just the stub when
-// there are no excluded opcodes (e.g. a build that loaded every overlay).
-func buildIllegalInstr(excluded map[string]logic.LogicMap) string {
-	const stub = `code(15 downto 8) = x"ff"`
-	names := make([]string, 0, len(excluded))
-	for n := range excluded {
+// buildIllegalInstr produces check_illegal_instruction as one case arm per
+// top nibble. Each arm is the negation of that nibble's defined-instruction
+// cover, so coverage of the undefined space is exhaustive by construction.
+//
+// We reduce the DEFINED cubes and negate rather than reducing the hole
+// minterms directly: logic.ReduceImplicants is Petrick-based and does not
+// scale to the thousands of minterms a hole set contains, whereas the
+// defined set is a few dozen cubes per nibble. This is the same polarity
+// choice buildAddrBitAssigns makes via its offReduced branch.
+//
+// Decomposing per nibble also confines churn: adding an instruction to one
+// nibble re-reduces that arm and provably no other, so unrelated variants'
+// arms stay byte-identical.
+func buildIllegalInstr(lm map[string]logic.LogicMap) IllegalFunc {
+	var f IllegalFunc
+	groups := [16][]logic.LogicMap{}
+
+	names := make([]string, 0, len(lm))
+	for n := range lm {
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	var maps []logic.LogicMap
+
 	for _, n := range names {
-		stripped := logic.LogicMap{}
-		for k, v := range excluded[n] {
-			if k.Sig != "p" {
-				stripped[k] = v
+		m := lm[n]
+		nibble := 0
+		for b := 12; b < 16; b++ {
+			if v, ok := m[logic.SigBit{Sig: "i", Bit: b}]; ok && v == 1 {
+				nibble |= 1 << (b - 12)
 			}
 		}
-		maps = append(maps, stripped)
+		lo12 := logic.LogicMap{}
+		for k, v := range m {
+			if k.Sig == "i" && k.Bit < 12 {
+				lo12[k] = v
+			}
+		}
+		groups[nibble] = append(groups[nibble], lo12)
 	}
-	reduced := logic.ReduceImplicants(maps)
-	expr := orJoin(reduced, map[string]string{"i": "code"})
-	if expr == "" {
-		return stub
+
+	for nib := 0; nib < 16; nib++ {
+		f.Arms[nib] = IllegalArm{TopNibble: nib}
+		g := groups[nib]
+		if len(g) == 0 {
+			// No instruction uses this nibble: the whole 4096-entry
+			// block is undefined.
+			f.Arms[nib].Expr = "true"
+			continue
+		}
+		reduced := logic.ReduceImplicants(g)
+		if hasEmptyImplicant(reduced) {
+			// Reduction collapsed to "always true": the nibble is
+			// fully defined, nothing to trap.
+			f.Arms[nib].Expr = "false"
+			continue
+		}
+		inner := orJoin(reduced, map[string]string{"i": "code"})
+		if inner == "" {
+			f.Arms[nib].Expr = "true"
+			continue
+		}
+		f.Arms[nib].Expr = "not (" + inner + ") = '1'"
 	}
-	return "(" + stub + ") or ((" + expr + ") = '1')"
+	return f
 }
 
 // buildPrivileged produces the boolean expression for the privileged()

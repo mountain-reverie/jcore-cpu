@@ -1,7 +1,6 @@
 package model
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/j-core/jcore-cpu/decode/gen-go/internal/spec"
@@ -16,8 +15,15 @@ func TestIllegalModeNoneEmitsConstantFalse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if got := d.Body.IllegalInstr; got != "false" {
-		t.Errorf("IllegalMode none: IllegalInstr = %q, want %q", got, "false")
+	for nib, arm := range d.Body.IllegalInstr.Arms {
+		if arm.Expr != "false" {
+			t.Errorf("IllegalMode none: nibble %X = %q, want \"false\"", nib, arm.Expr)
+		}
+	}
+	for op := 0; op < 65536; op++ {
+		if d.Body.IllegalInstr.Eval(uint16(op)) {
+			t.Fatalf("IllegalMode none: opcode %#04x reported illegal", op)
+		}
 	}
 }
 
@@ -30,7 +36,13 @@ func TestIllegalModeFullIsNonEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if strings.TrimSpace(d.Body.IllegalInstr) == "" || d.Body.IllegalInstr == "false" {
-		t.Errorf("IllegalMode full: IllegalInstr = %q, want a real expression", d.Body.IllegalInstr)
+	any := false
+	for _, arm := range d.Body.IllegalInstr.Arms {
+		if arm.Expr != "false" {
+			any = true
+		}
+	}
+	if !any {
+		t.Error("IllegalMode full: every arm is \"false\"; want real detection logic")
 	}
 }

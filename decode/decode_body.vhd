@@ -292,12 +292,62 @@ package body decode_pack is
     end;
     function check_illegal_instruction (code : std_logic_vector(15 downto 0)) return std_logic is
     begin
-        -- TODO: Improve detection of illegal instructions
-        if (code(15 downto 8) = x"ff") or (((not code(0) and not code(1) and not code(2) and code(3) and code(4) and code(5) and not code(7) and not code(8) and not code(9) and not code(10) and not code(11) and not code(12) and not code(13) and not code(14) and not code(15)) or (not code(0) and not code(1) and not code(2) and code(3) and code(5) and code(6) and not code(7) and not code(8) and not code(9) and not code(10) and not code(11) and not code(12) and not code(13) and not code(14) and not code(15)) or (not code(0) and code(1) and not code(2) and not code(3) and code(4) and code(5) and not code(7) and not code(12) and not code(13) and not code(14) and not code(15)) or (not code(0) and code(1) and not code(2) and not code(3) and code(7) and not code(12) and not code(13) and not code(14) and not code(15)) or (not code(0) and code(1) and not code(2) and code(3) and not code(4) and not code(5) and code(6) and not code(7) and not code(12) and not code(13) and not code(15)) or (not code(0) and code(1) and code(2) and code(3) and code(4) and code(5) and not code(7) and not code(12) and not code(13) and code(14) and not code(15)) or (not code(0) and code(1) and code(2) and code(3) and code(6) and not code(7) and not code(12) and not code(13) and code(14) and not code(15)) or (not code(0) and code(1) and code(2) and code(3) and code(7) and not code(12) and not code(13) and code(14) and not code(15)) or (code(0) and not code(1) and not code(2) and not code(3) and code(12) and code(13) and not code(14) and not code(15)) or (code(0) and not code(1) and not code(2) and code(3) and code(4) and code(5) and not code(6) and not code(7) and not code(12) and not code(13) and not code(14) and not code(15)) or (code(0) and not code(1) and not code(2) and code(3) and not code(7) and code(12) and code(13) and not code(14) and not code(15)) or (code(0) and not code(1) and not code(3) and not code(5) and not code(6) and code(7) and not code(12) and not code(13) and code(14) and not code(15)) or (code(0) and code(1) and not code(2) and not code(3) and not code(4) and not code(5) and not code(6) and code(7) and not code(12) and not code(13) and not code(14) and not code(15)) or (code(0) and code(1) and not code(2) and not code(3) and code(4) and code(6) and not code(12) and not code(13) and not code(14) and not code(15)) or (code(0) and code(1) and not code(2) and code(3) and not code(4) and not code(5) and code(6) and not code(12) and not code(13) and code(14) and not code(15)) or (code(0) and code(1) and not code(2) and code(3) and not code(4) and code(5) and code(6) and not code(7) and not code(8) and not code(9) and not code(10) and not code(11) and not code(12) and not code(13) and not code(14) and not code(15)) or (code(0) and code(1) and not code(2) and code(3) and not code(4) and code(7) and not code(12) and not code(13) and code(14) and not code(15)) or (code(0) and code(1) and not code(2) and code(3) and not code(5) and code(7) and not code(12) and not code(13) and code(14) and not code(15)) or (code(0) and code(1) and not code(2) and code(4) and code(5) and code(6) and not code(12) and not code(13) and not code(14) and not code(15)) or (not code(1) and not code(2) and not code(3) and not code(12) and not code(13) and not code(14) and not code(15)) or (not code(1) and code(2) and not code(3) and not code(5) and not code(6) and code(7) and not code(12) and not code(13) and code(14) and not code(15)) or (not code(1) and not code(3) and not code(4) and not code(5) and not code(6) and code(7) and not code(12) and not code(13) and code(14) and not code(15)) or (not code(1) and not code(3) and code(4) and code(5) and code(6) and code(7) and not code(12) and not code(13) and code(14) and not code(15)) or (code(1) and not code(2) and not code(3) and code(6) and not code(7) and not code(12) and not code(13) and not code(14) and not code(15)) or (code(8) and code(9) and not code(10) and not code(11) and not code(12) and not code(13) and not code(14) and code(15)) or (code(9) and code(10) and not code(11) and not code(12) and not code(13) and not code(14) and code(15))) = '1') then
-            return '1';
-        else
-            return '0';
-        end if;
+        case code(15 downto 12) is
+            when x"0" =>
+                if not ((not code(0) and not code(1) and not code(2) and code(3) and not code(4) and not code(6) and not code(7) and not code(8) and not code(9) and not code(10) and not code(11)) or (not code(0) and code(1) and not code(2) and code(3) and code(4) and not code(5) and not code(7)) or (not code(0) and code(1) and not code(2) and not code(4) and not code(6) and not code(7)) or (not code(0) and code(1) and not code(2) and not code(5) and not code(6) and not code(7)) or (code(0) and not code(1) and not code(2) and code(3) and not code(4) and code(5) and not code(6) and not code(7)) or (code(0) and code(1) and not code(2) and code(3) and not code(6) and not code(7) and not code(8) and not code(9) and not code(10) and not code(11)) or (not code(1) and not code(2) and code(3) and not code(5) and not code(6) and not code(7) and not code(8) and not code(9) and not code(10) and not code(11)) or (code(1) and not code(2) and not code(3) and not code(4) and not code(6) and not code(7)) or (code(2))) = '1' then
+                    return '1';
+                else
+                    return '0';
+                end if;
+            when x"1" =>
+                return '0';
+            when x"2" =>
+                return '0';
+            when x"3" =>
+                if not ((not code(0)) or (code(1)) or (code(2))) = '1' then
+                    return '1';
+                else
+                    return '0';
+                end if;
+            when x"4" =>
+                if not ((not code(0) and code(1) and not code(2) and code(3) and code(4) and not code(5) and not code(7)) or (not code(0) and code(1) and not code(4) and not code(6) and not code(7)) or (not code(0) and code(1) and not code(5) and not code(6) and not code(7)) or (code(0) and code(2) and code(3)) or (code(0) and not code(3) and not code(5) and not code(6) and not code(7)) or (not code(1) and not code(2) and code(3) and not code(4) and not code(5) and code(7)) or (not code(1) and code(2) and code(3)) or (not code(2) and not code(4) and not code(6) and not code(7)) or (not code(2) and not code(5) and not code(6) and not code(7)) or (not code(3) and not code(4) and not code(6) and not code(7))) = '1' then
+                    return '1';
+                else
+                    return '0';
+                end if;
+            when x"5" =>
+                return '0';
+            when x"6" =>
+                return '0';
+            when x"7" =>
+                return '0';
+            when x"8" =>
+                if not ((code(8) and code(11)) or (not code(9) and not code(10)) or (not code(9) and not code(11))) = '1' then
+                    return '1';
+                else
+                    return '0';
+                end if;
+            when x"9" =>
+                return '0';
+            when x"A" =>
+                return '0';
+            when x"B" =>
+                return '0';
+            when x"C" =>
+                return '0';
+            when x"D" =>
+                return '0';
+            when x"E" =>
+                return '0';
+            when x"F" =>
+                if not ((code(0) and not code(1) and code(2) and code(3) and not code(5) and not code(6) and not code(7))) = '1' then
+                    return '1';
+                else
+                    return '0';
+                end if;
+            when others =>
+                return '0';
+        end case;
     end;
     function privileged (code : std_logic_vector(15 downto 0)) return std_logic is
     begin

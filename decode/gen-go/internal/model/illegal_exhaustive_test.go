@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/j-core/jcore-cpu/decode/gen-go/internal/logic"
 	"github.com/j-core/jcore-cpu/decode/gen-go/internal/spec"
 )
 
@@ -40,21 +39,6 @@ func definedSet(s *spec.Spec) [65536]bool {
 	return defined
 }
 
-// evalIllegal evaluates a generated VHDL boolean expression for one opcode.
-func evalIllegal(t *testing.T, expr string, op uint16) bool {
-	t.Helper()
-	v, err := logic.EvalBoolExpr(expr, func(sig string, bit int) int {
-		if sig != "code" {
-			t.Fatalf("unexpected sig %q in expression", sig)
-		}
-		return int((op >> uint(bit)) & 1)
-	})
-	if err != nil {
-		t.Fatalf("eval %q: %v", expr, err)
-	}
-	return v
-}
-
 // TestIllegalNeverTrapsDefinedOpcodes is the safety half of correctness: no
 // encoding that the loaded spec defines may be reported illegal. It must hold
 // for every variant, both before and after the switch to exhaustive coverage.
@@ -87,35 +71,60 @@ func TestIllegalNeverTrapsDefinedOpcodes(t *testing.T) {
 			}
 			defined := definedSet(s)
 
-			// Preprocess the expression once per variant. The stub prefix
-			// "code(15 downto 8) = x"ff") or " cannot be parsed by EvalBoolExpr
-			// (it uses VHDL range syntax). Strip it; it only affects opcodes
-			// with high byte 0xff, which are genuinely illegal per spec.
-			const stubPrefix = `(code(15 downto 8) = x"ff") or `
-			expr := strings.TrimPrefix(d.Body.IllegalInstr, stubPrefix)
-
-			// Unwrap the "(BOOLEXPR = '1')" wrapper: trim outer parens and
-			// the trailing " = '1'" suffix to recover the pure OR-chain.
-			expr = strings.TrimPrefix(expr, "(")
-			expr = strings.TrimSuffix(expr, ")")
-			inner, ok := strings.CutSuffix(expr, " = '1'")
-			if !ok {
-				t.Fatalf("IllegalInstr missing \" = '1'\" wrapper: %q", d.Body.IllegalInstr)
-			}
-			expr = inner
-
 			for op := 0; op < 65536; op++ {
-				// Skip opcodes with high byte 0xff; the stub covers those
-				// and they are all genuinely illegal.
-				if (op >> 8) == 0xff {
-					continue
-				}
 				if !defined[op] {
 					continue
 				}
-				if evalIllegal(t, expr, uint16(op)) {
+				if d.Body.IllegalInstr.Eval(uint16(op)) {
 					t.Fatalf("opcode %#04x is defined but reported illegal", op)
 				}
+			}
+		})
+	}
+}
+
+// TestIllegalCoversEveryHole is the completeness half: every encoding the
+// loaded spec does not define must be reported illegal, for every variant.
+func TestIllegalCoversEveryHole(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		overlays []string
+	}{
+		{"base", nil},
+		{"sh2a", []string{"../../spec/sh2a"}},
+		{"sh4", []string{"../../spec/sh4"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var s *spec.Spec
+			var err error
+			if len(tc.overlays) == 0 {
+				s, err = spec.Load("../../spec")
+			} else {
+				s, err = spec.LoadProfile("../../spec", tc.overlays...)
+			}
+			if err != nil {
+				t.Fatalf("load: %v", err)
+			}
+			d, err := Build(s, 72, IllegalFull)
+			if err != nil {
+				t.Fatalf("Build: %v", err)
+			}
+			defined := definedSet(s)
+			holes, trapped := 0, 0
+			for op := 0; op < 65536; op++ {
+				if defined[op] {
+					continue
+				}
+				holes++
+				if d.Body.IllegalInstr.Eval(uint16(op)) {
+					trapped++
+				}
+			}
+			if trapped != holes {
+				t.Errorf("%s: trapped %d of %d holes; want all", tc.name, trapped, holes)
+			}
+			if holes == 0 {
+				t.Fatal("no holes found — definedSet is wrong")
 			}
 		})
 	}

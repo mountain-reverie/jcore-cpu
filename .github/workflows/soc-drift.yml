@@ -1,0 +1,105 @@
+name: soc-drift
+# Opens a submodule-bump PR in jcore-soc for every jcore-cpu change, so the
+# SoC-level impact of a CPU commit (notably ULX3S Fmax, benchmarked by
+# jcore-soc's board-synth.yml on every pull_request) is visible when the change
+# is proposed rather than months later in aggregate. See
+# docs/superpowers/specs/2026-07-26-soc-drift-bot-design.md.
+#
+# Open jcore-cpu PR -> draft jcore-soc PR on cpu-bump/pr-<N>, closed when the
+# PR closes. Push to master -> non-draft PR on cpu-bump/master, left open for
+# human review (benchmarks are not currently PR-blocking, so auto-merge would
+# let regressions self-land).
+#
+# Fork PRs are deliberately skipped: `pull_request` withholds secrets from
+# forks, and the usual remedy (pull_request_target) would hand a write-capable
+# PAT to a job running against untrusted contributor content. Do not switch.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "jcore-cpu commit to bump jcore-soc to (default: master HEAD)"
+        required: false
+        type: string
+
+defaults:
+  run:
+    shell: bash
+
+# Collapse rapid pushes to one bump: each bump triggers a multi-hour synth run
+# downstream in jcore-soc, so queueing them is expensive and pointless.
+concurrency:
+  group: soc-drift-${{ github.event.pull_request.number || 'master' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write   # for the sticky link-back comment on this repo
+
+jobs:
+  sync:
+    # Skip fork PRs (no secrets available -- see header). Closed PRs are
+    # handled by the `retire` job below.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.action != 'closed' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout jcore-cpu
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Resolve source commit and PR
+        id: src
+        run: |
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+            echo "src=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ inputs.sha || github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "src=master" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sync jcore-soc bump PR
+        env:
+          SOC_PAT: ${{ secrets.DEPENDABOT_RECREATE_PAT }}
+          GH_TOKEN: ${{ secrets.DEPENDABOT_RECREATE_PAT }}
+        run: scripts/soc_bump.sh sync "${{ steps.src.outputs.sha }}" "${{ steps.src.outputs.src }}"
+
+      # Two tokens are in play here: the PAT reads the PR URL out of jcore-soc,
+      # then this repo's own GITHUB_TOKEN posts the comment on jcore-cpu.
+      - name: Link back on the jcore-cpu PR
+        if: github.event_name == 'pull_request'
+        run: |
+          url="$(GH_TOKEN='${{ secrets.DEPENDABOT_RECREATE_PAT }}' \
+                 bash -c 'SOC_BUMP_LIB_ONLY=1 . scripts/soc_bump.sh; \
+                          soc_pr_url "${{ steps.src.outputs.src }}"')"
+          if [ -z "$url" ]; then
+            echo "no bump PR open (no-op sync) -- skipping link-back"
+            exit 0
+          fi
+          GH_TOKEN='${{ github.token }}' \
+            scripts/soc_bump.sh comment "${{ steps.src.outputs.src }}" "$url"
+
+  retire:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout jcore-cpu
+        uses: actions/checkout@v4
+
+      - name: Close the draft bump PR
+        env:
+          GH_TOKEN: ${{ secrets.DEPENDABOT_RECREATE_PAT }}
+        run: scripts/soc_bump.sh close "${{ github.event.pull_request.number }}"

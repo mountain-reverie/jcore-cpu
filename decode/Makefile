@@ -7,6 +7,7 @@
 
 GEN_DIR := gen-go
 ROM_WIDTH ?= 72
+ILLEGAL ?= full
 
 #
 # Note: decode_core.vhd is NOT in GENERATED. It is a C-preprocessor
@@ -25,13 +26,13 @@ GENERATED := \
 .PHONY: generate generate-j4 generate-j2a m8gen clean diff insns insns-check
 
 generate:
-	go -C $(GEN_DIR) run ./cmd/cpugen -w $(ROM_WIDTH) -o ..
+	go -C $(GEN_DIR) run ./cmd/cpugen -w $(ROM_WIDTH) -illegal $(ILLEGAL) -o ..
 
 generate-j4:
-	go -C $(GEN_DIR) run ./cmd/cpugen -w $(ROM_WIDTH) -overlay spec/sh4 -o ..
+	go -C $(GEN_DIR) run ./cmd/cpugen -w $(ROM_WIDTH) -overlay spec/sh4 -illegal $(ILLEGAL) -o ..
 
 generate-j2a:
-	go -C $(GEN_DIR) run ./cmd/cpugen -w $(ROM_WIDTH) -overlay spec/sh2a -o ..
+	go -C $(GEN_DIR) run ./cmd/cpugen -w $(ROM_WIDTH) -overlay spec/sh2a -illegal $(ILLEGAL) -o ..
 
 insns:
 	go -C $(GEN_DIR) run ./cmd/cpugen insns -json ../../docs/insns.json

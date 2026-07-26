@@ -15,9 +15,12 @@ end icache_ram;
 
 architecture beh of icache_ram is
 
-signal tag_we  : std_logic_vector( 1 downto 0);
-signal tag_dr  : std_logic_vector(15 downto 0);
-signal tag_dw  : std_logic_vector(15 downto 0);
+constant TAG_BYTES : natural := (CACHE_PA_TAG_WIDTH + 1 + 7) / 8;
+constant TAG_W      : natural := 8 * TAG_BYTES;
+
+signal tag_we  : std_logic_vector(TAG_BYTES-1 downto 0);
+signal tag_dr  : std_logic_vector(TAG_W-1 downto 0);
+signal tag_dw  : std_logic_vector(TAG_W-1 downto 0);
 signal ram_we1 : std_logic_vector( 1 downto 0);
 
 begin
@@ -25,7 +28,7 @@ begin
    tag : ram_1rw
     generic map (
      SUBWORD_WIDTH => 8,
-     SUBWORD_NUM   => 2,
+     SUBWORD_NUM   => TAG_BYTES,
      ADDR_WIDTH    => CACHE_INDEX_BITS)
     port map(
      rst => rst,
@@ -34,13 +37,13 @@ begin
      wr  => ra.twr,
      we  => tag_we,
      a   => ra.ta,
-     dw  => tag_dw,                           -- 16 b => 1 b & 15 b
+     dw  => tag_dw,                           -- TAG_W b => 1 b & CACHE_PA_TAG_WIDTH b
      dr  => tag_dr,
      margin => "00" );
 
-   tag_we <= ra.twr & ra.twr;
-   tag_dw <= "0" & ra.tag;
-   ry.tag <= tag_dr(14 downto 0);            -- 15 b (PA[27:13], 28-bit region)
+   tag_we <= (others => ra.twr);
+   tag_dw <= std_logic_vector(resize(unsigned(ra.tag), TAG_W));
+   ry.tag <= tag_dr(CACHE_PA_TAG_WIDTH-1 downto 0);
 
    ram : for i in 0 to 1 generate
      ram_s : ram_2rw

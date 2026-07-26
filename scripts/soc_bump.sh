@@ -91,7 +91,7 @@ soc_pr_url() {
 # cmd_sync <sha> <pr#|master>
 cmd_sync() {
   local sha="$1" src="$2"
-  local branch draft workdir
+  local branch draft workdir askpass existing_url
   branch="$(bump_branch "$src")"
   # `[ x = y ] && draft=""` would return 1 for the master case and `set -e`
   # would kill the script, so this must be an if.
@@ -103,9 +103,23 @@ cmd_sync() {
   # shellcheck disable=SC2064
   trap "rm -rf '$workdir'" EXIT
 
+  # Never let SOC_PAT touch argv or a git config file: a GIT_ASKPASS helper
+  # reads it from the environment at run time instead. The helper and the
+  # clone both live under $workdir, so the trap above cleans them up; the
+  # only thing that ends up in .git/config is the token-free username@host
+  # URL, which is not a secret.
+  askpass="$workdir/askpass.sh"
+  cat > "$askpass" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$SOC_PAT"
+EOF
+  chmod 700 "$askpass"
+  export GIT_ASKPASS="$askpass"
+  export GIT_TERMINAL_PROMPT=0
+
   log "cloning $SOC_REPO"
   git clone --quiet --branch master \
-    "https://x-access-token:${SOC_PAT}@github.com/${SOC_REPO}.git" "$workdir/soc"
+    "https://x-access-token@github.com/${SOC_REPO}.git" "$workdir/soc"
   cd "$workdir/soc"
 
   git config user.name  "soc-drift-bot"
@@ -148,7 +162,13 @@ cmd_sync() {
   log "force-pushing $branch"
   git push --quiet --force origin "HEAD:refs/heads/$branch"
 
-  if [ -n "$(soc_pr_url "$src")" ]; then
+  # Plain assignment on its own line so a gh failure (rate limit, transient
+  # auth error) trips set -e and is caught below, instead of a failed command
+  # substitution silently vanishing inside `[ -n "$(...)" ]` and being
+  # mistaken for "no PR is open".
+  existing_url="$(soc_pr_url "$src")" \
+    || die "could not determine whether a bump PR already exists for $branch -- aborting rather than risk opening a duplicate"
+  if [ -n "$existing_url" ]; then
     log "PR already open for $branch -- force-push updated it in place"
     return 0
   fi

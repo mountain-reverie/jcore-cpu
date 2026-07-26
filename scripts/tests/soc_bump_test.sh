@@ -85,5 +85,14 @@ cbody="$(comment_body https://github.com/mountain-reverie/jcore-soc/pull/99)"
 ok "comment body starts with marker" "$(printf '%s\n' "$cbody" | head -1)" "<!-- soc-drift-bot -->"
 ok_contains "comment body links the soc PR" "$cbody" "jcore-soc/pull/99"
 
+# --- main dispatch -------------------------------------------------------
+# main is reachable only via a subshell run of the script itself.
+run_script() { DRY_RUN=1 bash scripts/soc_bump.sh "$@"; }
+
+ok_exits "unknown subcommand exits 2" 2 run_script bogus
+ok_exits "sync without args exits 2" 2 run_script sync
+ok_exits "sync with one arg exits 2" 2 run_script sync deadbeef
+ok_exits "close without args exits 2" 2 run_script close
+
 echo "1..$count"
 [ "$fails" -eq 0 ]

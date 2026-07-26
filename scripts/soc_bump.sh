@@ -80,8 +80,110 @@ comment_body() {
   printf 'this PR. Updated in place on each push.\n'
 }
 
+# soc_pr_url <pr#|master> -> URL of the open bump PR, or empty.
+soc_pr_url() {
+  local branch
+  branch="$(bump_branch "$1")"
+  gh pr list --repo "$SOC_REPO" --head "$branch" --state open \
+    --json url --jq '.[0].url // empty'
+}
+
+# cmd_sync <sha> <pr#|master>
+cmd_sync() {
+  local sha="$1" src="$2"
+  local branch draft workdir
+  branch="$(bump_branch "$src")"
+  # `[ x = y ] && draft=""` would return 1 for the master case and `set -e`
+  # would kill the script, so this must be an if.
+  if [ "$src" = master ]; then draft=""; else draft="--draft"; fi
+
+  : "${SOC_PAT:?SOC_PAT must be set (DEPENDABOT_RECREATE_PAT)}"
+
+  workdir="$(mktemp -d)"
+  # shellcheck disable=SC2064
+  trap "rm -rf '$workdir'" EXIT
+
+  log "cloning $SOC_REPO"
+  git clone --quiet --branch master \
+    "https://x-access-token:${SOC_PAT}@github.com/${SOC_REPO}.git" "$workdir/soc"
+  cd "$workdir/soc"
+
+  git config user.name  "soc-drift-bot"
+  git config user.email "soc-drift-bot@users.noreply.github.com"
+
+  log "pinning components/cpu to $sha"
+  git submodule update --init components/cpu
+  git -C components/cpu fetch --quiet origin "$sha"
+  git -C components/cpu checkout --quiet --detach FETCH_HEAD
+
+  log "running make soc_gen"
+  make soc_gen
+
+  git add -A
+  if git diff --cached --quiet; then
+    log "submodule already at $sha and soc_gen is clean -- nothing to do"
+    return 0
+  fi
+
+  git commit --quiet -m "$(bump_title "$sha" "$src")" \
+    -m "Automated bump by jcore-cpu scripts/soc_bump.sh. Includes make soc_gen output."
+
+  # No-op guard: if an existing bump branch already has this exact tree, a
+  # force-push would only churn the PR and re-trigger a multi-hour synth run
+  # for an identical result.
+  if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+    git fetch --quiet origin "$branch"
+    if [ "$(git rev-parse 'HEAD^{tree}')" = "$(git rev-parse "origin/${branch}^{tree}")" ]; then
+      log "tree identical to existing $branch -- skipping push"
+      return 0
+    fi
+  fi
+
+  if [ "$DRY_RUN" = 1 ]; then
+    log "DRY RUN: would force-push $branch and ensure a PR exists"
+    git --no-pager show --stat HEAD >&2
+    return 0
+  fi
+
+  log "force-pushing $branch"
+  git push --quiet --force origin "HEAD:refs/heads/$branch"
+
+  if [ -n "$(soc_pr_url "$src")" ]; then
+    log "PR already open for $branch -- force-push updated it in place"
+    return 0
+  fi
+
+  log "opening PR for $branch"
+  # shellcheck disable=SC2086
+  gh pr create --repo "$SOC_REPO" --base master --head "$branch" \
+    --title "$(bump_title "$sha" "$src")" \
+    --body "$(bump_body "$sha" "$src")" $draft
+}
+
 main() {
-  die "main not implemented yet"
+  local args=()
+  for a in "$@"; do
+    case "$a" in
+      --dry-run) DRY_RUN=1 ;;
+      *) args+=("$a") ;;
+    esac
+  done
+  [ "${#args[@]}" -ge 1 ] || { log "usage: soc_bump.sh <sync|close|comment> ..."; exit 2; }
+
+  local sub="${args[0]}"
+  case "$sub" in
+    sync)
+      [ "${#args[@]}" -eq 3 ] || { log "usage: soc_bump.sh sync <sha> <pr#|master>"; exit 2; }
+      cmd_sync "${args[1]}" "${args[2]}" ;;
+    close)
+      [ "${#args[@]}" -eq 2 ] || { log "usage: soc_bump.sh close <pr#>"; exit 2; }
+      die "close not implemented yet" ;;
+    comment)
+      [ "${#args[@]}" -eq 3 ] || { log "usage: soc_bump.sh comment <pr#> <soc-url>"; exit 2; }
+      die "comment not implemented yet" ;;
+    *)
+      log "unknown subcommand '$sub'"; exit 2 ;;
+  esac
 }
 
 if [ "${SOC_BUMP_LIB_ONLY:-0}" != 1 ]; then

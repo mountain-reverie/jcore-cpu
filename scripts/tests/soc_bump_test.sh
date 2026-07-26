@@ -38,17 +38,17 @@ ok_contains() { # ok_contains <desc> <haystack> <needle>
 
 ok_exits() { # ok_exits <desc> <expected_code> <cmd...>
   count=$((count + 1))
-  local expected="$2"
+  local desc="$1" expected="$2"
   shift 2
   local rc=0
   # Subshell is load-bearing: the helpers call `exit`, which would otherwise
   # terminate this test script rather than being caught here.
   ( "$@" ) >/dev/null 2>&1 || rc=$?
   if [ "$rc" = "$expected" ]; then
-    echo "ok $count - $1"
+    echo "ok $count - $desc"
   else
     fails=$((fails + 1))
-    echo "not ok $count - $1"
+    echo "not ok $count - $desc"
     echo "#   expected exit $expected, got $rc"
   fi
 }
@@ -58,6 +58,7 @@ ok "bump_branch numeric -> pr branch" "$(bump_branch 12)" "cpu-bump/pr-12"
 ok "bump_branch master -> master branch" "$(bump_branch master)" "cpu-bump/master"
 ok_exits "bump_branch rejects garbage" 2 bump_branch "not-a-pr"
 ok_exits "bump_branch rejects empty" 2 bump_branch ""
+ok_exits "bump_branch rejects leading zero" 2 bump_branch "012"
 
 # --- bump_title ----------------------------------------------------------
 ok_contains "title carries short sha" "$(bump_title 850fb17deadbeef 12)" "850fb17"

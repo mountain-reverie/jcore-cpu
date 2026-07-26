@@ -37,6 +37,7 @@ bump_branch() {
   local src="${1:-}"
   case "$src" in
     master) printf 'cpu-bump/master\n' ;;
+    0[0-9]*) log "bump_branch: expected a PR number or 'master', got '$src'"; exit 2 ;;
     *[!0-9]* | '') log "bump_branch: expected a PR number or 'master', got '$src'"; exit 2 ;;
     *) printf 'cpu-bump/pr-%s\n' "$src" ;;
   esac
@@ -44,7 +45,7 @@ bump_branch() {
 
 # bump_title <sha> <pr#|master>
 bump_title() {
-  local sha="$1" src="$2" short="${1:0:7}"
+  local src="$2" short="${1:0:7}"
   if [ "$src" = master ]; then
     printf 'chore(cpu): bump jcore-cpu to %s (master)\n' "$short"
   else

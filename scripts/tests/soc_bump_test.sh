@@ -94,6 +94,11 @@ ok_exits "sync without args exits 2" 2 run_script sync
 ok_exits "sync with one arg exits 2" 2 run_script sync deadbeef
 ok_exits "close without args exits 2" 2 run_script close
 
+# --- sha validation ------------------------------------------------------
+ok_exits "sync rejects a non-hex sha" 1 run_script sync notasha master
+ok_exits "sync rejects an option-like sha" 1 run_script sync --upload-pack=x master
+ok_exits "sync rejects a too-short sha" 1 run_script sync abc123 master
+
 # --- close/comment are wired (no longer stubs) ---------------------------
 count=$((count + 1))
 if DRY_RUN=1 bash scripts/soc_bump.sh close 12 2>&1 | grep -q 'not implemented'; then

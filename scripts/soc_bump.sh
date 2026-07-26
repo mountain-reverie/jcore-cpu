@@ -88,6 +88,28 @@ soc_pr_url() {
     --json url --jq '.[0].url // empty'
 }
 
+# src_still_open <pr#|master> -> 0 if the source jcore-cpu PR is still open
+# (or the source is master, where there is no PR), 1 if it is not.
+#
+# A merge fires `retire`, which closes the draft and deletes the bump branch,
+# while a `sync` triggered by the immediately preceding push may still be
+# running: without this check that sync would resurrect the branch and open a
+# brand new draft for an already-closed PR, which nothing would ever retire.
+src_still_open() {
+  local src="$1" state
+  if [ "$src" = master ]; then
+    return 0
+  fi
+  # Standalone assignment so a gh failure trips `|| die` instead of being read
+  # as "not open" -- guessing either way here is worse than stopping.
+  state="$(gh pr view "$src" --repo "$CPU_REPO" --json state --jq '.state')" \
+    || die "could not determine the state of ${CPU_REPO}#${src} -- aborting rather than guess"
+  if [ "$state" = OPEN ]; then
+    return 0
+  fi
+  return 1
+}
+
 # cmd_close <pr#> -- retire the draft bump PR for a now-closed jcore-cpu PR.
 cmd_close() {
   local src="$1" branch num
@@ -158,7 +180,17 @@ cmd_comment() {
 # cmd_sync <sha> <pr#|master>
 cmd_sync() {
   local sha="$1" src="$2"
-  local branch draft workdir askpass existing_url
+  local branch draft workdir askpass existing_url skip_push=0
+  # Validate the sha before it reaches any shell/git argument: workflow_dispatch
+  # supplies it as free-form input, and `git fetch origin "$sha"` would happily
+  # take a leading-dash value as an option (e.g. --upload-pack=...).
+  case "$sha" in
+    '' | *[!0-9a-fA-F]*)
+      die "sync: invalid commit sha '$sha' (expected hex characters only)" ;;
+  esac
+  if [ "${#sha}" -lt 7 ]; then
+    die "sync: commit sha '$sha' is too short (need at least 7 hex characters)"
+  fi
   branch="$(bump_branch "$src")"
   # `[ x = y ] && draft=""` would return 1 for the master case and `set -e`
   # would kill the script, so this must be an if.
@@ -198,7 +230,10 @@ EOF
   git -C components/cpu checkout --quiet --detach FETCH_HEAD
 
   log "running make soc_gen"
-  make soc_gen
+  # soc_gen shells out to `go run`, which fetches and executes third-party
+  # module code. The clone already happened and the push happens later, so
+  # nothing here needs the tokens -- drop them for this one command.
+  env -u SOC_PAT -u GH_TOKEN make soc_gen
 
   git add -A
   if git diff --cached --quiet; then
@@ -211,12 +246,14 @@ EOF
 
   # No-op guard: if an existing bump branch already has this exact tree, a
   # force-push would only churn the PR and re-trigger a multi-hour synth run
-  # for an identical result.
+  # for an identical result. It suppresses the PUSH only -- control still falls
+  # through to the PR reconciliation below, otherwise a sync cancelled between
+  # the push and `gh pr create` could never be recovered by re-running it.
   if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
     git fetch --quiet origin "$branch"
     if [ "$(git rev-parse 'HEAD^{tree}')" = "$(git rev-parse "origin/${branch}^{tree}")" ]; then
       log "tree identical to existing $branch -- skipping push"
-      return 0
+      skip_push=1
     fi
   fi
 
@@ -226,8 +263,15 @@ EOF
     return 0
   fi
 
-  log "force-pushing $branch"
-  git push --quiet --force origin "HEAD:refs/heads/$branch"
+  if [ "$skip_push" = 0 ]; then
+    if ! src_still_open "$src"; then
+      log "${CPU_REPO}#${src} is no longer open -- abandoning this bump instead of resurrecting $branch"
+      return 0
+    fi
+
+    log "force-pushing $branch"
+    git push --quiet --force origin "HEAD:refs/heads/$branch"
+  fi
 
   # Plain assignment on its own line so a gh failure (rate limit, transient
   # auth error) trips set -e and is caught below, instead of a failed command
@@ -237,6 +281,13 @@ EOF
     || die "could not determine whether a bump PR already exists for $branch -- aborting rather than risk opening a duplicate"
   if [ -n "$existing_url" ]; then
     log "PR already open for $branch -- force-push updated it in place"
+    return 0
+  fi
+
+  # Re-checked immediately before creation as well: `retire` may have run
+  # (closing the PR and deleting the branch) at any point since the last check.
+  if ! src_still_open "$src"; then
+    log "${CPU_REPO}#${src} is no longer open -- not opening a bump PR that nothing would retire"
     return 0
   fi
 

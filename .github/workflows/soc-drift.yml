@@ -58,16 +58,27 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          # Must match (or exceed) the `go` directive in jcore-soc's
+          # tools/socgen/go.mod, or `make soc_gen` either self-downloads a
+          # toolchain (GOTOOLCHAIN=auto) or hard-fails (GOTOOLCHAIN=local).
+          go-version: "1.26"
 
       - name: Resolve source commit and PR
         id: src
+        # `inputs.sha` is the one free-form value in this workflow, so it is
+        # passed through env: rather than spliced into the script text, where
+        # it could inject shell or forge extra GITHUB_OUTPUT keys.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          INPUT_SHA: ${{ inputs.sha || github.sha }}
         run: |
-          if [ "${{ github.event_name }}" = pull_request ]; then
-            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
-            echo "src=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = pull_request ]; then
+            echo "sha=$PR_SHA" >> "$GITHUB_OUTPUT"
+            echo "src=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           else
-            echo "sha=${{ inputs.sha || github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "sha=$INPUT_SHA" >> "$GITHUB_OUTPUT"
             echo "src=master" >> "$GITHUB_OUTPUT"
           fi
 
@@ -81,15 +92,21 @@ jobs:
       # then this repo's own GITHUB_TOKEN posts the comment on jcore-cpu.
       - name: Link back on the jcore-cpu PR
         if: github.event_name == 'pull_request'
+        # Both tokens come in through env: rather than the run: body -- GitHub
+        # materialises run: blocks to a file on the runner, which would put the
+        # secret on disk (the askpass helper exists to avoid exactly that).
+        env:
+          SOC_TOKEN: ${{ secrets.DEPENDABOT_RECREATE_PAT }}
+          CPU_TOKEN: ${{ github.token }}
         run: |
-          url="$(GH_TOKEN='${{ secrets.DEPENDABOT_RECREATE_PAT }}' \
+          url="$(GH_TOKEN="$SOC_TOKEN" \
                  bash -c 'SOC_BUMP_LIB_ONLY=1 . scripts/soc_bump.sh; \
                           soc_pr_url "${{ steps.src.outputs.src }}"')"
           if [ -z "$url" ]; then
             echo "no bump PR open (no-op sync) -- skipping link-back"
             exit 0
           fi
-          GH_TOKEN='${{ github.token }}' \
+          GH_TOKEN="$CPU_TOKEN" \
             scripts/soc_bump.sh comment "${{ steps.src.outputs.src }}" "$url"
 
   retire:
@@ -106,6 +123,11 @@ jobs:
     steps:
       - name: Checkout jcore-cpu
         uses: actions/checkout@v4
+        with:
+          # Run the base branch's copy of the script, not the PR-authored merge
+          # ref: no reason to execute PR content with a write-capable cross-repo
+          # PAT, and refs/pull/N/merge may not resolve after the merge anyway.
+          ref: ${{ github.event.pull_request.base.sha }}
 
       - name: Close the draft bump PR
         env:

@@ -95,19 +95,34 @@ cmd_close() {
   num="$(gh pr list --repo "$SOC_REPO" --head "$branch" --state open \
           --json number --jq '.[0].number // empty')"
 
-  if [ -z "$num" ]; then
-    log "no open bump PR for $branch -- nothing to close"
+  if [ -n "$num" ]; then
+    if [ "$DRY_RUN" = 1 ]; then
+      log "DRY RUN: would close $SOC_REPO#$num and delete $branch"
+      return 0
+    fi
+
+    log "closing $SOC_REPO#$num and deleting $branch"
+    gh pr close "$num" --repo "$SOC_REPO" --delete-branch \
+      --comment "jcore-cpu#${src} closed; retiring this drift check."
     return 0
   fi
 
-  if [ "$DRY_RUN" = 1 ]; then
-    log "DRY RUN: would close $SOC_REPO#$num and delete $branch"
-    return 0
-  fi
+  log "no open bump PR for $branch"
 
-  log "closing $SOC_REPO#$num and deleting $branch"
-  gh pr close "$num" --repo "$SOC_REPO" --delete-branch \
-    --comment "jcore-cpu#${src} closed; retiring this drift check."
+  # No PR (e.g. it was cancelled/interrupted between the sync job's
+  # force-push and PR creation) can still leave the branch pushed to
+  # jcore-soc with nothing to close it. Clean that up directly.
+  if gh api "repos/${SOC_REPO}/branches/${branch}" >/dev/null 2>&1; then
+    if [ "$DRY_RUN" = 1 ]; then
+      log "DRY RUN: would delete orphaned branch $branch"
+      return 0
+    fi
+
+    log "deleting orphaned branch $branch"
+    gh api -X DELETE "repos/${SOC_REPO}/git/refs/heads/${branch}"
+  else
+    log "no remote branch $branch -- nothing to close"
+  fi
 }
 
 # cmd_comment <pr#> <soc_pr_url> -- sticky link-back on the jcore-cpu PR.

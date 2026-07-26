@@ -30,12 +30,6 @@ defaults:
   run:
     shell: bash
 
-# Collapse rapid pushes to one bump: each bump triggers a multi-hour synth run
-# downstream in jcore-soc, so queueing them is expensive and pointless.
-concurrency:
-  group: soc-drift-${{ github.event.pull_request.number || 'master' }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
   pull-requests: write   # for the sticky link-back comment on this repo
@@ -50,6 +44,13 @@ jobs:
        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # Collapse rapid pushes to one bump: each bump triggers a multi-hour synth
+    # run downstream in jcore-soc, so queueing them is expensive and pointless.
+    # Scoped to this job only so a `retire` run can never cancel a `sync` run
+    # that is mid force-push (that would strand a branch with no PR on it).
+    concurrency:
+      group: soc-drift-sync-${{ github.event.pull_request.number || 'master' }}
+      cancel-in-progress: true
     steps:
       - name: Checkout jcore-cpu
         uses: actions/checkout@v4
@@ -92,9 +93,16 @@ jobs:
             scripts/soc_bump.sh comment "${{ steps.src.outputs.src }}" "$url"
 
   retire:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    if: >-
+      github.event_name == 'pull_request' && github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    # Own group, never cancelled: this is a teardown, and it must not be able
+    # to race/cancel (or be cancelled by) a `sync` run in-flight for the same PR.
+    concurrency:
+      group: soc-drift-retire-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
     steps:
       - name: Checkout jcore-cpu
         uses: actions/checkout@v4

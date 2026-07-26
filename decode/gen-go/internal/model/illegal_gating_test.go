@@ -2,8 +2,6 @@ package model
 
 import (
 	"testing"
-
-	"github.com/j-core/jcore-cpu/decode/gen-go/internal/spec"
 )
 
 // TestIllegalInstrPerVariant verifies per-variant illegal-instruction gating
@@ -30,22 +28,9 @@ func TestIllegalInstrPerVariant(t *testing.T) {
 		jsrnAtTBR = 0x8300 // SH-2A jsr/n @@(disp8,TBR) (1000 0011 dddddddd)
 	)
 
-	build := func(t *testing.T, overlays ...string) *Decoder {
+	build := func(t *testing.T, overlay string) *Decoder {
 		t.Helper()
-		var s *spec.Spec
-		var err error
-		if len(overlays) == 0 {
-			s, err = spec.Load("../../spec")
-		} else {
-			s, err = spec.LoadProfile("../../spec", overlays...)
-		}
-		if err != nil {
-			t.Fatalf("load spec: %v", err)
-		}
-		d, err := Build(s, 72, IllegalFull)
-		if err != nil {
-			t.Fatalf("Build: %v", err)
-		}
+		_, d := buildIllegalVariant(t, overlay, 72, IllegalFull)
 		if d.Body == nil {
 			t.Fatal("Build did not produce a Body")
 		}
@@ -57,9 +42,9 @@ func TestIllegalInstrPerVariant(t *testing.T) {
 		return d.Body.IllegalInstr.Eval(opcode)
 	}
 
-	base := build(t)
-	j2a := build(t, "../../spec/sh2a")
-	j4 := build(t, "../../spec/sh4")
+	base := build(t, "")
+	j2a := build(t, "sh2a")
+	j4 := build(t, "sh4")
 
 	cases := []struct {
 		variant string

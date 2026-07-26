@@ -2,19 +2,10 @@ package model
 
 import (
 	"testing"
-
-	"github.com/j-core/jcore-cpu/decode/gen-go/internal/spec"
 )
 
 func TestIllegalModeNoneEmitsConstantFalse(t *testing.T) {
-	s, err := spec.Load("../../spec")
-	if err != nil {
-		t.Fatalf("load spec: %v", err)
-	}
-	d, err := Build(s, 72, IllegalNone)
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
+	_, d := buildIllegalVariant(t, "", 72, IllegalNone)
 	for nib, arm := range d.Body.IllegalInstr.Arms {
 		if arm.Expr != "false" {
 			t.Errorf("IllegalMode none: nibble %X = %q, want \"false\"", nib, arm.Expr)
@@ -28,14 +19,7 @@ func TestIllegalModeNoneEmitsConstantFalse(t *testing.T) {
 }
 
 func TestIllegalModeFullIsNonEmpty(t *testing.T) {
-	s, err := spec.Load("../../spec")
-	if err != nil {
-		t.Fatalf("load spec: %v", err)
-	}
-	d, err := Build(s, 72, IllegalFull)
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
+	_, d := buildIllegalVariant(t, "", 72, IllegalFull)
 	any := false
 	for _, arm := range d.Body.IllegalInstr.Arms {
 		if arm.Expr != "false" {

@@ -2,8 +2,6 @@ package model
 
 import (
 	"testing"
-
-	"github.com/j-core/jcore-cpu/decode/gen-go/internal/spec"
 )
 
 // TestIllegalArmsIsolatedPerNibble is the churn-containment guarantee: adding
@@ -11,25 +9,11 @@ import (
 // textually identical, so an SH-2A or SH-4 addition cannot move base J2's
 // decode logic in an unrelated nibble.
 func TestIllegalArmsIsolatedPerNibble(t *testing.T) {
-	base, err := spec.Load("../../spec")
-	if err != nil {
-		t.Fatalf("load base: %v", err)
-	}
-	bd, err := Build(base, 72, IllegalFull)
-	if err != nil {
-		t.Fatalf("build base: %v", err)
-	}
+	base, bd := buildIllegalVariant(t, "", 72, IllegalFull)
 
 	for _, ov := range []string{"sh2a", "sh4"} {
 		t.Run(ov, func(t *testing.T) {
-			s, err := spec.LoadProfile("../../spec", "../../spec/"+ov)
-			if err != nil {
-				t.Fatalf("load %s: %v", ov, err)
-			}
-			od, err := Build(s, 72, IllegalFull)
-			if err != nil {
-				t.Fatalf("build %s: %v", ov, err)
-			}
+			s, od := buildIllegalVariant(t, ov, 72, IllegalFull)
 
 			// Which nibbles does this overlay actually add instructions to?
 			touched := map[int]bool{}

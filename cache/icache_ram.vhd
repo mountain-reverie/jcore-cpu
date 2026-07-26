@@ -16,9 +16,12 @@ end entity icache_ram;
 
 architecture beh of icache_ram is
 
-  signal tag_we  : std_logic_vector( 1 downto 0);
-  signal tag_dr  : std_logic_vector(15 downto 0);
-  signal tag_dw  : std_logic_vector(15 downto 0);
+  constant TAG_BYTES : natural := (CACHE_PA_TAG_WIDTH + 1 + 7) / 8;
+  constant TAG_W      : natural := 8 * TAG_BYTES;
+
+  signal tag_we  : std_logic_vector(TAG_BYTES-1 downto 0);
+  signal tag_dr  : std_logic_vector(TAG_W-1 downto 0);
+  signal tag_dw  : std_logic_vector(TAG_W-1 downto 0);
   signal ram_we1 : std_logic_vector( 1 downto 0);
 
 begin
@@ -26,8 +29,8 @@ begin
   tag : component ram_1rw
     generic map (
       subword_width => 8,
-      subword_num   => 2,
-      addr_width    => 8
+      subword_num   => TAG_BYTES,
+      addr_width    => CACHE_INDEX_BITS
     )
     port map (
       rst    => rst,
@@ -41,9 +44,9 @@ begin
       margin => "00"
     );
 
-  tag_we <= ra.twr & ra.twr;
-  tag_dw <= "0" & ra.tag;
-  ry.tag <= tag_dr(14 downto 0); -- 15 b (PA[27:13], 28-bit region)
+  tag_we <= (others => ra.twr);
+  tag_dw <= std_logic_vector(resize(unsigned(ra.tag), TAG_W));
+  ry.tag <= tag_dr(CACHE_PA_TAG_WIDTH-1 downto 0);
 
   -- GF180 single-port SRAM spike note (branch spike/gf180-cache-singleport-
   -- collision, see cache/dcache_ram.vhd for the dcache analysis): unlike
@@ -74,7 +77,7 @@ begin
       generic map (
         subword_width => 8,
         subword_num   => 2,
-        addr_width    => 11
+        addr_width    => CACHE_INDEX_BITS + CACHE_LINE_WIDTH_BITS - CACHE_MEM_WIDTH_BITS
       )
       port map (
         rst0    => rst,

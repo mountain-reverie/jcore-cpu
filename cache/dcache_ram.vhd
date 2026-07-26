@@ -17,18 +17,21 @@ end entity dcache_ram;
 
 architecture beh of dcache_ram is
 
-  signal tag_we0 : std_logic_vector( 1 downto 0);
-  signal tag_dr0 : std_logic_vector(15 downto 0);
-  signal tag_dw0 : std_logic_vector(15 downto 0);
-  signal tag_dr1 : std_logic_vector(15 downto 0);
+  constant TAG_BYTES : natural := (CACHE_PA_TAG_WIDTH + 1 + 7) / 8;
+  constant TAG_W      : natural := 8 * TAG_BYTES;
+
+  signal tag_we0 : std_logic_vector(TAG_BYTES-1 downto 0);
+  signal tag_dr0 : std_logic_vector(TAG_W-1 downto 0);
+  signal tag_dw0 : std_logic_vector(TAG_W-1 downto 0);
+  signal tag_dr1 : std_logic_vector(TAG_W-1 downto 0);
 
 begin
 
   tag0 : component ram_1rw
     generic map (
       subword_width => 8,
-      subword_num   => 2,
-      addr_width    => 8
+      subword_num   => TAG_BYTES,
+      addr_width    => CACHE_INDEX_BITS
     )
     port map (
       rst    => rst,
@@ -45,8 +48,8 @@ begin
   tag1 : component ram_1rw
     generic map (
       subword_width => 8,
-      subword_num   => 2,
-      addr_width    => 8
+      subword_num   => TAG_BYTES,
+      addr_width    => CACHE_INDEX_BITS
     )
     port map (
       rst    => rst,
@@ -60,10 +63,10 @@ begin
       margin => "00"
     );
 
-  tag_we0 <= ra.twr0 & ra.twr0;
-  tag_dw0 <= "0" & ra.tag0;
-  ry.tag0 <= tag_dr0(14 downto 0); -- 15 b => 16 b ( 15 b range)
-  ry.tag1 <= tag_dr1(14 downto 0); -- 15 b => 16 b ( 15 b range)
+  tag_we0 <= (others => ra.twr0);
+  tag_dw0 <= std_logic_vector(resize(unsigned(ra.tag0), TAG_W));
+  ry.tag0 <= tag_dr0(CACHE_PA_TAG_WIDTH-1 downto 0);
+  ry.tag1 <= tag_dr1(CACHE_PA_TAG_WIDTH-1 downto 0);
 
   -- Data RAM. Two write sources: port0 = CPU store (CCL, clk125), port1 = line
   -- refill (MCL, clk200). They are provably mutually exclusive per cycle (the
@@ -121,7 +124,7 @@ begin
         generic map (
           subword_width => 8,
           subword_num   => 2,
-          addr_width    => 11
+          addr_width    => CACHE_INDEX_BITS + CACHE_LINE_WIDTH_BITS - CACHE_MEM_WIDTH_BITS
         )
         port map (
           rst0    => rst,
@@ -171,7 +174,7 @@ begin
         generic map (
           subword_width => 8,
           subword_num   => 2,
-          addr_width    => 11
+          addr_width    => CACHE_INDEX_BITS + CACHE_LINE_WIDTH_BITS - CACHE_MEM_WIDTH_BITS
         )
         port map (
           -- port0: read-only (CPU loads); no read on a store so dr0 holds (matches dc)

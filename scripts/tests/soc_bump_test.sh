@@ -94,5 +94,20 @@ ok_exits "sync without args exits 2" 2 run_script sync
 ok_exits "sync with one arg exits 2" 2 run_script sync deadbeef
 ok_exits "close without args exits 2" 2 run_script close
 
+# --- close/comment are wired (no longer stubs) ---------------------------
+count=$((count + 1))
+if DRY_RUN=1 bash scripts/soc_bump.sh close 12 2>&1 | grep -q 'not implemented'; then
+  fails=$((fails + 1)); echo "not ok $count - close is implemented"
+else
+  echo "ok $count - close is implemented"
+fi
+
+count=$((count + 1))
+if DRY_RUN=1 bash scripts/soc_bump.sh comment 12 http://x 2>&1 | grep -q 'not implemented'; then
+  fails=$((fails + 1)); echo "not ok $count - comment is implemented"
+else
+  echo "ok $count - comment is implemented"
+fi
+
 echo "1..$count"
 [ "$fails" -eq 0 ]

@@ -88,6 +88,58 @@ soc_pr_url() {
     --json url --jq '.[0].url // empty'
 }
 
+# cmd_close <pr#> -- retire the draft bump PR for a now-closed jcore-cpu PR.
+cmd_close() {
+  local src="$1" branch num
+  branch="$(bump_branch "$src")"
+  num="$(gh pr list --repo "$SOC_REPO" --head "$branch" --state open \
+          --json number --jq '.[0].number // empty')"
+
+  if [ -z "$num" ]; then
+    log "no open bump PR for $branch -- nothing to close"
+    return 0
+  fi
+
+  if [ "$DRY_RUN" = 1 ]; then
+    log "DRY RUN: would close $SOC_REPO#$num and delete $branch"
+    return 0
+  fi
+
+  log "closing $SOC_REPO#$num and deleting $branch"
+  gh pr close "$num" --repo "$SOC_REPO" --delete-branch \
+    --comment "jcore-cpu#${src} closed; retiring this drift check."
+}
+
+# cmd_comment <pr#> <soc_pr_url> -- sticky link-back on the jcore-cpu PR.
+# Edited in place, so a 20-push PR accumulates one comment rather than twenty.
+cmd_comment() {
+  local src="$1" url="$2" marker body existing
+  marker="$(comment_marker)"
+  body="$(comment_body "$url")"
+
+  existing="$(gh api "repos/${CPU_REPO}/issues/${src}/comments" --paginate \
+    --jq "map(select(.body | contains(\"${marker}\"))) | .[0].id // empty")"
+
+  if [ "$DRY_RUN" = 1 ]; then
+    if [ -n "$existing" ]; then
+      log "DRY RUN: would edit comment $existing on ${CPU_REPO}#${src}"
+    else
+      log "DRY RUN: would create a comment on ${CPU_REPO}#${src}"
+    fi
+    printf '%s\n' "$body" >&2
+    return 0
+  fi
+
+  if [ -n "$existing" ]; then
+    log "updating sticky comment $existing on ${CPU_REPO}#${src}"
+    gh api -X PATCH "repos/${CPU_REPO}/issues/comments/${existing}" \
+      -f body="$body" --silent
+  else
+    log "creating sticky comment on ${CPU_REPO}#${src}"
+    gh pr comment "$src" --repo "$CPU_REPO" --body "$body"
+  fi
+}
+
 # cmd_sync <sha> <pr#|master>
 cmd_sync() {
   local sha="$1" src="$2"
@@ -197,10 +249,10 @@ main() {
       cmd_sync "${args[1]}" "${args[2]}" ;;
     close)
       [ "${#args[@]}" -eq 2 ] || { log "usage: soc_bump.sh close <pr#>"; exit 2; }
-      die "close not implemented yet" ;;
+      cmd_close "${args[1]}" ;;
     comment)
       [ "${#args[@]}" -eq 3 ] || { log "usage: soc_bump.sh comment <pr#> <soc-url>"; exit 2; }
-      die "comment not implemented yet" ;;
+      cmd_comment "${args[1]}" "${args[2]}" ;;
     *)
       log "unknown subcommand '$sub'"; exit 2 ;;
   esac

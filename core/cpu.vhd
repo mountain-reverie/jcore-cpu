@@ -19,7 +19,7 @@ entity cpu is
     -- register_file(ebr), core1=register_file(two_bank)). Without a differing
     -- generic the ghdl->yosys frontend hashes both to one module name and errors
     -- with "Re-definition of module". No functional effect.
-    core_id      : integer := 0
+    core_id : integer := 0
   );
   port (
     clk     : in    std_logic;

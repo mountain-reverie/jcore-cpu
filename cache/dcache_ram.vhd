@@ -17,13 +17,13 @@ end entity dcache_ram;
 
 architecture beh of dcache_ram is
 
-  constant TAG_BYTES : natural := (CACHE_PA_TAG_WIDTH + 1 + 7) / 8;
-  constant TAG_W      : natural := 8 * TAG_BYTES;
+  constant tag_bytes : natural := (CACHE_PA_TAG_WIDTH + 1 + 7) / 8;
+  constant tag_w     : natural := 8 * tag_bytes;
 
-  signal tag_we0 : std_logic_vector(TAG_BYTES-1 downto 0);
-  signal tag_dr0 : std_logic_vector(TAG_W-1 downto 0);
-  signal tag_dw0 : std_logic_vector(TAG_W-1 downto 0);
-  signal tag_dr1 : std_logic_vector(TAG_W-1 downto 0);
+  signal tag_we0 : std_logic_vector(tag_bytes - 1 downto 0);
+  signal tag_dr0 : std_logic_vector(tag_w - 1 downto 0);
+  signal tag_dw0 : std_logic_vector(tag_w - 1 downto 0);
+  signal tag_dr1 : std_logic_vector(tag_w - 1 downto 0);
 
 begin
 
@@ -64,9 +64,9 @@ begin
     );
 
   tag_we0 <= (others => ra.twr0);
-  tag_dw0 <= std_logic_vector(resize(unsigned(ra.tag0), TAG_W));
-  ry.tag0 <= tag_dr0(CACHE_PA_TAG_WIDTH-1 downto 0);
-  ry.tag1 <= tag_dr1(CACHE_PA_TAG_WIDTH-1 downto 0);
+  tag_dw0 <= std_logic_vector(resize(unsigned(ra.tag0), tag_w));
+  ry.tag0 <= tag_dr0(CACHE_PA_TAG_WIDTH - 1 downto 0);
+  ry.tag1 <= tag_dr1(CACHE_PA_TAG_WIDTH - 1 downto 0);
 
   -- Data RAM. Two write sources: port0 = CPU store (CCL, clk125), port1 = line
   -- refill (MCL, clk200). They are provably mutually exclusive per cycle (the

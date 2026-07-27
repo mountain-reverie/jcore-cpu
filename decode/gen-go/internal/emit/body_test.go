@@ -50,10 +50,16 @@ func TestDecodeBodyStructural(t *testing.T) {
 			t.Errorf("output missing case arm %d", n)
 		}
 	}
-	// predecode_rom_addr and check_illegal_instruction both case-split on
-	// the top nibble.
-	if got := strings.Count(out, "case code(15 downto 12)"); got != 2 {
-		t.Errorf(`output contains %d occurrences of "case code(15 downto 12)"; want 2`, got)
+	// predecode_rom_addr case-splits on the top nibble. check_illegal_instruction
+	// deliberately does NOT: it is emitted as a single flat two-level
+	// sum-of-products expression (no case statement, hence no extra 16:1 mux
+	// layer) to keep it off the critical path into datapath state
+	// registers — see the "timing optimisation" commit that introduced this.
+	if got := strings.Count(out, "case code(15 downto 12)"); got != 1 {
+		t.Errorf(`output contains %d occurrences of "case code(15 downto 12)"; want 1`, got)
+	}
+	if !strings.Contains(out, "code(15) and") && !strings.Contains(out, "not code(15) and") {
+		t.Errorf("output missing flat top-nibble match terms for check_illegal_instruction")
 	}
 }
 

@@ -19,37 +19,54 @@ type Body struct {
 	// (the all-ones address — a reserved, unused slot)
 }
 
-// IllegalFunc represents check_illegal_instruction's case-statement body,
-// one arm per top nibble. Mirrors PredecodeFunc, which already decomposes
-// the same encoding space the same way.
+// IllegalFunc represents check_illegal_instruction's body: a flat,
+// two-level sum-of-products VHDL expression rather than a case statement
+// (a case statement synthesises an extra 16:1 mux layer on top of the
+// per-arm logic, which lengthens the critical path into datapath state
+// registers; a flat OR-of-ANDs lets the synthesiser share terms without
+// that mux layer). Arms mirrors PredecodeFunc's per-top-nibble
+// decomposition and is retained so per-nibble churn stays isolated
+// (TestIllegalArmsIsolatedPerNibble compares Arms[i].Expr directly); Flat
+// is the actual expression emitted to VHDL and evaluated by Eval.
 type IllegalFunc struct {
 	Arms [16]IllegalArm
+	// Flat is the single flat OR-of-AND-terms VHDL expression emitted for
+	// check_illegal_instruction, e.g.
+	//   (<nibble0 match> and not (<cover0>)) or (<nibble3 match> and not (<cover3>)) or ...
+	// wrapped as "(...) = '1'" by buildIllegalInstr. Empty when every arm
+	// is "false" (IllegalMode == IllegalNone), in which case the function
+	// unconditionally returns '0'.
+	Flat string
 }
 
-// IllegalArm is one case arm. Expr is a VHDL boolean expression over
-// code(11 downto 0), or the literal "true" (whole nibble undefined) or
-// "false" (whole nibble defined).
+// IllegalArm is one logical arm, one per top nibble. Expr is the VHDL
+// boolean expression historically emitted per-arm inside a case statement:
+// "not (<cover>) = '1'", or the literal "true" (whole nibble undefined) or
+// "false" (whole nibble defined). Expr's exact text is preserved unchanged
+// — TestIllegalArmsIsolatedPerNibble in illegal_isolation_test.go compares
+// it directly to assert per-overlay churn containment — even though the
+// case statement it once described is no longer emitted. Cover holds the
+// bare defined-instruction cover (without the "not (...)" wrapper or the
+// " = '1'" suffix) used to assemble IllegalFunc.Flat.
 type IllegalArm struct {
 	TopNibble int
 	Expr      string
+	Cover     string
 }
 
-// Eval evaluates the whole function for one opcode. Test-facing; keeps the
-// exhaustive tests independent of VHDL emission.
+// Eval evaluates the whole function for one opcode by evaluating f.Flat —
+// the same flat expression emitted to VHDL — so the exhaustive tests
+// validate exactly what the hardware receives.
 func (f IllegalFunc) Eval(op uint16) bool {
-	arm := f.Arms[op>>12]
-	switch arm.Expr {
-	case "true":
-		return true
-	case "false":
+	if f.Flat == "" {
 		return false
 	}
-	// arm.Expr ends with " = '1'" (a std_logic-to-boolean comparison wrapper
-	// around the OR-chain produced by orJoin); EvalBoolExpr's comparison
-	// grammar only accepts "IDENT(INT) = 'bit'", not "(expr) = 'bit'", so
-	// strip the wrapper before parsing — the same convention differential_test.go
-	// uses for other wrapped boolean expressions in this package.
-	trimmed := strings.TrimSuffix(arm.Expr, " = '1'")
+	// f.Flat ends with " = '1'" (a std_logic-to-boolean comparison wrapper);
+	// EvalBoolExpr's comparison grammar only accepts "IDENT(INT) = 'bit'",
+	// not "(expr) = 'bit'", so strip the wrapper before parsing — the same
+	// convention differential_test.go uses for other wrapped boolean
+	// expressions in this package.
+	trimmed := strings.TrimSuffix(f.Flat, " = '1'")
 	v, err := logic.EvalBoolExpr(trimmed, func(sig string, bit int) int {
 		return int((op >> uint(bit)) & 1)
 	})
@@ -186,9 +203,57 @@ func buildIllegalInstr(lm map[string]logic.LogicMap) IllegalFunc {
 			f.Arms[nib].Expr = "true"
 			continue
 		}
+		f.Arms[nib].Cover = inner
 		f.Arms[nib].Expr = "not (" + inner + ") = '1'"
 	}
+	f.Flat = buildIllegalFlat(f.Arms)
 	return f
+}
+
+// buildIllegalFlat assembles the single flat two-level sum-of-products VHDL
+// expression emitted for check_illegal_instruction, from arms already
+// populated by buildIllegalInstr. For every arm whose Expr is not "false"
+// it emits one OR term ANDing that nibble's 4-bit top-nibble match with the
+// arm's cover (negated), or just the top-nibble match when Expr is "true".
+// Arms whose Expr is "false" (nibble fully defined, no holes) contribute
+// nothing. If every arm is "false", returns "" — the caller (and the
+// template) treat that as an unconditional return '0'.
+func buildIllegalFlat(arms [16]IllegalArm) string {
+	var terms []string
+	for nib := 0; nib < 16; nib++ {
+		arm := arms[nib]
+		if arm.Expr == "false" {
+			continue
+		}
+		match := nibbleMatch(nib)
+		switch arm.Expr {
+		case "true":
+			terms = append(terms, "("+match+")")
+		default:
+			terms = append(terms, "("+match+" and not ("+arm.Cover+"))")
+		}
+	}
+	if len(terms) == 0 {
+		return ""
+	}
+	return "(" + strings.Join(terms, " or ") + ") = '1'"
+}
+
+// nibbleMatch renders the 4-bit top-nibble equality code(15 downto 12) =
+// nib as an explicit AND of per-bit terms in code(15), code(14), code(13),
+// code(12) order, so the whole flat expression stays one two-level SOP the
+// synthesiser can collapse and share, instead of a std_match/= comparison.
+func nibbleMatch(nib int) string {
+	bits := make([]string, 4)
+	for i, b := range []int{15, 14, 13, 12} {
+		set := (nib>>uint(b-12))&1 == 1
+		if set {
+			bits[i] = fmt.Sprintf("code(%d)", b)
+		} else {
+			bits[i] = fmt.Sprintf("not code(%d)", b)
+		}
+	}
+	return strings.Join(bits, " and ")
 }
 
 // buildPrivileged produces the boolean expression for the privileged()

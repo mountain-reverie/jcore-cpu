@@ -153,7 +153,7 @@ package cpu2j0_pack is
       mmu_arch     : boolean := false;
       -- Elaboration tag distinguishing per-instance nested regfile configs (see
       -- cpu entity). No functional effect.
-      core_id      : integer := 0
+      core_id : integer := 0
     );
     port (
       clk     : in    std_logic;

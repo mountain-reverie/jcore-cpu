@@ -25,11 +25,29 @@
 -- (pend_wr-only queued-drain path -- master has no pend_wr).
 --
 -- Retained cases test TLB BEHAVIOUR, which is identical in spirit between
--- the split and unsplit designs: install, flush, ASID isolation, global
--- entries (implicitly, via the dedup/global checks), superpages/page-mask
--- handling, install-time overlap replacement (multi-hit avoidance), and
--- protection checks. Original numbering is kept in the comments below for
--- traceability back to f22694e.
+-- the split and unsplit designs: install, flush, ASID isolation, GLOBAL
+-- cross-ASID visibility, STALE suppression, superpages/page-mask handling,
+-- exact-VPN install dedup, multi-hit detection on coexisting overlapping
+-- entries, and protection checks. Original numbering is kept in the
+-- comments below for traceability back to f22694e.
+--
+-- Coverage note (fix round 1): the original 22 cases never set GLOBAL='1'
+-- or the STALE bit at all -- that gap pre-dates this port. Cases 14 and 15
+-- close it directly: 14 proves a global entry is visible under an ASID
+-- different from its install ASID (core/tlb.vhd:105/162), and 15 proves a
+-- STALE entry is suppressed on the lookup path (:103/160) even though the
+-- install path does NOT gate on stale (:232-281 has no stale check --
+-- install can freely write a stale-marked entry, e.g. software installing
+-- a mapping already soft-invalidated). That install/lookup asymmetry on
+-- STALE is exactly the dimension a later install-path change must not
+-- regress, hence both directions (install-accepts-stale,
+-- lookup-suppresses-stale) are exercised. Still NOT covered here: the U
+-- (user/supervisor) permission bit is only exercised via u='0' in every
+-- case above (case 7's i_prot check depends on u='0' combined with md='1'
+-- with X=0 -- see core/tlb.vhd:114-116); no case sets u='1' or drives
+-- md='0', so the SMEP and user/kernel-page paths at :114-116/171 are
+-- untested. That gap is not closed by this round and should not be assumed
+-- covered.
 --
 -- ptel layout mirrored from the install path at core/tlb.vhd:
 --   ptel(31 downto 10) = ppn(31 downto 10)  -- entry.ppn; PA_TAG=ppn(27:13),
@@ -349,6 +367,50 @@ begin
     wait for 1 ns;
     i_va <= x"0000a000"; wait for 1 ns;
     check(i_hit = '0', "case 13: flush must invalidate the entry within a single cycle");
+
+    -- 14 (new, fix round 1): GLOBAL cross-ASID visibility. A global entry
+    -- (ptel bit 2, `g` argument here) must be visible to a lookup under an
+    -- ASID different from the one it was installed with, per the isolation
+    -- predicate at core/tlb.vhd:105/162 (`entry.global = '1' or
+    -- entry.asid_tag = asid`). Contrast directly against case 3, which
+    -- already proves a NON-global entry misses under a different ASID --
+    -- this case proves the opposite for g='1', so the ASID half of the
+    -- predicate is exercised on both sides of the OR.
+    flush_all;
+    install(vpn => x"00002", asid_tag => x"0007", ppn => x"00004",
+            page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
+            g => '1');
+    i_va <= x"00002000";
+    asid <= x"0007"; wait for 1 ns;
+    check(i_hit = '1', "case 14 precondition: global entry must hit under its own install ASID");
+    asid <= x"00ab"; wait for 1 ns;
+    check(i_hit = '1', "case 14: global entry must hit under a DIFFERENT ASID than it was installed with");
+    check(i_pa_tag = "000000000000010",
+          "case 14: global entry's PA must be correct under the different ASID, not a miss-masked stale value");
+    asid <= x"0000"; wait for 1 ns;
+
+    -- 15 (new, fix round 1): STALE suppression on the lookup path. ptel
+    -- bit 1 (tied '0' in every install above) is written straight through
+    -- to entry.stale (core/tlb.vhd:280) and gates both lookup processes
+    -- directly (`entry.stale = '0'` at :103/160) -- install itself does not
+    -- gate on stale at all, so a stale entry can be installed exactly like
+    -- any other. Install one directly with ptel(1)='1' (bypassing the
+    -- `install` procedure, which always drives '0' there) and confirm the
+    -- lookup path suppresses it: a probe of its VA must miss outright, not
+    -- merely lose priority to some other entry.
+    flush_all;
+    pteh_vpn <= x"00003";
+    asidr    <= x"0000";
+    -- ppn=x"00005", page_mask="0000", w='1', x='1', u='0', d='0', c='1',
+    -- g='0', stale='1', (unused)='0'.
+    ptel     <= x"00005" & "0000" & '1' & '1' & '0' & '0' & '1' & '0' & '1' & '0';
+    tlb_wr   <= '1';
+    wait until rising_edge(clk);
+    tlb_wr   <= '0';
+    wait for 1 ns;
+    i_va <= x"00003000"; wait for 1 ns;
+    check(i_hit = '0', "case 15: a STALE entry must be suppressed on the lookup path (miss, not a low-priority hit)");
+    check(i_multihit = '0', "case 15: a suppressed stale entry must not register as any kind of match");
 
     if fail then
       report "tlb_tb FAILED" severity failure;

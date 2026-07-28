@@ -69,6 +69,22 @@ architecture rtl of tlb is
 
   signal ram : tlb_array_t := (others => TLB_ENTRY_RESET);
 
+  -- Shared usable-match predicate for the I-side and D-side lookup scans.
+  -- Usable = VALID and not STALE and masked-VPN equal and (GLOBAL or ASID
+  -- match) -- the isolation predicate of docs/architecture/tlb.md section 3.
+  function tlb_match (
+    entry : tlb_entry_t;
+    va    : std_logic_vector(31 downto 0);
+    asid  : std_logic_vector(15 downto 0)) return boolean is
+  begin
+    -- page_mask selects how many low VPN bits are ignored, so superpages match
+    -- a range of VAs.
+    return (entry.valid = '1'
+            and entry.stale = '0'                                                                                     -- STALE (PTEL[1]) = SW soft-invalidate/revocation (mmustale)
+            and ((entry.vpn xor va(31 downto 12)) and vpn_compare_mask(entry.page_mask)) = (entry.vpn'range => '0')
+            and (entry.global = '1' or entry.asid_tag = asid));                                                       -- ASID isolation (mmuasid)
+  end function tlb_match;
+
 begin
 
   -- Combinational I-lookup (instruction fetch). Scan all 32 entries; a usable
@@ -100,10 +116,7 @@ begin
 
       entry := ram(k);
 
-      if (entry.valid = '1'
-         and entry.stale = '0'                                                                                     -- STALE (PTEL[1]) = SW soft-invalidate/revocation (mmustale)
-         and ((entry.vpn xor i_va(31 downto 12)) and vpn_compare_mask(entry.page_mask)) = (entry.vpn'range => '0')
-         and (entry.global = '1' or entry.asid_tag = asid)) then                                                   -- ASID isolation (mmuasid)
+      if (tlb_match(entry, i_va, asid)) then
         if (hit_found = '1') then
           multihit := '1';                                                                                         -- S-I5: sticky flag, 2nd+ match while one already found
         end if;
@@ -157,10 +170,7 @@ begin
 
       entry := ram(k);
 
-      if (entry.valid = '1'
-         and entry.stale = '0'                                                                                     -- STALE (PTEL[1]) = software soft-invalidate
-         and ((entry.vpn xor d_va(31 downto 12)) and vpn_compare_mask(entry.page_mask)) = (entry.vpn'range => '0')
-         and (entry.global = '1' or entry.asid_tag = asid)) then
+      if (tlb_match(entry, d_va, asid)) then
         if (hit_found = '1') then
           multihit := '1';                                                                                         -- S-I5: sticky flag, 2nd+ match while one already found
         end if;

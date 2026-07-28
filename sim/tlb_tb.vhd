@@ -66,6 +66,7 @@
 
 library ieee;
   use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
   use work.cpu2j0_components_pack.all;
 
 entity tlb_tb is
@@ -447,6 +448,140 @@ begin
           "case 16: install-time overlap detection must evict the overlapping superpage, not leave both entries coexisting as a multi-hit");
     check(i_pa_tag = "000000000110000",
           "case 16: the surviving mapping must be the narrower (2nd-installed) entry's PA");
+
+    -- 17 (new, fix round 1): install-side overlap eviction of a STALE
+    -- resident entry. The install dedup scan (core/tlb.vhd) deliberately
+    -- does NOT gate on ram(k).stale, unlike the lookup path's tlb_match
+    -- (which does) -- an install must be able to see and evict a resident
+    -- mapping that is stale, or it could install something overlapping a
+    -- range it can no longer perceive. This is the subtlest part of task 3
+    -- and was previously UNTESTED: case 15 only proves the lookup-side half
+    -- (a stale entry never hits); this proves the install-side half (a
+    -- stale entry IS still considered -- and evicted -- by the overlap
+    -- scan).
+    --
+    -- The trap: a STALE resident entry never hits at lookup regardless of
+    -- whether it was evicted or left coexisting (tlb_match suppresses it
+    -- either way), so a naive VA-hit/miss check cannot distinguish "evicted"
+    -- from "silently coexisting forever, gating wrongly excluded it". The
+    -- only externally observable difference is TLB CAPACITY: a coexisting
+    -- dead stale entry permanently occupies one of the 32 slots. This case
+    -- exploits that: a canary entry is installed into slot 0 first, then the
+    -- stale entry + its overlapping narrow install, then exactly enough
+    -- filler entries to fill the TLB to capacity IF (and only if) the stale
+    -- entry was evicted (freeing its slot). If the stale entry was instead
+    -- left resident (the regression this case exists to catch), the TLB is
+    -- one slot short, the last filler install overflows NRU's "all
+    -- valid+used -> clear used bits, take slot 0" recycle path, and that
+    -- recycle unconditionally overwrites slot 0 -- silently evicting the
+    -- canary. Checking the canary's continued presence at the end is the
+    -- discriminator.
+    flush_all;
+
+    -- Canary: must land in slot 0 (first install after the flush, on an
+    -- all-invalid array). vpn=0xF0 is deliberately OUTSIDE every range used
+    -- below (the stale superpage's 0x00-0x3F, the narrow install's 0x11,
+    -- and the fillers' 0x100-0x11D) -- it must never itself be a party to
+    -- any overlap eviction in this case, or its disappearance would prove
+    -- nothing about the stale asymmetry being tested.
+    install(vpn => x"000F0", asid_tag => x"0000", ppn => x"00002",
+            page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
+            g => '0');
+
+    -- STALE resident superpage (256KB, covers VA [0x0,0x3FFFF] -- same
+    -- range arithmetic as cases 4/5/16). Installed directly (bypassing the
+    -- `install` procedure, which always drives ptel(1)='0'), same technique
+    -- as case 15. Lands in slot 1 (next invalid slot after the canary).
+    pteh_vpn <= x"00010";
+    asidr    <= x"0000";
+    -- ppn=x"00020", page_mask="0011", w='1', x='1', u='0', d='0', c='1',
+    -- g='0', stale='1', (unused)='0'.
+    ptel     <= x"00020" & "0011" & '1' & '1' & '0' & '0' & '1' & '0' & '1' & '0';
+    tlb_wr   <= '1';
+    wait until rising_edge(clk);
+    tlb_wr   <= '0';
+    wait for 1 ns;
+
+    -- Overlapping narrow install: VA 0x00011000 falls inside the stale
+    -- superpage's range but has a different raw vpn. If the install scan
+    -- correctly considers the stale entry, this evicts it in place (slot 1
+    -- freed for reuse -- overwritten, in fact, by this very install). If the
+    -- install scan wrongly excludes stale entries, this instead lands via
+    -- plain NRU in slot 2, leaving the stale entry stranded (still valid,
+    -- still occupying slot 1) forever.
+    install(vpn => x"00011", asid_tag => x"0000", ppn => x"00099",
+            page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
+            g => '0');
+
+    -- Fill the TLB to exactly 32 total valid entries under the CORRECT
+    -- (evicted) hypothesis: 2 already resident (canary, narrow) + 30 more =
+    -- 32, landing in slots 2..31 with no NRU overflow at all. Under the
+    -- BUGGY (not-evicted) hypothesis there are 3 resident entries (canary,
+    -- dead stale, narrow) + 30 more = 33 needed in 32 slots: the last of
+    -- these 30 filler installs overflows and clobbers slot 0 (the canary).
+    for i in 0 to 29 loop
+      install(vpn => std_logic_vector(to_unsigned(16#00100# + i, 20)),
+              asid_tag => x"0000",
+              ppn => std_logic_vector(to_unsigned(16#00200# + i, 20)),
+              page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
+              g => '0');
+    end loop;
+
+    -- The discriminator: the canary (slot 0) must still be there. If the
+    -- stale entry was wrongly left resident (install gated on stale), the
+    -- capacity shortfall above forces its silent eviction here.
+    i_va <= x"000F0000"; wait for 1 ns;
+    check(i_hit = '1',
+          "case 17: canary (slot 0) must still hit -- if this misses, the stale resident entry was NOT evicted at install (the stale asymmetry is broken) and starved the TLB of a slot");
+    check(i_pa_tag = "000000000000001",
+          "case 17: canary's PA must be unchanged -- a different PA here means slot 0 was silently overwritten by NRU overflow");
+
+    -- The overlapping narrow install itself must also be a clean single
+    -- hit, exactly like case 16.
+    i_va <= x"00011000"; wait for 1 ns;
+    check(i_hit = '1', "case 17: the overlapping narrow install must hit");
+    check(i_multihit = '0',
+          "case 17: the overlapping narrow install must be a clean hit, not a multi-hit against the (should-be-evicted) stale superpage");
+    check(i_pa_tag = "000000001001100",
+          "case 17: the surviving mapping at this VA must be the narrow (overlapping) install's own PA");
+
+    -- 18 (new, fix round 1): the DOCUMENTED, BOUNDED residual multi-hit gap
+    -- (docs/architecture/tlb.md S-I5, sim/tests/mmumultihit.S header): the
+    -- install dedup scan evicts only the FIRST resident entry it finds
+    -- overlapping a new install (`not dedup` short-circuits further matches
+    -- in the same scan) -- it does not sweep and evict every overlapping
+    -- entry. So if TWO pre-existing, mutually non-overlapping entries each
+    -- independently overlap one new (wider) install, only the first-scanned
+    -- one is evicted; the second survives and now genuinely overlaps the
+    -- new entry, reaching a real multi-hit. This is current, INTENTIONAL,
+    -- bounded behaviour (not a defect to fix here) -- this case asserts it
+    -- so the gap stays documented-AND-tested rather than documented-only.
+    flush_all;
+    install(vpn => x"00050", asid_tag => x"0000", ppn => x"00060",
+            page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
+            g => '0');
+    install(vpn => x"00051", asid_tag => x"0000", ppn => x"00061",
+            page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
+            g => '0');
+    -- Wide superpage (256KB, covers VPN 0x40..0x7F i.e. VA
+    -- [0x00040000,0x0007FFFF] -- vpn=0x50 masked to its 64-VPN-aligned base
+    -- is 0x40). Overlaps BOTH prior entries (0x50 and 0x51 both fall in
+    -- 0x40..0x7F). Dedup finds and evicts only the FIRST-scanned resident
+    -- match (vpn=0x00050, installed first -> earlier slot).
+    install(vpn => x"00050", asid_tag => x"0000", ppn => x"00070",
+            page_mask => "0011", w => '1', x => '1', u => '0', c => '1',
+            g => '0');
+    -- The evicted entry's own VA is now a clean single hit (superpage only).
+    i_va <= x"00050000"; wait for 1 ns;
+    check(i_hit = '1', "case 18: VA of the evicted (first-scanned) entry must still hit, via the surviving superpage");
+    check(i_multihit = '0', "case 18: the evicted entry's VA must be a clean hit, not a multi-hit");
+    -- The SECOND overlapping entry was never scanned for dedup (short-
+    -- circuited) and survives untouched, now genuinely double-matched by
+    -- both itself and the superpage: a real, current, bounded multi-hit.
+    i_va <= x"00051000"; wait for 1 ns;
+    check(i_hit = '1', "case 18: VA covered by both the surviving 2nd entry and the superpage must still hit");
+    check(i_multihit = '1',
+          "case 18: two independently-overlapping entries against one new install is the documented residual gap -- dedup only evicts the first match it scans, so this must still genuinely multi-hit");
 
     if fail then
       report "tlb_tb FAILED" severity failure;

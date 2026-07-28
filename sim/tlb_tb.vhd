@@ -202,15 +202,14 @@ begin
     i_va <= x"00040000"; wait for 1 ns;
     check(i_hit = '0', "VA outside the (masked) superpage range must miss");
 
-    -- 5. S-I5, C2 fix: install-time overlap PREVENTS multi-hit rather than
-    -- faulting on it after the fact. Install a 256KB superpage covering
+    -- 5. S-I5, C2 fix (task 3, INVERTED from the original "coexist" case):
+    -- install-time overlap now PREVENTS the multi-hit rather than leaving it
+    -- to be caught (fatally) at lookup. Install a 256KB superpage covering
     -- [0x0,0x3FFFF], then a 4K page whose VA falls inside that range but
-    -- whose raw vpn differs. core/tlb.vhd's install dedup only replaces an
-    -- EXACT vpn match (:234-238), so unlike the two-level split's later
-    -- masked-range-overlap dedup, these two entries CAN and DO coexist here
-    -- -- this is expected single-level behaviour, not a bug: exercise it as
-    -- such below instead of asserting the split design's replacement
-    -- semantics.
+    -- whose raw vpn differs. Task 3's masked overlap compare (core/tlb.vhd)
+    -- must detect that the new 4K install overlaps the resident superpage
+    -- under the coarser (superpage) mask and evict it, so only the narrower
+    -- mapping survives.
     flush_all;
     install(vpn => x"00010", asid_tag => x"0000", ppn => x"00020",
             page_mask => "0011", w => '1', x => '1', u => '0', c => '1',
@@ -218,18 +217,17 @@ begin
     install(vpn => x"00011", asid_tag => x"0000", ppn => x"00030",
             page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
             g => '0');
-    -- The narrower (2nd-installed) entry's own VA hits, and -- since the
-    -- superpage also covers this VA -- both entries match: a genuine
-    -- multi-hit, exactly as S-I5 defines it.
+    -- The narrower (2nd-installed) entry's own VA must now be a CLEAN hit:
+    -- the overlapping superpage was evicted at install, not left to coexist.
     i_va <= x"00011000"; wait for 1 ns;
-    check(i_hit = '1', "overlapping VA must still report a hit (multihit takes priority, but hit stays asserted)");
-    check(i_multihit = '1',
-          "two installs with distinct VPNs that both cover this VA must report a genuine multi-hit (no range-overlap dedup at this level)");
-    -- A VA covered ONLY by the superpage (not the narrower entry) must hit
-    -- singly.
+    check(i_hit = '1', "overlapping VA must hit the narrower, just-installed mapping");
+    check(i_multihit = '0',
+          "install-time overlap detection must evict the overlapping superpage, so this is a clean hit, not a multi-hit");
+    -- The superpage that covered a WIDER range (e.g. 0x00010000, outside the
+    -- narrower entry) is now gone -- it was evicted, so that VA misses.
     i_va <= x"00010000"; wait for 1 ns;
-    check(i_hit = '1', "VA covered only by the superpage must hit");
-    check(i_multihit = '0', "VA covered by exactly one entry must not multi-hit");
+    check(i_hit = '0',
+          "the evicted superpage's range outside the narrower entry must now miss (it was replaced, not merely deprioritized)");
 
     -- 6. Exact-VPN dedup: re-installing the SAME vpn/asid replaces the
     -- existing entry in place (core/tlb.vhd :234-238) rather than adding a
@@ -301,31 +299,43 @@ begin
     check(d_prot = '1', "store to a w=0 page must raise d_prot");
     d_we <= '0';
 
-    -- 11 (was #16): N2-style check adapted for single-level dedup semantics:
-    -- installing two non-overlapping 4K pages, then a wider superpage that
-    -- covers both, does NOT replace either (core/tlb.vhd dedups on exact
-    -- VPN match only -- neither 4K entry's VPN equals the superpage's VPN),
-    -- so all three entries coexist and any VA covered by more than one of
-    -- them must report a genuine multi-hit. This documents actual
-    -- single-level behaviour (no install-time range-overlap prevention),
-    -- the mirror image of case 5 above.
+    -- 11 (was #16, INVERTED for task 3): mirror image of case 5 -- narrow
+    -- entries installed FIRST, then a wider superpage installed on top,
+    -- rather than case 5's wide-then-narrow order. Install two
+    -- non-overlapping 4K pages: one (vpn=0x00000) inside the 256KB range
+    -- the superpage will cover, one (vpn=0x00040, VA=0x00040000) genuinely
+    -- OUTSIDE it (the same boundary established in case 4: 0x00040000 is
+    -- the first VA whose VPN has bit 6 set). Then install the 256KB
+    -- superpage. It overlaps only the in-range 4K entry, which the masked
+    -- install-time overlap check must detect and evict -- leaving a clean
+    -- single hit there -- while the out-of-range entry, which never
+    -- overlapped anything, must be left completely untouched.
     flush_all;
     install(vpn => x"00000", asid_tag => x"0000", ppn => x"00001",
             page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
             g => '0');
-    install(vpn => x"00001", asid_tag => x"0000", ppn => x"00002",
+    install(vpn => x"00040", asid_tag => x"0000", ppn => x"00002",
             page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
             g => '0');
     install(vpn => x"00000", asid_tag => x"0000", ppn => x"00020",
             page_mask => "0011", w => '1', x => '1', u => '0', c => '1',
             g => '0');
+    -- The in-range 4K entry's overlap must have been evicted at install:
+    -- this VA is now a clean hit on the surviving superpage, not a
+    -- multi-hit.
     i_va <= x"00001000"; wait for 1 ns;
-    check(i_hit = '1', "VA covered by both the surviving 4K entry and the superpage must still hit");
-    check(i_multihit = '1',
-          "VA covered by two coexisting entries (no install-time overlap prevention at this level) must multi-hit");
-    i_va <= x"00003000"; wait for 1 ns;
-    check(i_hit = '1', "VA covered only by the superpage must hit");
-    check(i_multihit = '0', "VA covered by exactly one entry must not multi-hit");
+    check(i_hit = '1', "VA formerly covered by the evicted 4K entry must still hit (now via the superpage)");
+    check(i_multihit = '0',
+          "install-time overlap detection must have evicted the overlapping 4K entry, so this is a clean hit");
+    check(i_pa_tag = "000000000010000",
+          "the surviving mapping at this VA must be the superpage (3rd-installed) entry's PA");
+    -- The out-of-range 4K entry never overlapped anything and must be
+    -- completely unaffected: still resident, still a clean single hit.
+    i_va <= x"00040000"; wait for 1 ns;
+    check(i_hit = '1', "the non-overlapping 4K entry outside the superpage's range must be untouched and still hit");
+    check(i_multihit = '0', "the untouched, non-overlapping entry must not multi-hit");
+    check(i_pa_tag = "000000000000001",
+          "the untouched entry's PA must still be its own (2nd-installed) mapping");
 
     -- 12 (was #17): a flush must invalidate every entry, not just some of
     -- them. Install two entries at different VPNs, confirm both hit, flush,
@@ -411,6 +421,32 @@ begin
     i_va <= x"00003000"; wait for 1 ns;
     check(i_hit = '0', "case 15: a STALE entry must be suppressed on the lookup path (miss, not a low-priority hit)");
     check(i_multihit = '0', "case 15: a suppressed stale entry must not register as any kind of match");
+
+    -- 16 (new, task 3): masked install-time overlap. Install a 1 MB
+    -- superpage (page_mask="0100" -> vpn_compare_mask n=8, ignores VPN bits
+    -- 0..7, i.e. VA bits 12..19 -- see core/components_pkg.vhd:107/548 and
+    -- the "PageMask helpers" comment: pm=4 => 2**(12+8)=1MB) covering VA
+    -- range [0x00000000, 0x000FFFFF] (installed vpn=0x00000, all bits from
+    -- 8 up are zero). Then install a 4K page whose VA (0x00005000) falls
+    -- INSIDE that range but whose raw vpn (0x00005) differs from the
+    -- superpage's vpn (0x00000) -- master's OLD exact-VPN dedup could not
+    -- see this as the same range, so both entries stayed valid and a lookup
+    -- of 0x00005000 multi-hit (S-I5 fatal). Task 3's masked overlap compare
+    -- must detect this at install time and evict the superpage, replacing
+    -- it with the narrower mapping: the lookup must be a clean single hit.
+    flush_all;
+    install(vpn => x"00000", asid_tag => x"0000", ppn => x"00050",
+            page_mask => "0100", w => '1', x => '1', u => '0', c => '1',
+            g => '0');
+    install(vpn => x"00005", asid_tag => x"0000", ppn => x"00060",
+            page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
+            g => '0');
+    i_va <= x"00005000"; wait for 1 ns;
+    check(i_hit = '1', "case 16: VA inside the evicted superpage's range, covered by the new 4K page, must hit");
+    check(i_multihit = '0',
+          "case 16: install-time overlap detection must evict the overlapping superpage, not leave both entries coexisting as a multi-hit");
+    check(i_pa_tag = "000000000110000",
+          "case 16: the surviving mapping must be the narrower (2nd-installed) entry's PA");
 
     if fail then
       report "tlb_tb FAILED" severity failure;

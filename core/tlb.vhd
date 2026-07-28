@@ -227,14 +227,34 @@ begin
 
       elsif (tlb_wr = '1') then
         -- Slot selection for an LDTLB install. Dedup takes PRIORITY over NRU:
-        -- if a valid entry already maps this VPN under this ASID (or either
-        -- side is global), overwrite THAT slot so the install replaces the
-        -- mapping in place. This mirrors SH-4 LDTLB semantics and prevents a
-        -- benign re-install -- e.g. Linux upgrading a page's permissions
-        -- (dirty bit) while it is still resident -- from leaving TWO matching
-        -- entries, which the S-I5 multi-hit check would otherwise (correctly)
-        -- flag as a fatal illegal state. With dedup, a multi-hit can only
-        -- arise from a genuinely inconsistent SW/HW state, never normal use.
+        -- if a valid entry already OVERLAPS this mapping's range under this
+        -- ASID (or either side is global), overwrite THAT slot so the
+        -- install replaces the mapping in place. This mirrors SH-4 LDTLB
+        -- semantics and prevents a benign re-install -- e.g. Linux upgrading
+        -- a page's permissions (dirty bit) while it is still resident, or
+        -- installing a narrower page inside a resident superpage -- from
+        -- leaving TWO matching entries, which the S-I5 multi-hit check would
+        -- otherwise (correctly) flag as a fatal illegal state. With dedup, a
+        -- multi-hit can only arise from a genuinely inconsistent SW/HW
+        -- state, never normal use.
+        --
+        -- Overlap uses a MASKED compare under the intersection of the two
+        -- entries' page masks (the coarser/wider of the two), not exact VPN
+        -- equality: a resident 1 MB superpage and a newly-installed 4 KB
+        -- page inside it have different vpn values but genuinely overlap in
+        -- VA range, and exact equality (master's old compare) could not see
+        -- that -- both stayed valid and a later lookup hit both, producing
+        -- a fatal S-I5 multi-hit on a perfectly reasonable software
+        -- sequence (docs/architecture/tlb.md S-I5). Exact-VPN equality is
+        -- the special case where both masks are "0000" (4 KB, no bits
+        -- ignored), so this subsumes the old dedup path.
+        --
+        -- Deliberately does NOT gate on ram(k).stale, unlike the lookup
+        -- path's tlb_match (which does): an install must consider stale
+        -- entries too, or it could install a mapping that overlaps one it
+        -- cannot see (a stale entry is a soft-invalidated-but-still-resident
+        -- slot, not an absent one). This asymmetry is intentional.
+        --
         -- Absent a dedup match, fall back to NRU: first invalid slot, else
         -- first unused; if all valid+used, clear used bits and take slot 0.
         idx      := 0; nru_idx := 0; dedup := false; nru_found := false;
@@ -243,7 +263,10 @@ begin
         for k in 0 to 31 loop
 
           if (not dedup and ram(k).valid = '1'
-              and ram(k).vpn = pteh_vpn
+              and ((ram(k).vpn xor pteh_vpn)
+                   and (vpn_compare_mask(ram(k).page_mask)
+                        and vpn_compare_mask(ptel(11 downto 8))))
+                  = (ram(k).vpn'range => '0')
               and (ram(k).global = '1' or ptel(2) = '1'
                     or ram(k).asid_tag = asidr)) then
             idx := k; dedup := true;

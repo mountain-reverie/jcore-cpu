@@ -47,7 +47,7 @@
 !   0x00100000  workload VA     (P0; pgd_index=0, pte_index=0x40)
 !
 ! Scenario 1 (walk + install): with MMUCR.AT enabled, touch the mapped P0
-! VA with a load. It TLB-misses (no HW entry yet) at VBR+0x420
+! VA with a load. It TLB-misses (no HW entry yet) at VBR+0x400
 ! (jcore_vec_dload, ex.o); the inlined JCORE_TLB_FASTPATH TSB probe misses
 ! (TSB was zeroed), so it falls to jcore_tlb_miss_slow, which calls the
 ! REAL __jcore_tlb_walk(pgd, addr, asid_tag). The walker finds our pte,
@@ -299,7 +299,7 @@ kmain:
 
         ! ================= SCENARIO 1: walk + install =================
         mov.l   va_A, r0
-        mov.l   @r0, r8                 ! load -> TLB miss -> VBR+0x420 ->
+        mov.l   @r0, r8                 ! load -> TLB miss -> VBR+0x400 ->
                                          ! TSB miss -> __jcore_tlb_walk()
                                          ! installs -> resumed load completes
 

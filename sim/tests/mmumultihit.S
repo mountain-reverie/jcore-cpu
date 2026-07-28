@@ -1,27 +1,43 @@
 ! mmumultihit.S -- S-I5: multiple TLB entries matching one lookup.
 !
-! Two properties are verified, reflecting the LDTLB dedup + multi-hit design:
+! Two properties are verified, reflecting the LDTLB dedup + install-time
+! overlap-eviction design (jcore-soc components/cpu, task 3,
+! "tlb-install-overlap"):
 !
 !  (A) DEDUP (the common case): re-installing the SAME VPN under the SAME ASID
 !      (e.g. Linux upgrading a still-resident page's permissions / dirty bit)
 !      must REPLACE the entry in place -- one valid entry, newest wins -- NOT
 !      leave two matching entries. core/tlb.vhd's LDTLB scans for an existing
 !      VPN+ASID (or global) match and overwrites that slot before falling back
-!      to NRU. Without dedup this benign re-install would manufacture a
-!      duplicate that (B) would then (correctly) fault, derailing normal use.
+!      to NRU.
 !
-!  (B) MULTI-HIT (the fatal path, S-I5): when two entries genuinely match a
-!      single lookup and dedup cannot have merged them -- only possible via
-!      page-size ALIASING (a large page and a smaller page inside its range
-!      have DIFFERENT exact VPNs, so exact-match dedup keeps both) -- the
-!      lookup must be a DEFINED, non-recoverable fault, never a silent
-!      last-match-wins pick of one candidate PA. That "pick one of N PAs,
-!      unspecified which" is exactly the address-confusion primitive S-I5
-!      exists to deny. The multi-hit is routed (core/cpu.vhd,
-!      decode/decode_core.vhm) to the EXISTING General Illegal register-model
-!      exception (EXPEVT=0x180, PC<-VBR+0x100) rather than a new EXPEVT/vector
-!      pair -- the decoder's system-plane immediate field was already at
-!      capacity (32/32); see components_pkg.vhd's tlb_exc_kind_t comment.
+!  (B) INSTALL-TIME OVERLAP EVICTION (was: "multi-hit is the defined fatal
+!      path"; NO LONGER TRUE for this construction -- see below): dedup used
+!      to compare VPN for EXACT equality only, so a small page installed
+!      inside the range of a resident large page had a DIFFERENT exact VPN
+!      and was never recognised as overlapping -- both entries stayed valid,
+!      and a lookup landing in the overlap genuinely matched both, which the
+!      RTL (correctly, at the time) reported as a fatal S-I5 multi-hit. Task
+!      3 replaced the exact-VPN compare with a MASKED overlap compare (under
+!      the intersection -- the coarser -- of the two entries' page masks),
+!      so LDTLB now recognises this exact page-size-aliasing case as a
+!      genuine range overlap and EVICTS the resident (large-page) entry at
+!      install time, same as case (A)'s dedup. The result: this construction
+!      no longer produces two coexisting matching entries at all, so the
+!      lookup is a clean single hit on the newest (small-page) mapping, not
+!      a fault.
+!
+!      The RTL's multi-hit detection itself (core/tlb.vhd tlb_match /
+!      i_multihit / d_multihit, S-I5) is UNCHANGED and still present as
+!      defence-in-depth: it fires if two entries ever genuinely coexist and
+!      match the same lookup, e.g. through a route LDTLB's single-slot dedup
+!      cannot reach (more than one pre-existing entry independently overlaps
+!      a single new install -- LDTLB only evicts the first match found -- or
+!      any other inconsistent SW/HW state). This guard's Test B can no
+!      longer exercise the fault path through a normal install sequence,
+!      because normal LDTLB installs are exactly what the fix now resolves
+!      before a multi-hit can occur; it instead exercises the eviction that
+!      prevents this construction from ever reaching a multi-hit.
 !
 ! Construction (all under ASID A, page 0 identity kernel code W|X|C=0xC8):
 !   - VPN 0x4 (VA 0x4000): installed TWICE -- PA 0x4000 then PA 0x9000. Dedup
@@ -30,17 +46,25 @@
 !   - VPN 0x8 large page, page_mask=0x1 (ignores VPN[1:0] -> covers VPN 0x8..
 !     0xB, VA 0x8000..0xBFFF), PA 0x8000.
 !   - VPN 0xA (VA 0xA000) 4KB page, PA 0xA000. Its VA lies INSIDE the large
-!     page's range, so a lookup of VA 0xA000 matches BOTH (large VPN 0x8 and
-!     small VPN 0xA -- different exact VPNs, so dedup left both installed).
+!     page's range. Under the OLD exact-VPN dedup this VPN differs from the
+!     large page's VPN, so both stayed resident and VA 0xA000 multi-hit.
+!     Under the NEW masked-overlap dedup, this install's masked compare
+!     against the resident large-page entry detects the overlap and EVICTS
+!     it -- the large-page slot is overwritten with this (VPN 0xA, PA 0xA000)
+!     mapping, so only ONE entry remains and the range is disjoint again.
 !
 !   Test A: load VA 0x4000 -- must NOT fault (dedup resolved it), and must
 !     return PA 0x9000's data (newest install won), NOT PA 0x4000's.
 !   Negative control: load VA 0x5000 -- must HIT, return PA 0x5000's data.
-!   Test B: load VA 0xA000 -- must FAULT (General Illegal, EXPEVT=0x180 at
-!     VBR+0x100), with the destination register left at its pre-fault
-!     sentinel (neither matching PA's data leaked through).
+!   Test B: load VA 0xA000 -- must NOT fault (install-time overlap eviction
+!     resolved it, same as Test A), and must return PA 0xA000's data (the
+!     surviving, newest-installed small-page mapping), NOT PA 0x8000's data
+!     and NOT a fault-time sentinel. Checking only "no fault" would pass even
+!     if the TLB returned garbage or the wrong PA's data, so the loaded value
+!     is checked explicitly against the small page's sentinel.
 !
-! VBR = _v_gi - 0x100 so the General Illegal vector (VBR+0x100) hits _v_gi.
+! VBR = _v_gi - 0x100 so the General Illegal vector (VBR+0x100) would hit
+! _v_gi if any of these loads unexpectedly faulted.
 !
 ! PTEL flag bit layout (core/tlb.vhd): bit7=W bit6=X bit5=U bit4=D bit3=C
 !                                       bit2=G bit1=STALE bit0=V
@@ -52,11 +76,15 @@
 !   2  dedup load returned wrong data -- newest install (PA 0x9000) did not win
 !   3  negative control (VA 0x5000) faulted unexpectedly
 !   4  negative control returned wrong data
-!   5  multi-hit load (VA 0xA000): NO exception -- multi-hit silently resolved
-!      (the RED case this guard exists to catch)
-!   6  multi-hit load: EXPEVT != 0x180 (General Illegal)
-!   7  multi-hit load: destination register was NOT left at the pre-fault
-!      sentinel (a PA's data leaked through despite the fault)
+!   5  Test B load (VA 0xA000) FAULTED -- install-time overlap eviction did
+!      not resolve the large/small page overlap before the lookup (a
+!      regression back toward the pre-task-3 behaviour)
+!   6  retired: previously "Test B load: EXPEVT != General Illegal", from
+!      when Test B was expected to fault. No longer emitted; kept out of
+!      reuse so any old failure logs referencing it are not misread.
+!   7  Test B load returned wrong data -- the surviving mapping was not the
+!      newest (small-page, PA 0xA000) install, or stale/garbage data leaked
+!      through
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -151,8 +179,9 @@ ENTRY(start)
         .word   0x0038                  ! LDTLB
 
         ! ---- Map small page VPN 0xA (VA 0xA000 -> PA 0xA000), 4KB. Its VA
-        ! is inside the large page above -> a VA-0xA000 lookup multi-hits.
-        ! Dedup keeps both (VPN 0x8 != VPN 0xA, exact-match). ----
+        ! is inside the large page above -> this install's masked overlap
+        ! compare detects the range overlap against the resident large-page
+        ! entry and evicts it in place (task 3): only this mapping survives. ----
         mov.l   p_pteh_pa, r0
         .word   0x405E                  ! LDC r0, PTEH
         mov.l   p_ptel_pa, r0          ! PA 0xA000 | W|C
@@ -200,32 +229,29 @@ ENTRY(start)
         mov     #4, r9                 ! fail 4 = wrong data on single hit
         bf      _fail
 
-        ! ================= Test B: MULTI-HIT (VA 0xA000) ================
-        ! Must FAULT General Illegal. Set expected EXPEVT and resume target.
+        ! ======== Test B: INSTALL-TIME OVERLAP EVICTION (VA 0xA000) =======
+        ! Must NOT fault: the VPN 0xA install's masked overlap compare
+        ! detected that it overlaps the resident large-page (VPN 0x8) entry
+        ! and evicted it in place, so only the small-page mapping remains --
+        ! this VA is a clean single hit, same shape as Test A.
         mov.l   p_g_exp_expevt, r0
-        mov.l   c_general_illegal, r1
-        mov.l   r1, @r0                 ! g_exp_expevt = 0x180
+        mov     #0, r1
+        mov.l   r1, @r0                 ! g_exp_expevt = 0 (no fault expected)
         mov.l   p_g_bad_expevt, r0
-        mov     #6, r1
-        mov.l   r1, @r0                 ! EXPEVT wrong -> result 6
+        mov     #5, r1
+        mov.l   r1, @r0                 ! any fault -> EXPEVT-mismatch -> result 5
         mov.l   p_g_resume, r0
-        mov.l   p_after_multihit, r1
-        mov.l   r1, @r0                 ! resume -> after_multihit
+        mov.l   p_l_multihit_fault, r1
+        mov.l   r1, @r0                 ! (fluke EXPEVT match) -> result 5 too
 
-        mov.l   p_sentinel_pre, r0
-        mov     r0, r8                 ! r8 = pre-fault sentinel
-        mov     #5, r9                 ! sentinel: no exception -> result 5
         mov.l   c_vaa, r2
-        mov.l   @r2, r8                ! FAULTS -> _v_gi, General Illegal
-        bra     _fail                  ! reached only if the load did NOT fault
-        nop
-ENTRY(after_multihit)
-
-        ! ---- r8 must still hold the pre-fault sentinel: neither matching
-        ! PA's data was silently returned. ----
-        mov.l   p_sentinel_pre, r0
+        mov.l   @r2, r8                 ! must NOT fault
+        ! No fault: r8 must hold PA 0xA000's data (the surviving,
+        ! newest-installed small-page mapping) -- NOT PA 0x8000's data, and
+        ! not merely "didn't fault": a wrong/garbage PA must also be caught.
+        mov.l   p_sentinel_d, r0
         cmp/eq  r8, r0
-        mov     #7, r9                 ! fail 7 = a PA's data leaked through
+        mov     #7, r9                 ! fail 7 = surviving mapping's data wrong
         bf      _fail
 
         bra     _done
@@ -238,6 +264,10 @@ ENTRY(l_dedup_fault)
         nop
 ENTRY(l_negctrl_fault)
         mov     #3, r9
+        bra     _fail
+        nop
+ENTRY(l_multihit_fault)
+        mov     #5, r9
         bra     _fail
         nop
 
@@ -259,8 +289,7 @@ p_asid_a:                 .long 0x00000011
 p_sentinel_a:              .long 0xA51DA51D        ! at PA 0x4000 (must NOT be returned)
 p_sentinel_b:              .long 0xB33FB33F        ! at PA 0x9000 (dedup: newest -> returned)
 p_sentinel_c:              .long 0xC0FFEE00        ! at PA 0x5000 (negative control)
-p_sentinel_d:              .long 0xD00D0000        ! at PA 0xA000 (must NOT leak on fault)
-p_sentinel_pre:            .long 0xDEAD0BAD        ! pre-fault r8 value; must survive the fault
+p_sentinel_d:              .long 0xD00D0000        ! at PA 0xA000 (surviving install, must be returned)
 p_p1_4000:                .long 0x80004000
 p_p1_9000:                .long 0x80009000
 p_p1_5000:                .long 0x80005000
@@ -268,13 +297,12 @@ p_p1_a000:                .long 0x8000A000
 c_va4:                    .long 0x00004000
 c_va5:                    .long 0x00005000
 c_vaa:                    .long 0x0000A000
-c_general_illegal:        .long 0x00000180        ! EXPEVT General Illegal
 p_g_exp_expevt:           .long _g_exp_expevt
 p_g_bad_expevt:           .long _g_bad_expevt
 p_g_resume:               .long _g_resume
-p_after_multihit:         .long after_multihit
 p_l_dedup_fault:          .long l_dedup_fault
 p_l_negctrl_fault:        .long l_negctrl_fault
+p_l_multihit_fault:       .long l_multihit_fault
 
 #endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 

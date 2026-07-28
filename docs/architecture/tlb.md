@@ -138,9 +138,17 @@ incl. user-mode `IPROT`/`DPROT_R` and `DPROT_W`), `mmureloc`/`mmurelocif`/
      slot.** A trailing `nop` in handler examples is padding, not an architectural
      delay slot, and must not carry a meaningful instruction.
 5. **Replacement** is NRU (not-recently-used) across the 32 entries; software does
-   not choose the slot. **Do not install duplicate `VPN+ASID` entries** — a
-   multi-hit is resolved to the highest-index match with no hardware multi-hit
-   exception.
+   not choose the slot, EXCEPT that dedup takes priority over NRU: an `LDTLB`
+   whose install overlaps an already-resident, valid entry (same masked VA
+   range under the ASID/global rule — this subsumes plain `VPN+ASID` equality)
+   overwrites that resident entry in place instead of adding a second one.
+   This is what makes routine re-installs (e.g. upgrading a still-resident
+   page's permission/dirty bits) and page-size transitions (e.g. installing a
+   4 KB page inside a resident 1 MB hugepage, or vice versa) safe: the
+   overlapping resident mapping is evicted at install time, so the two
+   mappings never coexist and a subsequent lookup is a clean single hit. See
+   §8.1 for the full multi-hit story, including the one case this dedup
+   cannot reach and why the hardware still detects it.
 
 All MMU registers and instructions (`PTEH`, `PTEL`, `ASIDR`, `MMUCR`, `TSB*`,
 `LDTLB`, `LDTLB.RN`) are **privileged**: a user-mode access traps illegal-instruction.
@@ -255,16 +263,58 @@ the design repository's `docs/mmu/security-review.md`.
 | Precise-exception fault transparency (MAC, auto-inc, …) | `m8_*` family |
 | Variable page size (PageMask) | `mmupage4k`, `mmupage16k`, `mmupage64k`, `mmupage1m`, `mmupagemix`, `mmupagemix2`, `mmupagewalk` |
 
-> **Multi-hit with variable page sizes — documented limitation.**  The TLB's
-> multi-hit resolution is **last-(highest-index)-slot-wins**: if two entries both
-> match a VA (e.g. a 4 KB entry whose VPN falls inside a live 1 MB hugepage),
-> whichever slot has the higher index wins the combinational priority and supplies
-> the PA.  There is **no hardware multi-hit detection or fault** — the result is
-> deterministic but architecturally incorrect.  Software must not install
-> overlapping entries; in particular, splitting or remapping a hugepage requires
-> first invalidating (STALE or TI flush) the existing large-page entry before
-> installing the smaller replacements.  This invariant is more important now that
-> page sizes can span several orders of magnitude.
+> ### 8.1 S-I5 — multi-hit: install-time overlap eviction, with hardware
+> detection retained as defence-in-depth
+>
+> A **multi-hit** is >1 usable (`VALID`, not `STALE`, VPN-in-range,
+> ASID-or-`GLOBAL`) entry matching one lookup. It is a **defined,
+> non-recoverable fault** (`i_multihit`/`d_multihit`, routed to the existing
+> General Illegal exception, `EXPEVT=0x180`) rather than a silent
+> last-match-wins pick of one candidate PA — an unspecified choice among N
+> live PAs is exactly the address-confusion primitive S-I5 exists to deny.
+>
+> **The common cause used to be install-time page-size aliasing**, and it is
+> now resolved before it can reach the lookup path: `LDTLB`'s install dedup
+> (item 5 above, §5.1) compares the new mapping against every resident entry
+> under the **intersection of the two entries' page masks** (the coarser/wider
+> of the two) rather than exact `VPN` equality. A 4 KB page installed inside a
+> resident 1 MB hugepage — or a hugepage installed over a resident 4 KB page —
+> has a *different* raw `VPN` from the entry it overlaps, but the masked
+> compare still recognises the range overlap and evicts the resident entry in
+> place. Exact-`VPN`-equality re-installs (e.g. a permission/dirty-bit update)
+> are the special case where both page masks are 4 KB, so this dedup subsumes
+> the old exact-match dedup entirely. **Practically: normal `LDTLB` sequences,
+> including page-size transitions, no longer produce a multi-hit fault** —
+> splitting or growing a mapping no longer requires a manual `STALE`/`TI`
+> flush of the overlapped entry first (though doing so is still harmless).
+>
+> **The install dedup deliberately does NOT gate on `STALE`**, unlike the
+> lookup path (§6): a `STALE=1` resident entry is a soft-invalidated-but-still
+> -occupying-a-slot mapping, not an absent one, and an install that ignored it
+> could overlap a range it can no longer see, defeating the whole point of the
+> check. The lookup path, symmetrically, *does* gate on `STALE` — a stale
+> entry must never hit. This asymmetry (install considers stale entries;
+> lookup suppresses them) is intentional and load-bearing, not an oversight.
+>
+> **Multi-hit detection in the RTL is unchanged and still present as
+> defence-in-depth.** `LDTLB`'s dedup only evicts the *first* resident entry
+> it finds overlapping the new install (single-slot replacement, matching
+> SH-4 `LDTLB` semantics) — it does not sweep and evict every overlapping
+> entry. A pathological sequence where **two or more pre-existing, mutually
+> non-overlapping entries independently overlap one new install** can still
+> leave a genuine multi-hit: dedup evicts only the first match it scans, the
+> remaining overlapping entry survives untouched, and a lookup landing in the
+> shared range will hit both. This is a narrow, avoidable case (well-behaved
+> software installs mappings in an order that does not construct it), and any
+> other genuinely inconsistent SW/HW state that manufactures duplicate
+> matching entries is caught the same way. The hardware fault is retained
+> specifically to catch these, not because normal install sequences are
+> expected to trigger it anymore.
+>
+> *Guards: `mmumultihit` (dedup — exact-VPN re-install and page-size-aliasing
+> overlap, both resolved at install with no fault; kept as regression coverage
+> for the eviction path), `mmupagemix`/`mmupagemix2` (mixed page-size
+> transitions).*
 
 ---
 

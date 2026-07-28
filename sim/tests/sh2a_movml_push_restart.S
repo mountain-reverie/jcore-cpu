@@ -88,7 +88,8 @@ ENTRY(start)
         nop
         nop
 
-        ! ---- VBR = _v_dstore - 0x440 (VBR+0x440 = D-store vector = _v_dstore). ----
+        ! ---- VBR = _v_dstore - 0x400 (VBR+0x400 = the single TLB-fault
+        !      vector = _v_dstore; EXPEVT distinguishes DMISS_W). ----
         mov.l   p_vbr_val, r0
         ldc     r0, vbr
 
@@ -188,7 +189,7 @@ ENTRY(start)
 
         .align 2
 p_rbclear:      .long 0xDFFFFFFF
-p_vbr_val:      .long _v_dstore - 0x440 ! VBR so VBR+0x440 = _v_dstore (D-store vector)
+p_vbr_val:      .long _v_dstore - 0x400 ! VBR so VBR+0x400 = _v_dstore (TLB-fault vector)
 p_mmucr:        .long 0xFF000010
 p_ptel_page0:   .long 0x000000E8        ! W|X|U|C
 p_sp0:          .long 0x00001010        ! R15 start: push_ptr = 0x0FFC straddles page 0/1
@@ -269,7 +270,7 @@ p_test_result: .long TEST_RESULT_ADDRESS
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH
 
         ! ================================================================
-        ! DMISS_W handler at VBR+0x440 (D-store vector) = _v_dstore.
+        ! DMISS_W handler at VBR+0x400 (the single TLB-fault vector) = _v_dstore.
         ! Runs with RB=1 (bank 1): r0..r2 here are the banked bank-1 copies,
         ! so they do NOT clobber the bank-0 R0..R4 the push restart re-reads.
         ! Maps page 1, does a leak-detecting ORDINARY SP-relative marker store
@@ -279,7 +280,7 @@ p_test_result: .long TEST_RESULT_ADDRESS
         .balign 4
         .space 0x380, 0
         .balign 4
-_v_dstore:                              ! = VBR + 0x440
+_v_dstore:                              ! = VBR + 0x400
         ! Sanity-guard: EXPEVT must be DMISS_W (0x080).
         .word   0x0052                  ! STC EXPEVT, r0
         mov.l   Hc_dmiss_w, r1

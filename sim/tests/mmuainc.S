@@ -169,7 +169,7 @@ p_test_result: .long TEST_RESULT_ADDRESS
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
         ! ===================== Exception vector base =====================
-        ! VBR points at the P1 alias of _vbase; hardware adds 0x420 (load miss).
+        ! VBR points at the P1 alias of _vbase; hardware adds 0x400 (all TLB faults).
         .balign 4
 _vbase:
         .space 0x400, 0

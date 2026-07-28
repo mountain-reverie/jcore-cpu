@@ -34,7 +34,7 @@
 !      - Loads 0..3 (R0..R3) succeed the first time.
 !      - Load 4 (R4, VA 0x1000) DMISSes: EXPEVT=0x060, TEA=0x1000. R15 is
 !        NOT yet updated (still 0x0FF0).
-!   4. The DMISS_R handler (VBR+0x420, the D-load vector) maps page 1
+!   4. The DMISS_R handler (VBR+0x400, the single TLB-fault vector) maps page 1
 !      identity (W|X|U|C=0xE8)
 !      via PTEH/PTEL/ASIDR+LDTLB, bumps a fault counter, and RTEs WITHOUT
 !      touching SPC -- relying on hardware to have captured SPC = the
@@ -98,11 +98,12 @@ ENTRY(start)
         nop
         nop
 
-        ! ---- VBR = _v_dmiss - 0x420 (so VBR+0x420 = _v_dmiss = the D-load
-        !      vector: DMISS_R/DPROT_R dispatch to VBR+0x420, NOT VBR+0x060 --
-        !      0x060 is the EXPEVT *code*, not the vector offset; the Option-A
-        !      vector layout is I-fetch->VBR+0x400, D-load->VBR+0x420,
-        !      D-store->VBR+0x440; see decode/gen-go/spec/sh4/exceptions.toml). ----
+        ! ---- VBR = _v_dmiss - 0x400 (so VBR+0x400 = _v_dmiss = the single
+        !      TLB-fault vector: all six TLB causes (IMISS/DMISS_R/DMISS_W/
+        !      IPROT/DPROT_R/DPROT_W) dispatch to VBR+0x400, NOT VBR+0x060 --
+        !      0x060 is the EXPEVT *code*, not the vector offset. EXPEVT still
+        !      distinguishes the cause, which the handler below checks; see
+        !      decode/gen-go/spec/sh4/exceptions.toml). ----
         mov.l   p_vbr_val, r0
         ldc     r0, vbr
 
@@ -191,7 +192,7 @@ ENTRY(start)
 
         .align 2
 p_rbclear:      .long 0xDFFFFFFF
-p_vbr_val:      .long _v_dmiss - 0x420  ! VBR so VBR+0x420 = _v_dmiss (D-load vector)
+p_vbr_val:      .long _v_dmiss - 0x400  ! VBR so VBR+0x400 = _v_dmiss (TLB-fault vector)
 p_mmucr:        .long 0xFF000010
 p_ptel_page0:   .long 0x000000E8        ! W|X|U|C
 p_sp0:          .long 0x00000FF0        ! R15 start: straddles page 0/1
@@ -264,7 +265,7 @@ p_test_result: .long TEST_RESULT_ADDRESS
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH
 
         ! ================================================================
-        ! DMISS_R handler at VBR+0x420 (D-load vector) = _v_dmiss.
+        ! DMISS_R handler at VBR+0x400 (the single TLB-fault vector) = _v_dmiss.
         ! Maps page 1 identity, bumps the fault counter, RTEs WITHOUT
         ! touching SPC (hardware-captured SPC must already point at the
         ! MOVML.L instruction under test -- that is the property this test
@@ -273,7 +274,7 @@ p_test_result: .long TEST_RESULT_ADDRESS
         .balign 4
         .space 0x360, 0
         .balign 4
-_v_dmiss:                               ! = VBR + 0x420
+_v_dmiss:                               ! = VBR + 0x400
         ! Sanity-guard: EXPEVT must be DMISS_R (0x060).
         .word   0x0052                  ! STC EXPEVT, r0
         mov.l   Hc_dmiss_r, r1

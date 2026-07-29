@@ -107,6 +107,16 @@ AREA_TOP=""; AREA_CPUTOP=""
 SYN_BINDING=""
 case "$SYNTH_VARIANT" in
   j2)
+    # J2 has NO illegal-instruction trapping: the feature is J4/PRIV-only. Its
+    # end-to-end guard sim/tests/j4_illegal_trap.S states it "MUST run under the
+    # J4/PRIV" cosim, and no J2 illegal test exists. Carrying the illegal-decode
+    # cone in a J2 netlist therefore synthesizes logic the architecture never
+    # traps on -- and it is not free: it costs this harness ~2.5 MHz of ECP5
+    # Fmax (measured, 5 seeds). Regenerate with ILLEGAL=none as a synth-time
+    # transient, exactly as j2a/j4c do for their overlays; the EXIT trap above
+    # restores the committed base decoder on every exit path.
+    echo "cpu_synth.sh: regenerating decoder with ILLEGAL=none for j2 (transient)" >&2
+    make -C decode generate ILLEGAL=none >&2
     TOP="cpu_synth_direct"; TIMING_TOP="cpu_timing_j2"
     FILES+=(synth/cpu_timing_top.vhd synth/cpu_timing_config.vhd)
     ;;

@@ -328,7 +328,25 @@ jobs:
           set -euo pipefail
           case "${{ matrix.variant }}" in
             j1)  floor=33 ;;                    # J1 ~38-40 MHz representative
-            j2)  floor="${ECP5_FMIN_MHZ}" ;;    # J2 ~42-43 MHz; env floor 40
+            # J2 floor is 37, NOT the ECP5_FMIN_MHZ default of 40. Two measured
+            # reasons, both from 5-seed sweeps of this harness (see
+            # docs/j4-ecp5-fmax-findings.md):
+            #  1. This metric has ~3.6 MHz of seed spread (master measures
+            #     39.91-43.52 across seeds 1-5). CI runs the default seed, so the
+            #     gate is deterministic -- but master's own worst seed is 39.91,
+            #     leaving the old floor of 40 with essentially zero margin against
+            #     ordinary toolchain or placement drift.
+            #  2. Retiming the illegal-instruction checks off the critical path
+            #     (perf/illegal-retime) costs this STANDALONE harness ~2.46 MHz
+            #     (41.70 -> 39.24 mean, p ~ 0.03) while GAINING ~1.95 MHz on the
+            #     real ULX3S j4-rom SoC (32.75 -> 34.70). The harness exposes
+            #     inst_i.d as a top-level PIN, so evaluating the checks there is a
+            #     pin->logic->FF path; in-SoC that signal is register-sourced and
+            #     the same move shortens the binding path. The harness overstates
+            #     this change's cost by construction.
+            # 37 sits below the measured worst seed (37.74) with margin. Tighten
+            # again if the harness is ever made representative of in-SoC fanin.
+            j2)  floor=37 ;;                    # J2 ~41-43 MHz representative
             j4)  floor=35 ;;                    # J4 == J2 core today (margin vs ~42-43 noisy Fmax)
             j2c) floor=18 ;;                    # cpu+cache, single-clock CDC-limited
             j4c) floor=18 ;;

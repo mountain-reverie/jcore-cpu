@@ -253,19 +253,19 @@ package cpu2j0_components_pack is
     -- is the branch PC (the fetch PC is held across the delayed branch), so the
     -- normal tlb_exc_pc = ma_pc - 2 bias undershoots; when ma_dslot='1' the bias is
     -- ma_pc + 2 instead, yielding SPC = TLBPC - 4 = branch PC - 2 = branch restart.
-    ma_dslot           : std_logic;
-    tlb_fault_zreg     : std_logic_vector(4 downto 0);
-    tlb_restore_val    : std_logic_vector(31 downto 0);
-    tlb_restore_pend   : std_logic;
-    mac_s              : std_logic;
-    data_o_size        : mem_size_t;
-    data_o_unsigned    : std_logic; -- SH2A_ARCH only: MOVU.B/MOVU.W zero-extend
-    data_o_lock        : std_logic;
-    data_o             : cpu_data_o_t;
-    inst_o             : cpu_instruction_o_t;
-    pc_inc             : std_logic_vector(31 downto 0);
-    if_dr              : std_logic_vector(15 downto 0);
-    if_dr_next         : std_logic_vector(15 downto 0);
+    ma_dslot         : std_logic;
+    tlb_fault_zreg   : std_logic_vector(4 downto 0);
+    tlb_restore_val  : std_logic_vector(31 downto 0);
+    tlb_restore_pend : std_logic;
+    mac_s            : std_logic;
+    data_o_size      : mem_size_t;
+    data_o_unsigned  : std_logic; -- SH2A_ARCH only: MOVU.B/MOVU.W zero-extend
+    data_o_lock      : std_logic;
+    data_o           : cpu_data_o_t;
+    inst_o           : cpu_instruction_o_t;
+    pc_inc           : std_logic_vector(31 downto 0);
+    if_dr            : std_logic_vector(15 downto 0);
+    if_dr_next       : std_logic_vector(15 downto 0);
     -- Retimed companions of if_dr_next: the opcode-derived illegal checks are
     -- computed here (in lockstep with if_dr_next, same write-enable) instead
     -- of combinationally from if_dr at the if_en transfer point, moving that
@@ -274,13 +274,13 @@ package cpu2j0_components_pack is
     -- exact mirrored enables and why the PRIV_ARCH term is NOT moved here.
     illegal_delay_slot_next : std_logic;
     illegal_instr_next      : std_logic;
-    illegal_delay_slot : std_logic;
-    illegal_instr      : std_logic;
-    if_en              : std_logic;
-    m_dr               : std_logic_vector(31 downto 0);
-    m_dr_next          : std_logic_vector(31 downto 0);
-    m_en               : std_logic;
-    slot               : std_logic;
+    illegal_delay_slot      : std_logic;
+    illegal_instr           : std_logic;
+    if_en                   : std_logic;
+    m_dr                    : std_logic_vector(31 downto 0);
+    m_dr_next               : std_logic_vector(31 downto 0);
+    m_en                    : std_logic;
+    slot                    : std_logic;
     -- pipelines the enter_debug signal to delay it so that single stepping
     -- instructions works and debug mode is re-entered after one instruction.
     -- The length of this depends on how many microcode lines there are in the

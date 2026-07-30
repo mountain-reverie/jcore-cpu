@@ -101,6 +101,15 @@
 !         ASIDR generation bump (same 12-bit ASID, gen_low 0->1) -- the
 !         TSB fast-path tag_lo compare must treat this as a miss and force
 !         a real re-walk, exactly like scenario 3's cross-ASID case
+!   r9=18 scenario 7 (write-protect fault, REAL entry.S prologue): fault-
+!         count global did not read back as exactly 3 (do_page_fault() not
+!         reached exactly once more for VA_E's store)
+!   r9=19 scenario 7: k_faultcode (error_code as REAL entry.S/do_page_fault
+!         built it from r5, NOT the harness) != (FAULT_CODE_PROT|
+!         FAULT_CODE_WRITE) == 0x09 -- proves entry.S reads MMU_FSR and
+!         extu.b's it into r5, rather than the old `mov #0, r5` gap
+!   r9=20 scenario 7: captured faulting address != VA_E (confirms the rest
+!         of the shipped prologue is otherwise intact)
 !
 ! do_page_fault() has a real body from Task 3/SP2 scenarios 4-5: records a
 ! fault-count + faulting address into scratch globals, restores SR.RB=0
@@ -254,6 +263,12 @@ kmain:
         ! page/PFN, distinct from va_A's). Same pgd[0]/pte-table range. ----
         mov.l   k_pte_d, r0
         mov.l   v_pte_d, r1
+        mov.l   r1, @r0
+
+        ! ---- Scenario 7 pte: VA_E present+valid, read-only (W clear).
+        ! Same pgd[0]/pte-table range. ----
+        mov.l   k_pte_e, r0
+        mov.l   v_pte_e, r1
         mov.l   r1, @r0
 
         ! ---- Zero the do_page_fault handshake globals; point the fault
@@ -548,6 +563,47 @@ s5_assert:
         mov.l   v_seed_d, r1 ; cmp/eq r1, r8 ; mov #16, r9 ; bf _fail
                                  ! translation after generation bump wrong/stale
 
+        ! ================= SCENARIO 7: write-protect fault (REAL entry.S) ====
+        ! VA_E's pte is present+valid but read-only (PTEL W clear). Storing
+        ! to it takes a real DPROT_W through the REAL linux@jcore entry.S
+        ! prologue (arch/sh/kernel/cpu/jcore/entry.S), which now reads
+        ! MMU_FSR and extu.b's it into r5 before calling do_page_fault --
+        ! this is the gap a stubbed/hand-rolled prologue could never catch.
+        mov.l   k_saved_sp, r0
+        mov.l   r15, @r0
+        mov.l   k_fault_target, r0
+        mov.l   s7_assert_ptr, r1
+        mov.l   r1, @r0
+
+        mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0   ! flush TLB, AT on
+
+        mov.l   va_E, r0
+        mov.l   r0, @r0                 ! faulting store -> DPROT_W -> real
+                                         ! entry.S -> real do_page_fault stub
+
+        mov     #92, r9
+        bra     _fail
+        nop
+        .align 2
+s7_assert_ptr:  .long s7_assert
+s7_assert:
+        mov.l   k_mmucr, r0 ; mov #0, r1 ; mov.l r1, @r0   ! AT off for readback
+
+        mov.l   k_faultcnt, r0
+        mov.l   @r0, r1
+        mov     #3, r2
+        cmp/eq  r2, r1 ; mov #18, r9 ; bf _fail             ! fault-count not exactly 3
+
+        mov.l   k_faultcode, r0
+        mov.l   @r0, r1
+        mov     #0x09, r2
+        cmp/eq  r2, r1 ; mov #19, r9 ; bf _fail             ! error_code != (PROT|WRITE)
+
+        mov.l   k_faultaddr, r0
+        mov.l   @r0, r1
+        mov.l   va_E, r2
+        cmp/eq  r2, r1 ; mov #20, r9 ; bf _fail             ! captured address != VA_E
+
         mov     #0, r9
         bra     _done
         nop
@@ -588,6 +644,7 @@ k_faultcnt:     .long 0x80029004        ! do_page_fault-recorded fault count
 k_faultaddr:    .long 0x80029008        ! do_page_fault-recorded faulting address
 k_fault_target: .long 0x8002900C        ! address do_page_fault jumps to next
 k_saved_sp:     .long 0x80029010        ! r15 snapshot restored by do_page_fault
+k_faultcode:    .long 0x80029014        ! do_page_fault-recorded error_code (r5)
 unexpected_fault_ptr: .long unexpected_fault
 
 ! ---- Scenario 6 scratch: a fresh mapped VA_D (present+valid, own backing
@@ -602,6 +659,17 @@ k_backing_d:    .long 0x80044000
 v_seed_d:       .long 0xD00DFEED
 k_asidr_gen0:   .long 0x00000002        ! ASID X=2, gen_low=0
 k_asidr_gen1:   .long 0x00001002        ! ASID X=2, gen_low=1 (X | 0x1000)
+
+! ---- Scenario 7 scratch: VA_E present+valid, read-only (PTEL X|U|C =
+! 0x68, W clear), own backing page. A store must take a real DPROT_W
+! (walker installs the read-only translation, hardware then traps the
+! write against a present-but-non-writable TLB entry) through the REAL
+! linux@jcore entry.S prologue, proving it builds error_code from MMU_FSR
+! instead of the old `mov #0, r5`. ----
+va_E:           .long 0x00110000        ! pte_index 0x44 -> k_ptetbl+0x110
+k_pte_e:        .long 0x80024110
+v_pte_e:        .long 0x00048069        ! PFN(0x00048000)|V|C|U|X (0x68|0x01), W clear
+k_backing_e:    .long 0x80048000
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -646,6 +714,8 @@ ENTRY(do_page_fault)
         mov.l   r1, @r0
         mov.l   dpf_faultaddr, r0
         mov.l   r6, @r0
+        mov.l   dpf_faultcode, r0
+        mov.l   r5, @r0                 ! record error_code as entry.S built it
 
         ! ---- SR.RB=1 -> 0: harness code (incl. the assert target) runs
         ! against bank 0; entry.S never clears RB itself. ----
@@ -672,6 +742,7 @@ dpf_faultaddr:  .long 0x80029008        ! == k_faultaddr
 dpf_rbclear:    .long 0xDFFFFFFF        ! == p_rbclear (duplicated: forward-only pc-rel)
 dpf_saved_sp:   .long 0x80029010        ! == k_saved_sp
 dpf_target:     .long 0x8002900C        ! == k_fault_target
+dpf_faultcode:  .long 0x80029014        ! == k_faultcode
 
 ! unexpected_fault -- scenarios 1-3 point k_fault_target here (they expect
 ! zero faults). Same behavior the original Task-1 do_page_fault stub had:

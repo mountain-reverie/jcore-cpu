@@ -110,6 +110,19 @@
 !         extu.b's it into r5, rather than the old `mov #0, r5` gap
 !   r9=20 scenario 7: captured faulting address != VA_E (confirms the rest
 !         of the shipped prologue is otherwise intact)
+!   r9=21 scenario 8 (TSB invalidation on TLB flush): do_page_fault() was
+!         reached a SECOND time for VA_F's store. The first episode's
+!         handler already set _PAGE_DIRTY and called the REAL
+!         local_flush_tlb_all(); if the store still faults after that, the
+!         flush invalidated only the hardware TLB and left the stale
+!         read-only slot live in the software TSB, so the fast path
+!         reinstalls it forever -- the C1 livelock. THIS is the code the
+!         guard reports when the tlb-jcore.c TSB-memset fix is absent.
+!   r9=22 scenario 8: fault-count global did not read back as exactly 4
+!         (VA_F's store must cost exactly ONE do_page_fault episode on
+!         top of scenarios 4/5/7's three)
+!   r9=23 scenario 8: VA_F's backing page does not hold the stored value --
+!         the store "completed" without actually writing through
 !
 ! do_page_fault() has a real body from Task 3/SP2 scenarios 4-5: records a
 ! fault-count + faulting address into scratch globals, restores SR.RB=0
@@ -269,6 +282,14 @@ kmain:
         ! Same pgd[0]/pte-table range. ----
         mov.l   k_pte_e, r0
         mov.l   v_pte_e, r1
+        mov.l   r1, @r0
+
+        ! ---- Scenario 8 pte: VA_F present+valid, WRITABLE in the Linux pte
+        ! but CLEAN (_PAGE_DIRTY clear), so jcore_pte_to_ptel() withholds
+        ! PTEL.W and the first store must trap. Same pgd[0]/pte-table
+        ! range. ----
+        mov.l   k_pte_f, r0
+        mov.l   v_pte_f, r1
         mov.l   r1, @r0
 
         ! ---- Zero the do_page_fault handshake globals; point the fault
@@ -604,9 +625,115 @@ s7_assert:
         mov.l   va_E, r2
         cmp/eq  r2, r1 ; mov #20, r9 ; bf _fail             ! captured address != VA_E
 
+        ! ================= SCENARIO 8: TSB invalidation on TLB flush ========
+        ! The C1 guard. Everything above runs ONE fault episode per scenario
+        ! against a do_page_fault stub that never repairs the mapping, so
+        ! none of them can observe what happens on the SECOND touch of a page
+        ! whose pte was fixed and whose TLB was then flushed. That is exactly
+        ! where the software TSB and the hardware TLB can diverge:
+        ! MMUCR.TI invalidates only the hardware TLB, while the ex.S fast
+        ! path treats a TSB hit as authoritative and reinstalls it with
+        ! LDTLB.RN without re-reading the page table.
+        !
+        ! VA_F is present+valid and writable in the Linux pte but CLEAN, so
+        ! jcore_pte_to_ptel() withholds PTEL.W. Sequence:
+        !
+        !   episode 1: store -> DMISS_W -> TSB miss -> real
+        !              __jcore_tlb_walk() installs a READ-ONLY entry AND
+        !              writes that read-only PTEL into the TSB slot ->
+        !              store retries -> DPROT_W -> real entry.S ->
+        !              do_page_fault stub -> s8_ep1.
+        !   s8_ep1:    models the kernel's repair: sets _PAGE_DIRTY in the
+        !              pte (what handle_mm_fault/ptep_set_access_flags does)
+        !              and then calls the REAL local_flush_tlb_all() out of
+        !              tlb-jcore.o -- not a hand-rolled MMUCR.TI strobe, so
+        !              the fix under test is the one actually shipped -- and
+        !              RTEs back to the store.
+        !   episode 2: MUST NOT HAPPEN. With the TSB left stale, the retried
+        !              store takes DMISS_W, hits the stale W=0 slot,
+        !              reinstalls read-only, takes DPROT_W, and loops
+        !              forever. s8_ep2 catches that as r9=21 instead of
+        !              hanging the simulation.
+        !
+        ! So: fails with Result=21 without the tlb-jcore.c fix, passes with
+        ! it, and the store completing at all is the termination proof
+        ! scenario 7 could not give.
+        mov.l   k_saved_sp, r0
+        mov.l   r15, @r0
+        mov.l   k_fault_target, r0
+        mov.l   s8_ep1_ptr, r1
+        mov.l   r1, @r0
+
+        mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0   ! flush TLB, AT on
+
+        mov.l   va_F, r0
+        mov.l   r0, @r0                 ! episode 1; re-executed by s8_ep1's
+                                         ! RTE and required to COMPLETE then.
+                                         ! r0 is re-established by s8_ep1
+                                         ! before the RTE (the fault path
+                                         ! clobbers bank-0 r0-r7).
+
+        ! ---- Reached only when the store finally retires. ----
+        mov.l   k_mmucr, r0 ; mov #0, r1 ; mov.l r1, @r0   ! AT off for readback
+
+        mov.l   k_faultcnt, r0
+        mov.l   @r0, r1
+        mov     #4, r2
+        cmp/eq  r2, r1 ; mov #22, r9 ; bf _fail             ! fault-count not exactly 4
+
+        mov.l   k_backing_f, r0
+        mov.l   @r0, r1
+        mov.l   va_F, r2
+        cmp/eq  r2, r1 ; mov #23, r9 ; bf _fail             ! store did not write through
+
         mov     #0, r9
         bra     _done
         nop
+
+        .align 2
+s8_ep1_ptr:     .long s8_ep1
+
+! Episode-1 fault handler (jumped to by the do_page_fault stub, SR.RB
+! already 0 and r15 already restored to the harness stack). Repairs the
+! pte, flushes via the real kernel routine, arms the second-episode trap,
+! then resumes the faulting store. SPC/SSR still hold the store's restart
+! PC and its SR (RB=0), untouched by entry.S/do_page_fault, so RTE lands
+! back on the store. local_flush_tlb_all() is plain SH ABI and preserves
+! r8-r15, so the harness's r8/r9/r15 survive the call.
+s8_ep1:
+        mov.l   s8_k_pte_f, r0
+        mov.l   @r0, r1
+        mov     #0x10, r2               ! _PAGE_DIRTY (pgtable-bits-jcore.h)
+        or      r2, r1
+        mov.l   r1, @r0                 ! pte is now writable AND dirty
+
+        mov.l   s8_k_fault_target, r0   ! any further episode is a failure
+        mov.l   s8_ep2_ptr, r1
+        mov.l   r1, @r0
+
+        mov.l   s8_p_lfta, r0
+        jsr     @r0                     ! REAL local_flush_tlb_all()
+        nop                              ! (tlb-jcore.o): MMUCR.TI strobe +
+                                         ! the TSB memset that is the fix
+
+        mov.l   s8_va_F, r0             ! re-establish the store's operand
+        rte
+        nop
+
+! Second do_page_fault episode for VA_F == the C1 livelock. Reported, not
+! looped, so the failure is a deterministic Result=21 rather than a
+! stop-time timeout.
+s8_ep2:
+        mov     #21, r9
+        bra     _fail
+        nop
+
+        .align 2
+s8_k_pte_f:       .long 0x80024114      ! == k_pte_f  (duplicated: mov.l is
+s8_k_fault_target:.long 0x8002900C      ! == k_fault_target   PC-relative
+s8_ep2_ptr:       .long s8_ep2          !                     forward-only)
+s8_p_lfta:        .long local_flush_tlb_all
+s8_va_F:          .long 0x00114000      ! == va_F
 
         .align 2
 p_rbclear:      .long 0xDFFFFFFF
@@ -615,13 +742,13 @@ k_pgd:          .long 0x80020000
 k_ptetbl:       .long 0x80024000
 k_pte:          .long 0x80024100        ! pte_index(0x00100000) = 0x40 -> +0x100
 v_pte:          .long 0x000400B9        ! PFN(0x00040000) | V|C|U|W|D (0x1|0x8|0x20|0x80|0x10)
-k_tsb:          .long 0x80028000
+k_tsb:          .long 0x80028000        ! == jcore_boot_tsb (see the equate below)
 k_backing:      .long 0x80040000
 v_seed:         .long 0xC0FFEE00
 k_ttb_a:        .long 0xFF000008        ! MMU_TTB
 k_vbr:          .long jcore_vbr_base
 k_tsbbr_a:      .long 0xFF000014        ! TSBBR
-v_tsbbr:        .long 0x80028004
+v_tsbbr:        .long 0x80028004        ! jcore_boot_tsb | TSB_SIZE_LOG=4
 k_tsbcfg_a:     .long 0xFF000018        ! TSBCFG
 v_tsbcfg:       .long 0x00000061
 k_mmucr:        .long 0xFF000010        ! MMUCR
@@ -670,6 +797,17 @@ va_E:           .long 0x00110000        ! pte_index 0x44 -> k_ptetbl+0x110
 k_pte_e:        .long 0x80024110
 v_pte_e:        .long 0x00048069        ! PFN(0x00048000)|V|C|U|X (0x68|0x01), W clear
 k_backing_e:    .long 0x80048000
+
+! ---- Scenario 8 scratch: VA_F present+valid, USER, EXEC, CACHEABLE and
+! _PAGE_WRITE set, but _PAGE_DIRTY CLEAR -- the clean-writable case
+! jcore_pte_to_ptel() deliberately installs read-only so the first store
+! traps (dirty-bit emulation; J4 has no hardware initial-page-write
+! exception). Own backing page so the write-through check is unambiguous.
+va_F:           .long 0x00114000        ! pte_index 0x45 -> k_ptetbl+0x114
+k_pte_f:        .long 0x80024114
+v_pte_f:        .long 0x0004C0E9        ! PFN(0x0004C000)|W|X|U|C|V, D and
+                                        ! ACCESSED clear (0x80|0x40|0x20|0x8|0x1)
+k_backing_f:    .long 0x8004C000
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -773,35 +911,57 @@ ENTRY(arch_local_save_flags)
         rts
         nop
 
-! memset(s, c, n) / jcore_boot_tsb -- link-only stubs for tlb-jcore.o's
-! jcore_tsb_flush_on_generation() (parallel Linux-side ASID-generation work,
-! S-I3), pulled in transitively now that tlb-jcore.c references them. NEVER
-! actually invoked by this harness: get_mmu_context()/the version-wrap path
-! that calls jcore_tsb_flush_on_generation() is not exercised here -- scenario
-! 6 advances ASIDR's gen_low directly by hand, it never wraps a generation
-! counter. A minimal byte-store loop and a reserved .bss buffer are enough
-! to satisfy the link. r4=s, r5=c, r6=n; returns s in r0 (SH memset ABI).
+! memset(s, c, n) / jcore_boot_tsb -- referenced by tlb-jcore.o's
+! jcore_tsb_flush_on_generation() (ASID-generation wrap, S-I3) and, since
+! the C1 fix, by local_flush_tlb_all() as well -- which scenario 8 DOES
+! invoke for real. So neither is a link-only stub any more.
+!
+! jcore_boot_tsb must therefore BE the TSB the hardware is pointed at
+! (TSBBR, k_tsb below), not a separate buffer: if the kernel memset()s one
+! array while the MMU hashes into another, local_flush_tlb_all()'s TSB
+! invalidation is a no-op here and scenario 8 would pass vacuously. Defined
+! as an absolute symbol at k_tsb's address rather than a .bss array so
+! there is exactly one TSB and the equality is stated, not hoped for. The
+! kernel memsets JCORE_BOOT_TSB_BYTES (4096) from it; 0x80028000..0x80029000
+! is reserved for that and ends exactly where the scratch globals (k_wcnt)
+! begin.
+        .globl  jcore_boot_tsb
+jcore_boot_tsb = 0x80028000
+
+! r4=s, r5=c, r6=n; returns s in r0 (SH memset ABI). Word-store fast path
+! for the aligned case: the kernel's TSB memset is 4096 bytes and a
+! byte-at-a-time loop costs ~25k cycles inside the 200us guard budget.
 ENTRY(memset)
-        mov     r4, r3                  ! save s for the return value
-1:      tst     r6, r6
+        mov     r4, r3                  ! save s
+        extu.b  r5, r5
+        mov     r4, r0
+        or      r6, r0
+        tst     #3, r0                  ! s and n both 4-aligned?
+        bf      3f
+        tst     r6, r6
+        bt      2f
+        mov     r5, r2                  ! splat c into all four bytes
+        shll8   r2 ; or r5, r2
+        mov     r2, r1
+        shll16  r1 ; or r1, r2
+1:      mov.l   r2, @r4
+        add     #4, r4
+        add     #-4, r6
+        tst     r6, r6
+        bf      1b
+        bra     2f
+        nop
+3:      tst     r6, r6                  ! byte-at-a-time fallback
         bt      2f
         mov.b   r5, @r4
         add     #1, r4
         add     #-1, r6
-        bra     1b
+        bra     3b
         nop
 2:      mov     r3, r0
         rts
         nop
 
-        .bss
-        .balign 16
-        .globl  jcore_boot_tsb
-        .type   jcore_boot_tsb, @object
-        .size   jcore_boot_tsb, 4096
-jcore_boot_tsb:
-        .skip   4096
-        .text
 
 ! jcore_tlb_walk_mark_accessed(pte_t *ptep, pte_t entry) -- Task 2: this
 ! STRONG definition shadows tlb-jcore.o's __weak default (mmulinux.o links

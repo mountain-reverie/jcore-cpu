@@ -318,8 +318,10 @@ jobs:
 
           # SP2: mmulinux links the REAL linux@jcore MMU TLB-miss handler
           # objects (built by kbuild above, via the WIP J4 gas/ld) against a
-          # bare-metal harness (sim/tests/mmulinux.S) covering scenarios 1-3
-          # (real __jcore_tlb_walk install, warm TSB hit, ASID isolation).
+          # bare-metal harness (sim/tests/mmulinux.S) covering scenarios 1-8
+          # (real __jcore_tlb_walk install, warm TSB hit, ASID isolation,
+          # real-fault handoff, STALE, ASID-generation bump, DPROT_W through
+          # the real entry.S prologue, and TSB invalidation on TLB flush).
           # LINUX_SRC/J4GAS/J4LD/J4BIN are exported above; sim/tests/Makefile's
           # `?=` defaults pick them up. 200us matches sim/linux_sim.sh.
           run_guard mmulinux "" 200us 120

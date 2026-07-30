@@ -217,10 +217,11 @@ ENTRY(after)
         ! resume, so it is used here for a *voluntary* mode drop too.
         mov.l   p_userok_page_addr, r0
         .word   0x404E                  ! LDC r0, SPC (SPC = &_user_ok_page)
-        stc     sr, r3
+        stc     sr, r1
         mov.l   p_mdmask, r4
-        and     r4, r3                  ! r3 = SR with MD cleared
-        .word   0x413E                  ! LDC r3, SSR (SSR = user-mode SR)
+        and     r4, r1                  ! r1 = SR with MD cleared (0x413E
+                                         ! hardcodes Rm=r1, see _v_trapa above)
+        .word   0x413E                  ! LDC r1, SSR (SSR = user-mode SR)
         rte                             ! PC:=SPC, SR:=SSR together
         nop
 

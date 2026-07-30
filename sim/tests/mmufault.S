@@ -331,10 +331,11 @@ ENTRY(after_d)
         ! Drop to user mode AND jump to _user_tramp_e via RTE.
         mov.l   p_tramp_e_addr, r0
         .word   0x404E                  ! LDC r0, SPC (SPC = &_user_tramp_e)
-        stc     sr, r3
+        stc     sr, r1
         mov.l   p_mdmask, r4
-        and     r4, r3                  ! r3 = SR with MD cleared
-        .word   0x413E                  ! LDC r3, SSR
+        and     r4, r1                  ! r1 = SR with MD cleared (0x413E
+                                         ! hardcodes Rm=r1)
+        .word   0x413E                  ! LDC r1, SSR
         rte                             ! PC:=SPC, SR:=SSR together
         nop
 
@@ -393,10 +394,11 @@ ENTRY(after_e)
         ! Drop to user mode AND jump to _user_tramp_f via RTE.
         mov.l   p_tramp_f_addr, r0
         .word   0x404E                  ! LDC r0, SPC (SPC = &_user_tramp_f)
-        stc     sr, r3
+        stc     sr, r1
         mov.l   p_mdmask, r4
-        and     r4, r3                  ! r3 = SR with MD cleared
-        .word   0x413E                  ! LDC r3, SSR
+        and     r4, r1                  ! r1 = SR with MD cleared (0x413E
+                                         ! hardcodes Rm=r1)
+        .word   0x413E                  ! LDC r1, SSR
         rte                             ! PC:=SPC, SR:=SSR together
         nop
 

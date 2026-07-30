@@ -104,6 +104,8 @@ A **miss** (no matching entry) raises `IMISS` (`0x040`), `DMISS_R` (`0x060`), or
 know the access kind without reading `EXPEVT`. `EXPEVT` holds the cause and `TEA`
 the faulting virtual address (both privileged-read only).
 
+A supplementary read-only register, `MMUFSR` (MMU Fault Status Register, P4 MMIO `0xFF000028`), latches the fault-cause `KIND` and access-type flags alongside `TEA` and `PTEH`. Its low byte is deliberately formatted as a Linux `FAULT_CODE_*` image: `[0] WRITE`, `[2] ITLB`, `[3] PROT`, `[4] USER`; the high nibble encodes `KIND` (1–7: miss/prot variants, 0 if no fault latched). **Critically, `MMUFSR` distinguishes `DPROT_R` from `DPROT_W`**, which both report `EXPEVT=0x0C0` and vector to `VBR+0x400`. The entire low byte for a `MULTI_HIT` fault is zero (since it is not a page fault). Software must read `MMUFSR` in the exception prologue; it is overwritten by the next fault.
+
 **Privileged-mode (`MD=1`) rules.** The kernel honours `X` and `W` (it cannot
 execute an `X=0` page nor write a `W=0` page — the `MD` term gates only the `U`
 check). The kernel does **not** enforce `U` against itself: it may read, write,
@@ -115,7 +117,8 @@ VA[11:0]}` (28-bit physical region) and used to index the PIPT L1 caches; `C`
 selects cache vs. uncached bypass.
 
 *Guards: `mmuxlate` (basic translate), `mmufault` (all six miss/prot classes
-incl. user-mode `IPROT`/`DPROT_R` and `DPROT_W`), `mmureloc`/`mmurelocif`/
+incl. user-mode `IPROT`/`DPROT_R` and `DPROT_W`), `mmufsr` (fault status register
+and `DPROT_R`/`DPROT_W` discrimination), `mmureloc`/`mmurelocif`/
 `mmurelocbp` (VA→PA relocation for D, I, and the C=0 bypass).*
 
 ---
@@ -258,6 +261,7 @@ the design repository's `docs/mmu/security-review.md`.
 | VA→PA relocation (D / I / C=0 bypass) | `mmureloc`, `mmurelocif`, `mmurelocbp` |
 | Faulting store does not mutate memory | `mmustore` |
 | Per-access fault vectors + EXPEVT/TEA | `mmufault`, `mmuimiss` |
+| Fault status register (DPROT_R vs DPROT_W discrimination) / fault status latching | `mmufsr` |
 | Privileged-register / instruction trap | `mmureg`, `mmuguard`, `privmode` |
 | SR / bank state on exception entry | `mmusr` |
 | Precise-exception fault transparency (MAC, auto-inc, …) | `m8_*` family |
@@ -414,6 +418,7 @@ instructions against the instruction's start address.
 | **LDTLB.RN** | Fused *load-TLB-and-return* (`0x0068`): an atomic `LDTLB`+`RTE` with **no** delay slot, used by the miss handler to install and resume in one step. |
 | **MD** | `SR.MD`, the mode bit: `1` = privileged (kernel), `0` = user. Gates the `U` permission check and access to privileged registers/instructions. |
 | **MMUCR** | MMU Control Register (P4 MMIO `0xFF00_0010`): `AT` (bit 0) enables translation, `TI` (bit 2) flushes the TLB. |
+| **MMUFSR** | MMU Fault Status Register (P4 MMIO `0xFF000028`): read-only latch of the last fault. `[12] VALID`, `[11:8] KIND`, `[7:5] reserved`, `[4] USER`, `[3] PROT`, `[2] ITLB`, `[1] INITIAL` (always 0), `[0] WRITE`. KIND values: 1=IMISS, 2=DMISS_R, 3=DMISS_W, 4=IPROT, 5=DPROT_R, 6=DPROT_W, 7=MULTI_HIT, 0=none. Low byte is a Linux `FAULT_CODE_*` image. Latched on first fault cycle alongside TEA/PTEH; overwritten by next fault. |
 | **NRU** | Not-Recently-Used — the TLB's replacement policy for choosing which entry `LDTLB` overwrites. |
 | **P0–P4** | The SH-4 virtual segments: P0 (`0x0…`) user+kernel translated; P1 (`0x8…`) kernel cached physical window; P2 (`0xA…`) kernel uncached physical window; P3 (`0xC…`) kernel translated; P4 (`0xE…/0xF…`) privileged control/MMIO. |
 | **PA / VA** | Physical address / Virtual address. |

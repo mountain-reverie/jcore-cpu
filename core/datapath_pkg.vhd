@@ -29,7 +29,7 @@ package datapath_pack is
   -- type is used only by a datapath process variable inside MMU_ARCH-guarded
   -- code, so it is dead/eliminated in base builds.
 
-  type p4_sel_t is (p4_none, p4_mmucr, p4_ttb, p4_tea, p4_tsbbr, p4_tsbcfg, p4_tsbptr);
+  type p4_sel_t is (p4_none, p4_mmucr, p4_ttb, p4_tea, p4_tsbbr, p4_tsbcfg, p4_tsbptr, p4_mmufsr);
 
   function seg_decode (
     va : std_logic_vector(31 downto 0)
@@ -96,6 +96,7 @@ package datapath_pack is
       tlb_exc_pend       : in    std_logic := '0';
       tlb_fault_va       : in    std_logic_vector(31 downto 0) := (others => '0');
       tlb_exc_expevt     : in    std_logic_vector(11 downto 0) := (others => '0');
+      tlb_exc_fsr        : in    std_logic_vector(12 downto 0) := (others => '0');
       delay_slot         : in    std_logic := '0';
       tlb_exc_is_i       : in    std_logic := '0';
       if_pc              : out   std_logic_vector(31 downto 0);

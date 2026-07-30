@@ -85,6 +85,10 @@ entity datapath is
 		     tlb_exc_pend   : in std_logic := '0';
 		     tlb_fault_va   : in std_logic_vector(31 downto 0) := (others => '0');
 		     tlb_exc_expevt : in std_logic_vector(11 downto 0) := (others => '0');
+		     -- MMUFSR partial word from cpu.vhd (KIND/PROT/ITLB/WRITE); this
+		     -- process ORs in VALID (bit12) and USER (bit4, from this.sr.md) at
+		     -- capture time -- see the capture block below.
+		     tlb_exc_fsr    : in std_logic_vector(12 downto 0) := (others => '0');
 		     -- Dynamic delay-slot flag of the instruction currently in EX, phase-
 		     -- aligned to the datapath EX control (registered in decode.vhd in
 		     -- lockstep with pipeline_r). Shadowed at the MA access-launch point as
@@ -801,7 +805,7 @@ end generate;
 
 	ibit <= sr.int_mask;
 
-	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, tlb_fault_va, tlb_exc_expevt, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, tlb_exc_is_i, ex_if_pc)
+	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, tlb_fault_va, tlb_exc_expevt, tlb_exc_fsr, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, tlb_exc_is_i, ex_if_pc)
 	  register this when clk='1' and clk'event reset when rst='1';
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
@@ -849,6 +853,21 @@ end generate;
             -- also needs the full 4 KB VPN.
             this.mmu.pteh(31 downto 12) := tlb_fault_va(31 downto 12);
             this.mmu.pteh(11 downto 0)  := (others => '0');
+            -- MMUFSR (hardware-spec.md §2.9): latch cpu.vhd's KIND/PROT/ITLB/
+            -- WRITE word, OR in VALID (bit12, always set -- capture only runs
+            -- on a real fault) and USER (bit4). USER must come from
+            -- this.sr.md sampled HERE (SSR is not written yet at capture
+            -- time, and tlb_exc_sr is a different, non-synchronized path) --
+            -- same precedent as this.tlb_exc_sr := this.sr; above. MULTI_HIT
+            -- (tlb_exc_fsr(11 downto 8) = "0111") leaves the entire low byte
+            -- (including USER) at 0, per spec.
+            this.mmu.fsr := (others => '0');
+            this.mmu.fsr(12)          := '1';
+            this.mmu.fsr(11 downto 5) := tlb_exc_fsr(11 downto 5);
+            if tlb_exc_fsr(11 downto 8) /= "0111" then
+              this.mmu.fsr(4) := not this.sr.md;
+            end if;
+            this.mmu.fsr(3 downto 0) := tlb_exc_fsr(3 downto 0);
             this.tlb_exc_captured       := '1';
             -- Latch the faulting instruction's restart PC (D-side faults only).
             -- ma_pc still holds the faulting access's launch PC: any following
@@ -1170,6 +1189,7 @@ end generate;
                 elsif ma_ad(7 downto 0) = x"14" then p4_sel_v := P4_TSBBR;
                 elsif ma_ad(7 downto 0) = x"18" then p4_sel_v := P4_TSBCFG;
                 elsif ma_ad(7 downto 0) = x"1C" then p4_sel_v := P4_TSBPTR;
+                elsif ma_ad(7 downto 0) = x"28" then p4_sel_v := P4_MMUFSR;
                 end if;
               end if;
               if MMU_ARCH and seg_v = SEG_P4 then
@@ -1199,6 +1219,7 @@ end generate;
                     when P4_TSBBR  => this.m_dr_next := this.mmu.tsbbr;
                     when P4_TSBCFG => this.m_dr_next := this.mmu.tsbcfg;
                     when P4_TSBPTR => this.m_dr_next := this.mmu.tsbptr;
+                    when P4_MMUFSR => this.m_dr_next := this.mmu.fsr;
                     when others    => this.m_dr_next := (others => '0');
                   end case;
                   this.m_en := '1';

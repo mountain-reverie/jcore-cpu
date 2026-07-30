@@ -201,21 +201,27 @@ ENTRY(after)
         mov     #0, r1
         mov.l   r1, @r0
 
-        ! Drop to user mode (clear SR.MD = bit 30 = 0x40000000).
+        mov     #5, r9                  ! sentinel: user code never trapped back
+
+        ! Drop to user mode AND jump to _user_ok_page (a separate U=1 page)
+        ! using RTE, not a raw ldc-sr/jmp sequence. Our own code page is now
+        ! U=0 (kernel-only, see p_ownpage_flags below); a raw SR write
+        ! followed by a plain jmp/branch has no guaranteed visibility point
+        ! at which "MD has flipped" and "PC has left this U=0 page" happen
+        ! atomically together -- empirically, every nop count tried either
+        ! fetches the target while MD is still stale-1 (SMEP false-fire) or
+        ! fetches a later instruction still on THIS page after MD is already
+        ! visible-0 (spurious user-on-super fault). RTE is the CPU's actual
+        ! atomic PC+SR transition primitive (SPC/SSR -> PC/SR together), the
+        ! same mechanism the exception handlers below already rely on to
+        ! resume, so it is used here for a *voluntary* mode drop too.
+        mov.l   p_userok_page_addr, r0
+        .word   0x404E                  ! LDC r0, SPC (SPC = &_user_ok_page)
         stc     sr, r3
         mov.l   p_mdmask, r4
-        and     r4, r3
-        ldc     r3, sr                  ! MD=0 after this
-        nop
-        nop
-        nop
-        nop
-
-        mov     #5, r9                  ! sentinel: user code never trapped back
-        mov.l   p_userok_page_addr, r0
-        jmp     @r0                     ! ALLOWED: user fetch of U=1,X=1 page
-        nop
-        bra     _fail
+        and     r4, r3                  ! r3 = SR with MD cleared
+        .word   0x413E                  ! LDC r3, SSR (SSR = user-mode SR)
+        rte                             ! PC:=SPC, SR:=SSR together
         nop
 
 ENTRY(after_ok)
@@ -259,14 +265,15 @@ p_userok_page_addr: .long _user_ok_page
 p_ptel_userok:   .long _user_ok_page + 0x68  ! identity PPN | X|U|C, W=0
 p_start_addr:    .long start
 p_pagemask:      .long 0xFFFFF000
-p_ownpage_flags: .long 0x000000E8       ! W|X|U|C -- must be U=1: the negative-
-                                         ! control sub-test's MD-drop sequence
-                                         ! (stc/and/ldc sr + nops + jmp) executes
-                                         ! FROM this page, and once MD flips to 0
-                                         ! mid-sequence a U=0 mapping here would
-                                         ! itself fault (user access to a
-                                         ! supervisor-only page) before ever
-                                         ! reaching _user_ok_page.
+p_ownpage_flags: .long 0x000000C8       ! W|X|C -- U=0 (kernel-only). This is the
+                                         ! guard's OWN code page, always fetched
+                                         ! in supervisor mode; U=1 here would trip
+                                         ! SMEP on the very next instruction fetch
+                                         ! after AT is enabled. The negative-control
+                                         ! sub-test's MD flip happens in the delay
+                                         ! slot of the jmp to _user_ok_page (see
+                                         ! below), so MD=0 is never observed while
+                                         ! fetching from this U=0 page.
 
 #endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 
@@ -309,8 +316,9 @@ _v_trapa:                              ! = VBR + 0x100 = _v_ifetch - 0x300
         mov.l   Htrapa_mdbit, r2
         or      r2, r1
         .word   0x413E                  ! LDC r1, SSR  (force MD=1 -> kernel on RTE)
-        mov.l   Htrapa_resume, r0
-        mov.l   @r0, r0                 ! r0 = after_ok address
+        mov.l   Htrapa_resume, r0        ! r0 = after_ok address (literal constant,
+                                         ! not a pointer-to-variable -- do NOT
+                                         ! dereference again, unlike Hresume below)
         .word   0x404E                  ! LDC r0, SPC
         rte
         nop

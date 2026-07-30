@@ -56,6 +56,15 @@
 !   6  negative control: G=1,U=0 page did not HIT under ASID B (after
 !      switching back to A -- see below, checked in the opposite order)
 
+!
+! ---- _fail integrity net ----
+! _fail writes r9 verbatim to TEST_RESULT_ADDRESS; sim/cpu_ctb.c's test_result()
+! treats any 4-byte write of 0 as PASS. Since the per-sub-test fail-code globals
+! start at 0 until a sub-test sets them, a fault reaching _fail BEFORE the first
+! sub-test runs would otherwise silently report PASS. _fail now clamps r9==0 to
+! 0x7F before the store so 0 can never leave through the fail path. Fail-code
+! globals below use loud sentinels (_g_exp_* = 0xFFFFFFFF, _g_bad_* = small
+! distinct values) so an early exit still names its cause.
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
 
@@ -251,6 +260,10 @@ ENTRY(_done)
         nop
 ENTRY(_fail)
         mov.l   p_test_result, r0
+        tst     r9, r9                  ! integrity net: 0 is the harness PASS token
+        bf      1f                      ! (sim/cpu_ctb.c test_result() accepts any 4B==0
+        mov     #0x7F, r9               ! write as PASS), so _fail must never write it.
+1:
         mov.l   r9, @r0
         bra     _fail
         nop
@@ -295,8 +308,8 @@ Hbad_expevt:    .long _g_bad_expevt
 
         ! ---- Handler globals. ----
         .balign 4
-_g_exp_expevt:  .long 0
-_g_bad_expevt:  .long 0
+_g_exp_expevt:  .long 0xFFFFFFFF        ! sentinel: unset (a real sub-test always overwrites)
+_g_bad_expevt:  .long 0x5A              ! loud fail-code sentinel: names an early fault
 _g_resume:      .long 0
 
         ! ---- Backing-page padding: VA 0x4000 and 0x8000. ----

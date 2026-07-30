@@ -21,6 +21,15 @@
 ! CPU will either re-take an IMISS forever, silently execute past the illegal
 ! word, or hang -- none of which reach "Test Passed".
 
+!
+! ---- _fail integrity net ----
+! _fail writes r9 verbatim to TEST_RESULT_ADDRESS; sim/cpu_ctb.c's test_result()
+! treats any 4-byte write of 0 as PASS. Since the per-sub-test fail-code globals
+! start at 0 until a sub-test sets them, a fault reaching _fail BEFORE the first
+! sub-test runs would otherwise silently report PASS. _fail now clamps r9==0 to
+! 0x7F before the store so 0 can never leave through the fail path. Fail-code
+! globals below use loud sentinels (_g_exp_* = 0xFFFFFFFF, _g_bad_* = small
+! distinct values) so an early exit still names its cause.
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
 
@@ -99,6 +108,10 @@ ENTRY(_done)
         nop
 ENTRY(_fail)
         mov.l   p_test_result, r0
+        tst     r9, r9                  ! integrity net: 0 is the harness PASS token
+        bf      1f                      ! (sim/cpu_ctb.c test_result() accepts any 4B==0
+        mov     #0x7F, r9               ! write as PASS), so _fail must never write it.
+1:
         mov.l   r9, @r0
         bra     _fail
         nop

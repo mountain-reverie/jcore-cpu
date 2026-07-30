@@ -16,17 +16,25 @@
 ! returning to the correct place in the main test body.
 !
 ! Addressing model (cpu_ctb bus):
-!   Binary image mapped flat at VA 0. Page 0 (0x0000-0x0FFF) identity-mapped
-!   in TLB (W+X+U+C=0xE8). Pages 1-4 (0x1000-0x4FFF) padded with zeros so
-!   bus does not fault before the TLB exception fires.  Pages 2-4 are
-!   installed with restricted permissions for protection tests.
+!   `start` links at VA 0x1000 (not VA 0 -- the .vect header occupies the
+!   page before it). Our own code's page is identity-mapped in TLB,
+!   kernel-only (W|X|C=0xC8, no U bit -- U=1 here would trip the SMEP
+!   fail-closed check on the very next fetch once AT is enabled). Pages
+!   1-4 (0x1000-0x4FFF relative VA, i.e. immediately after our own page)
+!   are padded with zeros so the bus does not fault before the TLB
+!   exception fires. Pages 2-4 are installed with restricted permissions
+!   for protection tests. A separate U=1 trampoline page hosts the brief
+!   user-mode instruction streams for sub-tests E and F (see
+!   _user_tramp_e/_user_tramp_f) since our own page is kernel-only.
 !
 ! PTEL flag bit layout (core/tlb.vhd lines 120-126):
 !   bit7=W  bit6=X  bit5=U  bit4=D  bit3=C
-!   page 0 full-access : W|X|U|C = 0xE8
+!   own page  kernel-only: W|X|C   = 0xC8  (no U -- keeps SMEP from firing
+!                                            on our own supervisor fetches)
 !   page 2 read-only   : X|U|C   = 0x68  (W=0 -> DPROT_W on store)
 !   page 3 no-execute  : W|U|C   = 0xA8  (X=0 -> IPROT  on fetch)
 !   page 4 super-only  : W|X|C   = 0xC8  (U=0 -> DPROT_R on user load)
+!   trampoline page    : X|U|C   = 0x68  (user-executable, for E/F)
 !
 ! Fault class coverage:
 !   DMISS_R (0x060) A -- runtime, supervisor, load  from page 1 (unmapped)
@@ -101,11 +109,21 @@ ENTRY(start)
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
-        ! ---- Map page 0 (VA 0x0000-0x0FFF): identity, W+X+U+C = 0xE8. ----
-        mov     #0, r0
-        .word   0x405E                  ! LDC r0, PTEH  (VPN=0, ASID=0)
-        mov.l   p_ptel_page0, r0
-        .word   0x406E                  ! LDC r0, PTEL
+        ! ---- Map our own code's page: identity, kernel-only (no U bit,
+        ! see p_ptel_page0). Computed at runtime (mask &start down to its
+        ! page) rather than hardcoded VPN=0: this test image links with
+        ! `start` at VA 0x1000 (not VA 0), so a hardcoded VPN=0 mapping
+        ! never actually covered the code that needs to keep fetching once
+        ! AT is enabled. ----
+        mov.l   p_start_addr, r0
+        mov.l   p_pagemask, r1
+        and     r1, r0
+        .word   0x405E                  ! LDC r0, PTEH (VPN = start's page, ASID=0)
+        mov.l   p_start_addr, r0
+        and     r1, r0
+        mov.l   p_ptel_page0, r2
+        or      r2, r0
+        .word   0x406E                  ! LDC r0, PTEL = (start & pagemask) | W|X|C
         mov     #0, r0
         .word   0x407E                  ! LDC r0, ASIDR
         .word   0x0038                  ! LDTLB
@@ -257,12 +275,35 @@ ENTRY(after_d)
         ! ==============================================================
         ! Sub-test E: IPROT (EXPEVT=0x0A0) -> VBR+0x400 (_v_tlb)
         ! Map page 3 (VA 0x3000) no-execute (X=0, W|U|C = 0xA8).
-        ! Drop to user mode; I-prot fires when x=0.
+        ! User mode: I-prot fires when x=0. The MD=0 instruction stream
+        ! that performs the jump must NOT execute from this file's own
+        ! code page: that page is now U=0 (kernel-only, p_ptel_page0),
+        ! so any fetch from it while MD=0 would itself spuriously fault
+        ! (user access to a supervisor-only page) before ever reaching
+        ! the intended IPROT target. Instead, drop to user mode AND jump
+        ! straight into a separate U=1 trampoline page (_user_tramp_e)
+        ! via a single RTE -- the same atomic PC+SR transition primitive
+        ! used by mmusmep.S's negative control, for the same reason a
+        ! raw ldc-sr/jmp sequence has no safe timing window here.
         ! ==============================================================
         mov.l   c_page3_pteh, r0
         .word   0x405E                  ! LDC r0, PTEH (VPN=3, ASID=0)
         mov.l   p_ptel_nx, r0
         .word   0x406E                  ! LDC r0, PTEL = 0xA8
+        mov     #0, r0
+        .word   0x407E                  ! LDC r0, ASIDR
+        .word   0x0038                  ! LDTLB
+
+        ! Map the user-mode trampoline page: identity, X|U|C = 0x68.
+        mov.l   p_tramp_addr, r0
+        mov.l   p_pagemask, r1
+        and     r1, r0
+        .word   0x405E                  ! LDC r0, PTEH (VPN=tramp page, ASID=0)
+        mov.l   p_tramp_addr, r0
+        and     r1, r0
+        mov.l   p_ptel_tramp, r2
+        or      r2, r0
+        .word   0x406E                  ! LDC r0, PTEL = (tramp & mask) | X|U|C
         mov     #0, r0
         .word   0x407E                  ! LDC r0, ASIDR
         .word   0x0038                  ! LDTLB
@@ -287,35 +328,44 @@ ENTRY(after_d)
         mov.l   p_after_e, r1
         mov.l   r1, @r0
 
-        ! Drop to user mode (clear SR.MD = bit 30 = 0x40000000).
+        ! Drop to user mode AND jump to _user_tramp_e via RTE.
+        mov.l   p_tramp_e_addr, r0
+        .word   0x404E                  ! LDC r0, SPC (SPC = &_user_tramp_e)
         stc     sr, r3
         mov.l   p_mdmask, r4
-        and     r4, r3
-        ldc     r3, sr                  ! MD=0 after this
-        nop
-        nop
-        nop
-        nop
-
-        ! In user mode: jump to VA 0x3000 (X=0) -> IPROT.
-        mov     #13, r9
-        mov.l   c_page3_va, r0
-        jmp     @r0                     ! FAULTS -> _v_tlb (VBR+0x400), IPROT
-        nop
-
-        bra     _fail
+        and     r4, r3                  ! r3 = SR with MD cleared
+        .word   0x413E                  ! LDC r3, SSR
+        rte                             ! PC:=SPC, SR:=SSR together
         nop
 
 ENTRY(after_e)
         ! ==============================================================
         ! Sub-test F: DPROT_R (EXPEVT=0x0C0) -> VBR+0x400 (_v_tlb)
         ! Map page 4 (VA 0x4000) supervisor-only (U=0, W|X|C = 0xC8).
-        ! Drop to user mode; D-prot fires when u=0 AND md=0 on load.
+        ! User mode: D-prot fires when u=0 AND md=0 on load. As with E,
+        ! the faulting load's own I-fetch must not come from this (now
+        ! U=0) own page while MD=0, so it runs from the trampoline page
+        ! (_user_tramp_f) instead, entered the same RTE way.
         ! ==============================================================
         mov.l   c_page4_pteh, r0
         .word   0x405E                  ! LDC r0, PTEH (VPN=4, ASID=0)
         mov.l   p_ptel_super, r0
         .word   0x406E                  ! LDC r0, PTEL = 0xC8
+        mov     #0, r0
+        .word   0x407E                  ! LDC r0, ASIDR
+        .word   0x0038                  ! LDTLB
+
+        ! Re-map the trampoline page (idempotent; guards against any TLB
+        ! eviction since sub-test E installed it).
+        mov.l   p_tramp_addr, r0
+        mov.l   p_pagemask, r1
+        and     r1, r0
+        .word   0x405E                  ! LDC r0, PTEH (VPN=tramp page, ASID=0)
+        mov.l   p_tramp_addr, r0
+        and     r1, r0
+        mov.l   p_ptel_tramp, r2
+        or      r2, r0
+        .word   0x406E                  ! LDC r0, PTEL = (tramp & mask) | X|U|C
         mov     #0, r0
         .word   0x407E                  ! LDC r0, ASIDR
         .word   0x0038                  ! LDTLB
@@ -340,22 +390,14 @@ ENTRY(after_e)
         mov.l   p_after_f, r1
         mov.l   r1, @r0
 
-        ! Drop to user mode.
+        ! Drop to user mode AND jump to _user_tramp_f via RTE.
+        mov.l   p_tramp_f_addr, r0
+        .word   0x404E                  ! LDC r0, SPC (SPC = &_user_tramp_f)
         stc     sr, r3
         mov.l   p_mdmask, r4
-        and     r4, r3
-        ldc     r3, sr                  ! MD=0 after this
-        nop
-        nop
-        nop
-        nop
-
-        ! In user mode: load from VA 0x4000 (U=0) -> DPROT_R.
-        mov     #16, r9
-        mov.l   c_page4_va, r2
-        mov.l   @r2, r3                 ! FAULTS -> _v_tlb (VBR+0x400), DPROT_R
-
-        bra     _fail
+        and     r4, r3                  ! r3 = SR with MD cleared
+        .word   0x413E                  ! LDC r3, SSR
+        rte                             ! PC:=SPC, SR:=SSR together
         nop
 
 ENTRY(after_f)
@@ -370,10 +412,19 @@ p_rbclear:          .long 0xDFFFFFFF
 p_mdmask:           .long 0xBFFFFFFF
 p_vbr_val:          .long _v_tlb - 0x400 ! VBR so VBR+0x400 = _v_tlb
 p_mmucr:            .long 0xFF000010
-p_ptel_page0:       .long 0x000000E8   ! W|X|U|C
+p_ptel_page0:       .long 0x000000C8   ! W|X|C -- U=0 (kernel-only): this is the
+                                       ! guard's OWN code page, always fetched in
+                                       ! supervisor mode; U=1 here would trip SMEP
+                                       ! on the very next fetch after AT is enabled.
 p_ptel_ro:          .long 0x00000068   ! X|U|C  (W=0 -> DPROT_W)
 p_ptel_nx:          .long 0x000000A8   ! W|U|C  (X=0 -> IPROT)
 p_ptel_super:       .long 0x000000C8   ! W|X|C  (U=0 -> DPROT_R)
+p_ptel_tramp:       .long 0x00000068   ! X|U|C  (trampoline page for E/F user code)
+p_pagemask:         .long 0xFFFFF000
+p_start_addr:       .long start
+p_tramp_addr:       .long _user_tramp_e ! trampoline page anchor (E/F share one page)
+p_tramp_e_addr:     .long _user_tramp_e
+p_tramp_f_addr:     .long _user_tramp_f
 ! handler globals
 p_g_exp_expevt:     .long _g_exp_expevt
 p_g_exp_tea:        .long _g_exp_tea
@@ -393,14 +444,17 @@ c_dmiss_r:          .long 0x00000060
 c_dmiss_w:          .long 0x00000080
 c_iprot:            .long 0x000000A0
 c_dprot:            .long 0x000000C0
-! VA / PTEH constants
-c_page1_va:         .long 0x00001000
-c_page2_va:         .long 0x00002000
-c_page3_va:         .long 0x00003000
-c_page4_va:         .long 0x00004000
-c_page2_pteh:       .long 0x00002000
-c_page3_pteh:       .long 0x00003000
-c_page4_pteh:       .long 0x00004000
+! VA / PTEH constants. Our own code's page occupies VA 0x1000-0x1FFF
+! (start links at 0x1000, not 0 -- the .vect header occupies the page
+! before it), so the fault-target pages below start at 0x2000 to avoid
+! colliding with it.
+c_page1_va:         .long 0x00002000
+c_page2_va:         .long 0x00003000
+c_page3_va:         .long 0x00004000
+c_page4_va:         .long 0x00005000
+c_page2_pteh:       .long 0x00003000
+c_page3_pteh:       .long 0x00004000
+c_page4_pteh:       .long 0x00005000
 ! P4 TEA register
 p_h_tea_addr:       .long 0xFF00000C
 
@@ -590,9 +644,47 @@ _g_bad_expevt:  .long 0x5A              ! loud fail-code sentinels: distinguish 
 _g_bad_tea:     .long 0x5B              ! fault (before any sub-test runs) from result=0
 
         ! ================================================================
-        ! Fault-page padding: VA 0x1000-0x4FFF.
+        ! Fault-page padding, so the bus has real backing under the
+        ! sub-test target VAs (0x2000-0x5FFF) before any TLB exception
+        ! for them is recognized.
         ! ================================================================
 _fault_pages:
-        .space 0x4000, 0
+        .space 0x8000, 0
+
+        ! ================================================================
+        ! User-mode trampoline page for sub-tests E and F, placed AFTER
+        ! _fault_pages (well past 0x5FFF) so its own (.balign 4096)
+        ! identity-mapped page cannot collide with the fixed c_pageN_va
+        ! fault-target constants above. Mapped U=1 at runtime, separate
+        ! from the guard's own (now U=0) code page. Each entry keeps its
+        ! own local literal pool in PC-relative reach (the shared
+        ! globals/constants back near "start" are not).
+        ! ================================================================
+        .balign 4096
+_user_tramp_e:
+        mov     #13, r9                 ! sentinel: no exception -> result 13
+        mov.l   te_page3_va, r0
+        jmp     @r0                     ! FAULTS -> _v_tlb (VBR+0x400), IPROT
+        nop
+        ! RED path only (fault didn't fire): _fail is too far for a short
+        ! bra from this page, so jmp via an absolute-address literal.
+        mov.l   te_fail_addr, r0
+        jmp     @r0
+        nop
+        .balign 4
+te_page3_va: .long 0x00004000
+te_fail_addr: .long _fail
+
+        .balign 4
+_user_tramp_f:
+        mov     #16, r9
+        mov.l   tf_page4_va, r2
+        mov.l   @r2, r3                 ! FAULTS -> _v_tlb (VBR+0x400), DPROT_R
+        mov.l   tf_fail_addr, r0        ! RED path only (fault didn't fire)
+        jmp     @r0
+        nop
+        .balign 4
+tf_page4_va: .long 0x00005000
+tf_fail_addr: .long _fail
 
 #endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH

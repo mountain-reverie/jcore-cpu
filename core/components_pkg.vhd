@@ -96,7 +96,7 @@ package cpu2j0_components_pack is
     tsbbr  : std_logic_vector(31 downto 0);
     tsbcfg : std_logic_vector(31 downto 0);
     tsbptr : std_logic_vector(31 downto 0);
-    -- MMUFSR (M-fsr, hardware-spec §2.9): fault-status snapshot latched on
+    -- MMUFSR (M-fsr, hardware-spec §2.11): fault-status snapshot latched on
     -- every TLB exception, read-only MMIO 0xFF000028. [12]=VALID [11:8]=KIND
     -- [7:5]=rsvd(0) [4]=USER [3]=PROT [2]=ITLB [1]=INITIAL(0) [0]=WRITE.
     -- Distinguishes DPROT_R/DPROT_W, which otherwise share EXPEVT 0x0C0.

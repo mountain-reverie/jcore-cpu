@@ -63,29 +63,30 @@ func TestOverlaps(t *testing.T) {
 	}
 	cases := []struct {
 		name string
-		a    string
-		b    string
+		a, b string
 		want bool
 	}{
-		// Same bits constrain.
+		// Same fixed bits everywhere both constrain.
 		{"identical", "0110nnnnmmmm0011", "0110nnnnmmmm0011", true},
-		// b's don't-care m-field spans fixed 1100; word matching
-		// also matches b. Exact-key comparison miss this.
+		// b's don't-care m-field spans a's fixed 1100; every word matching
+		// a also matches b. Exact-key comparison would miss this.
 		{"nested field over constant", "0000nnnn11001011", "0000nnnnmmmm1011", true},
-		// Differ in low nibble, both fix.
+		// Differ in the low nibble, which both fix.
 		{"disjoint low nibble", "0110nnnnmmmm0011", "0110nnnnmmmm0100", false},
-		// Differ in top nibble.
+		// Differ in the top nibble.
 		{"disjoint top nibble", "0110nnnnmmmm0011", "0100nnnnmmmm0011", false},
 		// Neither constrains any common bit.
+		{"all don't care", "----------------", "0110nnnnmmmm0011", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			m1, k1 := mustParse(t, tc.a)
-			m2, k2 := mustParse(t, tc.b)
-			got := Overlaps(m1, k1, m2, k2)
-			if got != tc.want {
-				t.Errorf("Overlaps(%04X, %04X, %04X, %04X) = %v, want %v",
-					m1, k1, m2, k2, got, tc.want)
+			am, ak := mustParse(t, tc.a)
+			bm, bk := mustParse(t, tc.b)
+			if got := Overlaps(am, ak, bm, bk); got != tc.want {
+				t.Errorf("Overlaps(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+			}
+			if got := Overlaps(bm, bk, am, ak); got != tc.want {
+				t.Errorf("Overlaps is not symmetric for %q, %q", tc.a, tc.b)
 			}
 		})
 	}

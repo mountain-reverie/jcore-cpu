@@ -139,6 +139,8 @@ func TestSearchTwoWordSharesWord1(t *testing.T) {
 	}
 	if len(got[0].Shareable) != 1 {
 		t.Errorf("Shareable = %v, want the movi20 word1", got[0].Shareable)
+	} else if want := "iiiiiiiiiiiiiiii"; !strings.Contains(got[0].Shareable[0], want) {
+		t.Errorf("Shareable[0] = %q, want it to include word2 pattern %q", got[0].Shareable[0], want)
 	}
 }
 

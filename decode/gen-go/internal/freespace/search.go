@@ -97,7 +97,7 @@ func Search(opts Options, claims []Claim) ([]Candidate, error) {
 			cand.Virgin = false
 			if c.ClaimedBy(avoid) {
 				if opts.TwoWord && c.TwoWord {
-					cand.Shareable = append(cand.Shareable, describe(c))
+					cand.Shareable = append(cand.Shareable, describeShareable(c))
 					continue
 				}
 				blocked = true
@@ -118,6 +118,14 @@ func Search(opts Options, claims []Claim) ([]Candidate, error) {
 // describe renders a claim as "VARIANT[,VARIANT]: format" for reporting.
 func describe(c Claim) string {
 	return strings.Join(c.Variants, ",") + ": " + strings.ReplaceAll(c.Format, "\t", " ")
+}
+
+// describeShareable renders a two-word claim like describe, but appends the
+// claim's word2 pattern so the caller can see which extension words are
+// already taken — Search cannot verify a free ext_word[15:12] discriminant
+// remains, since it doesn't know which extension word the caller intends.
+func describeShareable(c Claim) string {
+	return describe(c) + " [ext " + c.Word2 + "]"
 }
 
 // render substitutes the assigned bits back into the form so the result reads

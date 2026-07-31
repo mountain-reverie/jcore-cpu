@@ -102,15 +102,11 @@ func runFreespace(args []string) int {
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "CODE\tSTATUS\tSHADOWS\tNEAREST FAMILY MEMBER")
+	sawShareable := false
 	for _, c := range cands {
-		status := "shadows"
-		if c.Virgin {
-			status = "virgin"
-		}
-		shadows := formatList(c.Shadows)
+		status, shadows := candidateStatus(c)
 		if len(c.Shareable) > 0 {
-			status = "shareable"
-			shadows = formatList(c.Shareable)
+			sawShareable = true
 		}
 		near := "—"
 		if n, ok := freespace.Nearest(c, *family, claims); ok {
@@ -120,6 +116,9 @@ func runFreespace(args []string) int {
 	}
 	w.Flush() //nolint:errcheck
 	fmt.Printf("\n%s: %d candidates survived --avoid, %d of them virgin\n", pattern, total, virgin)
+	if sawShareable {
+		fmt.Println(`note: "shareable?" means only word 1 was compared. Verify a free ext_word[15:12] discriminant remains against the extension words listed.`)
+	}
 	return 0
 }
 
@@ -154,6 +153,28 @@ func resolveForm(rest []string, form, specDir, overlay string) (string, int) {
 	}
 	fmt.Fprintf(os.Stderr, "freespace: no instruction %q in %s\n", rest[0], specDir)
 	return "", 1
+}
+
+// candidateStatus renders a candidate's STATUS and SHADOWS table cells.
+// Shadows and shareable claims are independent findings — a candidate can
+// have both — so both are rendered rather than one overwriting the other.
+func candidateStatus(c freespace.Candidate) (status, shadows string) {
+	status = "shadows"
+	if c.Virgin {
+		status = "virgin"
+	}
+	var cells []string
+	if len(c.Shadows) > 0 {
+		cells = append(cells, formatList(c.Shadows))
+	}
+	if len(c.Shareable) > 0 {
+		status = "shareable?"
+		cells = append(cells, formatList(c.Shareable))
+	}
+	if len(cells) == 0 {
+		return status, "—"
+	}
+	return status, strings.Join(cells, "; ")
 }
 
 // maxShown caps how many claim descriptions a table cell lists. A common

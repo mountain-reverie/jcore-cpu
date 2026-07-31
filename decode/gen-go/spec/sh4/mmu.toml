@@ -92,7 +92,7 @@
 # 0011); the high middle-nibble bit marks the "compare" variant of the read
 # (PTEH read 0101 -> compare 1101; ASIDR read 0111 -> compare 1111). ----
 [[instr]]
-  name = "CMP/EQ.PTEH Rn"
+  name = "CMP/EQ PTEH, Rn"
   privileged = true
   format = "n"
   opcode = "0000 nnnn 1101 0011"
@@ -107,7 +107,7 @@
     ybus = "PTEH"
 
 [[instr]]
-  name = "CMP/EQ.ASID Rn"
+  name = "CMP/EQ ASIDR, Rn"
   privileged = true
   format = "n"
   opcode = "0000 nnnn 1111 0011"

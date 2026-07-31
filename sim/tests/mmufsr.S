@@ -447,7 +447,15 @@ ENTRY(after_f)
         ! VPN 0x8 again as a 16KB superpage (mask=1, covers VPN 0x8..0xB).
         ! The third install's overlap scan evicts VPN 0x8's slot (first
         ! match found) but never reaches VPN 0x9's slot, which also overlaps
-        ! the new superpage's range and so survives. A load from VPN 0x9
+        ! the new superpage's range and so survives. ORDERING DEPENDENCY:
+        ! "first match" is the lowest slot index (core/tlb.vhd's scan runs
+        ! k = 0..31 and latches `dedup` on the first hit), so this relies on
+        ! NRU giving VPN 0x8 a lower slot than VPN 0x9 -- true because they
+        ! are installed in that order with no MMUCR.TI flush between them.
+        ! Do not insert a flush between the first two installs. If this ever
+        ! breaks, the sub-test fails cleanly with result 20/21 (no exception,
+        ! or wrong FSR/EXPEVT) rather than passing for the wrong reason.
+        ! A load from VPN 0x9
         ! then genuinely matches both the surviving VPN 0x9 entry and the
         ! new VPN 0x8 superpage. MULTI_HIT dispatches via General Illegal to
         ! VBR+0x100, NOT through _v_tlb -- reload VBR so VBR+0x100 lands on

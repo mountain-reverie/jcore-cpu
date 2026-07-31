@@ -57,11 +57,11 @@ func Parse32(pattern string) (match, mask uint32, err error) {
 }
 
 // Overlaps reports whether any 16-bit word matches both (match, mask) keys.
-// Two keys overlap agree on every bit position both constrain;
+// Two keys overlap when they agree on every bit position that both constrain;
 // bits either key leaves don't-care cannot separate them.
 //
-// This strictly weaker than key equality, what collision
-// checks in internal/insns internal/spec use. `0000nnnn11001011`
-// `0000nnnnmmmm1011` different masks, different keys, yet every
-// word matching first also matches second.
+// This is strictly weaker than key equality, which is what the collision
+// checks in internal/insns and internal/spec use. `0000nnnn11001011` and
+// `0000nnnnmmmm1011` have different masks, hence different keys, yet every
+// word matching the first also matches the second.
 func Overlaps(m1, k1, m2, k2 uint16) bool { return (m1^m2)&k1&k2 == 0 }

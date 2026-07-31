@@ -51,3 +51,42 @@ func TestParse32(t *testing.T) {
 		t.Error("want length error for short pattern")
 	}
 }
+
+func TestOverlaps(t *testing.T) {
+	mustParse := func(t *testing.T, p string) (uint16, uint16) {
+		t.Helper()
+		m, k, err := Parse(p)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", p, err)
+		}
+		return m, k
+	}
+	cases := []struct {
+		name string
+		a    string
+		b    string
+		want bool
+	}{
+		// Same bits constrain.
+		{"identical", "0110nnnnmmmm0011", "0110nnnnmmmm0011", true},
+		// b's don't-care m-field spans fixed 1100; word matching
+		// also matches b. Exact-key comparison miss this.
+		{"nested field over constant", "0000nnnn11001011", "0000nnnnmmmm1011", true},
+		// Differ in low nibble, both fix.
+		{"disjoint low nibble", "0110nnnnmmmm0011", "0110nnnnmmmm0100", false},
+		// Differ in top nibble.
+		{"disjoint top nibble", "0110nnnnmmmm0011", "0100nnnnmmmm0011", false},
+		// Neither constrains any common bit.
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m1, k1 := mustParse(t, tc.a)
+			m2, k2 := mustParse(t, tc.b)
+			got := Overlaps(m1, k1, m2, k2)
+			if got != tc.want {
+				t.Errorf("Overlaps(%04X, %04X, %04X, %04X) = %v, want %v",
+					m1, k1, m2, k2, got, tc.want)
+			}
+		})
+	}
+}

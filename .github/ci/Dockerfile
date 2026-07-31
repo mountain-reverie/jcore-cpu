@@ -247,11 +247,20 @@ ENV NANGATE_LIB=/opt/nangate45/nangate45.lib
 # ---------------------------------------------------------------------------
 ARG SKY130_VERSION=bdc9412b3e468c102d01b7cf6337be06ec6e9c9a
 ARG IHP_REF=v1.0
-RUN pip3 install --no-cache-dir --break-system-packages ciel \
- && ciel enable --pdk-family sky130 ${SKY130_VERSION} \
+# ciel is pinned: it was previously installed unpinned, and upstream 2.x
+# flattened the `ciel prl path` subcommand group away, which broke every
+# image build with "Error: No such command 'prl'". Rather than swap in the
+# replacement query (`ciel path --pdk-family sky130`), pass an explicit
+# --pdk-root and reference it directly, so the build no longer depends on
+# that CLI surface at all. Bump CIEL_VERSION deliberately, as with every
+# other tool here.
+ARG CIEL_VERSION=2.6.1
+RUN pip3 install --no-cache-dir --break-system-packages ciel==${CIEL_VERSION} \
+ && ciel enable --pdk-root /opt/pdk --pdk-family sky130 ${SKY130_VERSION} \
  && mkdir -p /opt/sky130 \
- && cp "$(ciel prl path)"/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib \
+ && cp /opt/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib \
        /opt/sky130/ \
+ && rm -rf /opt/pdk \
  && test -s /opt/sky130/sky130_fd_sc_hd__tt_025C_1v80.lib
 
 RUN git clone --depth 1 --branch ${IHP_REF} https://github.com/IHP-GmbH/IHP-Open-PDK /tmp/ihp \

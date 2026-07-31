@@ -35,14 +35,13 @@ ARG GHDL_YOSYS_PLUGIN_COMMIT=07a30ed
 # (adds stc expevt/intevt/tra,Rn and the other J4-only mnemonics) rather than
 # stock binutils, pinned by commit SHA for reproducible image builds (a
 # branch ref would make the image non-deterministic as the fork moves). To
-# bump: `git ls-remote https://github.com/mountain-reverie/binutils-gdb jcore-cause-regs`
-# (or whichever branch PR #1 lands on next) and update both the SHA and the
-# comment below.
+# bump: `git ls-remote https://github.com/mountain-reverie/binutils-gdb jcore`
+# and update both the SHA and the comment below.
 ARG BINUTILS_JCORE_REPO=https://github.com/mountain-reverie/binutils-gdb.git
-# jcore-cause-regs branch (base: jcore), head of PR #1 as of 2026-07-30:
-# https://github.com/mountain-reverie/binutils-gdb/pull/1
-# (adds stc expevt/intevt/tra,Rn; open, not yet merged to jcore)
-ARG BINUTILS_JCORE_COMMIT=4635def4796687bd2248178760f186edef12edcb
+# jcore branch head as of 2026-07-31 -- the merge commit of PR #1
+# (https://github.com/mountain-reverie/binutils-gdb/pull/1), which added
+# stc expevt/intevt/tra,Rn on top of the existing J4 mnemonics.
+ARG BINUTILS_JCORE_COMMIT=cf1e4755e9ced3c2a1a06559808566253f486f07
 ARG SH2_GCC_VERSION=14.2.0
 ARG GO_VERSION=1.26.2
 # OpenSTA is not packaged for Ubuntu; built from source below. OpenSTA requires

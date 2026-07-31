@@ -2,7 +2,10 @@
 #
 # Provides the heavy toolchains needed by the Step 6/7/8 portion of
 # decode/gen-go/regression.sh:
-#   - sh2-elf-gcc 14.2.0 (+ binutils 2.43.1) -- bare-metal SH-2 cross
+#   - sh2-elf-gcc 14.2.0 (+ binutils from the mountain-reverie/binutils-gdb
+#     "jcore" fork, pinned by commit -- bare-metal SH-2 cross, with native
+#     understanding of the J4 privileged mnemonics (stc tsbptr/pteh/ptel/
+#     asidr/expevt/intevt/tra, ldtlb.rn, etc). See BINUTILS_JCORE_COMMIT below.
 #   - GHDL 6.0.0 (libghdl exported, needed by ghdl-yosys-plugin)
 #   - yosys 0.44
 #   - ghdl-yosys-plugin @ 07a30ed (newer commits break against GHDL 6.0.0
@@ -28,7 +31,18 @@ ENV LANG=C.UTF-8
 ARG GHDL_VERSION=v6.0.0
 ARG YOSYS_VERSION=yosys-0.44
 ARG GHDL_YOSYS_PLUGIN_COMMIT=07a30ed
-ARG BINUTILS_VERSION=2.43.1
+# binutils comes from the mountain-reverie/binutils-gdb "jcore" branch
+# (adds stc expevt/intevt/tra,Rn and the other J4-only mnemonics) rather than
+# stock binutils, pinned by commit SHA for reproducible image builds (a
+# branch ref would make the image non-deterministic as the fork moves). To
+# bump: `git ls-remote https://github.com/mountain-reverie/binutils-gdb jcore-cause-regs`
+# (or whichever branch PR #1 lands on next) and update both the SHA and the
+# comment below.
+ARG BINUTILS_JCORE_REPO=https://github.com/mountain-reverie/binutils-gdb.git
+# jcore-cause-regs branch (base: jcore), head of PR #1 as of 2026-07-30:
+# https://github.com/mountain-reverie/binutils-gdb/pull/1
+# (adds stc expevt/intevt/tra,Rn; open, not yet merged to jcore)
+ARG BINUTILS_JCORE_COMMIT=4635def4796687bd2248178760f186edef12edcb
 ARG SH2_GCC_VERSION=14.2.0
 ARG GO_VERSION=1.26.2
 # OpenSTA is not packaged for Ubuntu; built from source below. OpenSTA requires
@@ -118,17 +132,26 @@ ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/sbin:/usr/b
 # ---------------------------------------------------------------------------
 RUN set -eux; \
     mkdir -p /tmp/sh2-build && cd /tmp/sh2-build; \
-    wget -q https://ftp.gnu.org/gnu/binutils/binutils-${BINUTILS_VERSION}.tar.xz; \
-    tar xf binutils-${BINUTILS_VERSION}.tar.xz; \
+    mkdir binutils-jcore && cd binutils-jcore; \
+    git init -q; \
+    git remote add origin "${BINUTILS_JCORE_REPO}"; \
+    git fetch -q --depth 1 origin "${BINUTILS_JCORE_COMMIT}"; \
+    git checkout -q FETCH_HEAD; \
+    cd /tmp/sh2-build; \
     mkdir build-binutils && cd build-binutils; \
-    ../binutils-${BINUTILS_VERSION}/configure \
+    ../binutils-jcore/configure \
         --target=sh2-elf \
         --prefix=/usr/local \
         --disable-nls \
         --disable-werror \
-        --disable-doc; \
-    make -j"$(nproc)"; \
-    make install; \
+        --disable-doc \
+        --disable-gdb \
+        --disable-sim \
+        --disable-libdecnumber \
+        --disable-readline \
+        --disable-gprofng; \
+    make -j"$(nproc)" all-gas all-ld all-binutils; \
+    make install-gas install-ld install-binutils; \
     cd /tmp/sh2-build; \
     wget -q https://ftp.gnu.org/gnu/gcc/gcc-${SH2_GCC_VERSION}/gcc-${SH2_GCC_VERSION}.tar.xz; \
     tar xf gcc-${SH2_GCC_VERSION}.tar.xz; \

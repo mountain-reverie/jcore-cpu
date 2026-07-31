@@ -45,6 +45,11 @@ var sysControlMnemonics = map[string]bool{
 	"icbi": true, "ocbi": true, "ocbp": true, "ocbwb": true,
 	"prefi": true, "movca.l": true,
 	"ldtlb.rn": true,
+	// J4 fused TLB-tag compares: "cmp/eq pteh,Rn" / "cmp/eq asidr,Rn".
+	// The SH arithmetic cmp/eq forms sit in the Arithmetic group, which
+	// systemControlSelected rejects before it consults this map, so
+	// allow-listing the mnemonic here cannot pull them in.
+	"cmp/eq": true,
 	"clds": true, "csts": true,
 }
 

@@ -10614,7 +10614,7 @@
       "J2A": false,
       "J2A.issue": 0,
       "J2A.latency": 0,
-      "collides": ["CMP/EQ.PTEH Rn"]
+      "collides": ["CMP/EQ PTEH, Rn"]
     },
     {
       "group": "System Control Instructions",
@@ -22501,7 +22501,7 @@
       "DSP": false,
       "DSP.issue": 0,
       "DSP.latency": 0,
-      "format": "CMP/EQ.PTEH Rn",
+      "format": "CMP/EQ PTEH, Rn",
       "abstract": "When Rn = PTEH, 1 -\u003e T (TSB VPN-tag compare)",
       "code": "0000nnnn11010011",
       "J2": false,
@@ -22547,7 +22547,7 @@
       "DSP": false,
       "DSP.issue": 0,
       "DSP.latency": 0,
-      "format": "CMP/EQ.ASID Rn",
+      "format": "CMP/EQ ASIDR, Rn",
       "abstract": "When Rn = ASIDR, 1 -\u003e T (TSB ASID-tag compare)",
       "code": "0000nnnn11110011",
       "J2": false,

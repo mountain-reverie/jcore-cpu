@@ -246,7 +246,12 @@ ENV NANGATE_LIB=/opt/nangate45/nangate45.lib
 #     Only the typical-corner Liberty file is kept in the image.
 # ---------------------------------------------------------------------------
 ARG SKY130_VERSION=bdc9412b3e468c102d01b7cf6337be06ec6e9c9a
-ARG IHP_REF=v1.0
+# IHP-Open-PDK has never published a v1.0; its tags are v0.1.0, v0.2.0 and
+# v0.3.0, so the original pin could never clone and this stanza had never
+# built successfully. v0.3.0 is the newest release tag (commit 5cccb161,
+# recorded here so a moved tag is detectable). To bump:
+# `git ls-remote --tags https://github.com/IHP-GmbH/IHP-Open-PDK`.
+ARG IHP_REF=v0.3.0
 # ciel is pinned: it was previously installed unpinned, and upstream 2.x
 # flattened the `ciel prl path` subcommand group away, which broke every
 # image build with "Error: No such command 'prl'". Rather than swap in the

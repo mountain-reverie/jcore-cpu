@@ -71,7 +71,7 @@ func TestSearchOverlapNotJustEquality(t *testing.T) {
 	claims := []Claim{
 		claim(t, "0000nnnnmmmm1011", "wide\tRm,Rn", "Logic Operation Instructions", "SH4"),
 	}
-	got, err := Search(Options{Form: "0000nnnn1100--11", Avoid: []string{"SH4"}}, claims)
+	got, err := Search(Options{Form: "0000nnnn11--1011", Avoid: []string{"SH4"}}, claims)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}

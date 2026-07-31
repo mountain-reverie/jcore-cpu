@@ -131,49 +131,20 @@ jobs:
 
       # mmulinux (SP2) drives the REAL linux@jcore MMU TLB-miss handler
       # (arch/sh/mm/tlb-jcore.c, arch/sh/kernel/cpu/jcore/{ex,entry}.S)
-      # against the RTL. It needs kbuild's objects (from mountain-reverie/linux)
-      # plus a J4-aware gas/ld/objcopy (from mountain-reverie/binutils-gdb):
-      # the system sh2-elf-* toolchain's gas has no PRIV_ARCH/MMU insns, and
-      # its bfd rejects the newer e_flags the WIP J4 gas stamps ("relocations
-      # in generic ELF" / "file in wrong format" — toolchain skew, not a real
-      # relocation error). See sim/linux_sim.sh for the full rationale.
-      - name: Checkout binutils-gdb (J4 gas/ld/objcopy)
-        uses: actions/checkout@v4
-        with:
-          repository: mountain-reverie/binutils-gdb
-          ref: jcore
-          path: binutils-gdb
-
-      - name: Resolve binutils-gdb commit sha
-        id: binutils-sha
-        working-directory: binutils-gdb
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache J4 gas/ld/binutils build
-        id: binutils-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            binutils-gdb/build-sh2/gas/as-new
-            binutils-gdb/build-sh2/ld/ld-new
-            binutils-gdb/build-sh2/binutils/objdump
-            binutils-gdb/build-sh2/binutils/objcopy
-            binutils-gdb/build-sh2/binutils/nm-new
-            binutils-gdb/build-sh2/binutils/ar
-          key: binutils-sh2-${{ steps.binutils-sha.outputs.sha }}
-
-      - name: Build J4 gas/ld/binutils (build-sh2)
-        if: steps.binutils-cache.outputs.cache-hit != 'true'
-        working-directory: binutils-gdb
-        # Container steps default to dash, which rejects `set -o pipefail`.
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p build-sh2
-          cd build-sh2
-          ../configure --target=sh-elf --disable-gdb --disable-sim --disable-werror
-          make -j"$(nproc)" all-gas all-ld all-binutils
-
+      # against the RTL, so it needs kbuild's objects (from
+      # mountain-reverie/linux) built by a J4-aware assembler.
+      #
+      # That assembler is now the image's own sh2-elf-* toolchain: the CI
+      # image builds binutils from the mountain-reverie/binutils-gdb "jcore"
+      # fork (see .github/ci/Dockerfile, BINUTILS_JCORE_COMMIT), so
+      # sh2-elf-as understands the PRIV_ARCH/MMU mnemonics natively and
+      # sh2-elf-objdump accepts the J4 e_flags. This job used to check out
+      # and build that fork itself; that is now redundant.
+      #
+      # J4GAS/J4LD still exist as knobs because sim/tests/Makefile and
+      # sim/linux_sim.sh default them to a sibling binutils-gdb build for
+      # developers whose system sh2-elf-* is stock. In CI they simply point
+      # at the image's tools.
       - name: Checkout linux@jcore (real MMU handler sources)
         uses: actions/checkout@v4
         with:
@@ -193,7 +164,7 @@ jobs:
       - name: Build linux@jcore MMU objects (kbuild via the WIP J4 gas)
         env:
           LINUX_SRC: ${{ github.workspace }}/linux
-          J4GAS: ${{ github.workspace }}/binutils-gdb/build-sh2/gas/as-new
+          J4GAS: /usr/local/bin/sh2-elf-as
           J4BIN: ${{ github.workspace }}/j4bin
         # Container steps default to dash, which rejects `set -o pipefail`.
         shell: bash
@@ -218,8 +189,8 @@ jobs:
           TOOLS_DIR: ${{ github.workspace }}/jcore-soc/tools
           JCORE_SOC: ${{ github.workspace }}/jcore-soc
           LINUX_SRC: ${{ github.workspace }}/linux
-          J4GAS: ${{ github.workspace }}/binutils-gdb/build-sh2/gas/as-new
-          J4LD: ${{ github.workspace }}/binutils-gdb/build-sh2/ld/ld-new
+          J4GAS: /usr/local/bin/sh2-elf-as
+          J4LD: /usr/local/bin/sh2-elf-ld
           J4BIN: ${{ github.workspace }}/j4bin
         run: |
           set -euo pipefail

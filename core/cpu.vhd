@@ -116,7 +116,7 @@ architecture stru of cpu is
   -- datapath ORs in VALID on capture). tlb_exc_kind is not a datapath port,
   -- so cpu.vhd composes this word here and passes it in, mirroring
   -- tlb_exc_expevt.
-  signal tlb_exc_fsr      : std_logic_vector(12 downto 0);
+  signal tlb_exc_fsr : std_logic_vector(12 downto 0);
   -- '1' when the pending TLB fault is an I-fetch fault (IMISS/IPROT). The
   -- datapath uses it to capture the I-side restart PC from the faulting fetch
   -- VA (tlb_fault_va) instead of the D-side ma_pc shadow.
@@ -641,23 +641,54 @@ begin
     -- gets its KIND nibble here; the datapath capture block is responsible
     -- for leaving the rest of the low byte (including USER) at 0 for it.
     process (tlb_exc_kind) is
+
       variable kind_nibble : std_logic_vector(3 downto 0);
       variable prot_b      : std_logic;
       variable itlb_b      : std_logic;
       variable write_b     : std_logic;
+
     begin
+
       case tlb_exc_kind is
-        when IMISS    => kind_nibble := x"1"; prot_b := '0'; itlb_b := '1'; write_b := '0';
-        when DMISS_R  => kind_nibble := x"2"; prot_b := '0'; itlb_b := '0'; write_b := '0';
-        when DMISS_W  => kind_nibble := x"3"; prot_b := '0'; itlb_b := '0'; write_b := '1';
-        when IPROT    => kind_nibble := x"4"; prot_b := '1'; itlb_b := '1'; write_b := '0';
-        when DPROT_R  => kind_nibble := x"5"; prot_b := '1'; itlb_b := '0'; write_b := '0';
-        when DPROT_W  => kind_nibble := x"6"; prot_b := '1'; itlb_b := '0'; write_b := '1';
-        when MULTI_HIT => kind_nibble := x"7"; prot_b := '0'; itlb_b := '0'; write_b := '0';
-        when others   => kind_nibble := x"0"; prot_b := '0'; itlb_b := '0'; write_b := '0';
+
+        when IMISS =>
+
+          kind_nibble := x"1"; prot_b := '0'; itlb_b := '1'; write_b := '0';
+
+        when DMISS_R =>
+
+          kind_nibble := x"2"; prot_b := '0'; itlb_b := '0'; write_b := '0';
+
+        when DMISS_W =>
+
+          kind_nibble := x"3"; prot_b := '0'; itlb_b := '0'; write_b := '1';
+
+        when IPROT =>
+
+          kind_nibble := x"4"; prot_b := '1'; itlb_b := '1'; write_b := '0';
+
+        when DPROT_R =>
+
+          kind_nibble := x"5"; prot_b := '1'; itlb_b := '0'; write_b := '0';
+
+        when DPROT_W =>
+
+          kind_nibble := x"6"; prot_b := '1'; itlb_b := '0'; write_b := '1';
+
+        when MULTI_HIT =>
+
+          kind_nibble := x"7"; prot_b := '0'; itlb_b := '0'; write_b := '0';
+
+        when others =>
+
+          kind_nibble := x"0"; prot_b := '0'; itlb_b := '0'; write_b := '0';
+
       end case;
+
       tlb_exc_fsr <= '0' & kind_nibble & "000" & '0' & prot_b & itlb_b & '0' & write_b;
+
     end process;
+
   end generate g_mmu;
 
   g_no_mmu : if not MMU_ARCH generate

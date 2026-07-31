@@ -31,6 +31,7 @@ var systemRegAllow = map[string]bool{
 	"TBR": true, "MACH": true, "MACL": true, "PR": true,
 	"SGR": true, "DBR": true,
 	"PTEH": true, "PTEL": true, "ASIDR": true, "TSBPTR": true,
+	"EXPEVT": true, "INTEVT": true, "TRA": true,
 	"CP0_COM": true, "CPI_COM": true,
 }
 

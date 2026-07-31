@@ -7,8 +7,9 @@ import (
 
 // Rank orders candidates best-first, in place:
 //
-//  1. Virgin encodings — claimed by no variant at all, not merely free of the
-//     --avoid list. These are the ones with no future compatibility cost.
+//  1. Virgin encodings — claimed by no variant recorded in insns.json, not
+//     merely free of the --avoid list. These are the ones with no future
+//     compatibility cost.
 //  2. Proximity to the requested family, by Hamming distance over the
 //     candidate's fixed bits. Encodings near their relatives keep the
 //     QMC-reduced direct decoder small.

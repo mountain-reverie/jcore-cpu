@@ -76,6 +76,24 @@ func TestClaimsTwoWordKeysOnWord1(t *testing.T) {
 	if !c.TwoWord {
 		t.Error("TwoWord = false, want true")
 	}
+	if c.Word2 != "iiiiiiiiiiiiiiii" {
+		t.Errorf("Word2 = %q, want the raw second-word pattern", c.Word2)
+	}
+}
+
+func TestClaimsSingleWordHasEmptyWord2(t *testing.T) {
+	doc := fixtureDoc(t, map[string]any{
+		"group":  "Data Transfer Instructions",
+		"format": "mov\tRm,Rn",
+		"code":   "0110nnnnmmmm0011",
+	})
+	got, err := Claims(doc)
+	if err != nil {
+		t.Fatalf("Claims: %v", err)
+	}
+	if got[0].Word2 != "" {
+		t.Errorf("Word2 = %q, want empty for single-word row", got[0].Word2)
+	}
 }
 
 func TestClaimsRejectsBadCode(t *testing.T) {

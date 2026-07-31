@@ -23,6 +23,7 @@ type Claim struct {
 	Group       string   // e.g. "Data Transfer Instructions"
 	Variants    []string // sorted; variant columns true on this row
 	TwoWord     bool     // row's code is 32 bits (word1 + extension word)
+	Word2       string   // raw second-word pattern, e.g. "iiiiiiiiiiiiiiii"; empty for single-word rows
 }
 
 // variantColumns are the boolean per-variant columns carried by every row of
@@ -79,6 +80,9 @@ func Claims(doc *insns.Doc) ([]Claim, error) {
 			Format:  format,
 			Group:   group,
 			TwoWord: len(words) > 1,
+		}
+		if len(words) > 1 {
+			c.Word2 = words[1]
 		}
 		for _, v := range variantColumns {
 			if b, ok := r.Get(v); ok {

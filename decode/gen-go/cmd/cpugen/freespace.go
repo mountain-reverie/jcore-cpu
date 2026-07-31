@@ -107,13 +107,10 @@ func runFreespace(args []string) int {
 		if c.Virgin {
 			status = "virgin"
 		}
-		shadows := strings.Join(c.Shadows, "; ")
-		if shadows == "" {
-			shadows = "—"
-		}
+		shadows := formatList(c.Shadows)
 		if len(c.Shareable) > 0 {
 			status = "shareable"
-			shadows = strings.Join(c.Shareable, "; ")
+			shadows = formatList(c.Shareable)
 		}
 		near := "—"
 		if n, ok := freespace.Nearest(c, *family, claims); ok {
@@ -157,6 +154,23 @@ func resolveForm(rest []string, form, specDir, overlay string) (string, int) {
 	}
 	fmt.Fprintf(os.Stderr, "freespace: no instruction %q in %s\n", rest[0], specDir)
 	return "", 1
+}
+
+// maxShown caps how many claim descriptions a table cell lists. A common
+// query such as --form Rm,Rn overlaps ~100 legacy encodings on one candidate,
+// and printing them all destroys the table. --json still carries the full set.
+const maxShown = 5
+
+// formatList renders a claim list for a table cell, capped at maxShown.
+func formatList(items []string) string {
+	if len(items) == 0 {
+		return "—"
+	}
+	if len(items) <= maxShown {
+		return strings.Join(items, "; ")
+	}
+	return fmt.Sprintf("%s; +%d more",
+		strings.Join(items[:maxShown], "; "), len(items)-maxShown)
 }
 
 func splitList(s string) []string {

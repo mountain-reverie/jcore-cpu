@@ -100,7 +100,7 @@ package cpu2j0_components_pack is
     -- every TLB exception, read-only MMIO 0xFF000028. [12]=VALID [11:8]=KIND
     -- [7:5]=rsvd(0) [4]=USER [3]=PROT [2]=ITLB [1]=INITIAL(0) [0]=WRITE.
     -- Distinguishes DPROT_R/DPROT_W, which otherwise share EXPEVT 0x0C0.
-    fsr    : std_logic_vector(31 downto 0);
+    fsr : std_logic_vector(31 downto 0);
   end record mmu_reg_t;
 
   constant mmu_reg_reset : mmu_reg_t := (others => (others => '0'));

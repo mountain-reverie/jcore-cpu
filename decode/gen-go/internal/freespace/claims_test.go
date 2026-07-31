@@ -88,6 +88,25 @@ func TestClaimsRejectsBadCode(t *testing.T) {
 	}
 }
 
+func TestClaimsAcceptsDSPWildcards(t *testing.T) {
+	doc := fixtureDoc(t, map[string]any{
+		"group":  "DSP Instructions",
+		"format": "nopx",
+		"code":   "1111000*0*0*00**",
+	})
+	got, err := Claims(doc)
+	if err != nil {
+		t.Fatalf("Claims: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d claims, want 1", len(got))
+	}
+	c := got[0]
+	if c.Mask != 0xFEAC || c.Match != 0xF000 {
+		t.Errorf("key = (%#04x, %#04x), want (0xf000, 0xfeac)", c.Match, c.Mask)
+	}
+}
+
 func TestClaimedBy(t *testing.T) {
 	c := Claim{Variants: []string{"SH1", "SH4"}}
 	if !c.ClaimedBy(map[string]bool{"SH4": true}) {

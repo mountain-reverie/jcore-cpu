@@ -67,7 +67,7 @@ func Claims(doc *insns.Doc) ([]Claim, error) {
 			return nil, fmt.Errorf("row %d: missing code", i)
 		}
 		words := strings.Fields(code)
-		match, mask, err := opcode.Parse(words[0])
+		match, mask, err := opcode.Parse(normalizeCode(words[0]))
 		if err != nil {
 			return nil, fmt.Errorf("row %d: %w", i, err)
 		}
@@ -91,6 +91,30 @@ func Claims(doc *insns.Doc) ([]Claim, error) {
 		out = append(out, c)
 	}
 	return out, nil
+}
+
+// normalizeCode maps every character that is not '0' or '1' to a don't-care,
+// so opcode.Parse accepts the whole document.
+//
+// docs/insns.json is not limited to the 'n'/'m'/'d'/'i' operand characters:
+// 108 DSP rows use '*', 'z', 'x', 'y', 'D', 'A', 'e', 'f', 'g' and 'u' for
+// their operand and reserved fields. Every one of those positions is a bit
+// the instruction does not fix, which is exactly what a don't-care means
+// here. internal/insns/match.go normalizes the same way for the same reason.
+//
+// Widening a field to don't-care can only make Overlaps report MORE
+// collisions, never fewer, so an unfamiliar character can never cause an
+// occupied encoding to be offered as free.
+func normalizeCode(s string) string {
+	var b strings.Builder
+	for _, c := range s {
+		if c == '0' || c == '1' {
+			b.WriteRune(c)
+		} else {
+			b.WriteByte('-')
+		}
+	}
+	return b.String()
 }
 
 func stringField(r *insns.Row, key string) (string, bool) {

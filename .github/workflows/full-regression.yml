@@ -229,7 +229,17 @@ jobs:
           run_guard() {  # <name> <sim_top-or-default> [stop-time] [wall-timeout-s]
             local t="$1" top="${2:-}" stoptime="${3:-80us}" wall="${4:-120}"
             rm -f tests/$t.img tests/$t.o tests/$t.elf
-            make CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 -C tests $t.img >/dev/null 2>&1
+            # Capture the build rather than discarding it. With `set -e` a
+            # failing make used to abort the whole step with a bare
+            # "exit code 2" and no diagnostic at all -- 48 guards would pass,
+            # then nothing. Show the tail and name the guard instead.
+            local build
+            if ! build="$(make CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 -C tests $t.img 2>&1)"; then
+              echo "  FAIL  $t${top:+ [$top]} (build)"
+              echo "$build" | tail -20
+              fail=1
+              return 0
+            fi
             local out
             out="$(SIM_TOP="$top" timeout "$wall" ./cpu_ctb --stop-time="$stoptime" \
                    -i tests/$t.img --ieee-asserts=disable 2>&1 || true)"
@@ -276,6 +286,10 @@ jobs:
           # store through the new mapping. 300us stop-time for handler latency.
           run_guard mmupagewalk cpu_cache_tb 300us
           # M8 D-side fault-transparency sweep (34 cases; needs 200us to complete).
+          # m8_smoke is the one previously-orphaned guard that passes;
+          # mmubratest and m8_idslot_0..2 are built but invoked by nothing
+          # and currently fail -- see the note in sim/mmu_sim.sh.
+          run_guard m8_smoke
           run_guard m8_dside "" 200us
           # M8 MAC-arithmetic guard (short, 80us is sufficient).
           run_guard m8_macarith

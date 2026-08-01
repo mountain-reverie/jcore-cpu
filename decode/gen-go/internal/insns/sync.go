@@ -173,30 +173,68 @@ func VariantColumns() []string {
 	return out
 }
 
-func annotateCollides(d *Doc) {
-	byKey := map[Key][]*Row{}
-	for _, r := range d.Rows {
-		if cv, ok := r.Get("code"); ok {
-			if code, ok := cv.(string); ok {
-				if k, ok := keyOfCode(code); ok {
-					byKey[k] = append(byKey[k], r)
-				}
-			}
+// sharesVariant reports whether two rows are both present in at least one
+// variant, i.e. whether any single CPU faces both instructions at once.
+func sharesVariant(a, b *Row) bool {
+	for _, v := range variantColumns {
+		av, aok := a.Get(v)
+		bv, bok := b.Get(v)
+		if !aok || !bok {
+			continue
+		}
+		aOn, _ := av.(bool)
+		bOn, _ := bv.(bool)
+		if aOn && bOn {
+			return true
 		}
 	}
+	return false
+}
+
+// annotateCollides records, on each row, the formats of other rows whose
+// encoding it can collide with.
+//
+// Two link rules apply. Rows with an IDENTICAL key link unconditionally, as
+// they always have: the same encoding used twice is worth documenting even
+// across variants that never ship together (J4's LDTLB.RN over SH-2A's NOTT).
+// Rows that merely OVERLAP link only when they share a variant. Without that
+// condition the DSP rows, whose operand and reserved fields normalize to
+// don't-care, overlap nearly everything in the 1111 space and bury the real
+// collisions under thousands of entries for ISA combinations no CPU has.
+func annotateCollides(d *Doc) {
+	type keyed struct {
+		row *Row
+		key Key
+	}
+	var rows []keyed
 	for _, r := range d.Rows {
-		cv, _ := r.Get("code")
-		code, _ := cv.(string)
+		cv, ok := r.Get("code")
+		if !ok {
+			continue
+		}
+		code, ok := cv.(string)
+		if !ok {
+			continue
+		}
 		k, ok := keyOfCode(code)
 		if !ok {
 			continue
 		}
+		rows = append(rows, keyed{r, k})
+	}
+
+	for i, a := range rows {
 		var others []string
-		for _, o := range byKey[k] {
-			if o == r {
+		for j, b := range rows {
+			if i == j {
 				continue
 			}
-			if f, ok := o.Get("format"); ok {
+			if a.key != b.key {
+				if !overlapKeys(a.key, b.key) || !sharesVariant(a.row, b.row) {
+					continue
+				}
+			}
+			if f, ok := b.row.Get("format"); ok {
 				if fs, ok := f.(string); ok {
 					others = append(others, fs)
 				}
@@ -210,7 +248,7 @@ func annotateCollides(d *Doc) {
 		for i, s := range others {
 			anys[i] = s
 		}
-		r.Set("collides", anys)
+		a.row.Set("collides", anys)
 	}
 }
 

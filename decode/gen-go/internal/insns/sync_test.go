@@ -451,3 +451,96 @@ func TestVariantColumns(t *testing.T) {
 		t.Error("VariantColumns() returns the backing array; it must return a copy")
 	}
 }
+
+// collideRow builds a doc row with just the fields annotateCollides reads.
+func collideRow(format, code string, variants ...string) *Row {
+	r := &Row{}
+	r.Set("format", format)
+	r.Set("code", code)
+	for _, v := range variants {
+		r.Set(v, true)
+	}
+	return r
+}
+
+// collidesOf returns the collides entries of the row with the given format.
+func collidesOf(t *testing.T, d *Doc, format string) []string {
+	t.Helper()
+	for _, r := range d.Rows {
+		f, _ := r.Get("format")
+		if f != format {
+			continue
+		}
+		c, ok := r.Get("collides")
+		if !ok {
+			return nil
+		}
+		arr, _ := c.([]any)
+		out := make([]string, 0, len(arr))
+		for _, a := range arr {
+			s, _ := a.(string)
+			out = append(out, s)
+		}
+		return out
+	}
+	t.Fatalf("no row with format %q", format)
+	return nil
+}
+
+func TestAnnotateCollidesLinksOverlapWithSharedVariant(t *testing.T) {
+	// Different masks, so different keys: equality would miss this pair.
+	// Both rows are SH4, so a real CPU faces the collision.
+	d := &Doc{Rows: []*Row{
+		collideRow("wide Rm,Rn", "0000nnnnmmmm1011", "SH4"),
+		collideRow("narrow Rn", "0000nnnn11001011", "SH4"),
+	}}
+	annotateCollides(d)
+	if got := collidesOf(t, d, "wide Rm,Rn"); len(got) != 1 || got[0] != "narrow Rn" {
+		t.Errorf("collides = %v, want [narrow Rn]", got)
+	}
+	if got := collidesOf(t, d, "narrow Rn"); len(got) != 1 || got[0] != "wide Rm,Rn" {
+		t.Errorf("collides = %v, want [wide Rm,Rn]", got)
+	}
+}
+
+func TestAnnotateCollidesIgnoresOverlapWithoutSharedVariant(t *testing.T) {
+	// Same encodings as above, but no variant in common: the two instructions
+	// never coexist in one CPU, so this is not a collision anyone faces.
+	d := &Doc{Rows: []*Row{
+		collideRow("wide Rm,Rn", "0000nnnnmmmm1011", "DSP"),
+		collideRow("narrow Rn", "0000nnnn11001011", "SH4"),
+	}}
+	annotateCollides(d)
+	if got := collidesOf(t, d, "wide Rm,Rn"); len(got) != 0 {
+		t.Errorf("collides = %v, want none", got)
+	}
+	if got := collidesOf(t, d, "narrow Rn"); len(got) != 0 {
+		t.Errorf("collides = %v, want none", got)
+	}
+}
+
+func TestAnnotateCollidesEqualKeysNeedNoSharedVariant(t *testing.T) {
+	// An identical encoding stays noteworthy even across variants. This is
+	// today's behaviour and must not regress (cf. J4 LDTLB.RN over SH-2A NOTT).
+	d := &Doc{Rows: []*Row{
+		collideRow("ldtlb.rn", "0000000001101000", "J4"),
+		collideRow("nott", "0000000001101000", "SH2A"),
+	}}
+	annotateCollides(d)
+	if got := collidesOf(t, d, "ldtlb.rn"); len(got) != 1 || got[0] != "nott" {
+		t.Errorf("collides = %v, want [nott]", got)
+	}
+}
+
+func TestAnnotateCollidesTwoWordExtWordSeparates(t *testing.T) {
+	// The disp12 case: same word 1, different extension word. Not a collision,
+	// even though both rows are SH2A.
+	d := &Doc{Rows: []*Row{
+		collideRow("mov.b @(disp12,Rm),Rn", "0011nnnnmmmm0001 0100dddddddddddd", "SH2A"),
+		collideRow("fmov.d @(disp12,Rm),DRn", "0011nnnnmmmm0001 0111dddddddddddd", "SH2A"),
+	}}
+	annotateCollides(d)
+	if got := collidesOf(t, d, "mov.b @(disp12,Rm),Rn"); len(got) != 0 {
+		t.Errorf("collides = %v, want none: ext words differ", got)
+	}
+}

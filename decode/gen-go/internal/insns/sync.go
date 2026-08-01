@@ -157,6 +157,22 @@ func Sync(d *Doc, vds []VariantData) (*Report, error) {
 	return rep, nil
 }
 
+// variantColumns are the per-variant boolean columns carried by every row of
+// docs/insns.json, sorted. This package owns the document format, so this is
+// the canonical list; other packages read it through VariantColumns.
+var variantColumns = []string{
+	"DSP", "J1", "J2", "J2A", "J4",
+	"SH1", "SH2", "SH2A", "SH2E", "SH3", "SH3E", "SH4", "SH4A",
+}
+
+// VariantColumns returns the per-variant column names of docs/insns.json,
+// sorted. The result is a copy: callers may not mutate the canonical list.
+func VariantColumns() []string {
+	out := make([]string, len(variantColumns))
+	copy(out, variantColumns)
+	return out
+}
+
 func annotateCollides(d *Doc) {
 	byKey := map[Key][]*Row{}
 	for _, r := range d.Rows {

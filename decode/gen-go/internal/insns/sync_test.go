@@ -433,3 +433,21 @@ func TestOverlapKeys(t *testing.T) {
 		}
 	})
 }
+
+func TestVariantColumns(t *testing.T) {
+	got := VariantColumns()
+	want := []string{"DSP", "J1", "J2", "J2A", "J4", "SH1", "SH2", "SH2A", "SH2E", "SH3", "SH3E", "SH4", "SH4A"}
+	if len(got) != len(want) {
+		t.Fatalf("VariantColumns() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("VariantColumns() = %v, want %v", got, want)
+		}
+	}
+	// Callers must not be able to corrupt the canonical list.
+	got[0] = "MUTATED"
+	if VariantColumns()[0] != "DSP" {
+		t.Error("VariantColumns() returns the backing array; it must return a copy")
+	}
+}

@@ -105,7 +105,7 @@ else
   echo "== priv-arch + MMU guards (cpu_tb) =="
   for t in exctest trapatest pm3vec pm3guard privmode banktest excguard \
            rteredir mmureg mmuguard mmuxlate mmurte mmustore mmuimiss mmuimiss_illegal \
-           mmusr mmufault mmufsr mmudslot mmuidslot mmuldtlbr mmutsb mmuidx mmustres mmustr2 \
+           mmusr mmufault mmufsr mmudslot mmuidslot mmuldtlbr mmutsb mmuidx mmustres mmustr2 mmudrain \
            mmustale mmuasid mmuglobal mmumultihit mmudblflt mmunest_trapa mmunest_slotill mmunest mmuremap mmucmpcsr mmurun mmuirun mmuainc mmuainc2 mmusmep j4_illegal_trap; do
     run_guard "$t"
   done

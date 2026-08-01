@@ -290,10 +290,18 @@ RUN pip3 install --no-cache-dir --break-system-packages ciel==${CIEL_VERSION} \
  && rm -rf /opt/pdk \
  && test -s /opt/sky130/sky130_fd_sc_hd__tt_025C_1v80.lib
 
-RUN git clone --depth 1 --branch ${IHP_REF} https://github.com/IHP-GmbH/IHP-Open-PDK /tmp/ihp \
+# Only one Liberty file is wanted out of a large PDK, so fetch only that
+# blob: --filter=blob:none defers blob download, --no-checkout keeps the
+# working tree empty, and the sparse-checkout narrows the later checkout to
+# the single path. Measured on ubuntu:24.04: the clone step drops from
+# ~270s to ~1.7s.
+ARG IHP_LIB_PATH=ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+RUN git clone --depth 1 --branch ${IHP_REF} --filter=blob:none --no-checkout \
+        https://github.com/IHP-GmbH/IHP-Open-PDK /tmp/ihp \
+ && git -C /tmp/ihp sparse-checkout set --no-cone "${IHP_LIB_PATH}" \
+ && git -C /tmp/ihp checkout \
  && mkdir -p /opt/ihp-sg13g2 \
- && cp /tmp/ihp/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib \
-       /opt/ihp-sg13g2/ \
+ && cp "/tmp/ihp/${IHP_LIB_PATH}" /opt/ihp-sg13g2/ \
  && rm -rf /tmp/ihp \
  && test -s /opt/ihp-sg13g2/sg13g2_stdcell_typ_1p20V_25C.lib
 

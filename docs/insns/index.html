@@ -35,6 +35,32 @@
     order: 4;
   }
 
+  #filter-collides {
+    order: 5;
+  }
+
+  #filter-collides label {
+    display: inline-block;
+    padding-right: 10px;
+    white-space: nowrap;
+    cursor: help;
+  }
+
+  #filter-collides input {
+    vertical-align: middle;
+  }
+
+  #filter-collides label span {
+    vertical-align: middle;
+  }
+
+  /* Proxy input holding the query value, driven by the checkbox. Mirrors the
+     'remember' filter's mechanism; hidden because only the checkbox is for
+     the reader. */
+  #collides {
+    display: none;
+  }
+
   .remember label {
     display: inline-block;
     padding-right: 10px;
@@ -183,6 +209,16 @@
 
     $('#remember').trigger(jQuery.Event('keypress', { which: 13 }));
   }
+
+  function update_collides() {
+    if (document.getElementById('chk_collides').checked) {
+      $('#collides').val(true);
+    } else {
+      $('#collides').val(false);
+    }
+
+    $('#collides').trigger(jQuery.Event('keypress', { which: 13 }));
+  }
 </script>
 
 <div class="vertical">
@@ -233,6 +269,10 @@
     <div class="remember">
       <input type="search" id="remember" value="false" />
       <label><input type=checkbox id="chk_remember" onclick="update_remember();" /><span>Stared</span></label>
+    </div>
+    <div id="filter-collides">
+      <input type="search" id="collides" value="false" />
+      <label title="Encodings that can match the same instruction word. Identical encodings are always listed; merely overlapping encodings are listed only when one CPU implements both."><input type=checkbox id="chk_collides" onclick="update_collides();" /><span>Colliding only</span></label>
     </div>
   </div>
   <table id="instructions">
@@ -583,13 +623,13 @@
     var collidesRow = '';
     var collideIcon = '';
     if (record.collides && record.collides.length) {
-      collideIcon = '<a href="#" class="collide-icon" title="Shares its 16-bit encoding with another instruction — click to show the group" data-code="' + record.code + '">!</a> ';
+      collideIcon = '<a href="#" class="collide-icon" title="Encodings that can match the same instruction word. Identical encodings are always listed; merely overlapping encodings are listed only when one CPU implements both. Click to show the group." data-code="' + record.code + '">!</a> ';
       var links = record.collides.map(function (f) {
         var disp = f.replace(/\t/g, ' ').replace(/&/g, '&amp;').replace(/</g, '&lt;');
         var attr = f.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
         return '<a href="#" class="collide-link" data-format="' + attr + '">' + disp + '</a>';
       }).join(', ');
-      collidesRow = '<tr class="collapse" id="collides' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);"><td colspan=' + colspan + '><i><b>Shares encoding with:</b></i> ' + links + '</td></tr>';
+      collidesRow = '<tr class="collapse" id="collides' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);"><td colspan=' + colspan + '><i><b>Collides with:</b></i> ' + links + '</td></tr>';
     }
 
     return group_start + '<tr class="top" id="line0.' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);">' +
@@ -653,6 +693,12 @@
 
             return false;
           };
+          dynatable.queries.functions['collides'] = function (record, queryValue) {
+            if (queryValue === "true") {
+              return !!(record.collides && record.collides.length);
+            }
+            return true;
+          };
           dynatable.queries.functions['remember'] = function (record, queryValue) {
             if (queryValue === "true") {
               if (record.remember) return true;
@@ -673,7 +719,7 @@
             records: data.instructions
           },
           inputs: {
-            queries: $('#family, #search, #group, #remember')
+            queries: $('#family, #search, #group, #remember, #collides')
           }
         }).data('dynatable');
     }).fail(function() {

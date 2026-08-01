@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/j-core/jcore-cpu/decode/gen-go/internal/opcode"
 	"github.com/j-core/jcore-cpu/decode/gen-go/internal/spec"
 )
 
@@ -21,6 +22,26 @@ func keyOfCode(code string) (Key, bool) {
 		return KeyOf2(s[:16], s[16:])
 	}
 	return Key{}, false
+}
+
+// overlapKeys reports whether two encoding keys can match the same
+// instruction. This is strictly weaker than Key equality: two patterns whose
+// operand fields differ can still claim the same words, and equality misses
+// exactly that case.
+//
+// When both keys are two-word, word 1 AND the extension word must overlap —
+// several two-word instructions legitimately share word 1 and are told apart
+// only by the extension word (the disp12 family). When only one side is
+// two-word, word 1 decides: a single-word instruction claims the whole word
+// whatever follows it.
+func overlapKeys(a, b Key) bool {
+	if !opcode.Overlaps(a.Match, a.Mask, b.Match, b.Mask) {
+		return false
+	}
+	if a.Two && b.Two {
+		return opcode.Overlaps(a.Match2, a.Mask2, b.Match2, b.Mask2)
+	}
+	return true
 }
 
 // keyOfInstr keys a spec instruction, two-word when it carries an extension

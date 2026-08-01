@@ -56,7 +56,7 @@ p_sp0:  .long 0x00007000
 
         .global _done
 _done:  mov.l p_res, r0
-        mov #0, r9
+        mov.l p_res_pass, r9
         mov.l r9, @r0
         bra _done
         nop
@@ -88,3 +88,4 @@ _fail:  mov.l p_res, r0
 
         .align 2
 p_res: .long TEST_RESULT_ADDRESS
+p_res_pass: .long TEST_PASS_MAGIC

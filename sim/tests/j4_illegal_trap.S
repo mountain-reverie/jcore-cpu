@@ -166,7 +166,7 @@ ENTRY(exception_handler)
         nop
 ENTRY(_done)
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
@@ -181,3 +181,4 @@ p_vbr_fixed:   .long exception_handler - 0x100
 p_rbclear:     .long 0xDFFFFFFF
 p_sentinel:    .long 0x00007800
 p_test_result: .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long   TEST_PASS_MAGIC

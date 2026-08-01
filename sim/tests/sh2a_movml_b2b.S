@@ -36,7 +36,7 @@ p_s0:   .long 0xAA0000AA
 p_s1:   .long 0xBB1111BB
 p_s2:   .long 0xCC2222CC
 _done:  mov.l p_res, r0
-        mov #0, r9
+        mov.l p_res_pass, r9
         mov.l r9, @r0
         bra _done
         nop
@@ -47,3 +47,4 @@ _fail:  mov.l p_res, r0
         nop
         .align 2
 p_res:  .long TEST_RESULT_ADDRESS
+p_res_pass: .long TEST_PASS_MAGIC

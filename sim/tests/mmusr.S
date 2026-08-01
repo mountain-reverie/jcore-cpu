@@ -97,7 +97,7 @@ ENTRY(_resume)
         cmp/eq  r1, r3
         bf      _resume_bad_bank
         mov.l   pr_test_result, r0
-        mov     #0, r1
+        mov.l   pr_test_result_pass, r1
         mov.l   r1, @r0                 ! PASS
 _rspin: bra     _rspin
         nop
@@ -110,6 +110,7 @@ _rbspin: bra    _rbspin
 
         .align 2
 pr_test_result: .long TEST_RESULT_ADDRESS
+pr_test_result_pass: .long   TEST_PASS_MAGIC
 p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_load - 0x400
 p_mmucr:        .long 0xFF000010
@@ -120,7 +121,7 @@ c_page1_va:     .long 0x00001000
 
 ENTRY(_done)
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
@@ -135,6 +136,7 @@ ENTRY(_fail)
         nop
         .align 2
 p_test_result: .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long   TEST_PASS_MAGIC
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 

@@ -231,15 +231,14 @@ int test_result(struct mem_bus *bus, struct mem_range *range, uint32_t addr,
                 int num_bytes, uint32_t val,
                 uint32_t *ack_delay, uint32_t *drop_ack_delay) {
   if (num_bytes == 4) {
-    if (val) {
-      SIMERR(bus->sim, "Test failed. Result=%u\n", val);
-      //    sim_free(bus->sim);
-      //    exit(1);
-    } else {
+    if (val == TEST_PASS_MAGIC) {
       printf("Test Passed\n");
       sim_free(bus->sim);
       exit(0);
     }
+    SIMERR(bus->sim, "Test failed. Result=%u\n", val);
+    //    sim_free(bus->sim);
+    //    exit(1);
   }
   return 0;
 }

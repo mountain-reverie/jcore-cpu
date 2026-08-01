@@ -102,7 +102,7 @@ c_page1_va:     .long 0x00001000
 
 ENTRY(_done)
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
@@ -117,6 +117,7 @@ ENTRY(_fail)
         nop
         .align 2
 p_test_result: .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long   TEST_PASS_MAGIC
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 
@@ -131,7 +132,7 @@ _h_general_illegal:                     ! = VBR + 0x100
         ! as GENERAL_ILLEGAL: write pass and stop (do NOT RTE / resume --
         ! resuming would re-execute the illegal word).
         mov.l   Hres_addr, r0
-        mov     #0, r9
+        mov.l   Hres_addr_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
@@ -177,6 +178,7 @@ Hmmucr:         .long 0xFF000010
 Hpage1_va:      .long 0x00001000
 Hzero_page_pte: .long _zero_page + 0x000000C8   ! PPN(_zero_page) | flags
 Hres_addr:      .long TEST_RESULT_ADDRESS
+Hres_addr_pass:      .long   TEST_PASS_MAGIC
 
         ! ---- Backing page for VA 0x1000: a whole zeroed physical page, so
         ! offset 0 (the fetch offset for VA 0x1000) is the illegal word

@@ -291,7 +291,7 @@ p_neg32768:  .long 0xFFFF8000
         .global _done
 _done:
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0        ! 0 = pass
         bra     _done
         nop
@@ -465,3 +465,4 @@ _fail28:
         nop
         .align 2
 p_test_result: .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long   TEST_PASS_MAGIC

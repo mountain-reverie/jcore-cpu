@@ -92,7 +92,7 @@ ENTRY(exception_handler)
 
 ENTRY(_done)
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
@@ -111,6 +111,7 @@ p_rbclear:     .long 0xDFFFFFFF
 p_mdbit:       .long 0x40000000
 p_sentinel:    .long 0x00007800
 p_test_result: .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long   TEST_PASS_MAGIC
 
         ! exception entry stubs + trampoline (from rte.S / privmode.S)
 ENTRY(exception_entry)
@@ -145,7 +146,7 @@ vector = vector + 1
         nop
 ENTRY(_done)
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
@@ -157,4 +158,5 @@ ENTRY(_fail_loop)
         nop
         .align 2
 p_test_result: .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long   TEST_PASS_MAGIC
 #endif

@@ -89,12 +89,13 @@ ENTRY(_resume)
         ! RTE redirected after a correct TEA: write result 0 (PASS). AT is off
         ! (the handler disabled it) so this P-region store is reliable.
         mov.l   pr_test_result, r0
-        mov     #0, r1
+        mov.l   pr_test_result_pass, r1
         mov.l   r1, @r0
         bra     _resume
         nop
         .align 2
 pr_test_result: .long TEST_RESULT_ADDRESS
+pr_test_result_pass: .long   TEST_PASS_MAGIC
 
         .align 2
 p_rbclear:      .long 0xDFFFFFFF
@@ -107,7 +108,7 @@ c_page1_va:     .long 0x00001000
 
 ENTRY(_done)
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
@@ -122,6 +123,7 @@ ENTRY(_fail)
         nop
         .align 2
 p_test_result: .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long   TEST_PASS_MAGIC
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 

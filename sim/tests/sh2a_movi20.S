@@ -87,7 +87,7 @@ e7: .long 0xF8000000
         .global _done
 _done:
         mov.l   pr0, r0
-        mov     #0, r9
+        mov.l   pr0_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
@@ -122,3 +122,4 @@ _fail:  mov.l pr0, r0
         nop
         .align 2
 pr0: .long TEST_RESULT_ADDRESS
+pr0_pass: .long   TEST_PASS_MAGIC

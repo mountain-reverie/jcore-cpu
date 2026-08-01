@@ -280,7 +280,7 @@ p_ownpage_flags: .long 0x000000C8       ! W|X|C -- U=0 (kernel-only). This is th
 
 ENTRY(_done)
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
@@ -295,6 +295,7 @@ ENTRY(_fail)
         nop
         .align 2
 p_test_result: .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long   TEST_PASS_MAGIC
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 

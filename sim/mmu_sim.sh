@@ -63,7 +63,15 @@ run_guard() {  # <name> <sim_top-or-default> [stop-time] [wall-timeout-s]
   local t="$1" top="${2:-}" stoptime="${3:-80us}" wall="${4:-120}"
   if [ ! -f "tests/$t.S" ]; then echo "  SKIP  $t (no tests/$t.S on this branch)"; return; fi
   rm -f tests/$t.img tests/$t.o tests/$t.elf
-  make CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 -C tests $t.img >/dev/null 2>&1
+  # Capture the build rather than discarding it: a failing make otherwise
+  # produces no diagnostic and the guard just looks like it vanished.
+  local build
+  if ! build="$(make CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 -C tests $t.img 2>&1)"; then
+    echo "  FAIL  $t${top:+ [$top]} (build)"
+    echo "$build" | tail -20
+    fail=1
+    return 0
+  fi
   local out
   # MMU_VCD=<path> dumps a VCD of the run (used by sim/bench_tlb_hotpath.sh to
   # trace the PC through the TLB-miss hot path). The sim exits at "Test Passed",
@@ -123,6 +131,21 @@ else
   run_guard mmupagemix2 cpu_cache_tb 200us
   run_guard mmupagewalk cpu_cache_tb 300us
   echo "== M8 fault-coverage sweep =="
+# Orphaned guards -- built by sim/tests/Makefile but invoked by nothing.
+# Measured 2026-08-01, all four fail; they rotted precisely because nothing
+# ran them. Recorded here so their state is in the repo rather than
+# rediscovered:
+#
+#   mmubratest    IF: invalid read addr XXXXXXXX -- fetches an undefined
+#                 address; the guard runs off the rails entirely.
+#   m8_idslot_0   Test failed. Result=2
+#   m8_idslot_1   Test failed. Result=2
+#   m8_idslot_2   Test failed. Result=2
+#
+# m8_smoke passes and is wired into the run below. Fixing the other four is
+# its own piece of work; until then they are deliberately not invoked, and
+# this comment is the reason why.
+  run_guard m8_smoke
   run_guard m8_dside    "" 200us
   run_guard m8_macarith
   run_guard m8_macseq

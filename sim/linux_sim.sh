@@ -32,6 +32,9 @@ export JCORE_SOC="${JCORE_SOC:-$ROOT/../jcore-soc}"
 LINUX_SRC="${LINUX_SRC:-$ROOT/../linux}"
 J4GAS="${J4GAS:-$ROOT/../binutils-gdb/build-sh2/gas/as-new}"
 J4LD="${J4LD:-$ROOT/../binutils-gdb/build-sh2/ld/ld-new}"
+# sim/tests/Makefile also needs a J4-aware objcopy (the stock one rejects
+# the J4 e_flags). Same default, same override story as J4GAS/J4LD.
+J4OBJCOPY="${J4OBJCOPY:-$ROOT/../binutils-gdb/build-sh2/binutils/objcopy}"
 J4BIN="${J4BIN:-/tmp/j4bin}"
 
 [ -d "$JCORE_SOC" ] || { echo "ERROR: JCORE_SOC not found at $JCORE_SOC" >&2; exit 1; }
@@ -83,7 +86,8 @@ cd sim
 
 echo "== build $name.img (real linux@jcore objects, J4-built ld) =="
 rm -f "tests/$name.img" "tests/$name.o" "tests/$name.elf"
-make -C tests LINUX_SRC="$LINUX_SRC" J4GAS="$J4GAS" J4LD="$J4LD" J4BIN="$J4BIN" \
+make -C tests LINUX_SRC="$LINUX_SRC" J4GAS="$J4GAS" J4LD="$J4LD" \
+     J4OBJCOPY="$J4OBJCOPY" J4BIN="$J4BIN" \
      CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 "$name.img"
 
 out="$(timeout 120 ./cpu_ctb --stop-time=200us -i "tests/$name.img" --ieee-asserts=disable 2>&1 || true)"

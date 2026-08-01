@@ -191,6 +191,11 @@ jobs:
           LINUX_SRC: ${{ github.workspace }}/linux
           J4GAS: /usr/local/bin/sh2-elf-as
           J4LD: /usr/local/bin/sh2-elf-ld
+          # sim/tests/Makefile also needs a J4-aware objcopy (the stock one
+          # rejects the J4 e_flags). It used to default to the in-job fork
+          # build; point it at the image's tool too, or the mmulinux/mmuboot/
+          # mmuhuge image rules fail on a path that no longer exists.
+          J4OBJCOPY: /usr/local/bin/sh2-elf-objcopy
           J4BIN: ${{ github.workspace }}/j4bin
         run: |
           set -euo pipefail

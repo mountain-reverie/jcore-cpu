@@ -95,7 +95,7 @@ c_page1_va:     .long 0x00001000
 
 ENTRY(_done)
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
@@ -110,6 +110,7 @@ ENTRY(_fail)
         nop
         .align 2
 p_test_result: .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long   TEST_PASS_MAGIC
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 
@@ -126,7 +127,7 @@ _v_store:                               ! = VBR + 0x400
         ! now off so this P-region store is reliable. This is the ONLY path that
         ! writes a result -> reaching it == GREEN.
         mov.l   Hresult, r0
-        mov     #0, r1
+        mov.l   Hresult_pass, r1
         mov.l   r1, @r0
 _h_pass_spin:
         bra     _h_pass_spin
@@ -135,6 +136,7 @@ _h_pass_spin:
         .align 2
 Hmmucr:         .long 0xFF000010
 Hresult:        .long TEST_RESULT_ADDRESS
+Hresult_pass:        .long   TEST_PASS_MAGIC
 
         ! ---- Fault-page padding: VA 0x1000. ----
 _fault_pages:

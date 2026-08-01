@@ -94,7 +94,7 @@ p_scratch: .long scratch
         .global _done
 _done:
         mov.l   p_res, r0
-        mov     #0, r9
+        mov.l   p_res_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
@@ -130,6 +130,7 @@ _fail:
         nop
         .align 2
 p_res:  .long TEST_RESULT_ADDRESS
+p_res_pass:  .long   TEST_PASS_MAGIC
 
         .align 4
 scratch: .space 0x40

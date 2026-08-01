@@ -10,6 +10,11 @@
 
 #define EVENT_TRIGGER_ADDRESS 0xBCDE0000
 #define TEST_RESULT_ADDRESS 0xBCDE0010
+
+/* Written by a guard's _done to claim success. Deliberately not zero: the
+ * harness used to treat any zero write as PASS, which made an uninitialised
+ * or stray write indistinguishable from a guard that actually completed. */
+#define TEST_PASS_MAGIC 0x600DC0DE
 #define DUMP_STACK_ADDRESS 0xBCDE0020
 
 #endif

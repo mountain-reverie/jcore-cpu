@@ -92,7 +92,7 @@ p_va_x:      .long 0x00004000
 #endif
 ENTRY(_done)
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
@@ -107,4 +107,5 @@ ENTRY(_fail)
         nop
         .align 2
 p_test_result: .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long   TEST_PASS_MAGIC
         .org 0x7000

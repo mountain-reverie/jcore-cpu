@@ -255,7 +255,7 @@ still_ok:
     mov     #0x5A, r1
     mov.l   r1, @r0
     mov.l   p_test_result, r0
-    mov     #0, r9
+    mov.l   p_test_result_pass, r9
     mov.l   r9, @r0
 _done:
     bra     _done
@@ -272,6 +272,7 @@ _fail_loop:
     .align 4
 cpuid_addr:            .long 0xABCD0600
 p_test_result:         .long 0xBCDE0010
+p_test_result_pass:         .long   0x600DC0DE      ! TEST_PASS_MAGIC (sim_instr.h)
 led_addr:              .long 0xABCD0000
 
 release_pc_addr:       .long 0x00008000   ! spin-table entry-PC mailbox

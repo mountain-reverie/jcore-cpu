@@ -131,7 +131,7 @@ p_stub_v2:  .long 0xE016000B
 
 ENTRY(_done)
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
@@ -146,6 +146,7 @@ ENTRY(_fail)
         nop
         .align 2
 p_test_result: .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long   TEST_PASS_MAGIC
 
         ! --- stubs at absolute PA inside the image (shared with data buffer) ---
         .org 0x1000

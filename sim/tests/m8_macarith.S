@@ -83,7 +83,7 @@ ENTRY(start)
 
 ENTRY(_done)
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
@@ -99,6 +99,7 @@ ENTRY(_fail_loop)
 p_rbclear:     .long 0xDFFFFFFF
 #endif
 p_test_result: .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long   TEST_PASS_MAGIC
 p_macl_a:      .long macl_a
 p_macl_b:      .long macl_b
 p_macw_a:      .long macw_a

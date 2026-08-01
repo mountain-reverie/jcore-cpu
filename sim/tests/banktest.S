@@ -101,7 +101,7 @@ rb_clear: .long 0xDFFFFFFF
         .global _done
 _done:
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0        ! 0 = pass
         bra     _done
         nop
@@ -113,3 +113,4 @@ _fail_loop:
         nop
         .align 2
 p_test_result: .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long   TEST_PASS_MAGIC

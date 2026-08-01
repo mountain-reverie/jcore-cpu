@@ -51,7 +51,7 @@ ENTRY(start)
 ENTRY(_pass)
         ! Reached iff the handler RTE redirected PC to SPC = _pass.
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0
         bra     _pass
         nop
@@ -77,6 +77,7 @@ p_mdmask:      .long 0xBFFFFFFF
 p_rbclear:     .long 0xDFFFFFFF
 p_pass:        .long _pass
 p_test_result: .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long   TEST_PASS_MAGIC
 
 #else  ! CONFIG_PRIV_ARCH -- J1/J2 use the base (branch.toml) RTE; not under test here.
         bra     _done
@@ -85,7 +86,7 @@ p_test_result: .long TEST_RESULT_ADDRESS
 
 ENTRY(_done)
         mov.l   q_test_result, r0
-        mov     #0, r9
+        mov.l   q_test_result_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
@@ -97,3 +98,4 @@ ENTRY(_fail)
         nop
         .align 2
 q_test_result: .long TEST_RESULT_ADDRESS
+q_test_result_pass: .long   TEST_PASS_MAGIC

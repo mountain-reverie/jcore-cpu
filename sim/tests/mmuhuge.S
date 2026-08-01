@@ -430,7 +430,7 @@ v_ptel_expect_h3: .long 0x003008B9      ! PFN(0x00300000)|PageMask(pm=8,0x800)|V
 
 ENTRY(_done)
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
@@ -445,6 +445,7 @@ ENTRY(_fail)
         nop
         .align 2
 p_test_result: .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long   TEST_PASS_MAGIC
 
 ! ===========================================================================
 ! Stub set for the three real linux@jcore objects' cross-object undefined

@@ -124,7 +124,7 @@ ENTRY(start)
         
 _done:   
         mov.l test_result, r0
-        mov #0, r9
+        mov.l   test_result_pass, r9
         mov.l r9, @r0 ! success
         bra _done
         nop
@@ -139,6 +139,7 @@ _fail_loop:
 pfail_loop: .long _fail_loop
 evt_trigger: .long EVENT_TRIGGER_ADDRESS
 test_result: .long TEST_RESULT_ADDRESS
+test_result_pass: .long   TEST_PASS_MAGIC
 pvbr_base: .long vbr_base
 
 

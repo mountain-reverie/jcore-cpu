@@ -81,7 +81,7 @@ ENTRY(start)
 
 ENTRY(_done)
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0        ! 0 = pass
         bra     _done
         nop
@@ -112,6 +112,7 @@ p_vbr_fixed:   .long exception_handler - 0x100   ! J4: VBR+0x100 == handler
 p_mdmask:      .long 0xBFFFFFFF
 p_rbclear:     .long 0xDFFFFFFF
 p_test_result: .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long   TEST_PASS_MAGIC
 
         ! Per-vector entry stubs (from rte.S): vector N enters at +N*6, pushes
         ! the vector number, and branches to the common trampoline.

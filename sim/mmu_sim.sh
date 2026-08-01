@@ -131,6 +131,28 @@ else
   run_guard mmupagemix2 cpu_cache_tb 200us
   run_guard mmupagewalk cpu_cache_tb 300us
   echo "== M8 fault-coverage sweep =="
+# Mutation spot-checks (2026-08-01). A guard that passes proves nothing
+# unless it can be shown to fail, so a sample was checked by corrupting one
+# expected constant and confirming a sub-test-specific failure code (not the
+# 0x7F early-exit clamp, which would mean the assertion is never reached):
+#
+#   mmufault  c_dmiss_r  0x60->0x61     => FAIL Result=2
+#   mmusmep   c_iprot    0xA0->0xA1     => FAIL Result=2
+#   mmuguard  p_expevt   0x180->0x181   => FAIL Result=2
+#   mmuidx    p_val_plain               => FAIL Result=5
+#   mmutsb    p_tsbbr_val               => FAIL Result=4
+#
+#   mmuxlate  UNPROVEN. Two attempts were uninformative rather than
+#             revealing: p_testval is a self-consistent sentinel (loaded
+#             into r4, stored, read back, compared against r4 -- mutating it
+#             moves both sides), and p_ppn_mask masks an already-aligned
+#             address, so widening it changes nothing. Proving this guard
+#             needs a mutation chosen against its specific logic.
+#
+# This is a sample, not a proof about the suite. The magic-token change makes
+# "did this guard run?" structural; "is its assertion strong?" still needs
+# per-guard work like the above.
+
 # Orphaned guards -- built by sim/tests/Makefile but invoked by nothing.
 # Measured 2026-08-01, all four fail; they rotted precisely because nothing
 # ran them. Recorded here so their state is in the repo rather than

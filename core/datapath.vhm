@@ -927,7 +927,20 @@ end generate;
             -- pre-decrement stores restore the captured pre-decrement base
             -- (ma_base) since their faulting VA is the ALREADY-decremented
             -- address. Both retarget the same shadowed base register (ma_numz).
-            if PRIV_ARCH and this.ma_predec = '1' then
+            --
+            -- Gated on tlb_exc_is_i='0': arm the restore for D-SIDE faults ONLY.
+            -- ma_numz / ma_autoupd / ma_predec are written only at the
+            -- memory-access pipeline point and are never cleared on a non-memory
+            -- instruction, so on an INSTRUCTION-FETCH fault (IMISS/IPROT) they
+            -- still hold the last post-increment load's base register and a
+            -- stale ma_autoupd='1'.  Un-gated, that armed a bogus restore and
+            -- restore_fire wrote the I-side faulting FETCH VA into that GPR.
+            -- Both branches must be gated: a pre-decrement store shadow is
+            -- equally stale on an I-side fault.
+            if tlb_exc_is_i = '1' then
+              this.tlb_restore_val  := tlb_fault_va;
+              this.tlb_restore_pend := '0';
+            elsif PRIV_ARCH and this.ma_predec = '1' then
               this.tlb_restore_val  := this.ma_base;
               this.tlb_restore_pend := '1';
             else

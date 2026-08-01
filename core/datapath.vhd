@@ -172,6 +172,12 @@ signal manip_sel : std_logic_vector(31 downto 0);
  signal mem_autoinc1 : std_logic;
  signal mem_predec : std_logic;
  signal restore_fire : std_logic;
+ -- Registered tlb_squash, made readable INSIDE the process (this_r is
+ -- only usable in the concurrent assignments below). Used to suppress new
+ -- memory transactions issued in the fault shadow, symmetrically with the
+ -- reg_wr_z_g / reg_wr_w_g writeback gating. Tied '0' off MMU_ARCH so J1/J2
+ -- prune it away entirely.
+ signal tlb_squash_r : std_logic;
  -- SH2A_ARCH only: signature classification for the restart-safe MOVML.L
  -- Rm,@-R15 push (docs/superpowers/specs/2026-07-09-j2a-restart-safe-push-
  -- design.md §3). push_ptr_init marks the once-per-instruction slot that
@@ -1125,7 +1131,8 @@ end generate;
           end if;
           if this.slot = '1' then
             -- start new memory transactions
-            if (mem.issue = '1' and this.data_o.en = '0') or
+            if (mem.issue = '1' and this.data_o.en = '0'
+                and tlb_squash_r = '0') or
                (coproc.coproc_cmd = LDS) then
               -- start new data request
               case mem.addr_sel is
@@ -1410,7 +1417,8 @@ end generate;
  -- Export MMU CSRs and committed SR for TLB use in cpu.vhd (PRIV_ARCH).
  mmu_regs_o <= mmu_regs;
  sr_o <= sr;
- tlb_squash_o <= this_r.tlb_squash when PRIV_ARCH else '0';
+ tlb_squash_r <= this_r.tlb_squash when PRIV_ARCH else '0';
+ tlb_squash_o <= tlb_squash_r;
  mac_s <= this_r.mac_s;
         db_lock <= this_r.data_o_lock;
         db_o <= this_r.data_o;

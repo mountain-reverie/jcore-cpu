@@ -43,6 +43,17 @@
 ! assertion is deferred to _verify_S.  A guard that passes pre-fix is a broken
 ! guard, not a fixed CPU.
 !
+! ---- CURRENT STATUS: blocked by Defect 3, NOT by Defect 2 ----
+! With the Defect 2 fix in place this guard's r3 check (the shadow load) PASSES
+! and both loads now fault on their OWN pages (verified by VCD: fault count
+! 1 -> 2, fault VAs page1-4 -> {page0, page1}).  It still reports Result=0x21 on
+! the r2 check because of a THIRD, PRE-EXISTING and INDEPENDENT defect: the
+! D-side restart PC is one instruction too early, so fault 2's restart
+! re-executes load0 and bumps r2 a second time.  See sim/tests/mmurestartpc.S,
+! which isolates that defect to a single faulting load preceded by
+! `add #1, r7` and fails IDENTICALLY with and without the Defect 2 fix.
+! This guard reaches PASS only once Defect 3 is fixed.
+!
 ! ---- non-vacuity ----
 ! The handler counts faults and the guard asserts count >= 1 (fail 0x10).  The
 ! check is deliberately LOOSE (>=, not ==): a handler-side counter is NOT a
@@ -188,6 +199,21 @@ ENTRY(_verify_S)
         cmp/eq  r4, r2
         mov     #2, r9
         bt      1f
+        ! Classifier: distinguish the two failure modes rather than reporting a
+        ! bare "wrong".  0x20 = page0 (access DROPPED), 0x21 = page0+8 (executed
+        ! TWICE), 0x22 = anything else.  0x21 is the Defect 3 signature: the
+        ! restart re-executed the instruction BEFORE the faulting one.
+        mov     r4, r0
+        add     #-4, r0                 ! r0 = page0
+        cmp/eq  r0, r2
+        mov     #0x20, r9
+        bt      _fail
+        mov     r4, r0
+        add     #4, r0                  ! r0 = page0+8
+        cmp/eq  r0, r2
+        mov     #0x21, r9
+        bt      _fail
+        mov     #0x22, r9
         bra     _fail
         nop
 1:

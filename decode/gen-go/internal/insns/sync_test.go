@@ -357,3 +357,79 @@ func TestSyncTwoWordMatch(t *testing.T) {
 		t.Errorf("existing two-word row J2A = %v, want true", v)
 	}
 }
+
+func TestOverlapKeys(t *testing.T) {
+	one := func(t *testing.T, p string) Key {
+		t.Helper()
+		k, ok := KeyOf(p)
+		if !ok {
+			t.Fatalf("KeyOf(%q) failed", p)
+		}
+		return k
+	}
+	two := func(t *testing.T, w1, w2 string) Key {
+		t.Helper()
+		k, ok := KeyOf2(w1, w2)
+		if !ok {
+			t.Fatalf("KeyOf2(%q, %q) failed", w1, w2)
+		}
+		return k
+	}
+
+	t.Run("identical single word", func(t *testing.T) {
+		a := one(t, "0110nnnnmmmm0011")
+		if !overlapKeys(a, a) {
+			t.Error("a key must overlap itself")
+		}
+	})
+
+	t.Run("differing masks still overlap", func(t *testing.T) {
+		// The second pattern's m-field spans the first's fixed 1100.
+		// Equality would miss this; overlap must not.
+		a := one(t, "0000nnnn11001011")
+		b := one(t, "0000nnnnmmmm1011")
+		if !overlapKeys(a, b) {
+			t.Error("overlapping masks reported as disjoint")
+		}
+		if !overlapKeys(b, a) {
+			t.Error("overlapKeys is not symmetric")
+		}
+	})
+
+	t.Run("disjoint low nibble", func(t *testing.T) {
+		a := one(t, "0110nnnnmmmm0011")
+		b := one(t, "0110nnnnmmmm0100")
+		if overlapKeys(a, b) {
+			t.Error("keys differing in a bit both fix must not overlap")
+		}
+	})
+
+	t.Run("two word sharing word1 but differing ext word", func(t *testing.T) {
+		// This is the real disp12 case: same word 1, different extension
+		// word high nibble. They do NOT collide.
+		a := two(t, "0011nnnnmmmm0001", "0100dddddddddddd")
+		b := two(t, "0011nnnnmmmm0001", "0111dddddddddddd")
+		if overlapKeys(a, b) {
+			t.Error("two-word keys with differing ext words must not overlap")
+		}
+	})
+
+	t.Run("two word sharing word1 and ext word", func(t *testing.T) {
+		a := two(t, "0011nnnnmmmm0001", "0100dddddddddddd")
+		b := two(t, "0011nnnnmmmm0001", "0100dddddddddddd")
+		if !overlapKeys(a, b) {
+			t.Error("identical two-word keys must overlap")
+		}
+	})
+
+	t.Run("single word versus two word compares word1 only", func(t *testing.T) {
+		a := one(t, "0011nnnnmmmm0001")
+		b := two(t, "0011nnnnmmmm0001", "0100dddddddddddd")
+		if !overlapKeys(a, b) {
+			t.Error("a single-word instruction claims the whole word")
+		}
+		if !overlapKeys(b, a) {
+			t.Error("overlapKeys is not symmetric across widths")
+		}
+	})
+}

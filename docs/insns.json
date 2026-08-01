@@ -13552,7 +13552,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov\tDRm,DRn","fmov\tDRm,XDn","fmov\tXDm,DRn","fmov\tXDm,XDn"]
     },
     {
       "group": "32 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 0)",
@@ -13600,7 +13601,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.d\t@Rm,DRn","fmov.d\t@Rm,XDn"]
     },
     {
       "group": "32 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 0)",
@@ -13648,7 +13650,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.d\tDRm,@Rn","fmov.d\tXDm,@Rn"]
     },
     {
       "group": "32 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 0)",
@@ -13696,7 +13699,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.d\t@Rm+,DRn","fmov.d\t@Rm+,XDn"]
     },
     {
       "group": "32 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 0)",
@@ -13744,7 +13748,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.d\tDRm,@-Rn","fmov.d\tXDm,@-Rn"]
     },
     {
       "group": "32 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 0)",
@@ -13792,7 +13797,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.d\t@(R0,Rm),DRn","fmov.d\t@(R0,Rm),XDn"]
     },
     {
       "group": "32 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 0)",
@@ -13840,7 +13846,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.d\tDRm,@(R0,Rn)","fmov.d\tXDm,@(R0,Rn)"]
     },
     {
       "group": "32 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 0)",
@@ -13888,7 +13895,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.d\t@(disp12,Rm),DRn"]
     },
     {
       "group": "32 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 0)",
@@ -13936,7 +13944,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.d\tDRm,@(disp12,Rn)"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -13984,7 +13993,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov\tFRm,FRn"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14032,7 +14042,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov\tFRm,FRn"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14080,7 +14091,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov\tFRm,FRn"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14128,7 +14140,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov\tFRm,FRn"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14176,7 +14189,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.s\t@Rm,FRn"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14224,7 +14238,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.s\t@Rm,FRn"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14272,7 +14287,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.s\tFRm,@Rn"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14320,7 +14336,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.s\tFRm,@Rn"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14368,7 +14385,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.s\t@Rm+,FRn"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14416,7 +14434,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.s\t@Rm+,FRn"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14464,7 +14483,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.s\tFRm,@-Rn"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14512,7 +14532,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.s\tFRm,@-Rn"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14560,7 +14581,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.s\t@(R0,Rm),FRn"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14608,7 +14630,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.s\t@(R0,Rm),FRn"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14656,7 +14679,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.s\tFRm,@(R0,Rn)"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14704,7 +14728,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.s\tFRm,@(R0,Rn)"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14752,7 +14777,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.s\t@(disp12,Rm),FRn"]
     },
     {
       "group": "64 Bit Floating-Point Data Transfer Instructions (FPSCR.SZ = 1)",
@@ -14800,7 +14826,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmov.s\tFRm,@(disp12,Rn)"]
     },
     {
       "group": "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)",
@@ -15042,7 +15069,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fabs\tDRn"]
     },
     {
       "group": "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)",
@@ -15090,7 +15118,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fneg\tDRn"]
     },
     {
       "group": "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)",
@@ -15138,7 +15167,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fadd\tDRm,DRn"]
     },
     {
       "group": "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)",
@@ -15186,7 +15216,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fsub\tDRm,DRn"]
     },
     {
       "group": "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)",
@@ -15234,7 +15265,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmul\tDRm,DRn"]
     },
     {
       "group": "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)",
@@ -15330,7 +15362,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fdiv\tDRm,DRn"]
     },
     {
       "group": "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)",
@@ -15378,7 +15411,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fsqrt\tDRn"]
     },
     {
       "group": "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)",
@@ -15426,7 +15460,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fcmp/eq\tDRm,DRn"]
     },
     {
       "group": "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)",
@@ -15474,7 +15509,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fcmp/gt\tDRm,DRn"]
     },
     {
       "group": "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)",
@@ -15522,7 +15558,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["float\tFPUL,DRn"]
     },
     {
       "group": "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)",
@@ -15570,7 +15607,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["ftrc\tDRm,FPUL"]
     },
     {
       "group": "Floating-Point Single-Precision Instructions (FPSCR.PR = 0)",
@@ -15810,7 +15848,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fabs\tFRn"]
     },
     {
       "group": "Floating-Point Double-Precision Instructions (FPSCR.PR = 1)",
@@ -15858,7 +15897,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fneg\tFRn"]
     },
     {
       "group": "Floating-Point Double-Precision Instructions (FPSCR.PR = 1)",
@@ -15906,7 +15946,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fadd\tFRm,FRn"]
     },
     {
       "group": "Floating-Point Double-Precision Instructions (FPSCR.PR = 1)",
@@ -15954,7 +15995,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fsub\tFRm,FRn"]
     },
     {
       "group": "Floating-Point Double-Precision Instructions (FPSCR.PR = 1)",
@@ -16002,7 +16044,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fmul\tFRm,FRn"]
     },
     {
       "group": "Floating-Point Double-Precision Instructions (FPSCR.PR = 1)",
@@ -16050,7 +16093,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fdiv\tFRm,FRn"]
     },
     {
       "group": "Floating-Point Double-Precision Instructions (FPSCR.PR = 1)",
@@ -16098,7 +16142,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fsqrt\tFRn"]
     },
     {
       "group": "Floating-Point Double-Precision Instructions (FPSCR.PR = 1)",
@@ -16146,7 +16191,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fcmp/eq\tFRm,FRn"]
     },
     {
       "group": "Floating-Point Double-Precision Instructions (FPSCR.PR = 1)",
@@ -16194,7 +16240,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["fcmp/gt\tFRm,FRn"]
     },
     {
       "group": "Floating-Point Double-Precision Instructions (FPSCR.PR = 1)",
@@ -16242,7 +16289,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["float\tFPUL,FRn"]
     },
     {
       "group": "Floating-Point Double-Precision Instructions (FPSCR.PR = 1)",
@@ -16290,7 +16338,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["ftrc\tFRm,FPUL"]
     },
     {
       "group": "Floating-Point Double-Precision Instructions (FPSCR.PR = 1)",
@@ -16968,7 +17017,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["movy.w\t@Ay+,Dy","movy.w\t@Ay+Iy,Dy","movy.w\t@Ay,Dy","movy.w\tDa,@Ay","movy.w\tDa,@Ay+","movy.w\tDa,@Ay+Iy","nopy"]
     },
     {
       "group": "DSP Data Transfer Instructions",
@@ -17016,7 +17066,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["movy.w\t@Ay+,Dy","movy.w\t@Ay+Iy,Dy","movy.w\t@Ay,Dy","movy.w\tDa,@Ay","movy.w\tDa,@Ay+","movy.w\tDa,@Ay+Iy","nopy"]
     },
     {
       "group": "DSP Data Transfer Instructions",
@@ -17064,7 +17115,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["movy.w\t@Ay+,Dy","movy.w\t@Ay+Iy,Dy","movy.w\t@Ay,Dy","movy.w\tDa,@Ay","movy.w\tDa,@Ay+","movy.w\tDa,@Ay+Iy","nopy"]
     },
     {
       "group": "DSP Data Transfer Instructions",
@@ -17112,7 +17164,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["movy.w\t@Ay+,Dy","movy.w\t@Ay+Iy,Dy","movy.w\t@Ay,Dy","movy.w\tDa,@Ay","movy.w\tDa,@Ay+","movy.w\tDa,@Ay+Iy","nopy"]
     },
     {
       "group": "DSP Data Transfer Instructions",
@@ -17160,7 +17213,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["movy.w\t@Ay+,Dy","movy.w\t@Ay+Iy,Dy","movy.w\t@Ay,Dy","movy.w\tDa,@Ay","movy.w\tDa,@Ay+","movy.w\tDa,@Ay+Iy","nopy"]
     },
     {
       "group": "DSP Data Transfer Instructions",
@@ -17208,7 +17262,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["movy.w\t@Ay+,Dy","movy.w\t@Ay+Iy,Dy","movy.w\t@Ay,Dy","movy.w\tDa,@Ay","movy.w\tDa,@Ay+","movy.w\tDa,@Ay+Iy","nopy"]
     },
     {
       "group": "DSP Data Transfer Instructions",
@@ -17256,7 +17311,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["movy.w\t@Ay+,Dy","movy.w\t@Ay+Iy,Dy","movy.w\t@Ay,Dy","movy.w\tDa,@Ay","movy.w\tDa,@Ay+","movy.w\tDa,@Ay+Iy","nopy"]
     },
     {
       "group": "DSP Data Transfer Instructions",
@@ -17304,7 +17360,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["movx.w\t@Ax+,Dx","movx.w\t@Ax+Ix,Dx","movx.w\t@Ax,Dx","movx.w\tDa,@Ax","movx.w\tDa,@Ax+","movx.w\tDa,@Ax+Ix","nopx"]
     },
     {
       "group": "DSP Data Transfer Instructions",
@@ -17352,7 +17409,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["movx.w\t@Ax+,Dx","movx.w\t@Ax+Ix,Dx","movx.w\t@Ax,Dx","movx.w\tDa,@Ax","movx.w\tDa,@Ax+","movx.w\tDa,@Ax+Ix","nopx"]
     },
     {
       "group": "DSP Data Transfer Instructions",
@@ -17400,7 +17458,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["movx.w\t@Ax+,Dx","movx.w\t@Ax+Ix,Dx","movx.w\t@Ax,Dx","movx.w\tDa,@Ax","movx.w\tDa,@Ax+","movx.w\tDa,@Ax+Ix","nopx"]
     },
     {
       "group": "DSP Data Transfer Instructions",
@@ -17448,7 +17507,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["movx.w\t@Ax+,Dx","movx.w\t@Ax+Ix,Dx","movx.w\t@Ax,Dx","movx.w\tDa,@Ax","movx.w\tDa,@Ax+","movx.w\tDa,@Ax+Ix","nopx"]
     },
     {
       "group": "DSP Data Transfer Instructions",
@@ -17496,7 +17556,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["movx.w\t@Ax+,Dx","movx.w\t@Ax+Ix,Dx","movx.w\t@Ax,Dx","movx.w\tDa,@Ax","movx.w\tDa,@Ax+","movx.w\tDa,@Ax+Ix","nopx"]
     },
     {
       "group": "DSP Data Transfer Instructions",
@@ -17544,7 +17605,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["movx.w\t@Ax+,Dx","movx.w\t@Ax+Ix,Dx","movx.w\t@Ax,Dx","movx.w\tDa,@Ax","movx.w\tDa,@Ax+","movx.w\tDa,@Ax+Ix","nopx"]
     },
     {
       "group": "DSP Data Transfer Instructions",
@@ -17592,7 +17654,8 @@
       "J4.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "collides": ["movx.w\t@Ax+,Dx","movx.w\t@Ax+Ix,Dx","movx.w\t@Ax,Dx","movx.w\tDa,@Ax","movx.w\tDa,@Ax+","movx.w\tDa,@Ax+Ix","nopx"]
     },
     {
       "group": "DSP Data Transfer Instructions",

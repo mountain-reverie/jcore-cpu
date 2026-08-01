@@ -26,12 +26,9 @@ type Claim struct {
 	Word2       string   // raw second-word pattern, e.g. "iiiiiiiiiiiiiiii"; empty for single-word rows
 }
 
-// variantColumns are the boolean per-variant columns carried by every row of
-// docs/insns.json. Kept sorted so callers get deterministic output.
-var variantColumns = []string{
-	"DSP", "J1", "J2", "J2A", "J4",
-	"SH1", "SH2", "SH2A", "SH2E", "SH3", "SH3E", "SH4", "SH4A",
-}
+// variantColumns mirrors the canonical list owned by internal/insns, which
+// owns the docs/insns.json format. Read once so the two cannot drift.
+var variantColumns = insns.VariantColumns()
 
 // Variants returns the variant names accepted by --avoid, sorted.
 func Variants() []string {

@@ -79,7 +79,7 @@
 !
 ! ---- _fail integrity net ----
 ! _fail writes r9 verbatim to TEST_RESULT_ADDRESS; sim/cpu_ctb.c's
-! test_result() treats any 4-byte write of 0 as PASS, so _fail clamps r9==0
+! test_result() requires TEST_PASS_MAGIC for PASS; _fail still clamps r9==0
 ! to 0x7F.
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -291,21 +291,22 @@ q_v1:           .long 0xD1111111
 
 ENTRY(_done)
         mov.l   p_test_result, r0
-        mov     #0, r9
+        mov.l   p_test_result_pass, r9
         mov.l   r9, @r0
         bra     _done
         nop
 ENTRY(_fail)
         mov.l   p_test_result, r0
-        tst     r9, r9                  ! integrity net: 0 is the harness PASS token
-        bf      1f                      ! (sim/cpu_ctb.c test_result() accepts any
-        mov     #0x7F, r9               ! 4B==0 write as PASS), so never write it.
+        tst     r9, r9                  ! integrity net: keep the fail code loud
+        bf      1f                      ! (PASS now requires TEST_PASS_MAGIC, so 0
+        mov     #0x7F, r9               !  reports as Result=0, not as PASS.)
 1:
         mov.l   r9, @r0
         bra     _fail
         nop
         .align 2
 p_test_result:  .long TEST_RESULT_ADDRESS
+p_test_result_pass: .long TEST_PASS_MAGIC
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
 

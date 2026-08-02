@@ -923,19 +923,14 @@ end generate;
             -- constant launch-to-instruction offset. tlb_exc_is_d gates the
             -- xbus=PC substitution to the D-fault entry; I-fetch faults
             -- (EXPEVT 0x040 IMISS / 0x0A0 IPROT) keep the live PC.
-            -- ma_pc holds the faulting access launch PC = faulting_instr + 4
-            -- (the architectural PC during EX). The D-fault entry slot reads this
-            -- via SEL_TLBPC and subtracts alu_y=4; the resume (LDTLB.R/RTE)
-            -- re-enters one slot ahead, so the restart PC must be
-            -- faulting_instr - 2. Pre-bias by 2 here so tlb_exc_pc - 4 =
-            -- faulting_instr - 2. Captured for every fault (I-fetch faults read
-            -- SEL_PC, not SEL_TLBPC, so this value is simply unused for them).
-            -- Delay-slot D-fault: ma_pc is the BRANCH PC (the fetch PC is held
-            -- across the delayed branch), not faulting_instr + 4. Restart must be
-            -- the branch (so it re-issues its delay slot), i.e. SPC = branch - 2.
-            -- SPC = tlb_exc_pc - 4, so tlb_exc_pc = branch + 2 = ma_pc + 2 here.
-            -- (Without this the -2 bias yields SPC = branch - 6, landing three
-            -- instructions before the branch -> wrong control flow / fault cascade.)
+            -- The D-fault entry slot reads tlb_exc_pc via SEL_TLBPC and subtracts
+            -- alu_y=4, so SPC = tlb_exc_pc - 4. The resume (LDTLB.R/RTE) re-enters
+            -- exactly AT SPC -- NOT one slot ahead, as earlier revisions of this
+            -- comment assumed; that mistaken belief was one of the two compounding
+            -- -2 terms that put the D-side restart four bytes early. Captured for
+            -- every fault (I-fetch faults read SEL_PC, not SEL_TLBPC, so this
+            -- value is simply unused for them). See the D-side arm below for the
+            -- measured derivation from the live ex_if_pc.
             -- I-fetch faults (IMISS/IPROT): the D-side ma_pc shadow is stale, but
             -- tlb_fault_va IS the faulting FETCH VA at this first-fault cycle
             -- (0x1000 in the delay-slot case). Normal I-fault -> restart = fetch VA
@@ -951,17 +946,37 @@ end generate;
                 this.tlb_exc_pc := tlb_fault_va;
               end if;
             -- D-side: derive the restart from the instruction's OWN PC (ma_if_pc,
-            -- EX-aligned), not the run-ahead this.pc shadow (ma_pc). SPC = TLBPC-4
-            -- and the resume re-enters one slot ahead, so SPC lands at tlb_exc_pc-2:
-            -- normal load: ma_if_pc = load_PC -> tlb_exc_pc = ma_if_pc+2
-            -- -> SPC = load_PC-2 -> re-executes the load.
-            -- delay slot : ma_if_pc = delay_slot_PC(=branch+2) -> tlb_exc_pc =
-            -- ma_if_pc -> SPC = branch-2 -> re-executes the BRANCH,
-            -- which re-issues its delay slot (the load).
+            -- EX-aligned), not the run-ahead this.pc shadow (ma_pc).
+            -- MEASURED from cosim VCDs (sim/tests/mmupcprobe.S, a single PLAIN
+            -- faulting load at 0x104e; and mmurestartpc.S, a single @Rn+ load at
+            -- 0x1054):
+            -- * the resume (LDTLB.R/RTE) re-enters exactly AT SPC, NOT one
+            -- slot ahead as the old comment assumed: after the handler,
+            -- ex_if_pc went 0x104a, 0x104c, 0x104e, i.e. straight to
+            -- SPC = tlb_exc_pc - 4 = 0x104a.
+            -- * the SHADOWED this.ma_if_pc is NOT a usable base: it is sampled
+            -- at the data-access launch slot, and how far ex_if_pc has
+            -- advanced by then depends on the addressing mode. For the plain
+            -- load it held 0x104c (= faulting_PC - 2); for the @Rn+ load,
+            -- whose access launches a slot later, it held 0x1054
+            -- (= faulting_PC). No constant bias can correct both.
+            -- * the LIVE ex_if_pc, at this first-fault capture cycle, IS the
+            -- faulting instruction's own PC in BOTH cases (0x104e / 0x1054).
+            -- So derive the restart from the live ex_if_pc. The D-fault entry
+            -- computes SPC = tlb_exc_pc - 4 (exceptions.toml, alu_y=4 SUB) and
+            -- the resume lands on SPC, hence:
+            -- normal : tlb_exc_pc = ex_if_pc + 4 -> SPC = faulting_PC ->
+            -- re-executes exactly the faulting instruction.
+            -- dslot : ex_if_pc = delay_slot_PC (= branch+2), and the restart
+            -- must be the BRANCH so it re-issues its delay slot, so
+            -- tlb_exc_pc = ex_if_pc + 2 -> SPC = branch_PC.
+            -- ma_dslot (shadowed at the access slot) still selects the arm; only
+            -- the PC source changes. The I-side arm above is untouched: IMISS/
+            -- IPROT read this via SEL_TLBPC with alu_y=0, carrying no -4 term.
             elsif this.ma_dslot = '1' then
-              this.tlb_exc_pc := this.ma_if_pc;
+              this.tlb_exc_pc := std_logic_vector(unsigned(ex_if_pc) + 2);
             else
-              this.tlb_exc_pc := std_logic_vector(unsigned(this.ma_if_pc) + 2);
+              this.tlb_exc_pc := std_logic_vector(unsigned(ex_if_pc) + 4);
             end if;
             -- Capture the user SR for the D-fault entry's SSR save (read via
             -- SEL_TLBSR), stable across the stalled entry slot's re-evaluations.

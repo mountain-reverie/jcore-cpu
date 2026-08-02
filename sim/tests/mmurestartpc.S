@@ -1,48 +1,50 @@
-! mmurestartpc.S -- the D-side TLB-fault restart PC is ONE INSTRUCTION EARLY.
+! mmurestartpc.S -- GUARD for DEFECT 3: the D-side TLB-fault restart PC was
+! FOUR BYTES EARLY, so the TWO instructions preceding any faulting D-side
+! access were re-executed.  FIXED -- this guard is GREEN.
 !
-! DEFECT 3 (PRE-EXISTING and INDEPENDENT of Defects 1 and 2 -- this guard fails
-! IDENTICALLY with and without the Defect 2 fix; see the A/B below).
+! THE DEFECT.  Two -2 terms compounded:
+!   1. tlb_exc_pc := ma_if_pc + 2 with SPC := TLBPC - 4 (spec/sh4/exceptions.toml,
+!      alu_y=4 SUB) placed SPC two bytes below ma_if_pc.  The old comment in
+!      datapath.vhm justified this by claiming the resume re-enters one slot
+!      ahead of SPC; measurement shows the resume lands exactly AT SPC.
+!   2. ma_if_pc itself LAGS the faulting instruction's own PC, and the lag is
+!      ADDRESSING-MODE DEPENDENT: it is a shadow sampled at the memory-access
+!      point, which different addressing modes reach at different offsets from
+!      their own PC -- PC-2 for a plain load, PC for an @Rn+ load.
+! Because of (2) NO constant re-bias of ma_if_pc can correct both cases; the
+! circulated "+2 -> +4, +0 -> +2 on ma_if_pc" candidate fixes only term (1).
 !
-! On a D-side TLB fault the datapath latches the restart PC as
-!     tlb_exc_pc := ma_if_pc + 2            (core/datapath.vhm, normal load)
-! and the D-side exception entries compute
-!     SPC := TLBPC - 4                      (spec/sh4/exceptions.toml, alu_y=4 SUB)
-! so  SPC = ma_if_pc - 2 = faulting_instruction_PC - 2.
-! Execution resumes AT SPC, so the instruction IMMEDIATELY PRECEDING the
-! faulting access is re-executed after every D-side TLB fault.  This contradicts
-! the stated intent in exceptions.toml ("SPC<-TLBPC-4 (faulting PC)").
+! THE FIX (core/datapath.vhm, D-side arms only).  Derive the restart from the
+! LIVE ex_if_pc, which at the first-fault capture cycle IS the faulting
+! instruction'"'"'s own PC in both addressing modes:
+!     normal      tlb_exc_pc := ex_if_pc + 4  -> SPC = faulting PC
+!     delay slot  tlb_exc_pc := ex_if_pc + 2  -> SPC = branch PC (re-issues the
+!                                                delay slot)
+! The I-side arm (tlb_exc_is_i = '"'"'1'"'"') is UNTOUCHED: IMISS/IPROT read
+! tlb_exc_pc via SEL_TLBPC with alu_y=0 and use tlb_fault_va directly, so it
+! never carried the -4 term.
 !
-! MEASURED (mmushadowld, load0 @ 0x104C, load1 @ 0x104E, VCD):
-!   fault 1  tlb_exc_pc = 0x104E -> SPC = 0x104A  = the nop before load0
-!   fault 2  tlb_exc_pc = 0x1050 -> SPC = 0x104C  = LOAD0 itself
-! Fault 1 is harmless because a nop precedes the load.  Fault 2 re-executes
-! load0, a post-increment load, which bumps its base a second time.
+! MAGNITUDE.  Four bytes, not two: sim/tests/mmupcprobe.S measured
+! Result=0x020201 before the fix (both preceding instructions executed twice)
+! against its q_expect = 0x00010101, and PASSes after it.
 !
-! WHY THE WHOLE EXISTING SUITE MISSES IT: every other guard happens to have a
-! harmless (nop / idempotent) instruction in front of the faulting access, so
-! re-executing it is invisible.  It only bites when the preceding instruction
-! has an architectural side effect -- which is exactly the case in a TRAIN of
-! post-increment loads (mmudrain.S Result=6, mmushadowld.S Result=0x21).
+! WHY THE WHOLE EXISTING SUITE MISSED IT: every other guard happens to have
+! idempotent instructions (nop, constant-pool load) in front of its faulting
+! access, so re-execution is invisible -- including the exhaustive m8 sweeps,
+! whose two preceding instructions are generated constant loads that for the
+! MAC cases actively REPAIR the bases.
 !
 ! THIS GUARD makes the side effect explicit and minimal: a single faulting @Rn+
 ! load preceded by `add #1, r7`.  r7 is the tripwire.
 !   Result = (r7 << 8) | (r2 - page0),  expected 0x0104 (r7==1, base bumped once)
-!   MEASURED 0x0204 -> r7 == 2, i.e. `add #1, r7` ran TWICE.
-!   The base itself (0x04) is CORRECT, which rules out the Defect 1/2 machinery
-!   and isolates the fault to the restart PC alone.
+!   Before the fix: 0x0204 (Result=516) -- `add #1, r7` ran TWICE.
+!   The base itself (0x04) was already CORRECT, which ruled out the Defect 1/2
+!   machinery and isolated the fault to the restart PC alone.
 !
-! A/B PROVING IT IS PRE-EXISTING (sim/mmu_sim.sh -n mmurestartpc "" 200us):
-!   with    the Defect 2 fix : Test failed. Result=516  (0x204)
-!   without the Defect 2 fix : Test failed. Result=516  (0x204)
-! Identical, so Defect 2's fix neither causes nor masks this.
-!
-! NOTE: fixing this is NOT a one-liner to be done blind -- tlb_exc_pc is shared
-! with the I-side (IMISS/IPROT use SEL_TLBPC with alu_y=0/ADD) and the
-! delay-slot restart model was tuned by the exhaustive m8 sweeps.  The minimal
-! candidate is the D-side-only pair of tlb_exc_pc assignments in datapath.vhm
-! (normal +2 -> +4, delay-slot +0 -> +2), validated against m8_dside /
-! m8_ifetch_* / m8_idslot_*.  Deliberately left UNFIXED here: this branch's
-! scope was Defects 1 and 2.
+! DEPENDENCY: correcting the restart PC requires the age-aware w-port writeback
+! squash (wb_grace) to have landed first.  The -4 restart was the only thing
+! re-creating writebacks the age-blind squash destroyed, so correcting the PC
+! without it loses the value outright (mmustr2 then stores U).
 !
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:

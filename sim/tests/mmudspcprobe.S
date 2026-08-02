@@ -58,11 +58,27 @@
 !     while mmudslot AND mmuidslot both stay GREEN under the same mutation.
 !     That is the coverage gap this guard exists to close, demonstrated.
 !
-! FINDING: this guard also PASSES on the PRE-fix RTL (the ma_if_pc-derived
-! restart).  The delay-slot arm was therefore ALREADY correct; Defect 3 (the
-! four-bytes-early restart) affected the NORMAL arm only.  The move to ex_if_pc
-! is value-equivalent for the delay-slot case and changes behaviour only for
-! the normal one.
+! THIS GUARD IS RED ON THE PRE-FIX RTL: rebuilt against 2384dc4^'s
+! core/datapath.vhm AND core/datapath.vhd (the ma_if_pc-derived restart) it
+! reports Result=0x00020200 -- FOUR bytes early, BOTH r7 and r6 re-run --
+! alongside mmupcprobe's documented 0x020201.  So the pre-fix
+! `tlb_exc_pc := this.ma_if_pc` landed four bytes early for a delay-slot plain
+! load too: Defect 3 affected BOTH arms, and moving the delay-slot arm to
+! ex_if_pc + 2 is NOT a no-op.
+!
+! That makes this a REGRESSION TEST for a defect that actually shipped a fix,
+! not merely a tripwire against a hypothetical future error.  Do not delete it
+! on the theory that it has never caught anything -- it catches the original
+! defect, and the mutation above shows it also catches re-introductions.
+!
+! (An earlier revision of this comment claimed the opposite, that the guard
+!  passed pre-fix.  That measurement was bogus: the "revert" used
+!  `git stash push core/datapath.vhm core/datapath.vhd` AFTER the fix had
+!  already been committed, so the paths were clean, the stash was a silent
+!  no-op that still exits 0, and the run measured the FIXED RTL.  To A/B
+!  against pre-fix RTL, `git checkout <rev> -- core/datapath.vhm
+!  core/datapath.vhd` and check `git status core/` is non-empty first --
+!  and never revert the .vhm without the generated .vhd.)
 !
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:

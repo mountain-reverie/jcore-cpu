@@ -97,6 +97,7 @@ if [ $# -ge 1 ]; then
     mmureloc)   top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmurelocif) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmurelocbp) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
+    mmupcprobe|mmudspcprobe) stop="${stop:-200us}" ;;
     m8_dside)   stop="${stop:-200us}" ;;
     m8_ifetch_*) stop="${stop:-12ms}" ;;
   esac
@@ -109,6 +110,17 @@ else
            mmustale mmuasid mmuglobal mmumultihit mmudblflt mmunest_trapa mmunest_slotill mmunest mmuremap mmucmpcsr mmurun mmuirun mmuainc mmuainc2 mmusmep j4_illegal_trap; do
     run_guard "$t"
   done
+  # Restart-PC EXACTNESS probes. Run explicitly (200us) rather than from the
+  # loop above: they are the only guards that measure HOW FAR the D-side
+  # TLB-fault restart PC lands from the faulting instruction, in units of
+  # instructions, instead of merely checking that control flow survived.
+  #   mmupcprobe    pins the NORMAL arm  (plain load, tlb_exc_pc = ex_if_pc+4)
+  #   mmudspcprobe  pins the DELAY-SLOT arm (branch delay slot, ex_if_pc+2)
+  # mmupcprobe is also the ONLY coverage of the plain-load restart path --
+  # mmurestartpc and mmudrain both fault on @Rn+ loads -- so leaving it
+  # unwired meant a regression in that arm would keep the suite fully green.
+  run_guard mmupcprobe   "" 200us
+  run_guard mmudspcprobe "" 200us
   echo "== cache guards (cpu_cache_tb) =="
   run_guard mmuicolor  cpu_cache_tb 400us
   run_guard mmudcbit   cpu_cache_tb 200us

@@ -103,8 +103,9 @@ entity datapath is
 		     -- Per-instruction fetch-PC round-trip (J4). if_pc = the VA of
 		     -- the instruction currently in if_dr (its own PC, captured at fetch
 		     -- before any branch redirect). decode re-registers it EX-aligned and
-		     -- returns it as ex_if_pc, which the datapath shadows at the MA-launch
-		     -- (ma_if_pc) to derive the D-fault restart PC. '0' on non-MMU builds.
+		     -- returns it as ex_if_pc, from which the D-fault restart PC is derived
+		     -- directly (the ma_if_pc MA-launch shadow is dead state -- see
+		     -- components_pkg.vhd). '0' on non-MMU builds.
 		     if_pc          : out std_logic_vector(31 downto 0);
 		     ex_if_pc       : in  std_logic_vector(31 downto 0) := (others => '0')
 	     );
@@ -943,12 +944,8 @@ end generate;
             this.mmu.fsr(3 downto 0) := tlb_exc_fsr(3 downto 0);
             this.tlb_exc_captured       := '1';
             -- Latch the faulting instruction's restart PC (D-side faults only).
-            -- ma_pc still holds the faulting access's launch PC: any following
-            -- access launches a slot later, after this first-fault capture. The
-            -- SPC adjustment (exceptions.toml D-fault slot 0) subtracts the
-            -- constant launch-to-instruction offset. tlb_exc_is_d gates the
-            -- xbus=PC substitution to the D-fault entry; I-fetch faults
-            -- (EXPEVT 0x040 IMISS / 0x0A0 IPROT) keep the live PC.
+            -- tlb_exc_is_d gates the xbus=PC substitution to the D-fault entry;
+            -- I-fetch faults (EXPEVT 0x040 IMISS / 0x0A0 IPROT) keep the live PC.
             -- The D-fault entry slot reads tlb_exc_pc via SEL_TLBPC and subtracts
             -- alu_y=4, so SPC = tlb_exc_pc - 4. The resume (LDTLB.R/RTE) re-enters
             -- exactly AT SPC -- NOT one slot ahead, as earlier revisions of this
@@ -971,8 +968,9 @@ end generate;
               else
                 this.tlb_exc_pc := tlb_fault_va;
               end if;
-            -- D-side: derive the restart from the instruction's OWN PC (ma_if_pc,
-            -- EX-aligned), not the run-ahead this.pc shadow (ma_pc).
+            -- D-side: derive the restart from the instruction's OWN PC via the
+            -- LIVE ex_if_pc -- not the run-ahead this.pc shadow (ma_pc) and not
+            -- the MA-launch shadow (ma_if_pc), which is now unused here.
             -- MEASURED from cosim VCDs (sim/tests/mmupcprobe.S, a single PLAIN
             -- faulting load at 0x104e; and mmurestartpc.S, a single @Rn+ load at
             -- 0x1054):
@@ -1360,6 +1358,7 @@ end generate;
                   -- the instruction's PC, not the run-ahead this.pc (ma_pc). For a
                   -- delay-slot load ex_if_pc = delay_slot_PC (= branch+2) whereas
                   -- ma_pc is the branch target.
+                  -- DEAD STATE: no readers left. See components_pkg.vhd.
                   this.ma_if_pc   := ex_if_pc;
                 end if;
               end if;
@@ -1545,11 +1544,18 @@ end generate;
 	-- process branch that sets this.tlb_squash, and g_wb_grace (which must
 	-- sample the pending w-port writeback on the SAME edge, so it cannot wait
 	-- for tlb_squash_r -- that is already a cycle too late). Keeping them as
-	-- two hand-written copies is a silent-regression hazard: nothing in the
-	-- suite fails if g_wb_grace stops arming (Task 1 is deliberately
-	-- observably neutral until the D-side restart PC is fixed), so a
-	-- desynchronising edit would re-introduce the age-blind squash with a
-	-- fully green suite. Hence one signal, consumed by both.
+	-- two hand-written copies is a silent-regression hazard, so there is one
+	-- signal, consumed by both.
+	-- TESTABILITY GUARANTEE (measured, not assumed): sim/tests/mmustr2 FAILS
+	-- if g_wb_grace stops arming. Verified by mutation -- replacing the
+	-- wb_grace <= reg.wr_w and not slot_o arming with wb_grace <= '0' turns
+	-- mmustr2 RED (it stores U). This held only once the D-side restart PC
+	-- was corrected to derive from ex_if_pc: while the restart was four bytes
+	-- early, re-execution re-created the very writeback the age-blind squash
+	-- destroyed, which is what made the grace bit observably neutral and left
+	-- it with no failing test behind it. So a desynchronising edit here is now
+	-- caught by the suite -- do NOT dismiss an mmustr2 failure as unrelated to
+	-- a change in this predicate; it is the guard for it.
 	--   * tlb_exc_pend is combinational on the D-side request (cpu.vhd: it
 	--     asserts while sig_db_o.en = '1', i.e. before any ack), so the arm is
 	--     coincident with the faulting access, not a cycle behind it.

@@ -199,9 +199,21 @@ package cpu2j0_components_pack is
     -- load the branch redirect already carried this.pc into the target region, so
     -- ma_pc is the target, not the load. if_pc captures the instruction's OWN fetch
     -- VA at fetch (before any redirect); it is routed out to decode, re-registered
-    -- EX-aligned (ex_if_pc), and shadowed at the MA-launch as ma_if_pc, from which
-    -- the D-fault restart PC is derived. if_pc_next tracks if_dr_next; if_pc tracks
-    -- if_dr. (J4+PRIV_ARCH only; unused/pruned on J1/J2.)
+    -- EX-aligned (ex_if_pc), and shadowed at the MA-launch as ma_if_pc.
+    -- if_pc_next tracks if_dr_next; if_pc tracks if_dr.
+    -- (J4+PRIV_ARCH only; unused/pruned on J1/J2.)
+    -- ma_if_pc is currently DEAD STATE: it is written (datapath.vhm, inside
+    -- if PRIV_ARCH) but has NO readers. The D-fault restart PC was derived from
+    -- it until that was found to be unfixable -- ma_if_pc lags the faulting
+    -- instruction's own PC by an ADDRESSING-MODE-DEPENDENT amount (PC-2 for a
+    -- plain load, PC for an @Rn+ load), because it is sampled at the memory-
+    -- access point, which different modes reach at different offsets from
+    -- their own PC. The restart now uses the live ex_if_pc instead. The field
+    -- is retained rather than removed because datapath_reg_t is a SHARED
+    -- record: dropping it is a mechanical but cross-variant edit with no
+    -- functional benefit (the write is PRIV_ARCH-gated and constant-folds, so
+    -- it costs J1/J2 nothing). Remove it only as deliberate cleanup, with a
+    -- J1/J2 area check.
     if_pc_next : std_logic_vector(31 downto 0);
     if_pc      : std_logic_vector(31 downto 0);
     ma_if_pc   : std_logic_vector(31 downto 0);

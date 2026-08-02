@@ -1,19 +1,29 @@
 ! mmupcprobe.S -- INDEPENDENT probe of the D-side TLB-fault restart PC.
 !
-! STATUS: RED on current RTL (measured Result=0x020201). Deliberately NOT listed
-! in sim/mmu_sim.sh's default suite; run it explicitly:
-!     sim/mmu_sim.sh mmupcprobe cpu_tb 200us
+! STATUS: GREEN, and WIRED INTO sim/mmu_sim.sh's default suite (run explicitly
+! with: sim/mmu_sim.sh mmupcprobe "" 200us). It was RED at Result=0x020201
+! before the restart PC was corrected to derive from the live ex_if_pc; it now
+! reaches its exact q_expect of 0x00010101.
 !
-! It measures Defect 3 (D-side TLB-fault restart PC lands early). Unlike
+! WHY IT MUST STAY IN THE SUITE: it is the ONLY guard covering the PLAIN-LOAD
+! restart path -- mmurestartpc.S and mmudrain.S both fault on @Rn+ loads -- and
+! it is the only one that pins the normal arm to EXACTNESS rather than to "not
+! broken". While it was unwired, a regression in the normal arm would have left
+! the whole suite green. sim/tests/mmudspcprobe.S is its delay-slot analogue.
+!
+! It measured Defect 3 (D-side TLB-fault restart PC lands early). Unlike
 ! mmurestartpc.S, which can only report "too early", this probe reports HOW
 ! early -- and the answer is FOUR bytes, not two: BOTH instructions preceding
 ! the faulting access re-execute. mmurestartpc.S cannot see this because the
 ! slot at load_PC-4 in that test is a nop.
 !
-! Corroborated by VCD: on the fault, tlb_exc_pc latches the faulting PC while
-! the RTL applies a +2 bias (so the shadowed ma_if_pc = faulting_PC - 2), and
-! after the handler ex_if_pc resumes straight at SPC = tlb_exc_pc - 4 -- i.e.
-! the resume does NOT "re-enter one slot ahead" as core/datapath.vhm claims.
+! Corroborated by VCD: on the fault, tlb_exc_pc latched the faulting PC while
+! the RTL applied a +2 bias (so the shadowed ma_if_pc = faulting_PC - 2), and
+! after the handler ex_if_pc resumed straight at SPC = tlb_exc_pc - 4 -- i.e.
+! the resume does NOT "re-enter one slot ahead", as core/datapath.vhm used to
+! claim. That mistaken belief was one of the two compounding -2 terms; the
+! other was ma_if_pc's addressing-mode-dependent lag. Both are fixed by
+! deriving the D-side restart from the live ex_if_pc (tlb_exc_pc = ex_if_pc+4).
 !
 ! Deliberately does NOT reuse mmurestartpc.S's shape. Two differences that
 ! matter for attributing the effect:
@@ -29,7 +39,7 @@
 !
 !   Result = (r6 << 16) | (r7 << 8) | r8.
 !
-!   0x010101  restart lands exactly on the load          (correct)
+!   0x010101  restart lands exactly on the load          (correct -- MEASURED)
 !   0x010201  restart lands on load_PC-2 (one too early) (Defect 3 as claimed)
 !   0x020201  restart lands on load_PC-4 (two too early)
 !   r12 wrong -> the load itself did not land; fails early with 0x0BAD.

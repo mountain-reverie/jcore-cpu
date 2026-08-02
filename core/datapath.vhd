@@ -161,6 +161,14 @@ signal manip_sel : std_logic_vector(31 downto 0);
  -- (J4). On a non-MMU build these are exactly reg.wr_z/reg.wr_w, so
  -- J1/J2 behaviour is byte-identical and tlb_squash prunes away.
  signal reg_wr_z_g, reg_wr_w_g : std_logic;
+ -- One-shot program-order ("age") grace bit for the w-port squash
+ -- (J4+MMU_ARCH). See the g_wb_grace block near the register_file
+ -- instantiation for the rule it implements. Deliberately a standalone
+ -- generate-local register rather than a datapath_reg_t ("this") field:
+ -- widening that shared record perturbs the base J1/J2 techmap even for
+ -- arch-gated fields (see the sr_cs note above g_cs). Tied '0' off
+ -- MMU_ARCH so it prunes away entirely on J1/J2.
+ signal wb_grace : std_logic;
  signal ybus_override : bus_val_t;
  signal slot_o : std_logic;
  -- Precise auto-increment restore (J4). mem_autoupd marks the current
@@ -658,7 +666,61 @@ end generate;
  reg_wr_z_g <= ((reg.wr_z and (not this_r.tlb_squash
                                or (num_z_r(4) and not num_z_r(3))))
                 or restore_fire) when PRIV_ARCH else reg.wr_z;
- reg_wr_w_g <= reg.wr_w and not this_r.tlb_squash when PRIV_ARCH else reg.wr_w;
+ -- PROGRAM-ORDER RULE for the w-port squash (J4+PRIV_ARCH).
+ --
+ -- Precise-exception semantics: instructions OLDER than the faulting access
+ -- must COMMIT; only YOUNGER ones may be discarded. The squash above is a
+ -- pure time-window test with no age term, so on its own it also discards
+ -- the retirement of the instruction that was already presenting its w-port
+ -- writeback when the fault armed -- an instruction that is necessarily
+ -- older. (Observed on mmustr2.S: mov.l c_sval2,r11 presents we_wb=1,
+ -- w_addr_wb=0xb at 460000000 fs, tlb_squash arms at 470000000 fs and forces
+ -- we_wb to 0, and the commit edge lands at 480000000 fs -- R11 is never
+ -- written.) The z-port needs no such term: it retires IN-slot, so its
+ -- shadow correctly starts immediately. Only the w-port is offset, retiring
+ -- a slot late by construction (see the comment above reg_wr_z_g).
+ --
+ -- WHY ONE BIT IS ENOUGH -- do NOT "simplify" this back into a time window,
+ -- and do not reach for a per-instruction age tag. Only ONE memory
+ -- transaction can be outstanding: a new one starts only when
+ -- this.data_o.en = '0' (see "start new memory transactions" below) and the
+ -- pipeline does not advance while one is in flight (the slot-advance
+ -- condition requires this.data_o.en = '0' as well). A fault therefore always
+ -- arises from an access that began AFTER the previous access acked, so
+ -- (a) any w-port writeback pending when the squash arms is necessarily
+ -- OLDER than the faulting access, and
+ -- (b) the faulting instruction contributes no w-port writeback of its own
+ -- (a faulting load returns no data; a store writes no GPR).
+ -- Hence exactly one post-arm w-port commit must be admitted, and a single
+ -- one-shot bit expresses that exactly.
+ --
+ -- The bit is set at the arming edge iff a w-port writeback is pending and
+ -- is not already committing on that same edge (slot_o = '1' means it
+ -- commits now, ungated, because tlb_squash only becomes visible next
+ -- cycle -- no grace needed). It is cleared on the first slot boundary
+ -- thereafter, which IS that writeback's commit edge; while the slot is
+ -- stretched (slot_o = '0') the pipeline is frozen, so reg.wr_w/num_w_r are
+ -- held and the bit correctly persists.
+ g_wb_grace : if PRIV_ARCH generate
+   process(clk, rst)
+   begin
+     if rst = '1' then
+       wb_grace <= '0';
+     elsif clk = '1' and clk'event then
+       if tlb_squash_r = '0' and tlb_exc_pend = '1' and sr.rb = '0' then
+         -- squash arms on this edge (mirrors the tlb_squash arming below)
+         wb_grace <= reg.wr_w and not slot_o;
+       elsif slot_o = '1' then
+         wb_grace <= '0';
+       end if;
+     end if;
+   end process;
+ end generate;
+ g_wb_grace_off : if not PRIV_ARCH generate
+   wb_grace <= '0';
+ end generate;
+ reg_wr_w_g <= (reg.wr_w and (not this_r.tlb_squash or wb_grace))
+               when PRIV_ARCH else reg.wr_w;
  -- J1 early-read addresses (architecture(ebr) reads on rising edge); zero on J2/J4.
  num_x_early_r <= reg.num_x_early when EARLY_REGFILE_READ else (others => '0');
  num_y_early_r <= reg.num_y_early when EARLY_REGFILE_READ else (others => '0');

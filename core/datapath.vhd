@@ -169,6 +169,10 @@ signal manip_sel : std_logic_vector(31 downto 0);
  -- arch-gated fields (see the sr_cs note above g_cs). Tied '0' off
  -- MMU_ARCH so it prunes away entirely on J1/J2.
  signal wb_grace : std_logic;
+ -- Shared "the squash arms on this clock edge" predicate (J4+MMU_ARCH),
+ -- consumed by BOTH the tlb_squash arming in the process and g_wb_grace.
+ -- Constant '0' off MMU_ARCH so J1/J2 prune it. See its assignment below.
+ signal squash_arm : std_logic;
  signal ybus_override : bus_val_t;
  signal slot_o : std_logic;
  -- Precise auto-increment restore (J4). mem_autoupd marks the current
@@ -707,8 +711,10 @@ end generate;
      if rst = '1' then
        wb_grace <= '0';
      elsif clk = '1' and clk'event then
-       if tlb_squash_r = '0' and tlb_exc_pend = '1' and sr.rb = '0' then
-         -- squash arms on this edge (mirrors the tlb_squash arming below)
+       if tlb_squash_r = '0' and squash_arm = '1' then
+         -- squash arms on this edge -- squash_arm is the SHARED predicate
+         -- also consumed by the tlb_squash arming in the process, so the
+         -- two can no longer drift apart (see squash_arm's declaration).
          wb_grace <= reg.wr_w and not slot_o;
        elsif slot_o = '1' then
          wb_grace <= '0';
@@ -846,7 +852,7 @@ end generate;
  with mac.sel1 select macin1 <= xbus when SEL_XBUS, zbus_mac when SEL_ZBUS, wbus when others;
  with mac.sel2 select macin2 <= ybus when SEL_YBUS, zbus_mac when SEL_ZBUS, wbus when others;
  ibit <= sr.int_mask;
- datapath : process(this_r,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, tlb_fault_va, tlb_exc_expevt, tlb_exc_fsr, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, tlb_exc_is_i, ex_if_pc)
+ datapath : process(this_r,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, squash_arm, tlb_fault_va, tlb_exc_expevt, tlb_exc_fsr, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, tlb_exc_is_i, ex_if_pc)
    variable this : datapath_reg_t;
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
@@ -1031,7 +1037,9 @@ end generate;
           if PRIV_ARCH then
             if this.sr.rb = '1' then
               this.tlb_squash := '0';
-            elsif tlb_exc_pend = '1' then
+            elsif squash_arm = '1' then
+              -- squash_arm is the SHARED arming predicate; g_wb_grace consumes
+              -- the identical signal. Do not re-inline tlb_exc_pend here.
               this.tlb_squash := '1';
             end if;
           end if;
@@ -1480,6 +1488,27 @@ end generate;
  mmu_regs_o <= mmu_regs;
  sr_o <= sr;
  tlb_squash_r <= this_r.tlb_squash when PRIV_ARCH else '0';
+ -- SINGLE SOURCE OF TRUTH for "the precise-exception squash arms on this
+ -- clock edge" (J4+PRIV_ARCH). TWO sites must agree on this predicate: the
+ -- process branch that sets this.tlb_squash, and g_wb_grace (which must
+ -- sample the pending w-port writeback on the SAME edge, so it cannot wait
+ -- for tlb_squash_r -- that is already a cycle too late). Keeping them as
+ -- two hand-written copies is a silent-regression hazard: nothing in the
+ -- suite fails if g_wb_grace stops arming (Task 1 is deliberately
+ -- observably neutral until the D-side restart PC is fixed), so a
+ -- desynchronising edit would re-introduce the age-blind squash with a
+ -- fully green suite. Hence one signal, consumed by both.
+ -- * tlb_exc_pend is combinational on the D-side request (cpu.vhd: it
+ -- asserts while sig_db_o.en = '1', i.e. before any ack), so the arm is
+ -- coincident with the faulting access, not a cycle behind it.
+ -- * sr.rb = '0' is the "not already in the handler" guard, matching the
+ -- process's own if this.sr.rb = '1' then ... elsif ... structure. It
+ -- uses the COMMITTED SR (this_r.sr) rather than the process's
+ -- mid-cycle this.sr, so both consumers see one value; where the two
+ -- could differ the committed value is the conservative one (it can
+ -- only suppress an arm, never create a spurious one).
+ squash_arm <= '1' when PRIV_ARCH and tlb_exc_pend = '1' and sr.rb = '0'
+               else '0';
  tlb_squash_o <= tlb_squash_r;
  mac_s <= this_r.mac_s;
         db_lock <= this_r.data_o_lock;

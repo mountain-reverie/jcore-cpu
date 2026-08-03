@@ -162,14 +162,16 @@ signal manip_sel : std_logic_vector(31 downto 0);
  -- (J4). On a non-MMU build these are exactly reg.wr_z/reg.wr_w, so
  -- J1/J2 behaviour is byte-identical and tlb_squash prunes away.
  signal reg_wr_z_g, reg_wr_w_g : std_logic;
- -- One-shot program-order ("age") grace bit for the w-port squash
- -- (J4+MMU_ARCH). See the g_wb_grace block near the register_file
- -- instantiation for the rule it implements. Deliberately a standalone
- -- generate-local register rather than a datapath_reg_t ("this") field:
- -- widening that shared record perturbs the base J1/J2 techmap even for
- -- arch-gated fields (see the sr_cs note above g_cs). Tied '0' off
- -- MMU_ARCH so it prunes away entirely on J1/J2.
- signal wb_grace : std_logic;
+ -- NOTE -- the one-shot program-order ("age") grace bit for the w-port
+ -- squash (wb_grace) is declared INSIDE g_wb_grace, not here. A signal
+ -- declared at architecture scope and merely tied off under
+ -- "if not MMU_ARCH generate" still EXISTS on J1/J2: yosys carries it
+ -- through flatten as a dangling zero-cell wire, which perturbs abc9's
+ -- technology mapping (measured: non-monotonic +/-464 LUT4 swings on J1
+ -- with the flop count constant). Keeping it generate-local means the
+ -- base variants elaborate with no trace of it at all. Its consumer
+ -- reg_wr_w_g is assigned in the two generate branches for the same
+ -- reason. Same precedent as the SH2A_ARCH g_push locals.
  -- Shared "the squash arms on this clock edge" predicate (J4+MMU_ARCH),
  -- consumed by BOTH the tlb_squash arming in the process and g_wb_grace.
  -- Constant '0' off MMU_ARCH so J1/J2 prune it. See its assignment below.
@@ -192,13 +194,14 @@ signal manip_sel : std_logic_vector(31 downto 0);
  -- faulting access's own base) leaves the first base at +size and the
  -- RTE-restart bumps it a second time. This entry carries the first operand's
  -- (base register, pre-increment value) and is fired one eligible slot after
- -- the first entry. Driven in g_restore2 / tied off in g_restore2_off, and
- -- deliberately NOT new fields in the shared datapath_reg_t "this" record:
- -- widening that record perturbs the base J1/J2 techmap even for arch-gated
- -- fields (same precedent as wb_grace / sr_cs).
- signal restore2_fire : std_logic;
- signal restore2_reg : std_logic_vector(4 downto 0);
- signal restore2_val : std_logic_vector(31 downto 0);
+ -- the first entry. Declared INSIDE g_restore2 (not here) and deliberately
+ -- NOT new fields in the shared datapath_reg_t "this" record: widening that
+ -- record perturbs the base J1/J2 techmap even for arch-gated fields, and so
+ -- does an architecture-scope declaration that is merely tied off under
+ -- "if not MMU_ARCH generate" -- 38 dangling zero-cell wire bits survive
+ -- flatten and steer abc9 (see the wb_grace note above). Their three
+ -- consumers (gpf_zwd, num_z_r, reg_wr_z_g) are therefore assigned in the
+ -- g_restore2 / g_restore2_off branches too.
  -- ma_launch: "the ma_* access shadow is being written this cycle", i.e. the
  -- data access of an instruction is being handed to the bus. Driven from
  -- INSIDE the datapath process, at the very statement that writes
@@ -439,9 +442,8 @@ begin
  -- On the precise auto-increment restore cycle the EX write data is the
  -- captured pre-increment base (tlb_restore_val); otherwise the normal z path.
  -- The second (MAC first-operand) entry uses the same port one slot later.
- gpf_zwd <= this_r.tlb_restore_val when (PRIV_ARCH and restore_fire = '1')
-            else restore2_val when (PRIV_ARCH and restore2_fire = '1')
-            else pc when pc_ctrl.wrpr = '1' else zbus;
+ -- Assigned in the g_restore2 / g_restore2_off branches below, because the
+ -- restore2_* operands must not exist at all on J1/J2 (see their note above).
  -- mem_autoupd: marks the memory-access slot of a post-increment load @Rm+.
  -- In j-core a post-increment is a two-slot op: slot0 commits Rm := Rm+size on
  -- the EX z-port (no access), then THIS slot reads memory with the address
@@ -643,9 +645,8 @@ end generate;
  -- SH-4 register-bank remap on the four address ports; pass-through on J2.
  num_x_r <= bank_remap(reg.num_x, sr.md, sr.rb) when PRIV_ARCH else reg.num_x;
  num_y_r <= bank_remap(reg.num_y, sr.md, sr.rb) when PRIV_ARCH else reg.num_y;
- num_z_r <= this_r.tlb_fault_zreg when (PRIV_ARCH and restore_fire = '1')
-            else restore2_reg when (PRIV_ARCH and restore2_fire = '1')
-            else bank_remap(reg.num_z, sr.md, sr.rb) when PRIV_ARCH else reg.num_z;
+ -- num_z_r is assigned in the g_restore2 / g_restore2_off branches below
+ -- (it selects the restore2_* entry, which must not exist on J1/J2).
  num_w_r <= bank_remap(reg.num_w, sr.md, sr.rb) when PRIV_ARCH else reg.num_w;
  -- Bank-remap the dedicated R0-index read port too (drives dout_0); pass-through
  -- (bank-0 R0) on J2, so mov.l @(R0,Rn) uses the correct R0 under SR.RB=1.
@@ -714,9 +715,8 @@ end generate;
  -- z-port (e.g. a trailing LDC Rm,<sysreg>) would be wrongly exempted and
  -- commit non-precisely. Accepted -- strictly better than the pre-fix (no
  -- we_ex squash at all) and the exposure window is only 1-2 slots.
- reg_wr_z_g <= ((reg.wr_z and (not this_r.tlb_squash
-                               or (num_z_r(4) and not num_z_r(3))))
-                or restore_fire or restore2_fire) when PRIV_ARCH else reg.wr_z;
+ -- reg_wr_z_g is assigned in the g_restore2 / g_restore2_off branches below
+ -- (it ORs in restore2_fire, which must not exist on J1/J2).
  -- PROGRAM-ORDER RULE for the w-port squash (J4+PRIV_ARCH).
  --
  -- Precise-exception semantics: instructions OLDER than the faulting access
@@ -753,6 +753,11 @@ end generate;
  -- stretched (slot_o = '0') the pipeline is frozen, so reg.wr_w/num_w_r are
  -- held and the bit correctly persists.
  g_wb_grace : if PRIV_ARCH generate
+   -- Generate-local so J1/J2 elaborate with no trace of it (see the note at
+   -- the declaration site above for why "tied off at architecture scope" is
+   -- not good enough).
+   signal wb_grace : std_logic;
+ begin
    process(clk, rst)
    begin
      if rst = '1' then
@@ -768,9 +773,10 @@ end generate;
        end if;
      end if;
    end process;
+   reg_wr_w_g <= reg.wr_w and (not this_r.tlb_squash or wb_grace);
  end generate;
  g_wb_grace_off : if not PRIV_ARCH generate
-   wb_grace <= '0';
+   reg_wr_w_g <= reg.wr_w;
  end generate;
  -- SECOND base-restore entry for the DUAL-base MAC.L/W @Rm+,@Rn+ (see the
  -- NOTE above reg_wr_z_g). The microcode is, per decode/gen-go/spec:
@@ -850,7 +856,24 @@ end generate;
    signal op1_reg_r : std_logic_vector(4 downto 0) := (others => '0');
    signal op1_val_r : std_logic_vector(31 downto 0) := (others => '0');
    signal pend2_r : std_logic := '0';
+   -- The entry itself. Generate-local so it leaves no dangling wire bits on
+   -- J1/J2 (see the note at the declaration site above).
+   signal restore2_fire : std_logic;
+   signal restore2_reg : std_logic_vector(4 downto 0);
+   signal restore2_val : std_logic_vector(31 downto 0);
  begin
+   -- The three consumers live here rather than at architecture scope so that
+   -- the restore2_* operands can be generate-local.
+   gpf_zwd <= this_r.tlb_restore_val when restore_fire = '1'
+              else restore2_val when restore2_fire = '1'
+              else pc when pc_ctrl.wrpr = '1' else zbus;
+   num_z_r <= this_r.tlb_fault_zreg when restore_fire = '1'
+              else restore2_reg when restore2_fire = '1'
+              else bank_remap(reg.num_z, sr.md, sr.rb) when PRIV_ARCH
+              else reg.num_z;
+   reg_wr_z_g <= (reg.wr_z and (not this_r.tlb_squash
+                                or (num_z_r(4) and not num_z_r(3))))
+                 or restore_fire or restore2_fire;
    -- epc_r holds the SETTLED ex_if_pc of the most recent access, so on the
    -- launch_d cycle of access k this compares instruction(k) against
    -- instruction(k-1). One cycle later epc_r has moved on and prev_ok_r
@@ -944,12 +967,11 @@ end generate;
    end process;
  end generate;
  g_restore2_off : if not MMU_ARCH generate
-   restore2_fire <= '0';
-   restore2_reg <= (others => '0');
-   restore2_val <= (others => '0');
+   gpf_zwd <= pc when pc_ctrl.wrpr = '1' else zbus;
+   num_z_r <= bank_remap(reg.num_z, sr.md, sr.rb) when PRIV_ARCH
+                 else reg.num_z;
+   reg_wr_z_g <= reg.wr_z;
  end generate;
- reg_wr_w_g <= (reg.wr_w and (not this_r.tlb_squash or wb_grace))
-               when PRIV_ARCH else reg.wr_w;
  -- J1 early-read addresses (architecture(ebr) reads on rising edge); zero on J2/J4.
  num_x_early_r <= reg.num_x_early when EARLY_REGFILE_READ else (others => '0');
  num_y_early_r <= reg.num_y_early when EARLY_REGFILE_READ else (others => '0');

@@ -50,8 +50,11 @@
 ! sim/mmu_sim.sh's suite.
 !
 ! NON-VACUITY, established by mutation rather than argued:
-!   * The load lands (r12 == 0xD0000000 from an initially UNMAPPED page), so
-!     the fault provably occurred and the handler provably ran.
+!   * _verify checks the handler's _fault_count delta over the window is
+!     exactly 1, so the fault provably occurred and the handler provably ran.
+!     (The loaded value alone proves NOTHING of the sort: r12 == 0xD0000000
+!     only proves the page holds the right word, not that it was unmapped or
+!     that any fault was taken.)
 !   * Injecting a -2 error into the delay-slot arm in core/datapath.vhm
 !     (tlb_exc_pc := ex_if_pc instead of ex_if_pc + 2) turns this guard RED
 !     with Result=0x00010200 -- it reads the injected offset out correctly --
@@ -144,6 +147,8 @@ ENTRY(start)
 	! ---- stage everything the window needs (no memory traffic inside) ----
 	mov.l	p_d0, r2		! base = unmapped data page
 	mov.l	p_v0, r5		! expected loaded value
+	mov.l	p_fc, r0		! non-vacuity baseline: fault count before
+	mov.l	@r0, r11		! the window (delta checked in _verify)
 	nop
 	nop
 	nop
@@ -179,6 +184,7 @@ _dsl_target:
 	.align 2
 p_rbclear:	.long 0xDFFFFFFF
 p_vbr_val:	.long _v_pc - 0x400
+p_fc:		.long _fault_count
 p_mmucr:	.long 0xFF000010
 p_code_start:	.long start
 p_code_end:	.long _code_end
@@ -217,6 +223,21 @@ ENTRY(_verify)
 	bra	_fail			! r9 = composite, reported verbatim
 	nop
 7:
+	! ---- NON-VACUITY: exactly ONE fault must have been taken. ----
+	! _fault_count was wired but never read: with _dpage_0 accidentally
+	! mapped no fault occurs, the composite still matches, and the guard
+	! PASSES VACUOUSLY.  This is the check the header's coverage claim rests
+	! on (a correct loaded value proves nothing about faulting).
+	mov.l	q_fc, r0
+	mov.l	@r0, r1
+	sub	r11, r1
+	mov	#1, r0
+	cmp/eq	r0, r1
+	bt	8f
+	mov	#0x40, r9		! distinct code: vacuity / wrong fault count
+	bra	_fail
+	nop
+8:
 	! ---- Disable AT before handing the result to the harness. ----
 	mov.l	q_mmucr, r0
 	mov	#0, r1
@@ -231,6 +252,7 @@ q_expect:	.long 0x00010100
 q_mmucr:	.long 0xFF000010
 q_bad:		.long 0x00000BAD
 q_bad8:		.long 0x0000BAD8
+q_fc:		.long _fault_count
 
 #endif
 

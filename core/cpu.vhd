@@ -118,7 +118,7 @@ architecture stru of cpu is
   signal tlb_exc_fsr : std_logic_vector(12 downto 0);
   -- '1' when the pending TLB fault is an I-fetch fault (IMISS/IPROT). The
   -- datapath uses it to capture the I-side restart PC from the faulting fetch
-  -- VA (tlb_fault_va) instead of the D-side ma_pc shadow.
+  -- VA (tlb_fault_va) instead of the D-side ex_if_pc derivation.
   signal tlb_exc_is_i : std_logic;
   -- Dynamic delay-slot flag (decode->datapath): lets a delay-slot D-side TLB
   -- fault restart at the branch. Phase-aligned to the EX control in decode.

@@ -184,15 +184,22 @@ package cpu2j0_components_pack is
     -- overwritten by a later cycle of the same fault. Needed for IMISS, where the
     -- I-fetch stream advances a word while the miss persists (J4+PRIV_ARCH).
     tlb_exc_captured : std_logic;
-    -- Faulting-instruction restart-PC capture (J4+PRIV_ARCH). ma_pc shadows the
-    -- architectural PC of the instruction that launches each data access (a fixed
-    -- pipeline point, so the offset to the access's own instruction is constant
-    -- regardless of how far the fetch pointer later runs ahead). On the first
-    -- cycle of a D-side TLB fault ma_pc is latched into tlb_exc_pc and routed to
-    -- the SPC computation, so RTE/LDTLB.R re-executes the faulting access even
-    -- under back-to-back faults (where the frozen fetch PC's lead is variable).
-    -- It is read onto xbus via SEL_TLBPC for the D-fault exception entry only
-    -- (I-fetch faults keep SEL_PC / the live PC); the decoder scopes the use.
+    -- ma_pc is currently DEAD STATE: it is written once (datapath.vhm,
+    -- this.ma_pc := this.pc at the memory-access launch point, inside
+    -- if PRIV_ARCH) and has NO readers anywhere. It was the D-fault restart-PC
+    -- source until that derivation was found to be wrong: ma_pc is the
+    -- RUN-AHEAD fetch pointer at the access-launch slot, and for a delay-slot
+    -- load the branch redirect has already carried it into the target region,
+    -- so it is the branch target rather than the faulting instruction. The
+    -- restart PC is now derived live from ex_if_pc (the EX-aligned
+    -- per-instruction fetch PC) -- see the D-side arm in datapath.vhm.
+    -- The field is retained rather than removed because datapath_reg_t is a
+    -- SHARED record: dropping it is a mechanical but cross-variant edit with
+    -- no functional benefit (the write is PRIV_ARCH-gated and constant-folds,
+    -- so it costs J1/J2 nothing). Remove it only as deliberate cleanup, with a
+    -- J1/J2 area check. Sibling comments below still name ma_pc purely as the
+    -- shorthand for "the memory-access launch pipeline point" at which the
+    -- other ma_* shadows are captured.
     ma_pc : std_logic_vector(31 downto 0);
     -- Per-instruction fetch-PC. ma_pc (=this.pc at MA-launch) is the run-ahead
     -- fetch pointer: fine for a normal load (constant +4 lead) but for a delay-slot
@@ -264,12 +271,14 @@ package cpu2j0_components_pack is
     ma_predec : std_logic;
     ma_base   : std_logic_vector(31 downto 0);
     -- Delay-slot marker of the access-launching instruction, shadowed at the same
-    -- pipeline point as ma_pc. A D-side TLB fault whose faulting instruction is in
-    -- a branch delay slot must restart at the BRANCH (so it re-issues the delay
-    -- slot), not at the delay-slot instruction. ma_pc for a delay-slot instruction
-    -- is the branch PC (the fetch PC is held across the delayed branch), so the
-    -- normal tlb_exc_pc = ma_pc - 2 bias undershoots; when ma_dslot='1' the bias is
-    -- ma_pc + 2 instead, yielding SPC = TLBPC - 4 = branch PC - 2 = branch restart.
+    -- pipeline point as the ma_pc write. A D-side TLB fault whose faulting
+    -- instruction is in a branch delay slot must restart at the BRANCH (so it
+    -- re-issues the delay slot), not at the delay-slot instruction. ma_dslot only
+    -- SELECTS the arm; the PC itself comes from the live ex_if_pc. The D-fault
+    -- entry computes SPC = tlb_exc_pc - 4, so:
+    --   ma_dslot='0': tlb_exc_pc = ex_if_pc + 4 -> SPC = faulting instruction PC.
+    --   ma_dslot='1': ex_if_pc is the delay slot (= branch PC + 2), so
+    --                 tlb_exc_pc = ex_if_pc + 2 -> SPC = branch PC.
     ma_dslot         : std_logic;
     tlb_fault_zreg   : std_logic_vector(4 downto 0);
     tlb_restore_val  : std_logic_vector(31 downto 0);

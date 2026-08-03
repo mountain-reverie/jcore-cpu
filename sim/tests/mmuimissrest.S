@@ -4,8 +4,9 @@
 ! core/datapath.vhm's fault-capture block arms the @Rn+ base restore from the
 ! ma_numz / ma_autoupd / ma_predec shadows.  Those shadows are written only at
 ! the memory-access pipeline point and are NEVER cleared on a non-memory
-! instruction, and the arming block is NOT gated on tlb_exc_is_i (even though
-! tlb_exc_is_i is used ~20 lines earlier to pick the restart PC).  So an
+! instruction, and the arming block WAS NOT gated on tlb_exc_is_i (even though
+! tlb_exc_is_i was used ~20 lines earlier to pick the restart PC); it now IS.
+! Pre-fix, therefore, an
 ! INSTRUCTION-FETCH fault (IMISS/IPROT) inherits the last post-increment load's
 ! ma_numz plus a stale ma_autoupd='1', arms a bogus base restore, and
 ! restore_fire writes the I-side faulting FETCH VA into that GPR.
@@ -22,9 +23,9 @@
 ! Pre-fix, step 5 fails: r2 has been clobbered with the stub page's fetch VA.
 !
 ! ---- why exactly ONE faulting load ----
-! A SECOND, still-unfixed defect exists: a train of back-to-back faulting @Rn+
-! loads loses every second access (tlb_squash kills the slot-0 base bump while
-! the slot-1 access still issues at Rn-4).  mmudrain.S covers that.  To isolate
+! A SECOND defect exists (since FIXED, 84378f9): a train of back-to-back @Rn+
+! loads lost every second access (tlb_squash killed the slot-0 base bump while
+! the slot-1 access still issued at Rn-4).  mmudrain.S covers that.  To isolate
 ! Defect 1 cleanly this guard uses a single faulting post-increment load, well
 ! separated from any other memory traffic by nops.
 !

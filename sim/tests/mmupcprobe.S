@@ -5,11 +5,14 @@
 ! before the restart PC was corrected to derive from the live ex_if_pc; it now
 ! reaches its exact q_expect of 0x00010101.
 !
-! WHY IT MUST STAY IN THE SUITE: it is the ONLY guard covering the PLAIN-LOAD
-! restart path -- mmurestartpc.S and mmudrain.S both fault on @Rn+ loads -- and
-! it is the only one that pins the normal arm to EXACTNESS rather than to "not
-! broken". While it was unwired, a regression in the normal arm would have left
-! the whole suite green. sim/tests/mmudspcprobe.S is its delay-slot analogue.
+! WHY IT MUST STAY IN THE SUITE: it is the only guard that pins the normal
+! (plain-load) restart arm to EXACTNESS rather than to "not broken". Other
+! guards do fault on plain loads through the same restart path (mmufault.S:158,
+! mmustale.S:89, mmuxlate.S:54) -- but only coarsely, i.e. they check that
+! control flow survived and the value arrived, not WHERE the restart landed.
+! (mmurestartpc.S and mmudrain.S fault on @Rn+ loads, so they do not exercise
+! the plain-load shape at all.) While this probe was unwired, an off-by-N
+! regression in the normal arm would have left the whole suite green. sim/tests/mmudspcprobe.S is its delay-slot analogue.
 !
 ! It measured Defect 3 (D-side TLB-fault restart PC lands early). Unlike
 ! mmurestartpc.S, which can only report "too early", this probe reports HOW
@@ -108,6 +111,8 @@ ENTRY(start)
 	! ---- stage everything the window needs ----
 	mov.l	p_d0, r2		! base = unmapped data page
 	mov.l	p_v0, r5		! expected loaded value
+	mov.l	p_fc, r0		! non-vacuity baseline: fault count before
+	mov.l	@r0, r11		! the window (delta checked in _verify)
 	nop
 	nop
 	nop
@@ -143,6 +148,7 @@ p_code_flags:	.long 0x000000C8
 p_page_sz:	.long PAGE_SZ
 p_d0:		.long _dpage_0
 p_v0:		.long 0xD0000000
+p_fc:		.long _fault_count
 
 ! ---------------------------------------------------------------------------
 ENTRY(_verify)
@@ -166,6 +172,21 @@ ENTRY(_verify)
 	bra	_fail			! r9 = composite, reported verbatim
 	nop
 7:
+	! ---- NON-VACUITY: exactly ONE fault must have been taken. ----
+	! _fault_count was wired but never read: if _dpage_0 were accidentally
+	! mapped, no fault occurs, the composite still matches and the guard
+	! PASSES VACUOUSLY.  Checked after the composite so the composite's
+	! evidence distinguishes vacuity from a real restart-PC defect.
+	mov.l	q_fc, r0
+	mov.l	@r0, r1
+	sub	r11, r1
+	mov	#1, r0
+	cmp/eq	r0, r1
+	bt	8f
+	mov	#0x40, r9		! distinct code: vacuity / wrong fault count
+	bra	_fail
+	nop
+8:
 	! ---- Disable AT before handing the result to the harness. ----
 	mov.l	q_mmucr, r0
 	mov	#0, r1
@@ -179,6 +200,7 @@ ENTRY(_verify)
 q_expect:	.long 0x00010101
 q_mmucr:	.long 0xFF000010
 q_bad:		.long 0x00000BAD
+q_fc:		.long _fault_count
 
 #endif
 

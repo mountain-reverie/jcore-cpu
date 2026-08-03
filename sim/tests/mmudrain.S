@@ -5,13 +5,16 @@
 ! (or a train of them) immediately followed by an I-side miss -- where the
 ! squash/restart machinery is shared between the two axes.
 !
-! Four legs, each with private pages:
-!   A  N faulting LOADS  back-to-back -> 1 IMISS   fail 2 / regs 6  / count 0x10
-!   B  N x (faulting LOAD  -> IMISS)               fail 3 / regs 7  / count 0x11
-!   C  N faulting STORES back-to-back -> 1 IMISS   fail 4 / regs 8  / count 0x12
-!   D  N x (faulting STORE -> IMISS)               fail 5 / regs 9  / count 0x13
+! WHAT THIS FILE ACTUALLY COVERS -- ONE leg:
+!   A  N faulting LOADS back-to-back -> 1 IMISS    fail 2 / regs 6 / count 0x10
 !
-! (Task 1 implements leg A only; B/C/D land in later tasks.)
+! UNIMPLEMENTED (future work; do NOT assume coverage):
+!   B  N x (faulting LOAD  -> IMISS)
+!   C  N faulting STORES back-to-back -> 1 IMISS
+!   D  N x (faulting STORE -> IMISS)
+! In particular, a train of faulting STORES drained by an IMISS is NOT covered
+! anywhere; the only faulting-store-in-a-fault-shadow coverage in the suite is
+! the single shadow store in mmushadowst.S.
 !
 ! Every faulting access carries a non-idempotent side effect (post-increment
 ! on load, pre-decrement on store), so a restart that re-commits it is
@@ -78,8 +81,10 @@ _sim_instr_end: .long 0
         .text
 
         ! MMUCR.TI is bit 2 (core/cpu.vhd:519 -> tlb ti => dp_mmu_regs.mmucr(2)).
-        ! Set TI with AT held, then re-write AT alone.  Defined here, first used
-        ! at the leg boundaries introduced in task 2.
+        ! Set TI with AT held, then re-write AT alone.
+        ! RESERVED, CURRENTLY UNUSED: this macro (and the p_mmucr_ti literal)
+        ! exist for the leg boundaries of the unimplemented legs B/C/D above.
+        ! Leg A needs no flush.  Delete both if legs B-D are abandoned.
         .macro FLUSH_TLB
         mov.l   p_mmucr, r0
         mov.l   p_mmucr_ti, r1          ! AT=1 | TI=1

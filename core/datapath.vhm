@@ -188,6 +188,20 @@ signal manip_sel : std_logic_vector(31 downto 0);
 	signal mem_autoinc1 : std_logic;
 	signal mem_predec   : std_logic;
 	signal restore_fire : std_logic;
+	-- SECOND base-restore entry (J4+MMU_ARCH), for the DUAL-base form
+	-- MAC.L/W @Rm+,@Rn+. That instruction reads two post-increment operands in
+	-- successive EX slots; on a fault at the SECOND read the FIRST read's base
+	-- bump has already committed, so the single entry above (which restores the
+	-- faulting access's own base) leaves the first base at +size and the
+	-- RTE-restart bumps it a second time. This entry carries the first operand's
+	-- (base register, pre-increment value) and is fired one eligible slot after
+	-- the first entry. Driven in g_restore2 / tied off in g_restore2_off, and
+	-- deliberately NOT new fields in the shared datapath_reg_t "this" record:
+	-- widening that record perturbs the base J1/J2 techmap even for arch-gated
+	-- fields (same precedent as wb_grace / sr_cs).
+	signal restore2_fire : std_logic;
+	signal restore2_reg  : std_logic_vector(4 downto 0);
+	signal restore2_val  : std_logic_vector(31 downto 0);
 	-- Registered tlb_squash, made readable INSIDE the process (this'register is
 	-- only usable in the concurrent assignments below). Used to suppress new
 	-- memory transactions issued in the fault shadow, symmetrically with the
@@ -425,7 +439,9 @@ begin
 
 	-- On the precise auto-increment restore cycle the EX write data is the
 	-- captured pre-increment base (tlb_restore_val); otherwise the normal z path.
+	-- The second (MAC first-operand) entry uses the same port one slot later.
 	gpf_zwd <= this'register.tlb_restore_val when (PRIV_ARCH and restore_fire = '1')
+	           else restore2_val when (PRIV_ARCH and restore2_fire = '1')
 	           else pc when pc_ctrl.wrpr = '1' else zbus;
 	-- mem_autoupd: marks the memory-access slot of a post-increment load @Rm+.
 	-- In j-core a post-increment is a two-slot op: slot0 commits Rm := Rm+size on
@@ -632,6 +648,7 @@ end generate;
 	num_x_r <= bank_remap(reg.num_x, sr.md, sr.rb) when PRIV_ARCH else reg.num_x;
 	num_y_r <= bank_remap(reg.num_y, sr.md, sr.rb) when PRIV_ARCH else reg.num_y;
 	num_z_r <= this'register.tlb_fault_zreg when (PRIV_ARCH and restore_fire = '1')
+	           else restore2_reg when (PRIV_ARCH and restore2_fire = '1')
 	           else bank_remap(reg.num_z, sr.md, sr.rb) when PRIV_ARCH else reg.num_z;
 	num_w_r <= bank_remap(reg.num_w, sr.md, sr.rb) when PRIV_ARCH else reg.num_w;
 	-- Bank-remap the dedicated R0-index read port too (drives dout_0); pass-through
@@ -653,10 +670,28 @@ end generate;
 	--     faulting slot0 read -- i.e. IN the fault shadow. tlb_squash must also
 	--     gate this z-write, else the base double-increments after RTE
 	--     re-executes both slots.
-	--     NOTE -- MAC.L/W @Rm+,@Rn+ is now PRECISE across a D-side TLB fault at
-	--     EVERY fault position. BOTH bases Rm,Rn are precise (mem_autoinc1
-	--     restore, 1d5064a, single-increments each on EITHER operand fault). The
-	--     remaining defect was the MULTIPLY-ACCUMULATE: the MACH:MACL accumulate
+	--     NOTE -- MAC.L/W @Rm+,@Rn+ is a DUAL-base form and needs TWO restore
+	--     entries, not one. Its two post-increment operand reads issue in
+	--     successive EX slots; on a fault at the SECOND read the FIRST read's
+	--     base bump has ALREADY committed while the second's is correctly
+	--     squashed, so the single mem_autoinc1 entry (1d5064a) restored the
+	--     faulting access's own base -- which needed no restoring -- and left the
+	--     first base at +size, which the RTE-restart then bumped again to +2*size.
+	--     An earlier revision of this comment claimed both bases were already
+	--     precise; that was true only ACCIDENTALLY, because the then-broken
+	--     D-side restart PC landed four bytes early and re-executed the
+	--     constant-pool loads that happened to reload both bases. Correcting the
+	--     restart PC (ex_if_pc derivation, above) unmasked it. The restore now
+	--     carries a SECOND entry (g_restore2 / restore2_fire below): the MAC
+	--     first-operand read's ACCESS LAUNCH latches its (base register,
+	--     pre-increment base = xbus) -- the same pipeline point at which
+	--     ma_numz/ma_base are shadowed, which is what makes it correct when the
+	--     fault surfaces a slot later -- a fault on the MAC second-operand
+	--     access arms it, and it commits
+	--     on the first eligible EX-write slot AFTER the first entry has fired --
+	--     both entries use the reg.wr_z='0' rule, so neither can collide with the
+	--     exception entry's SPC/SSR saves on the shared EX write port.
+	--     The other defect of this instruction was the MULTIPLY-ACCUMULATE: the MACH:MACL accumulate
 	--     (mult.vhd, wr_mach/wr_macl via code.mach_en) re-applied on every
 	--     fault-restart and was neither squashed nor rolled back. Measured for
 	--     0xA11C0001^2 = P, pre-fix: 0 faults (warm) -> 1*P; one operand cold ->
@@ -685,7 +720,7 @@ end generate;
 	-- we_ex squash at all) and the exposure window is only 1-2 slots.
 	reg_wr_z_g <= ((reg.wr_z and (not this'register.tlb_squash
 	                              or (num_z_r(4) and not num_z_r(3))))
-	               or restore_fire) when PRIV_ARCH else reg.wr_z;
+	               or restore_fire or restore2_fire) when PRIV_ARCH else reg.wr_z;
 	-- PROGRAM-ORDER RULE for the w-port squash (J4+PRIV_ARCH).
 	--
 	-- Precise-exception semantics: instructions OLDER than the faulting access
@@ -740,6 +775,149 @@ end generate;
 	end generate;
 	g_wb_grace_off : if not PRIV_ARCH generate
 	  wb_grace <= '0';
+	end generate;
+
+	-- SECOND base-restore entry for the DUAL-base MAC.L/W @Rm+,@Rn+ (see the
+	-- NOTE above reg_wr_z_g). The microcode is, per decode/gen-go/spec:
+	--   slot0: READ @Rn (ma_addy=XBUS, ARITH ADD), Rn := Rn+size on the z-port,
+	--          pc = HOLD
+	--   slot1: READ @Rm (ma_addy=XBUS, ARITH ADD), Rm := Rm+size on the z-port
+	-- Both slots therefore match mem_autoinc1 (single-slot @Rm+: the base bump
+	-- commits in the very slot that reads), and they are CONSECUTIVE slots of ONE
+	-- instruction.
+	--
+	-- CRITICAL ALIGNMENT (measured on the m8_macseq VCD, and the reason two
+	-- earlier shapes of this detector were wrong): the entry must be keyed to the
+	-- ACCESS-LAUNCH pipeline point, exactly like this.ma_numz/ma_base/ma_autoupd
+	-- are, NOT to the EX slot presented when the fault arrives. A D-side fault is
+	-- reported one or more cycles AFTER its access launched, by which time the
+	-- pipeline is already presenting the NEXT slot -- so on a fault taken on MAC
+	-- slot0's access, slot1 is the slot on screen and any "is the current slot the
+	-- second operand?" test mis-fires. (Keying off the mac_ctrl_t fields
+	-- macin_1/macin_2/latch_s_mac is wrong for a second reason: those are
+	-- WB-stage aligned, and mac.sel1=SEL_WBUS never coincides with the
+	-- mem_autoinc1 EX slot it belongs to.)
+	--
+	-- So: ma_launch reproduces the process's own "start new memory transactions"
+	-- condition, which is the point at which this.ma_numz/ma_base/ma_autoupd are
+	-- shadowed. It is NOT a plain 0->1 edge on data_o.en: the process clears
+	-- data_o.en on the ack in the SAME evaluation in which it launches the next
+	-- access, so back-to-back accesses -- exactly the MAC case -- show en held
+	-- high throughout and an edge detector misses the second launch entirely
+	-- (measured: the second launch of every MAC pair was invisible). Hence the
+	-- explicit "en already clear, OR being cleared by this cycle's ack" term. The
+	-- extra this'combinatorial.data_o.en = '1' term excludes the P4 MMU-register branch
+	-- of the same if, which issues no bus transaction and does NOT update the
+	-- ma_* shadow. At each launch the shadow of the PREVIOUS access shifts in:
+	--   op1_reg_r/op1_val_r <- this'register.ma_numz / ma_base, which still hold
+	--     the previous access's base register and its PRE-increment value (ma_base
+	--     is xbus, the register read of the access slot, sampled before that
+	--     slot's own z-write commits) -- they are overwritten by this same edge.
+	--   ainc_pre_r/epc_pre_r <- whether that previous access was an mem_autoinc1
+	--     read, and which instruction (ex_if_pc) issued it.
+	-- The arm then requires same_insn: ex_if_pc at the fault -- which datapath
+	-- already relies on being the FAULTING instruction's own PC (see the restart
+	-- PC derivation) -- equals the previous access's ex_if_pc.
+	--
+	-- Only MAC.L/W and RTE issue two mem_autoinc1 accesses under one ex_if_pc;
+	-- every other post-increment form (LDS.L/LDC.L @Rm+, MOV.* @Rm+) issues at
+	-- most one per instruction, so back-to-back
+	-- LDS.L @Rm+,MACH / LDS.L @Rm+,MACL cannot pair up. RTE qualifying is
+	-- correct, not a false positive -- its two @R15+ pops carry the identical
+	-- hazard, and a fault on the second one must undo the first pop's R15 bump
+	-- for the restart to be precise. (In practice RTE runs with SR.RB=1, which
+	-- squash_arm already excludes, so the path is unexercised.)
+	--
+	-- pc_ctrl.inc is NOT usable as the "does this slot end the instruction?"
+	-- term, which is what an earlier shape of this detector tried: MEASURED on
+	-- the m8_dside VCD, pc_ctrl.inc = '1' on BOTH MAC.W slots even though the
+	-- spec marks slot0 pc=HOLD, so MAC.W was never classified and case 1009
+	-- still double-incremented. ex_if_pc, by contrast, was measured constant
+	-- (0x80000b58) across MAC.W's two operand slots, its fault and its restart,
+	-- and distinct for every neighbouring instruction.
+	g_restore2 : if MMU_ARCH generate
+	  signal ma_launch : std_logic;
+	  -- "the previous access was issued by the same instruction as the faulting
+	  -- one". Broken out so it is directly observable in a waveform.
+	  signal same_insn  : std_logic;
+	  signal launch_d_r : std_logic := '0';
+	  signal ainc_r     : std_logic := '0';
+	  signal ainc_pre_r : std_logic := '0';
+	  signal epc_r      : std_logic_vector(31 downto 0) := (others => '0');
+	  signal epc_pre_r  : std_logic_vector(31 downto 0) := (others => '0');
+	  signal op1_reg_r  : std_logic_vector(4 downto 0)  := (others => '0');
+	  signal op1_val_r  : std_logic_vector(31 downto 0) := (others => '0');
+	  signal pend2_r    : std_logic := '0';
+	begin
+	  ma_launch <= '1' when slot_o = '1' and mem.issue = '1' and tlb_squash_r = '0'
+	                        and this'combinatorial.data_o.en = '1'
+	                        and (this'register.data_o.en = '0' or db_i.ack = '1')
+	               else '0';
+	  same_insn <= '1' when ex_if_pc = epc_pre_r else '0';
+	  -- Fire on the first committed slot after the FIRST entry has retired
+	  -- (this'register.tlb_restore_pend = '0') on which the microcode is not
+	  -- itself driving the z-write port -- identical to restore_fire's rule, so
+	  -- this second commit is equally clear of the exception entry's
+	  -- slot0/slot1 SPC(21)/SSR(22) saves (those carry reg.wr_z='1').
+	  restore2_fire <= '1' when pend2_r = '1'
+	                            and this'register.tlb_restore_pend = '0'
+	                            and reg.wr_z = '0' and slot_o = '1'
+	                   else '0';
+	  restore2_reg <= op1_reg_r;
+	  restore2_val <= op1_val_r;
+	  process(clk, rst)
+	  begin
+	    if rst = '1' then
+	      op1_reg_r  <= (others => '0');
+	      op1_val_r  <= (others => '0');
+	      ainc_r     <= '0';
+	      ainc_pre_r <= '0';
+	      epc_r      <= (others => '0');
+	      epc_pre_r  <= (others => '0');
+	      launch_d_r <= '0';
+	      pend2_r    <= '0';
+	    elsif clk = '1' and clk'event then
+	      if ma_launch = '1' then
+	        -- Shift the previous access's shadow in before the process
+	        -- overwrites it on this same edge (signal semantics: every read
+	        -- below sees the pre-edge value).
+	        op1_reg_r  <= this'register.ma_numz;
+	        op1_val_r  <= this'register.ma_base;
+	        ainc_pre_r <= ainc_r;
+	        epc_pre_r  <= epc_r;
+	        ainc_r     <= mem_autoinc1;
+	      end if;
+	      -- ex_if_pc is sampled ONE CYCLE AFTER the launch, not at it. Measured
+	      -- (m8_macseq VCD, the RTE-restart launch at 7020ns): on the cycle a new
+	      -- instruction takes over, ex_if_pc is still transitioning at that edge,
+	      -- so a flop clocked by ma_launch captures the PREVIOUS instruction's PC
+	      -- while the launch belongs to the new one. Sampling both accesses one
+	      -- cycle late compares like with like: the two MAC operand accesses then
+	      -- yield the same value, whereas two back-to-back single-access
+	      -- instructions (LDS.L @Rm+,MACH ; LDS.L @Rm+,MACL) yield different ones.
+	      -- Accesses are never closer than two cycles apart, so this never races
+	      -- the next launch.
+	      launch_d_r <= ma_launch;
+	      if launch_d_r = '1' then
+	        epc_r <= ex_if_pc;
+	      end if;
+	      -- Arm on the SHARED squash-arming edge (the first fault cycle) when the
+	      -- FAULTING access is a post-increment whose instruction already
+	      -- committed an earlier operand's base bump. D-side faults only:
+	      -- ma_numz/ma_base/ma_autoupd are stale on an I-fetch fault.
+	      if tlb_squash_r = '0' and squash_arm = '1' then
+	        pend2_r <= ainc_pre_r and same_insn and this'register.ma_autoupd
+	                   and (not tlb_exc_is_i);
+	      elsif restore2_fire = '1' then
+	        pend2_r <= '0';
+	      end if;
+	    end if;
+	  end process;
+	end generate;
+	g_restore2_off : if not MMU_ARCH generate
+	  restore2_fire <= '0';
+	  restore2_reg  <= (others => '0');
+	  restore2_val  <= (others => '0');
 	end generate;
 	reg_wr_w_g <= (reg.wr_w and (not this'register.tlb_squash or wb_grace))
 	              when PRIV_ARCH else reg.wr_w;

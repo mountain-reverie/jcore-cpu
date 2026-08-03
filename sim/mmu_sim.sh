@@ -116,7 +116,7 @@ else
   # instructions, instead of merely checking that control flow survived.
   #   mmupcprobe    pins the NORMAL arm  (plain load, tlb_exc_pc = ex_if_pc+4)
   #   mmudspcprobe  pins the DELAY-SLOT arm (branch delay slot, ex_if_pc+2)
-  # Other guards (mmufault, mmustale, mmuxlate) do fault on plain loads through
+  # Other guards (mmufault, mmustale) do fault on plain loads through
   # the same restart path, but only coarsely -- they check that control flow
   # survived, not WHERE the restart landed. mmupcprobe is the only EXACT check
   # of the plain-load arm, so leaving it unwired meant an off-by-N regression

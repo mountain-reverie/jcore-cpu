@@ -8,11 +8,12 @@
 ! WHY IT MUST STAY IN THE SUITE: it is the only guard that pins the normal
 ! (plain-load) restart arm to EXACTNESS rather than to "not broken". Other
 ! guards do fault on plain loads through the same restart path (mmufault.S:158,
-! mmustale.S:89, mmuxlate.S:54) -- but only coarsely, i.e. they check that
-! control flow survived and the value arrived, not WHERE the restart landed.
+! mmustale.S:89) -- but only coarsely, i.e. they check that control flow
+! survived and the value arrived, not WHERE the restart landed.
 ! (mmurestartpc.S and mmudrain.S fault on @Rn+ loads, so they do not exercise
 ! the plain-load shape at all.) While this probe was unwired, an off-by-N
-! regression in the normal arm would have left the whole suite green. sim/tests/mmudspcprobe.S is its delay-slot analogue.
+! regression in the normal arm would have left the whole suite green.
+! sim/tests/mmudspcprobe.S is its delay-slot analogue.
 !
 ! It measured Defect 3 (D-side TLB-fault restart PC lands early). Unlike
 ! mmurestartpc.S, which can only report "too early", this probe reports HOW

@@ -199,6 +199,17 @@ signal manip_sel : std_logic_vector(31 downto 0);
  signal restore2_fire : std_logic;
  signal restore2_reg : std_logic_vector(4 downto 0);
  signal restore2_val : std_logic_vector(31 downto 0);
+ -- ma_launch: "the ma_* access shadow is being written this cycle", i.e. the
+ -- data access of an instruction is being handed to the bus. Driven from
+ -- INSIDE the datapath process, at the very statement that writes
+ -- ma_numz/ma_base/ma_if_pc, so it cannot drift out of step with them. It
+ -- cannot be expressed as a concurrent assignment the way squash_arm was
+ -- (d8d4682): the process's own launch condition tests this.data_o.en as a
+ -- mid-evaluation VARIABLE, which is not the registered value -- the ack
+ -- clears it in the same evaluation that launches the next access, so
+ -- back-to-back accesses show no 0->1 edge on the registered bit at all.
+ -- Assigned only under MMU_ARCH, so J1/J2 see a constant '0'.
+ signal ma_launch : std_logic;
  -- Registered tlb_squash, made readable INSIDE the process (this_r is
  -- only usable in the concurrent assignments below). Used to suppress new
  -- memory transactions issued in the fault shadow, symmetrically with the
@@ -782,26 +793,19 @@ end generate;
  -- WB-stage aligned, and mac.sel1=SEL_WBUS never coincides with the
  -- mem_autoinc1 EX slot it belongs to.)
  --
- -- So: ma_launch reproduces the process's own "start new memory transactions"
- -- condition, which is the point at which this.ma_numz/ma_base/ma_autoupd are
- -- shadowed. It is NOT a plain 0->1 edge on data_o.en: the process clears
- -- data_o.en on the ack in the SAME evaluation in which it launches the next
- -- access, so back-to-back accesses -- exactly the MAC case -- show en held
- -- high throughout and an edge detector misses the second launch entirely
- -- (measured: the second launch of every MAC pair was invisible). Hence the
- -- explicit "en already clear, OR being cleared by this cycle's ack" term. The
- -- extra this_c.data_o.en = '1' term excludes the P4 MMU-register branch
- -- of the same if, which issues no bus transaction and does NOT update the
- -- ma_* shadow. At each launch the shadow of the PREVIOUS access shifts in:
+ -- So: the entry is keyed to ma_launch, which the datapath process asserts at
+ -- the very statement that writes this.ma_numz/ma_base/ma_if_pc (see the
+ -- ma_launch declaration for why it is exported from inside the process rather
+ -- than reconstructed outside it). At each launch the shadow of the PREVIOUS
+ -- access shifts in:
  -- op1_reg_r/op1_val_r <- this_r.ma_numz / ma_base, which still hold
  -- the previous access's base register and its PRE-increment value (ma_base
  -- is xbus, the register read of the access slot, sampled before that
  -- slot's own z-write commits) -- they are overwritten by this same edge.
- -- ainc_pre_r/epc_pre_r <- whether that previous access was an mem_autoinc1
- -- read, and which instruction (ex_if_pc) issued it.
- -- The arm then requires same_insn: ex_if_pc at the fault -- which datapath
- -- already relies on being the FAULTING instruction's own PC (see the restart
- -- PC derivation) -- equals the previous access's ex_if_pc.
+ -- ainc_pre_r <- whether that previous access was an mem_autoinc1 read.
+ -- The arm then also requires prev_ok: the two accesses were issued by the
+ -- same instruction, decided by comparing ex_if_pc one cycle after each launch
+ -- (epc_r / prev_ok_r / the prev_ok bypass, below).
  --
  -- Only MAC.L/W and RTE issue two mem_autoinc1 accesses under one ex_if_pc;
  -- every other post-increment form (LDS.L/LDC.L @Rm+, MOV.* @Rm+) issues at
@@ -813,31 +817,72 @@ end generate;
  -- squash_arm already excludes, so the path is unexercised.)
  --
  -- pc_ctrl.inc is NOT usable as the "does this slot end the instruction?"
- -- term, which is what an earlier shape of this detector tried: MEASURED on
- -- the m8_dside VCD, pc_ctrl.inc = '1' on BOTH MAC.W slots even though the
- -- spec marks slot0 pc=HOLD, so MAC.W was never classified and case 1009
- -- still double-incremented. ex_if_pc, by contrast, was measured constant
- -- (0x80000b58) across MAC.W's two operand slots, its fault and its restart,
- -- and distinct for every neighbouring instruction.
+ -- term, which is what an earlier shape of this detector tried. TWO separate
+ -- reasons, neither of them a spec/decoder discrepancy:
+ -- 1. MAC.L and MAC.W are ASYMMETRIC in the spec. MAC.L is HOLD/HOLD/INC
+ -- over three slots; MAC.W is HOLD/INC over two, so MAC.W's SECOND
+ -- operand read IS its terminal slot. A "previous slot was non-terminal"
+ -- test therefore fixes MAC.L (case 1008) and can never fix MAC.W
+ -- (case 1009). decode_table_simple.vhd agrees with the spec exactly:
+ -- under -- MAC.W @Rm+, @Rn+ [400F], slot x"0" has no id.incpc while
+ -- slot x"1" has id.incpc <= '1' and dispatch <= '1'.
+ -- 2. pc_ctrl.inc originates as the decoder's id.incpc and is ID-STAGE
+ -- aligned, so it is no more EX-aligned with the memory slot than the
+ -- mac_ctrl_t fields rejected above are. While MAC.W slot0's access is
+ -- stalled in EX, ID is already presenting slot1, which legitimately
+ -- asserts incpc -- which is what the earlier measurement of inc='1'
+ -- "on MAC.W slot0" actually was. Same alignment trap, third instance.
+ -- ex_if_pc, by contrast, is the EX-aligned per-instruction fetch PC, and was
+ -- measured constant (0x80000b58) across MAC.W's two operand slots, its fault
+ -- and its restart, and distinct for every neighbouring instruction. That is
+ -- why it, and not any slot-terminality signal, is the discriminator here.
  g_restore2 : if MMU_ARCH generate
-   signal ma_launch : std_logic;
-   -- "the previous access was issued by the same instruction as the faulting
-   -- one". Broken out so it is directly observable in a waveform.
+   -- "the previous access was issued by the same instruction as this one".
+   -- Broken out so it is directly observable in a waveform.
    signal same_insn : std_logic;
+   -- same_insn with the one-cycle bypass applied -- see prev_ok_r below.
+   signal prev_ok : std_logic;
    signal launch_d_r : std_logic := '0';
    signal ainc_r : std_logic := '0';
    signal ainc_pre_r : std_logic := '0';
+   signal prev_ok_r : std_logic := '0';
    signal epc_r : std_logic_vector(31 downto 0) := (others => '0');
-   signal epc_pre_r : std_logic_vector(31 downto 0) := (others => '0');
    signal op1_reg_r : std_logic_vector(4 downto 0) := (others => '0');
    signal op1_val_r : std_logic_vector(31 downto 0) := (others => '0');
    signal pend2_r : std_logic := '0';
  begin
-   ma_launch <= '1' when slot_o = '1' and mem.issue = '1' and tlb_squash_r = '0'
-                         and this_c.data_o.en = '1'
-                         and (this_r.data_o.en = '0' or db_i.ack = '1')
-                else '0';
-   same_insn <= '1' when ex_if_pc = epc_pre_r else '0';
+   -- epc_r holds the SETTLED ex_if_pc of the most recent access, so on the
+   -- launch_d cycle of access k this compares instruction(k) against
+   -- instruction(k-1). One cycle later epc_r has moved on and prev_ok_r
+   -- carries the result, hence the bypass below.
+   same_insn <= '1' when ex_if_pc = epc_r else '0';
+   -- The fault is reported at the earliest ONE cycle after the launch, which
+   -- is exactly the launch_d cycle (measured: m8_macseq, launch 7040ns, arm
+   -- 7050ns). On that cycle prev_ok_r has not been clocked yet, so the arm
+   -- must see the combinational comparison instead. This bypass is what lets
+   -- the result be kept as ONE bit rather than a second 32-bit shadow of the
+   -- previous access's PC.
+   prev_ok <= same_insn when launch_d_r = '1' else prev_ok_r;
+   -- WHY epc_r EXISTS AND ma_if_pc CANNOT REPLACE IT. datapath_reg_t already
+   -- carries ma_if_pc, an access-launch-aligned shadow of ex_if_pc that this
+   -- task left with no readers, and it looks like exactly the register needed
+   -- here. It is not. ma_if_pc stores the LAUNCH-TIME ex_if_pc, and the
+   -- launch-time value is precisely the one that is unusable: the comment on
+   -- the D-fault restart PC above already records that "how far ex_if_pc has
+   -- advanced by then depends on the addressing mode", and it is worse than
+   -- biased at an instruction handover. MEASURED (m8_macseq, the RTE-restart
+   -- launch at 7020ns): the launch-time value was 0x8000066e -- still the
+   -- handler -- while the launch belonged to the MAC at 0x800006d2. Keying on
+   -- it reproduces exactly the mispairing that left case 1009 failing. The
+   -- SETTLED (launch + 1) sample is required, and the process cannot produce
+   -- one without a new one-bit delay field in datapath_reg_t, i.e. widening
+   -- the shared record -- which is exactly what this block exists to avoid.
+   -- Collapsing epc_r to a one-bit "an instruction boundary passed since the
+   -- previous launch" predicate was also considered: the only EX-aligned
+   -- boundary event available is a CHANGE in ex_if_pc, detecting which needs
+   -- ex_if_pc registered anyway, so it costs 32 + 2 bits instead of 32 + 1.
+   -- 74 flops (op1_val_r 32, epc_r 32, op1_reg_r 5, and 5 control bits) is
+   -- therefore the floor for this mechanism given the available signals.
    -- Fire on the first committed slot after the FIRST entry has retired
    -- (this_r.tlb_restore_pend = '0') on which the microcode is not
    -- itself driving the z-write port -- identical to restore_fire's rule, so
@@ -856,8 +901,8 @@ end generate;
        op1_val_r <= (others => '0');
        ainc_r <= '0';
        ainc_pre_r <= '0';
+       prev_ok_r <= '0';
        epc_r <= (others => '0');
-       epc_pre_r <= (others => '0');
        launch_d_r <= '0';
        pend2_r <= '0';
      elsif clk = '1' and clk'event then
@@ -868,7 +913,6 @@ end generate;
          op1_reg_r <= this_r.ma_numz;
          op1_val_r <= this_r.ma_base;
          ainc_pre_r <= ainc_r;
-         epc_pre_r <= epc_r;
          ainc_r <= mem_autoinc1;
        end if;
        -- ex_if_pc is sampled ONE CYCLE AFTER the launch, not at it. Measured
@@ -883,6 +927,7 @@ end generate;
        -- the next launch.
        launch_d_r <= ma_launch;
        if launch_d_r = '1' then
+         prev_ok_r <= same_insn;
          epc_r <= ex_if_pc;
        end if;
        -- Arm on the SHARED squash-arming edge (the first fault cycle) when the
@@ -890,7 +935,7 @@ end generate;
        -- committed an earlier operand's base bump. D-side faults only:
        -- ma_numz/ma_base/ma_autoupd are stale on an I-fetch fault.
        if tlb_squash_r = '0' and squash_arm = '1' then
-         pend2_r <= ainc_pre_r and same_insn and this_r.ma_autoupd
+         pend2_r <= ainc_pre_r and prev_ok and this_r.ma_autoupd
                     and (not tlb_exc_is_i);
        elsif restore2_fire = '1' then
          pend2_r <= '0';
@@ -1048,6 +1093,9 @@ end generate;
         begin
            this := this_r;
           this.debug_o.ack := '0';
+          -- Default for the access-launch export (see the ma_launch declaration);
+          -- overridden to '1' at the single statement that writes the ma_* shadow.
+          ma_launch <= '0';
           -- TLB fault hardware side-effects (J4): on the first cycle a
           -- fault is detected (tlb_exc_pend='1') capture TEA and PTEH[31:14] from
           -- the faulting VA. Done at the top of the process (not gated by a slot
@@ -1472,8 +1520,13 @@ end generate;
                 -- Shadow the architectural PC of the instruction launching this
                 -- data access (a fixed pipeline point). On a later fault this is
                 -- the faulting instruction's PC, independent of how far the fetch
-                -- pointer has since advanced. (J4 only.)
+                -- pointer has since advanced. (J4+PRIV_ARCH only.)
                 if PRIV_ARCH then
+                  -- Export the launch itself (see the ma_launch declaration):
+                  -- g_restore2's second base-restore entry keys off exactly this
+                  -- pipeline point, so it is published from here rather than
+                  -- reconstructed outside the process.
+                  ma_launch <= '1';
                   this.ma_pc := this.pc;
                   -- Shadow the (bank-remapped) base register (Rm = num_x in the
                   -- @Rm+ access slot) and the post-increment marker of the

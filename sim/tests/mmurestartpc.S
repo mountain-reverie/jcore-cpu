@@ -130,8 +130,9 @@ ENTRY(start)
 
         ! ================= THE WINDOW ========================================
         ! ONE faulting load, immediately PRECEDED by an observable,
-        ! NON-IDEMPOTENT instruction.  If the D-side restart PC is one
-        ! instruction too early, `add #1, r7` is re-executed by the restart and
+        ! NON-IDEMPOTENT instruction.  If the D-side restart PC lands short of
+        ! the faulting load (pre-fix it was FOUR BYTES = two instructions too
+        ! early), `add #1, r7` is re-executed by the restart and
         ! r7 ends at 2 instead of 1.  No memory traffic in the window.
         mov     #0, r7
         nop
@@ -177,6 +178,21 @@ ENTRY(_verify_R)
         bra     _fail                   ! r9 = the composite, reported verbatim
         nop
 7:
+        ! ---- NON-VACUITY: exactly ONE fault must have been taken. ----
+        ! Without this, an accidentally-mapped _dpage_R0 takes no fault at all,
+        ! leaves r7==1 and r2==page0+4, and the guard PASSES VACUOUSLY.
+        ! Runs AFTER the register oracle: the register evidence distinguishes a
+        ! vacuous run (everything ran, nothing faulted) from a real defect.
+        mov.l   q_fc, r0
+        mov.l   @r0, r1
+        sub     r11, r1                 ! r1 = fault delta over the window
+        mov     #1, r0
+        cmp/eq  r0, r1
+        bt      8f
+        mov     #0x40, r9               ! distinct code: vacuity / wrong fault count
+        bra     _fail
+        nop
+8:
         ! ---- Disable AT before handing the result to the harness. ----
         mov.l   q_mmucr, r0
         mov     #0, r1
@@ -191,9 +207,6 @@ q_fc:           .long _fault_count
 q_expect:       .long 0x00000104
 q_mmucr:        .long 0xFF000010
 q_d0:           .long _dpage_R0
-q_d1:           .long _dpage_R1
-q_v0:           .long 0xD0000000
-q_v1:           .long 0xD1111111
 
 #endif
 

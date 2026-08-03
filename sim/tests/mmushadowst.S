@@ -1,12 +1,13 @@
 ! mmushadowst.S -- a STORE issued in a TLB fault's shadow must not reach memory.
 !
-! THE UNTESTED HALF.  Defect 2 (see mmushadowld.S) is that tlb_squash suppresses
-! the GPR writebacks of shadow instructions but NOT their memory accesses.  The
-! load side is self-masking in the common case (a dropped/duplicated load is
+! THE UNTESTED HALF.  Defect 2 (see mmushadowld.S) was that tlb_squash
+! suppressed the GPR writebacks of shadow instructions but NOT their memory
+! accesses (the memory-issue block now also carries `and tlb_squash_r = '0'`).
+! The load side is self-masking in the common case (a dropped/duplicated load is
 ! only visible through the @Rn+ base), so it took a ten-deep train to surface.
-! The STORE side is potentially the more serious half and is currently covered
-! NOWHERE in the suite: a shadow store WRITES MEMORY, and a write cannot be
-! taken back by the restart.
+! The STORE side is the more serious half and was covered NOWHERE in the suite
+! before this guard: a shadow store WRITES MEMORY, and a write cannot be taken
+! back by the restart.
 !
 ! ---- making a shadow store DETECTABLE (the hard part) ----
 ! A plain store re-executed after the restart writes the same value to the same

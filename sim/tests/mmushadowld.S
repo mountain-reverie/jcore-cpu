@@ -1,10 +1,12 @@
-! mmushadowld.S -- the MINIMAL fault-shadow @Rn+ load train (Defect 2, RED guard)
+! mmushadowld.S -- the MINIMAL fault-shadow @Rn+ load train (Defect 2; GREEN)
 !
 ! DEFECT ISOLATED (Defect 2):
 ! core/datapath.vhm's precise-exception squash `tlb_squash` suppresses the GPR
 ! writebacks of instructions issued in a fault's shadow (reg_wr_z_g /
 ! reg_wr_w_g).  It does NOT suppress their MEMORY ACCESSES: the "start new
-! memory transactions" block is gated only on `mem.issue='1' and data_o.en='0'`.
+! memory transactions" block WAS gated only on `mem.issue='1' and
+! data_o.en='0'`.  (Pre-fix description: the block now also carries
+! `and tlb_squash_r = '0'`.)
 !
 ! Why that breaks the two-slot post-increment load form:
 !   slot0  commits Rm := Rm+size on the EX z-port (no access)
@@ -43,16 +45,15 @@
 ! assertion is deferred to _verify_S.  A guard that passes pre-fix is a broken
 ! guard, not a fixed CPU.
 !
-! ---- CURRENT STATUS: blocked by Defect 3, NOT by Defect 2 ----
-! With the Defect 2 fix in place this guard's r3 check (the shadow load) PASSES
-! and both loads now fault on their OWN pages (verified by VCD: fault count
-! 1 -> 2, fault VAs page1-4 -> {page0, page1}).  It still reports Result=0x21 on
-! the r2 check because of a THIRD, PRE-EXISTING and INDEPENDENT defect: the
-! D-side restart PC is one instruction too early, so fault 2's restart
-! re-executes load0 and bumps r2 a second time.  See sim/tests/mmurestartpc.S,
-! which isolates that defect to a single faulting load preceded by
-! `add #1, r7` and fails IDENTICALLY with and without the Defect 2 fix.
-! This guard reaches PASS only once Defect 3 is fixed.
+! ---- CURRENT STATUS: GREEN ----
+! Historical note: with only the Defect 2 fix in place this guard's r3 check
+! (the shadow load) passed but the r2 check still reported Result=0x21, because
+! of a THIRD, INDEPENDENT defect: the D-side restart PC was FOUR BYTES (two
+! instructions) too early, so fault 2's restart re-executed load0 and bumped r2
+! a second time.  sim/tests/mmurestartpc.S isolates that defect to a single
+! faulting load.  Both defects are now FIXED (Defect 2 = 84378f9, Defect 3 =
+! 2384dc4) and this guard PASSES.  A failure here is a REAL regression -- do not
+! dismiss it as a known defect.
 !
 ! ---- non-vacuity ----
 ! The handler counts faults and the guard asserts count >= 1 (fail 0x10).  The

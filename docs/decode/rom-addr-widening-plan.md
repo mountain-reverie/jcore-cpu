@@ -55,7 +55,7 @@ design spec is `docs/decode/rom-addr-widening-design.md`.
 **Files:**
 - Create: `synth/cpu_synth_j4_rom_config.vhd`
 - Modify: `synth/cpu_synth.sh`
-- Reference (do not edit): `synth/cpu_synth_j4_config.vhd`, `decode/decode_table_rom_config.vhd`, `core/cpu_config.vhd` (`cpu_decode_rom`)
+- Reference (do not edit): `synth/cpu_synth_j4_config.vhd`, `decode/decode_table_rom_config.vhd` (`cpu_decode_rom`)
 
 - [ ] **Step 1: Create the J4-with-ROM synth configuration**
 

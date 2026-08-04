@@ -861,7 +861,64 @@ end generate;
    signal restore2_fire : std_logic;
    signal restore2_reg : std_logic_vector(4 downto 0);
    signal restore2_val : std_logic_vector(31 downto 0);
+   -- One-shot z-port age exemption for INSTRUCTION-SIDE faults -- the z-port
+   -- twin of g_wb_grace's wb_grace, and generate-local for the same reason (an
+   -- architecture-scope or shared-record field perturbs the base J1/J2 techmap
+   -- even when arch-gated).
+   --
+   -- WHY IT IS NEEDED. The squash window's premise ("every instruction that
+   -- retires across the window issued AFTER the faulting access") holds for
+   -- D-side faults but is FALSE for an I-side fault taken on a BRANCH TARGET
+   -- fetch: the branch and its delay-slot instruction both issued BEFORE the
+   -- faulting fetch, and the delay slot is still in EX when the squash arms.
+   -- Its z writeback was being dropped while tlb_exc_pc was (correctly) set to
+   -- the target, so it was never re-executed and the write was lost forever.
+   -- (mmudrain leg D, at 19890000000 ps: tlb_squash_r=1, tlb_exc_is_i=1,
+   -- w_addr_ex=0xc, din_ex=0x6000, we_ex=0 -- the delay slot's `add r11,r12`
+   -- vanished, the stub pointer stopped advancing, and every later stub
+   -- `jmp @r12`-ed to itself and ran its `mov.l r13,@-Rn` twice.)
+   --
+   -- WHY THE DISCRIMINATOR IS EXACTLY (tlb_exc_is_i AND NOT delay_slot). Two
+   -- cases share this machinery and need OPPOSITE handling; the gate below is
+   -- the same predicate the restart-PC arm already uses:
+   -- * D-side fault (tlb_exc_is_i='0'), including one taken BY a delay-slot
+   -- instruction: the restart is at the BRANCH (or at the faulting
+   -- instruction itself), so the pending write WILL be re-executed and
+   -- MUST be squashed. No grace. This is case (a).
+   -- * I-side fault on a DELAY-SLOT fetch (delay_slot='1'): the restart is
+   -- backed up to the branch (tlb_fault_va - 2), so the branch re-issues
+   -- and re-executes its delay slot. No grace.
+   -- * I-side fault whose restart PC IS the faulting fetch VA
+   -- (tlb_exc_is_i='1', delay_slot='0'): nothing younger than the faulting
+   -- FETCH can be in EX -- the instruction at the faulting VA never
+   -- entered the pipe -- so the writeback pending when the squash arms is
+   -- architecturally OLDER and MUST commit. Grace. This is case (b).
+   -- Equivalently: grace is granted iff the restart PC is NOT backed up, i.e.
+   -- iff the pending writeback would not be re-executed.
+   --
+   -- TIMING. squash_arm rises in cycle N; tlb_squash_r -- and hence the z-port
+   -- gating -- is first visible in cycle N+1, which is where that older
+   -- writeback presents (the z-port retires in-slot, so unlike the w-port
+   -- there is no extra slot of offset). The bit is therefore set on the arming
+   -- edge and cleared on the next slot boundary, which is that writeback's
+   -- commit edge; while the slot is stretched (slot_o='0') the pipeline is
+   -- frozen and the bit correctly persists. One bit suffices for the same
+   -- reason it does on the w-port: the fault redirect lands a slot late, so at
+   -- most one pre-fault writeback can still be in flight.
+   signal z_grace : std_logic;
  begin
+   process(clk, rst)
+   begin
+     if rst = '1' then
+       z_grace <= '0';
+     elsif clk = '1' and clk'event then
+       if tlb_squash_r = '0' and squash_arm = '1' then
+         z_grace <= tlb_exc_is_i and not delay_slot;
+       elsif slot_o = '1' then
+         z_grace <= '0';
+       end if;
+     end if;
+   end process;
    -- The three consumers live here rather than at architecture scope so that
    -- the restore2_* operands can be generate-local.
    gpf_zwd <= this_r.tlb_restore_val when restore_fire = '1'
@@ -871,7 +928,7 @@ end generate;
               else restore2_reg when restore2_fire = '1'
               else bank_remap(reg.num_z, sr.md, sr.rb) when PRIV_ARCH
               else reg.num_z;
-   reg_wr_z_g <= (reg.wr_z and (not this_r.tlb_squash
+   reg_wr_z_g <= (reg.wr_z and (not this_r.tlb_squash or z_grace
                                 or (num_z_r(4) and not num_z_r(3))))
                  or restore_fire or restore2_fire;
    -- epc_r holds the SETTLED ex_if_pc of the most recent access, so on the

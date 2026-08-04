@@ -424,7 +424,11 @@ suppression cannot reach it and the undo path is mandatory.
     was an IMISS on a **branch target**, which was silently dropping the
     branch's delay-slot write while restarting at the target. A D-side fault,
     and an I-side fault on a delay-slot fetch, both restart somewhere that
-    re-executes the pending write, and so still squash it.
+    re-executes the pending write, and so still squash it — though only the
+    D-side half of that is guarded: the `not delay_slot` arm is **reasoning
+    only, unguarded by the current suite** (dropping it leaves all 68 guards
+    passing), and the sweep that would settle it is the rotted `m8_idslot_0-2`
+    of 9.5 item 3. The RTL comment says the same; keep the two in step.
 
   If a third instance appears, reach for this pattern rather than widening or
   narrowing the time window.
@@ -451,6 +455,11 @@ Known gaps, in priority order:
    alternating shape is worth completing.
 3. The exhaustive I-side delay-slot sweep (`m8_idslot_0-2`) does not run; it is a
    pre-existing rotted orphan, so delay-slot restart rests on single-case guards.
+   Named consequence: this is exactly the sweep that would exercise the
+   `not delay_slot` arm of `z_grace` (9.4). Until it is revived, that arm is
+   carried on reasoning alone — dropping it changes no guard's verdict — so a
+   green suite is not evidence that the delay-slot half of the I-side age
+   exemption is right.
 
 ### 9.6 Rule for new instructions
 

@@ -610,7 +610,10 @@ ENTRY(_verify_D)
 
         ! ---- layer 1 (exactly-once): spill[i] == _dpage_Di EXACTLY ----
         ! high by 4 -> the pre-decrement was DROPPED (base never moved)
-        ! low  by 4 -> the pre-decrement committed TWICE (restore path failed)
+        ! low  by 4 -> the pre-decrement committed TWICE.  On leg D this is a
+        !              CONSEQUENCE of the layer-3 r12 loss (see the header), NOT
+        !              a restore defect -- do not start debugging the restore
+        !              path from here.
         mov.l   qD_spill, r14
         mov.l   qD_dtab, r12
         mov     #N_FAULTS, r13

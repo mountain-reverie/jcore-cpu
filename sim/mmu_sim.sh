@@ -110,10 +110,17 @@ else
            mmustale mmuasid mmuglobal mmumultihit mmudblflt mmunest_trapa mmunest_slotill mmunest mmuremap mmucmpcsr mmurun mmuirun mmuainc mmuainc2 mmusmep j4_illegal_trap; do
     run_guard "$t"
   done
-  # mmudrain needs an explicit 600us entry: at the default 80us the suite loop
-  # never reached legs C or D at all (leg D writes its result at ~400us), so a
-  # store-side regression passed silently.
-  run_guard mmudrain "" 600us
+  # mmudrain gets an explicit stop-time for MARGIN, not because 80us is too
+  # short. Measured: the guard completes at 31.62us (final timestamp of a
+  # MMU_VCD dump, which ends at the "Test Passed" exit; leg D itself runs
+  # 18.9-27.9us). At the 80us loop default a mutated build still reports its
+  # failure, at 79.93us -- but that is a 0.09% margin, coincidentally rather
+  # than safely sufficient, and any added leg or a slower memory config would
+  # push it over. 120us is ~3.8x the measured completion time.
+  # (An earlier revision of this comment claimed the result landed at ~400us
+  # and that suite mode was blind. That was wrong: it read the
+  # end-of-simulation error timestamp as the result-write time.)
+  run_guard mmudrain "" 120us
 
   # Restart-PC EXACTNESS probes. Run explicitly (200us) rather than from the
   # loop above: they are the only guards that measure HOW FAR the D-side

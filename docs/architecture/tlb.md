@@ -407,12 +407,35 @@ suppression cannot reach it and the undo path is mandatory.
   base as well as operand 2's.
 - The restore arms for **D-side faults only** (`tlb_exc_is_i = '0'`); an
   instruction-fetch fault must never inherit a stale data-side shadow.
+- **Age exemptions on the squash.** The squash window is a pure *time* window,
+  so on its own it also discards the writeback of an instruction that is
+  architecturally **older** than the faulting access and will therefore never
+  be re-executed. This age-blindness has bitten twice — once per write port —
+  and both instances are fixed by the same shape, a one-shot bit that lets
+  exactly the writeback pending at arming time commit:
+  - **w-port, `wb_grace`** (`g_wb_grace`): the w-port retires a slot late by
+    construction, so a writeback already presenting when the squash arms is
+    necessarily older. Armed from the shared `squash_arm` predicate.
+  - **z-port, `z_grace`** (in `g_restore2`): armed only for an
+    **instruction-side** fault whose restart PC is *not* backed up
+    (`tlb_exc_is_i and not delay_slot` — the same predicate the `tlb_exc_pc`
+    arm uses). On such a fault nothing younger than the faulting *fetch* can be
+    in EX, so the pending write is older and must commit; the case that broke
+    was an IMISS on a **branch target**, which was silently dropping the
+    branch's delay-slot write while restarting at the target. A D-side fault,
+    and an I-side fault on a delay-slot fetch, both restart somewhere that
+    re-executes the pending write, and so still squash it.
+
+  If a third instance appears, reach for this pattern rather than widening or
+  narrowing the time window.
 
 ### 9.5 Coverage and open items
 
 *Guards: `mmuainc`, `mmuainc2` (single `@Rm+` across a D-fault), `mmustr2`,
-`mmushadowst` (store side), `mmudrain` (a train of faulting `@Rm+` loads drained
-by an I-side miss), `m8_dside` cases 8 and 9 (MAC dual-base at all three fault
+`mmushadowst` (store side), `mmudrain` (leg A: a train of faulting `@Rm+` loads
+drained by an I-side miss; leg C: a train of faulting `@-Rn` **stores** drained
+by an I-side miss; leg D: **alternating** faulting store -> IMISS, chained
+through stub pages), `m8_dside` cases 8 and 9 (MAC dual-base at all three fault
 positions), `mmurestartpc`, `mmupcprobe`, `mmudspcprobe` (restart-PC exactness).*
 
 Known gaps, in priority order:
@@ -421,10 +444,11 @@ Known gaps, in priority order:
    It is the same shape as the MAC dual-base case, in the SH-2A variant, and
    SH-2A + MMU restart safety is untested — the J2A decoder lacks the privileged
    MMU instructions the guards need, so those tests have never genuinely run.
-2. **Faulting-*store* trains drained by an I-side miss are uncovered.**
-   `mmudrain` implements the load leg only; the store legs are unimplemented.
-   All 14 Model-C forms depend on the undo path, so the store side is where the
-   contract is least exercised.
+2. **Faulting-*load* trains alternating with an I-side miss are uncovered.**
+   `mmudrain` legs C and D closed the store side (burst and alternating); the
+   remaining hole is leg B, the alternating shape on the **load** side. Leg D
+   is what exposed the z-port age-blindness described in 9.4, so the
+   alternating shape is worth completing.
 3. The exhaustive I-side delay-slot sweep (`m8_idslot_0-2`) does not run; it is a
    pre-existing rotted orphan, so delay-slot restart rests on single-case guards.
 

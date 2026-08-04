@@ -8,10 +8,35 @@
 ! WHAT THIS FILE COVERS -- THREE legs:
 !   A  N faulting LOADS  back-to-back      -> 1 IMISS   data 2 / regs 6 / count 0x10
 !   C  N faulting STORES back-to-back      -> 1 IMISS   data 4 / regs 8 / count 0x12
+!   D  N x (faulting STORE -> IMISS), chained through stub pages
+!                                          data 5 / regs 9 / r12 0x0B / count 0x13
+!
 ! UNIMPLEMENTED (future work; do NOT assume coverage):
-!   B  N x (faulting LOAD  -> IMISS)
-!   D  N x (faulting STORE -> IMISS)
-! Both alternating shapes are still uncovered.
+!   B  N x (faulting LOAD -> IMISS)
+! Leg B's load-side alternating shape is still uncovered; leg D covers the
+! alternating shape on the STORE side only.
+!
+! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! LEG D IS CURRENTLY **RED** ON THIS TREE -- IT HAS FOUND A DEFECT.
+! Measured (see the report under .superpowers/sdd/2026-07-31-mmudrain-test/):
+!   fault count  = 21 = 2*N_FAULTS+1  EXACTLY as expected -- the leg is not
+!                  vacuous, every store faulted once and every stub IMISSed once
+!   page data    = all ten pages hold the leg-D sentinel -- every store landed
+!   base regs    = r0 correct; r1..r9 are each 4 LOW, sum of deltas -36 = 9*(-4)
+!                  -> the `@-Rn` pre-decrement COMMITTED TWICE in nine of the
+!                     ten stubs.  That is the Model-C (concurrent) undo path of
+!                     docs/architecture/tlb.md section 9.4 (mem_predec) failing
+!                     under the alternating store->IMISS pattern.
+!   r12          = stub_base + 10*PAGE_SZ, one PAGE_SZ short of the expected
+!                  stub_base + 11*PAGE_SZ -> one delay-slot advance short
+!                  (fail 0x0B is what fires first only if the reg check is
+!                  moved; as ordered below, fail 9 fires first).
+! Ruled out as harness error: plain `jmp @Rn` + delay-slot write to Rn was
+! verified SH-2-correct on this core with a standalone non-MMU probe (the jump
+! uses the PRE-delay-slot value), and leg C -- the same stores, same sentinel,
+! same staging, but drained by a single IMISS instead of alternating -- PASSES
+! all three of its layers.  DO NOT weaken this leg to make the suite green.
+! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !
 ! ---- why the store legs matter (docs/architecture/tlb.md section 9) --------
 ! Section 9.1 states the contract: on a precise TLB fault, the base register of
@@ -58,9 +83,10 @@
 ! fault count wrong, so the count alone cannot tell the two apart.  The register
 ! evidence can: a vacuous run has every register at its untouched-by-restart
 ! value and only then trips the count.  So:
-!   Result=6 / 8        -> real defect: an access was dropped or doubled
-!   Result=2 / 4        -> real defect: a page holds the wrong data
-!   Result=0x10 / 0x12  -> vacuity: every access ran but the pages were mapped
+!   Result=6 / 8 / 9    -> real defect: an access was dropped or doubled
+!   Result=2 / 4 / 5    -> real defect: a page holds the wrong data
+!   Result=0x0B         -> real defect: leg D's delay-slot advance dropped/doubled
+!   Result=0x10/12/13   -> vacuity: every access ran but the pages were mapped
 !
 ! ---- three traps this file already stepped on (do not re-introduce) ----
 !  1. Do NOT extend the identity-map range down to VA 0.  A VPN==0 entry makes
@@ -72,7 +98,13 @@
 !     any VA below the data pool and 0xE8 inside it -- which is why the layout
 !     contract below puts ALL the stub pages (A, C, D0..D9, the leg-D
 !     trampoline) BELOW the first data page.
-!  3. FLUSH_TLB drops AT first.  Pulsing MMUCR.TI with AT=1 invalidates the
+!  3. Nothing on the leg-D chain may touch r10.  r10 carries leg D's
+!     fault-count snapshot across the whole chain, so _tramp_D loads its
+!     return address into r14, not r10 (which is what _stub_A / _stub_C use --
+!     legs A and C keep their snapshot in r11 instead).  Clobbering it makes
+!     the non-vacuity check report garbage and sent this file's own bring-up
+!     chasing a phantom.
+!  4. FLUSH_TLB drops AT first.  Pulsing MMUCR.TI with AT=1 invalidates the
 !     page the CPU is currently executing from, so the very next fetch IMISSes
 !     into a handler whose own page is also gone -- an unrecoverable double
 !     fault.  With AT=0 the flush and the code re-map run untranslated, exactly
@@ -85,7 +117,8 @@
 !
 ! TLB budget: the TLB has 32 entries (core/tlb.vhd).  FLUSH_TLB runs at the leg
 ! boundaries (never inside a measured window) so no leg's live set has to share
-! with another's.
+! with another's.  The largest leg is D: code pages + 10 stubs + trampoline +
+! 10 data pages.
 !
 ! Overlay .word encodings (the assembler does not know these J4 forms):
 !   STC PTEH,r1 = 0x0153   LDC r0,VBR  = 0x402E   LDC r0,PTEH  = 0x405E
@@ -462,9 +495,158 @@ ENTRY(_verify_C)
         bt      6f
         bra     _fail
         nop
+6:      bra     _leg_D
+        nop
+
+        .align 2
+qC_spill:       .long _spill_C
+qC_fc:          .long _fault_count
+qC_dtab:        .long _dtab_C
+qC_sent:        .long 0xB00BC0DE
+
+! ===========================================================================
+! Leg D: N x (faulting pre-decrement STORE -> IMISS), chained through stubs.
+!
+! A store produces no value, so leg D cannot use leg B's load-feeds-the-jump
+! trick to compute the next stub VA.  Rather than spend a filler instruction on
+! it -- which would break the zero-filler property that makes this leg mean
+! anything -- leg D keeps a running stub pointer in r12 and advances it in the
+! JUMP'S DELAY SLOT, which the jump has already read by then.
+!
+! The cost: no delay slot is left for an inline sequence counter, so leg D's
+! count comes from the handler fault counter (plus r12's final value, which
+! pins the advance itself).
+!
+! Stub chain arithmetic: r12 enters _stub_D0 holding _stub_D1, and each stub
+! jumps to r12 then bumps it by PAGE_SZ, so _stub_D<i> is entered with r12 ==
+! _stub_D<i+1>.  _stub_D9 therefore jumps to _stub_D_base + 10*PAGE_SZ, which
+! is where _tramp_D sits, and leaves r12 == _stub_D_base + 11*PAGE_SZ.
+!
+! Fault accounting: 10 stub-entry IMISSes + 10 DMISS_Ws + 1 IMISS on _tramp_D
+! = 2*N_FAULTS + 1.  (The original task brief said 2*N_FAULTS; it overlooked
+! the trampoline page, which is unmapped like every other page above
+! _code_end.)
+! ===========================================================================
+ENTRY(_leg_D)
+        FLUSH_TLB pD_
+        mov.l   pD_fc, r0               ! snapshot fault count (r11 is the stride)
+        mov.l   @r0, r10
+        mov.l   pD_d0, r0               ! stage r0..r9 = data page + 4
+        mov.l   pD_d1, r1
+        mov.l   pD_d2, r2
+        mov.l   pD_d3, r3
+        mov.l   pD_d4, r4
+        mov.l   pD_d5, r5
+        mov.l   pD_d6, r6
+        mov.l   pD_d7, r7
+        mov.l   pD_d8, r8
+        mov.l   pD_d9, r9
+        mov.l   pD_sval, r13
+        mov.l   pD_stride, r11          ! PAGE_SZ
+        mov.l   pD_stub1, r12           ! r12 = the NEXT stub
+        mov.l   pD_stub0, r14
+        jmp     @r14                    ! IMISS -- enter the chain
+        nop
+
+        .align 2
+pD_mmucr:       .long 0xFF000010
+pD_code_start:  .long start
+pD_code_end:    .long _code_end
+pD_code_flags:  .long 0x000000C8
+pD_page_sz:     .long PAGE_SZ
+pD_fc:          .long _fault_count
+pD_sval:        .long 0xB00BD0DE
+pD_stride:      .long PAGE_SZ
+pD_stub0:       .long _stub_D0
+pD_stub1:       .long _stub_D0 + PAGE_SZ
+pD_d0:          .long _dpage_D0 + 4
+pD_d1:          .long _dpage_D1 + 4
+pD_d2:          .long _dpage_D2 + 4
+pD_d3:          .long _dpage_D3 + 4
+pD_d4:          .long _dpage_D4 + 4
+pD_d5:          .long _dpage_D5 + 4
+pD_d6:          .long _dpage_D6 + 4
+pD_d7:          .long _dpage_D7 + 4
+pD_d8:          .long _dpage_D8 + 4
+pD_d9:          .long _dpage_D9 + 4
+
+ENTRY(_verify_D)
+        mov.l   qD_spill, r14           ! r14 is dead (it held _stub_D0)
+        mov.l   r0, @r14
+        add     #4, r14
+        mov.l   r1, @r14
+        add     #4, r14
+        mov.l   r2, @r14
+        add     #4, r14
+        mov.l   r3, @r14
+        add     #4, r14
+        mov.l   r4, @r14
+        add     #4, r14
+        mov.l   r5, @r14
+        add     #4, r14
+        mov.l   r6, @r14
+        add     #4, r14
+        mov.l   r7, @r14
+        add     #4, r14
+        mov.l   r8, @r14
+        add     #4, r14
+        mov.l   r9, @r14
+        mov.l   qD_r12sav, r14          ! r12 is needed as a table pointer below
+        mov.l   r12, @r14
+
+        ! ---- layer 1 (exactly-once): spill[i] == _dpage_Di EXACTLY ----
+        ! high by 4 -> the pre-decrement was DROPPED (base never moved)
+        ! low  by 4 -> the pre-decrement committed TWICE (restore path failed)
+        mov.l   qD_spill, r14
+        mov.l   qD_dtab, r12
+        mov     #N_FAULTS, r13
+2:      mov.l   @r14+, r0
+        mov.l   @r12+, r1
+        cmp/eq  r1, r0
+        mov     #9, r9
+        bt      3f
+        bra     _fail
+        nop
+3:      dt      r13
+        bf      2b
+
+        ! ---- layer 2: every page holds the sentinel, seed gone ----
+        mov.l   qD_dtab, r12
+        mov.l   qD_sent, r14
+        mov     #N_FAULTS, r13
+4:      mov.l   @r12+, r1
+        mov.l   @r1, r0
+        cmp/eq  r14, r0
+        mov     #5, r9
+        bt      5f
+        bra     _fail
+        nop
+5:      dt      r13
+        bf      4b
+
+        ! ---- layer 3: delay-slot advance, r12 == stub_base+(N+1)*PAGE_SZ ----
+        mov.l   qD_r12sav, r0
+        mov.l   @r0, r12
+        mov.l   qD_r12exp, r0
+        cmp/eq  r0, r12
+        mov     #0x0B, r9
+        bt      6f
+        bra     _fail
+        nop
 6:
+        ! ---- layer 4 (non-vacuity): fault count advanced by 2N+1 ----
+        mov.l   qD_fc, r0
+        mov.l   @r0, r12
+        sub     r10, r12
+        mov     #(2 * N_FAULTS + 1), r0
+        cmp/eq  r0, r12
+        mov     #0x13, r9
+        bt      7f
+        bra     _fail
+        nop
+7:
         ! ---- Disable AT before handing the result to the harness. ----
-        mov.l   qC_mmucr, r0
+        mov.l   qD_mmucr, r0
         mov     #0, r1
         mov.l   r1, @r0
 
@@ -473,11 +655,13 @@ ENTRY(_verify_C)
         nop
 
         .align 2
-qC_mmucr:       .long 0xFF000010
-qC_spill:       .long _spill_C
-qC_fc:          .long _fault_count
-qC_dtab:        .long _dtab_C
-qC_sent:        .long 0xB00BC0DE
+qD_spill:       .long _spill_D
+qD_fc:          .long _fault_count
+qD_dtab:        .long _dtab_D
+qD_sent:        .long 0xB00BD0DE
+qD_mmucr:       .long 0xFF000010
+qD_r12exp:      .long _stub_D0 + (N_FAULTS + 1) * PAGE_SZ
+qD_r12sav:      .long _r12sav_D
 
 #endif
 
@@ -554,6 +738,13 @@ _spill_A:
 _spill_C:
         .space 4 * N_FAULTS, 0
         .balign 4
+_spill_D:
+        .space 4 * N_FAULTS, 0
+        .balign 4
+_r12sav_D:
+        .long 0
+
+        .balign 4
 _dtab_A:
         .long _dpage_A0
         .long _dpage_A1
@@ -580,6 +771,19 @@ _dtab_C:
         .long _dpage_C9
 
         .balign 4
+_dtab_D:
+        .long _dpage_D0
+        .long _dpage_D1
+        .long _dpage_D2
+        .long _dpage_D3
+        .long _dpage_D4
+        .long _dpage_D5
+        .long _dpage_D6
+        .long _dpage_D7
+        .long _dpage_D8
+        .long _dpage_D9
+
+        .balign 4
 ENTRY(_code_end)                        ! everything above is identity-mapped code
 
 ! ======================= unmapped region starts here =======================
@@ -600,6 +804,37 @@ _stub_C:
         nop
         .align 2
 sC_back:        .long _verify_C
+
+! Leg D's ten stubs, laid out contiguously at PAGE_SZ spacing, with the
+! trampoline immediately after the last one so that
+! _stub_D0 + N_FAULTS*PAGE_SZ lands exactly on _tramp_D.  The .balign before
+! _stub_D0 plus the .balign inside the .irp make the spacing exact; the
+! _tramp_D assertion below proves it rather than assuming it.
+        .balign PAGE_SZ
+        .irp i, 0,1,2,3,4,5,6,7,8,9
+        .balign PAGE_SZ
+_stub_D\i:                              ! entry IMISSes
+        mov.l   r13, @-r\i              ! DMISS_W
+        jmp     @r12                    ! IMISS -- r12 already holds stub i+1
+        add     r11, r12                ! delay slot: advance to stub i+2
+        .endr
+
+        .balign PAGE_SZ
+_tramp_D:                               ! must NOT touch r10 (leg D's fault-count
+        mov.l   sD_back, r14            ! snapshot) -- r14 is dead here
+        jmp     @r14
+        nop
+        .align 2
+sD_back:        .long _verify_D
+
+        ! The chain arithmetic (_tramp_D == _stub_D0 + N_FAULTS*PAGE_SZ) cannot
+        ! be asserted with .ifne -- section-relative differences are not
+        ! constant at assembly time ("non-constant expression in .if").  It is
+        ! instead proven two ways: statically with
+        !     sh2-elf-nm mmudrain.elf | grep -E '_stub_D0|_tramp_D'
+        ! (the two must differ by exactly 0xA000), and dynamically -- if the
+        ! layout were wrong the chain would never reach _verify_D at all, and
+        ! the r12 check (fail 0x0B) pins the advance itself.
 
         .balign PAGE_SZ
 _dpage_A0:  .long 0xD0000000
@@ -646,5 +881,25 @@ _dpage_C8:  .long 0xC0000008
 _dpage_C9:  .long 0xC0000009
             .space PAGE_SZ - 4, 0
 
+_dpage_D0:  .long 0xC1000000
+            .space PAGE_SZ - 4, 0
+_dpage_D1:  .long 0xC1000001
+            .space PAGE_SZ - 4, 0
+_dpage_D2:  .long 0xC1000002
+            .space PAGE_SZ - 4, 0
+_dpage_D3:  .long 0xC1000003
+            .space PAGE_SZ - 4, 0
+_dpage_D4:  .long 0xC1000004
+            .space PAGE_SZ - 4, 0
+_dpage_D5:  .long 0xC1000005
+            .space PAGE_SZ - 4, 0
+_dpage_D6:  .long 0xC1000006
+            .space PAGE_SZ - 4, 0
+_dpage_D7:  .long 0xC1000007
+            .space PAGE_SZ - 4, 0
+_dpage_D8:  .long 0xC1000008
+            .space PAGE_SZ - 4, 0
+_dpage_D9:  .long 0xC1000009
+            .space PAGE_SZ - 4, 0
 
 #endif

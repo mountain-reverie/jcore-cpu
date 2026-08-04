@@ -1,7 +1,7 @@
 ! mmupagemix.S -- mixed-page-size coexistence: 16KB and 4KB entries installed
 ! together (16KB first). VA 0x12000 must hit the 16KB entry (PA 0x12000); VA
 ! 0x14000 must hit the 4KB entry (PA 0x44000). Proves per-entry PageMask with
-! no cross-size aliasing. (J4+MMU_ARCH, cpu_cache_tb)
+! no cross-size aliasing. (J4, cpu_cache_tb)
 !
 ! ---- _fail integrity net ----
 ! _fail writes r9 verbatim to TEST_RESULT_ADDRESS; sim/cpu_ctb.c's test_result()

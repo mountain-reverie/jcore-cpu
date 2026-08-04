@@ -1,4 +1,4 @@
-! mmudcbit.S -- D-side PTE C-bit cacheability pin (J4+MMU_ARCH, runs on cpu_cache_tb).
+! mmudcbit.S -- D-side PTE C-bit cacheability pin (J4, runs on cpu_cache_tb).
 !
 ! Proves the dcache honors the PTE C-bit on a TRANSLATED data access: a C=1 page
 ! caches the read line (so a later memory change is NOT seen -> stale) while a C=0

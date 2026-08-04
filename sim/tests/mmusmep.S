@@ -1,7 +1,7 @@
 ! mmusmep.S -- SMEP: kernel fetch of a user-executable page must IPROT,
 !              and a USER-mode fetch of the same kind of page must NOT.
 !
-! J4 + MMU_ARCH + PRIV_ARCH. Installs a TLB entry, identity-mapped, for a
+! J4 + PRIV_ARCH. Installs a TLB entry, identity-mapped, for a
 ! page (_user_page below) with PTEL U=1 (user page), X=1 (executable),
 ! W=0, C=1 -- i.e. a page a user process is allowed to execute. Then,
 ! while remaining in KERNEL mode (SR.MD=1, the default), the test jumps

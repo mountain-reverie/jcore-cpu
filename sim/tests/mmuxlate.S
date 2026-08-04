@@ -1,4 +1,4 @@
-! mmuxlate.S -- LDTLB + address-translation integration test (J4+MMU_ARCH).
+! mmuxlate.S -- LDTLB + address-translation integration test (J4).
 !
 ! Installs a TLB entry mapping VA=PA (identity, P0 range) and verifies a
 ! load through the translated P0 address returns the value written via P1

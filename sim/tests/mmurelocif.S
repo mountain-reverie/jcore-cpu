@@ -1,4 +1,4 @@
-! mmurelocif.S -- MMU I-fetch address relocation pin (J4+MMU_ARCH, cpu_cache_tb).
+! mmurelocif.S -- MMU I-fetch address relocation pin (J4, cpu_cache_tb).
 ! Maps VPN 0x4 (VA 0x4000) -> PPN 0x6 (PA 0x6000), NON-identity, C=1 exec. A stub
 ! at PA 0x6000 returns 0x42; a DECOY stub at PA 0x4000 (the VA's identity location)
 ! returns 0x11. Under AT, jsr to VA 0x4000: if the I-fetch relocates it executes

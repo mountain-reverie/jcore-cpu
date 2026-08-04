@@ -1,4 +1,4 @@
-! mmuasid.S -- ASID cross-tenant isolation + global-bit guard (J4 + MMU_ARCH).
+! mmuasid.S -- ASID cross-tenant isolation + global-bit guard (J4).
 !
 ! Security property (MMU security review, Family 5 / top risk #1): a TLB entry
 ! installed under ASID A must NOT be usable under ASID B (no cross-tenant hit),

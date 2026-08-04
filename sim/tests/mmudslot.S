@@ -1,5 +1,5 @@
 ! mmudslot.S -- DMISS in a branch delay slot must restart at the BRANCH,
-! not the delay-slot instruction (J4 + MMU_ARCH).
+! not the delay-slot instruction (J4).
 !
 ! Repro for the handover finding "MMU data-access fault in a branch delay slot
 ! restarts the delay slot, not the branch"

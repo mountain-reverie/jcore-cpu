@@ -191,7 +191,8 @@ Each group is a PR against master, gated behind `SH2A_ARCH`, with in-pipeline
   register + port; `decode_core.vhd` is v2p-generated and NOT in the cpugen
   byte-identity set, so it's free to change.
 - **`SH2A_ARCH` reaches `decode_core` only by CONFIGURATION**, not generic map
-  (like `MMU_ARCH`). The sim needs `cpu_sim_sh2a`/`cpu_decode_direct_mmu_sh2a`
+  (like `PRIV_ARCH`, which implies the MMU as of the MMU_ARCH merge). The sim
+  needs `cpu_sim_sh2a`/`cpu_decode_direct_mmu_sh2a`
   (in `core/cpu_config.vhd`) selected by `CONFIG_SH2A_ARCH` in `sim/cpu_tb.vhd`.
   A generic-map alone reaches the datapath but leaves `decode_core` gated off.
 - **Do NOT cross decode→datapath with a new variant-additive `decode` port.**
@@ -237,9 +238,11 @@ Each group is a PR against master, gated behind `SH2A_ARCH`, with in-pipeline
   in a `cpu_sim_sh2a` (MMU-on) build those instructions don't decode → `tlb_wr`
   never asserts (`core/tlb.vhd:170`) → empty TLB → enabling `MMUCR.AT` gives a
   garbage PC. **No CI job builds `CONFIG_SH2A_ARCH`+MMU either.** Two secondary
-  facts: the MMU sim needs **all three** flags `CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1
-  CONFIG_SH2A_ARCH=1` (MMU_ARCH is nested under `#if CONFIG_PRIV_ARCH` in
-  `cpu_tb.vhd`; the 2-flag command used everywhere silently disables MMU); and the
+  facts: the MMU sim needs `CONFIG_PRIV_ARCH=1 CONFIG_SH2A_ARCH=1` (historical
+  note: before the MMU_ARCH merge this needed a third flag,
+  `CONFIG_MMU_ARCH=1`, nested under `#if CONFIG_PRIV_ARCH` in `cpu_tb.vhd`;
+  `CONFIG_PRIV_ARCH=1` alone now always brings the MMU, so that flag no longer
+  exists and the 2-flag command above is the complete, current one); and the
   proper fix — a decoder combining `spec/sh2a`+`spec/sh4` — is not currently
   generatable (single `-overlay` flag; combining trips the ROM emitter's
   `IMM_P256` 6-bit-selector width limit; the J2A sim uses the *direct* decoder, so

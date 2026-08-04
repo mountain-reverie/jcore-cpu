@@ -1,4 +1,4 @@
-! mmuicolor.S -- I-side cacheability staleness pin (J4+MMU_ARCH, runs on cpu_cache_tb).
+! mmuicolor.S -- I-side cacheability staleness pin (J4, runs on cpu_cache_tb).
 !
 ! Proves the PTE C-bit DISTINGUISHES I-side caching from bypass. Two legs, AT on:
 !   Leg A (C=1 page, PA 0x1000): first call caches the stub in the icache; a P2

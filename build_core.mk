@@ -16,3 +16,6 @@ $(VHDLS) += decode/decode.vhd
 $(VHDLS) += decode/decode_body.vhd
 $(VHDLS) += decode/decode_table.vhd
 $(VHDLS) += decode/decode_core.vhd
+
+$(VHDLS) += $(CPU_EXTRA_FILES)
+$(VHDLS) += $(CPU_CONFIG_FILE)

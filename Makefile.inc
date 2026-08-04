@@ -17,6 +17,20 @@
 # .DEFAULT_GOAL yourself beforehand. This file deliberately does not set
 # .DEFAULT_GOAL, since doing so here would override the includer's intent.
 
+# This file uses GNU Make 4.3's grouped-target ("&:") syntax below for the
+# decode regeneration rule. Pre-4.3 Make has no idea what "&:" means: it
+# tokenizes the target side on whitespace and treats the literal "&" as a
+# spurious extra ordinary target, silently falling back to classic
+# multi-target semantics -- i.e. the exact `make -jN` race this file exists
+# to prevent, with no syntax error and no warning. Fail loudly instead.
+ifeq ($(filter grouped-target,$(.FEATURES)),)
+$(error Makefile.inc requires GNU Make 4.3+ for grouped-target '&:' support \
+  (needed so `make -jN` runs the decode-regeneration recipe exactly once \
+  instead of racing N-way across the six generated decode files). \
+  Found: $(MAKE_VERSION). Install GNU Make >= 4.3 (e.g. from https://www.gnu.org/software/make/ \
+  or your distro's newer make package, such as Ubuntu 22.04+))
+endif
+
 CPU_INC_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 CPU_VARIANT ?= j2
 TARGET_KIND ?= fpga

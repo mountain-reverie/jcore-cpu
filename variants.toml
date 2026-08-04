@@ -34,8 +34,13 @@ config_file = "core/cpu_config.vhd"
 
 # J4 = the multi-tenant family: privileged architecture + MMU, and later the
 # hypervisor. PRIV_ARCH implies MMU; there is deliberately no separate knob.
-# core/tlb.vhd must be analyzed BEFORE core/cpu.vhd, which instantiates
-# work.tlb inside `g_mmu : if PRIV_ARCH generate`.
+# core/cpu.vhd instantiates work.tlb inside `g_mmu : if PRIV_ARCH generate`,
+# but GHDL's `ghdl -i` + `ghdl -c`/`-m` flow resolves bindings from its own
+# library graph, not file-list order -- confirmed: sim/tlb_tb passes under
+# CPU_VARIANT=j4 with core/tlb.vhd listed AFTER core/cpu.vhd in the file
+# list. So core/tlb.vhd does NOT need to precede core/cpu.vhd in this list;
+# it only needs to be analyzed into the library at all (which is what this
+# extra_files entry ensures for j4).
 [j4]
 generics    = { PRIV_ARCH = "true" }
 overlay     = "sh4"

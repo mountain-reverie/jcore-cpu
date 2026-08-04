@@ -322,7 +322,124 @@ the design repository's `docs/mmu/security-review.md`.
 
 ---
 
-## 9. References
+## 9. Instruction-restart contract — base-register writeback
+
+### 9.1 The rule
+
+> **On a precise TLB fault, the base register of an access that specifies base
+> writeback is left at its pre-instruction value — for every such instruction,
+> uniformly, including multi-operand forms.**
+
+This is ARM's **Base Restored Abort Model**, adopted verbatim in intent. ARM DDI
+0100I (§A2.6.6) defines it as *"If a precise Data Abort occurs in an instruction
+that specifies base register write-back, the value in the base register is
+unchanged"*, and makes it mandatory from ARMv6. The sentence that matters most
+here is the one that follows:
+
+> *"In either case, the abort model applies uniformly across all instructions. An
+> implementation does not use the Base Restored Abort Model for some instructions
+> and the Base Updated Abort Model for others."*
+
+**Why this has to be written down here.** The SH ISA does not specify it. The
+instruction reference lists `Data TLB miss exception` for `@Rm+`/`@-Rn` forms but
+never states the base register's post-exception value, and its pseudocode models
+no fault path. SH *does* specify restart semantics elsewhere — `DIVS`/`DIVU`
+("*the return address will be the start address of this instruction, and this
+instruction will be re-executed*"), `MOVLI.L` (LDST cleared on exception) — so the
+omission is specific, not a general silence. Nothing upstream will define this for
+J4; the choice is ours, and the cost of leaving it undefined is one defect per
+addressing mode.
+
+### 9.2 Why a 5-stage in-order pipeline needs the rule at all
+
+The classic discipline is to commit architectural state in program order at a
+single point — writeback — so that a fault flushes everything younger by
+construction and nothing older is ever lost. An ISA with no base writeback
+(MIPS I: *"Only one addressing mode is supported: base + displacement"*) gets this
+almost for free.
+
+SH has `@Rm+`, `@-Rn`, and MAC forms with *two* base updates, so J4 cannot. Where
+an instruction mutates a base **before** the access that may fault, the machine
+must either suppress that write or undo it. Both mechanisms exist in
+`core/datapath.vhm`; §9.4 says which applies where.
+
+### 9.3 The three models currently in the machine
+
+Enumerated mechanically from `decode/gen-go/spec/` — every instruction whose
+operand syntax carries a base writeback (`@Rx+` or `@-Rx`), classified by *when*
+the base write commits relative to the faulting access:
+
+| Model | Count | Shape | Restart cost |
+| --- | --- | --- | --- |
+| **A — deferred** | 7 | base write is in a slot **after** every access | Restart-safe *by construction*; no restore needed |
+| **B — bump-first** | 9 | base write commits in a slot **before** the access | Needs suppression or undo |
+| **C — concurrent** | 14 | base write and access are in the **same** slot | Suppression is too late; needs undo |
+
+**Model A (restart-safe by construction) — 7:** `LDC.L @Rm+,{SR,GBR,VBR}`,
+`LDS.L @Rm+,PR`, `MOVML.L @R15+,Rn`, `MOVML.L Rm,@-R15`, `MOVMU.L @R15+,Rn`.
+These keep the base pristine until a terminal slot. The SH-2A pop states the
+principle in its own comment: *"R15 pristine until the terminal; loads
+idempotent."* **This is the preferred shape for any new instruction.**
+
+**Model B (bump-first) — 9:** `MOV.{B,W,L} @Rm+,Rn` and the SH-2A
+`MOV.{B,W,L} R0,@Rn+` / `@-Rm,R0` forms. `MOV.L @Rm+,Rn` is the archetype: slot 0
+commits `Rm := Rm+4` with no access, slot 1 then reads at `Rm-4`, recovering the
+original address by subtracting the 4 it just added.
+
+**Model C (concurrent) — 14:** every `@-Rn` store (`MOV.{B,W,L} Rm,@-Rn`,
+`STS.L {PR,MACH,MACL},@-Rn`, `STC.L {SR,GBR,VBR},@-Rn`), `LDS.L @Rm+,{MACH,MACL}`,
+`MAC.{L,W} @Rm+,@Rn+`, and `MOVMU.L Rm,@-R15`. The z-port write lands in the same
+slot as the access, one cycle before `tlb_squash` can arm — so `reg_wr_z_g`
+suppression cannot reach it and the undo path is mandatory.
+
+**Multi-access forms (more than one base to restore): 4** — `MAC.L @Rm+,@Rn+`,
+`MAC.W @Rm+,@Rn+`, `MOVMU.L Rm,@-R15`, `MOVMU.L @R15+,Rn`.
+
+### 9.4 How the contract is met today
+
+- **Model A** — nothing to do; the base never moves before the fault.
+- **Model B** — `reg_wr_z_g` suppression under `tlb_squash`, plus the
+  `mem_autoupd` restore for the case where the fault arrives after the bump has
+  committed.
+- **Model C** — the restore path only: `mem_autoinc1` (single-slot `@Rm+`),
+  `mem_predec` (`@-Rn` stores, restoring the captured pre-decrement base), and a
+  **second restore entry** for the MAC dual-base case, which restores operand 1's
+  base as well as operand 2's.
+- The restore arms for **D-side faults only** (`tlb_exc_is_i = '0'`); an
+  instruction-fetch fault must never inherit a stale data-side shadow.
+
+### 9.5 Coverage and open items
+
+*Guards: `mmuainc`, `mmuainc2` (single `@Rm+` across a D-fault), `mmustr2`,
+`mmushadowst` (store side), `mmudrain` (a train of faulting `@Rm+` loads drained
+by an I-side miss), `m8_dside` cases 8 and 9 (MAC dual-base at all three fault
+positions), `mmurestartpc`, `mmupcprobe`, `mmudspcprobe` (restart-PC exactness).*
+
+Known gaps, in priority order:
+
+1. **`MOVMU.L Rm,@-R15` is a Model-C multi-access form with no MMU coverage.**
+   It is the same shape as the MAC dual-base case, in the SH-2A variant, and
+   SH-2A + MMU restart safety is untested — the J2A decoder lacks the privileged
+   MMU instructions the guards need, so those tests have never genuinely run.
+2. **Faulting-*store* trains drained by an I-side miss are uncovered.**
+   `mmudrain` implements the load leg only; the store legs are unimplemented.
+   All 14 Model-C forms depend on the undo path, so the store side is where the
+   contract is least exercised.
+3. The exhaustive I-side delay-slot sweep (`m8_idslot_0-2`) does not run; it is a
+   pre-existing rotted orphan, so delay-slot restart rests on single-case guards.
+
+### 9.6 Rule for new instructions
+
+Prefer **Model A**: place the base write in a terminal slot after every access.
+It costs no restore state, cannot desynchronise from the squash, and is the shape
+the SH-2A `MOVML`/`MOVMU` pops already use. If Model B or C is unavoidable, the
+instruction must be added to the §9.3 enumeration *and* given a guard that faults
+at every access position — for a multi-access form, that means each operand
+separately and all operands cold.
+
+---
+
+## 10. References
 
 - [j4.md](j4.md) — J4 hardware block diagram, configuration matrix, synthesis cost.
 - [`core/tlb.vhd`](../../core/tlb.vhd) — the TLB RTL (match, permission, NRU, flush).
@@ -335,7 +452,7 @@ the design repository's `docs/mmu/security-review.md`.
 
 ---
 
-## 10. Historical references & prior art
+## 11. Historical references & prior art
 
 The J4 TLB is a deliberately conservative design that re-uses decades-old,
 well-understood mechanisms. The lineage of each major choice:
@@ -374,6 +491,27 @@ tagged, removing the virtual-synonym hazards (and page-colouring requirement) of
 a virtually-indexed cache.
 - [CPU cache — indexing/tagging (Wikipedia)](https://en.wikipedia.org/wiki/CPU_cache#Address_translation)
 
+**Base-register writeback on a faulting access (§9).** The rule that a faulting
+access leaves its base register at the pre-instruction value, uniformly across all
+writeback forms, is **ARM's Base Restored Abort Model** — optional before ARMv6,
+mandatory from ARMv6, and explicitly required to apply "uniformly across all
+instructions" rather than per-instruction. ARM adopted it after shipping both
+models for LDM/STM, which is the same multi-access base-writeback problem J4 has
+in `MAC.{L,W} @Rm+,@Rn+` and `MOVMU.L`.
+- ARM DDI 0100I, *ARM Architecture Reference Manual*, §A2.6.6 "Abort models".
+
+**Commit-in-program-order for precise exceptions (§9.2).** The discipline of
+committing architectural state only at writeback, so a fault flushes everything
+younger by construction, is the classic five-stage RISC model — and its known
+failure mode for delay-slot faults ("exceptions then have essentially two
+addresses, the exception address and the restart address") is documented as a
+recurring source of design bugs, which J4 encountered and fixed.
+- [Classic RISC pipeline (Wikipedia)](https://en.wikipedia.org/wiki/Classic_RISC_pipeline)
+- Smith & Pleszkun, *"Implementing Precise Interrupts in Pipelined Processors,"*
+  IEEE Trans. Computers, 1988 — the taxonomy (in-order completion, reorder
+  buffer, history buffer, future file). J4 is in-order completion with a
+  history-buffer-style undo for the writeback forms §9 enumerates.
+
 **Page-split / multi-word instruction faults.** The rule that an instruction
 fetch fault must report the instruction's *first-word* PC (so a multi-word unit
 restarts cleanly) follows the **Intel 386** (1985), which validated page-split
@@ -398,7 +536,7 @@ instructions against the instruction's start address.
 
 ---
 
-## 11. Glossary
+## 12. Glossary
 
 | Term | Meaning |
 |---|---|

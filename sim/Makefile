@@ -85,6 +85,10 @@ VHDS := $(CPU_VHDS) bridge_pkg.vhd monitor_pkg.vhd bus_monitor.vhd timeout_cnt.v
 # library contains it. core/sb_mac16_sim.vhd binds SB_MAC16 in simulation
 # (same idiom as core/mult_ice40dsp.vhd).
 VHDS += ../core/dsp_arith.vhd ../core/sb_mac16_sim.vhd
+# core/cpu_config_sim.vhd holds the sim-only cpu_sim/_sh2a/_dsp_alu/_rom
+# configurations selected by CONFIG_* in cpu_tb.vhd. Sim-only: it must NOT
+# be added to build_core.mk (FPGA/ASIC builds never bind these).
+VHDS += ../core/cpu_config_sim.vhd
 VHDS += mem/cpu_sram.vhd mem/asymmetric_ram.vhd
 # core/tlb.vhd is only a CPU_VHDS member for the j4 variant (variants.toml
 # extra_files); tlb_match_tb/tlb_tb directly instantiate `entity work.tlb` as

@@ -16,6 +16,13 @@ $(VHDLS) += decode/decode_table.vhd
 $(VHDLS) += decode/decode_core.vhd
 
 $(VHDLS) += $(CPU_EXTRA_FILES)
+# core/cpu_config_common.vhd holds the decode-binding configurations shared by
+# every variant (cpu_decode_direct_fpga/_rom_fpga, cpu_decode_direct_mmu,
+# _sh2a, _mmu_sh2a) plus the `use work.decode_pack.all;` clause that precedes
+# cpu_decode_direct_mmu. It must be analyzed BEFORE $(CPU_CONFIG_FILE) because
+# the per-variant files (cpu_config_j2a.vhd's cpu_j2a, cpu_config_sim.vhd's
+# cpu_sim/_sh2a/_dsp_alu) bind these configurations by name.
+$(VHDLS) += core/cpu_config_common.vhd
 $(VHDLS) += $(CPU_CONFIG_FILE)
 
 # Register-file architectures and decode-table configs are selected by VHDL

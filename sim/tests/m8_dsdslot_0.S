@@ -190,6 +190,11 @@ _m8_case_1:                       ! CAS.L Rm, Rn, @R0  (General, D-side in delay
         mov.l   c1_pay, r8
         bra     c1_Da             ! delayed branch; delay slot faults DMISS
         .word   0x2803                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c1_poison, r0
 c1_Da:
         mov.l   c1_snapa, r2
         mov.l   r0, @r2
@@ -233,6 +238,7 @@ c1_snapb:  .long SNAP_B
 c1_id:     .long 1
 c1_cmp:    .long 0x80000000 + _m8_cmp
 c1_flush:  .long 0x80000000 + _m8_flush
+c1_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_2:                       ! MOV.B @(disp, Rm), R0  (General, D-side in delay slot)
@@ -251,6 +257,11 @@ _m8_case_2:                       ! MOV.B @(disp, Rm), R0  (General, D-side in d
         mov     #0, r8
         bra     c2_Da             ! delayed branch; delay slot faults DMISS
         .word   0x8400                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c2_poison, r0
 c2_Da:
         mov.l   c2_snapa, r2
         mov.l   r0, @r2
@@ -290,6 +301,7 @@ c2_snapb:  .long SNAP_B
 c2_id:     .long 2
 c2_cmp:    .long 0x80000000 + _m8_cmp
 c2_flush:  .long 0x80000000 + _m8_flush
+c2_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_3:                       ! MOV.B @Rm+, Rn  (General, D-side in delay slot)
@@ -308,6 +320,11 @@ _m8_case_3:                       ! MOV.B @Rm+, Rn  (General, D-side in delay sl
         mov     #0, r8
         bra     c3_Da             ! delayed branch; delay slot faults DMISS
         .word   0x6804                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c3_poison, r0
 c3_Da:
         mov.l   c3_snapa, r2
         mov.l   r0, @r2
@@ -347,6 +364,7 @@ c3_snapb:  .long SNAP_B
 c3_id:     .long 3
 c3_cmp:    .long 0x80000000 + _m8_cmp
 c3_flush:  .long 0x80000000 + _m8_flush
+c3_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_4:                       ! MOV.B @Rm, Rn  (General, D-side in delay slot)
@@ -365,6 +383,11 @@ _m8_case_4:                       ! MOV.B @Rm, Rn  (General, D-side in delay slo
         mov     #0, r8
         bra     c4_Da             ! delayed branch; delay slot faults DMISS
         .word   0x6800                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c4_poison, r0
 c4_Da:
         mov.l   c4_snapa, r2
         mov.l   r0, @r2
@@ -404,6 +427,7 @@ c4_snapb:  .long SNAP_B
 c4_id:     .long 4
 c4_cmp:    .long 0x80000000 + _m8_cmp
 c4_flush:  .long 0x80000000 + _m8_flush
+c4_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_5:                       ! MOV.B R0, @(disp, Rn)  (General, D-side in delay slot)
@@ -422,6 +446,11 @@ _m8_case_5:                       ! MOV.B R0, @(disp, Rn)  (General, D-side in d
         mov.l   c5_pay, r8
         bra     c5_Da             ! delayed branch; delay slot faults DMISS
         .word   0x8000                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c5_poison, r0
 c5_Da:
         mov.l   c5_snapa, r2
         mov.l   r0, @r2
@@ -465,6 +494,7 @@ c5_snapb:  .long SNAP_B
 c5_id:     .long 5
 c5_cmp:    .long 0x80000000 + _m8_cmp
 c5_flush:  .long 0x80000000 + _m8_flush
+c5_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_6:                       ! MOV.B Rm, @Rn  (General, D-side in delay slot)
@@ -483,6 +513,11 @@ _m8_case_6:                       ! MOV.B Rm, @Rn  (General, D-side in delay slo
         mov.l   c6_pay, r8
         bra     c6_Da             ! delayed branch; delay slot faults DMISS
         .word   0x2080                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c6_poison, r0
 c6_Da:
         mov.l   c6_snapa, r2
         mov.l   r0, @r2
@@ -526,6 +561,7 @@ c6_snapb:  .long SNAP_B
 c6_id:     .long 6
 c6_cmp:    .long 0x80000000 + _m8_cmp
 c6_flush:  .long 0x80000000 + _m8_flush
+c6_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_7:                       ! MOV.B Rm,@-Rn  (General, D-side in delay slot)
@@ -544,6 +580,11 @@ _m8_case_7:                       ! MOV.B Rm,@-Rn  (General, D-side in delay slo
         mov.l   c7_pay, r8
         bra     c7_Da             ! delayed branch; delay slot faults DMISS
         .word   0x2084                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c7_poison, r0
 c7_Da:
         mov.l   c7_snapa, r2
         mov.l   r0, @r2
@@ -587,6 +628,7 @@ c7_snapb:  .long SNAP_B
 c7_id:     .long 7
 c7_cmp:    .long 0x80000000 + _m8_cmp
 c7_flush:  .long 0x80000000 + _m8_flush
+c7_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_8:                       ! MOV.L @(disp, Rm), Rn  (General, D-side in delay slot)
@@ -605,6 +647,11 @@ _m8_case_8:                       ! MOV.L @(disp, Rm), Rn  (General, D-side in d
         mov     #0, r8
         bra     c8_Da             ! delayed branch; delay slot faults DMISS
         .word   0x5800                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c8_poison, r0
 c8_Da:
         mov.l   c8_snapa, r2
         mov.l   r0, @r2
@@ -644,6 +691,7 @@ c8_snapb:  .long SNAP_B
 c8_id:     .long 8
 c8_cmp:    .long 0x80000000 + _m8_cmp
 c8_flush:  .long 0x80000000 + _m8_flush
+c8_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_9:                       ! MOV.L @Rm+, Rn  (General, D-side in delay slot)
@@ -662,6 +710,11 @@ _m8_case_9:                       ! MOV.L @Rm+, Rn  (General, D-side in delay sl
         mov     #0, r8
         bra     c9_Da             ! delayed branch; delay slot faults DMISS
         .word   0x6806                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c9_poison, r0
 c9_Da:
         mov.l   c9_snapa, r2
         mov.l   r0, @r2
@@ -701,6 +754,7 @@ c9_snapb:  .long SNAP_B
 c9_id:     .long 9
 c9_cmp:    .long 0x80000000 + _m8_cmp
 c9_flush:  .long 0x80000000 + _m8_flush
+c9_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_10:                       ! MOV.L @Rm, Rn  (General, D-side in delay slot)
@@ -719,6 +773,11 @@ _m8_case_10:                       ! MOV.L @Rm, Rn  (General, D-side in delay sl
         mov     #0, r8
         bra     c10_Da             ! delayed branch; delay slot faults DMISS
         .word   0x6802                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c10_poison, r0
 c10_Da:
         mov.l   c10_snapa, r2
         mov.l   r0, @r2
@@ -758,6 +817,7 @@ c10_snapb:  .long SNAP_B
 c10_id:     .long 10
 c10_cmp:    .long 0x80000000 + _m8_cmp
 c10_flush:  .long 0x80000000 + _m8_flush
+c10_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_11:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side in delay slot)
@@ -776,6 +836,11 @@ _m8_case_11:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side in 
         mov.l   c11_pay, r8
         bra     c11_Da             ! delayed branch; delay slot faults DMISS
         .word   0x1080                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c11_poison, r0
 c11_Da:
         mov.l   c11_snapa, r2
         mov.l   r0, @r2
@@ -819,6 +884,7 @@ c11_snapb:  .long SNAP_B
 c11_id:     .long 11
 c11_cmp:    .long 0x80000000 + _m8_cmp
 c11_flush:  .long 0x80000000 + _m8_flush
+c11_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_12:                       ! MOV.L Rm, @Rn  (General, D-side in delay slot)
@@ -837,6 +903,11 @@ _m8_case_12:                       ! MOV.L Rm, @Rn  (General, D-side in delay sl
         mov.l   c12_pay, r8
         bra     c12_Da             ! delayed branch; delay slot faults DMISS
         .word   0x2082                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c12_poison, r0
 c12_Da:
         mov.l   c12_snapa, r2
         mov.l   r0, @r2
@@ -880,6 +951,7 @@ c12_snapb:  .long SNAP_B
 c12_id:     .long 12
 c12_cmp:    .long 0x80000000 + _m8_cmp
 c12_flush:  .long 0x80000000 + _m8_flush
+c12_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_13:                       ! MOV.L Rm,@-Rn  (General, D-side in delay slot)
@@ -898,6 +970,11 @@ _m8_case_13:                       ! MOV.L Rm,@-Rn  (General, D-side in delay sl
         mov.l   c13_pay, r8
         bra     c13_Da             ! delayed branch; delay slot faults DMISS
         .word   0x2086                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c13_poison, r0
 c13_Da:
         mov.l   c13_snapa, r2
         mov.l   r0, @r2
@@ -941,6 +1018,7 @@ c13_snapb:  .long SNAP_B
 c13_id:     .long 13
 c13_cmp:    .long 0x80000000 + _m8_cmp
 c13_flush:  .long 0x80000000 + _m8_flush
+c13_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_14:                       ! MOV.W @(disp, Rm), R0  (General, D-side in delay slot)
@@ -959,6 +1037,11 @@ _m8_case_14:                       ! MOV.W @(disp, Rm), R0  (General, D-side in 
         mov     #0, r8
         bra     c14_Da             ! delayed branch; delay slot faults DMISS
         .word   0x8500                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c14_poison, r0
 c14_Da:
         mov.l   c14_snapa, r2
         mov.l   r0, @r2
@@ -998,6 +1081,7 @@ c14_snapb:  .long SNAP_B
 c14_id:     .long 14
 c14_cmp:    .long 0x80000000 + _m8_cmp
 c14_flush:  .long 0x80000000 + _m8_flush
+c14_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_15:                       ! MOV.W @Rm+, Rn  (General, D-side in delay slot)
@@ -1016,6 +1100,11 @@ _m8_case_15:                       ! MOV.W @Rm+, Rn  (General, D-side in delay s
         mov     #0, r8
         bra     c15_Da             ! delayed branch; delay slot faults DMISS
         .word   0x6805                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c15_poison, r0
 c15_Da:
         mov.l   c15_snapa, r2
         mov.l   r0, @r2
@@ -1055,6 +1144,7 @@ c15_snapb:  .long SNAP_B
 c15_id:     .long 15
 c15_cmp:    .long 0x80000000 + _m8_cmp
 c15_flush:  .long 0x80000000 + _m8_flush
+c15_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_16:                       ! MOV.W @Rm, Rn  (General, D-side in delay slot)
@@ -1073,6 +1163,11 @@ _m8_case_16:                       ! MOV.W @Rm, Rn  (General, D-side in delay sl
         mov     #0, r8
         bra     c16_Da             ! delayed branch; delay slot faults DMISS
         .word   0x6801                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c16_poison, r0
 c16_Da:
         mov.l   c16_snapa, r2
         mov.l   r0, @r2
@@ -1112,6 +1207,7 @@ c16_snapb:  .long SNAP_B
 c16_id:     .long 16
 c16_cmp:    .long 0x80000000 + _m8_cmp
 c16_flush:  .long 0x80000000 + _m8_flush
+c16_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_17:                       ! MOV.W R0, @(disp, Rn)  (General, D-side in delay slot)
@@ -1130,6 +1226,11 @@ _m8_case_17:                       ! MOV.W R0, @(disp, Rn)  (General, D-side in 
         mov.l   c17_pay, r8
         bra     c17_Da             ! delayed branch; delay slot faults DMISS
         .word   0x8100                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c17_poison, r0
 c17_Da:
         mov.l   c17_snapa, r2
         mov.l   r0, @r2
@@ -1173,6 +1274,7 @@ c17_snapb:  .long SNAP_B
 c17_id:     .long 17
 c17_cmp:    .long 0x80000000 + _m8_cmp
 c17_flush:  .long 0x80000000 + _m8_flush
+c17_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_18:                       ! MOV.W Rm, @Rn  (General, D-side in delay slot)
@@ -1191,6 +1293,11 @@ _m8_case_18:                       ! MOV.W Rm, @Rn  (General, D-side in delay sl
         mov.l   c18_pay, r8
         bra     c18_Da             ! delayed branch; delay slot faults DMISS
         .word   0x2081                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c18_poison, r0
 c18_Da:
         mov.l   c18_snapa, r2
         mov.l   r0, @r2
@@ -1234,6 +1341,7 @@ c18_snapb:  .long SNAP_B
 c18_id:     .long 18
 c18_cmp:    .long 0x80000000 + _m8_cmp
 c18_flush:  .long 0x80000000 + _m8_flush
+c18_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_19:                       ! MOV.W Rm,@-Rn  (General, D-side in delay slot)
@@ -1252,6 +1360,11 @@ _m8_case_19:                       ! MOV.W Rm,@-Rn  (General, D-side in delay sl
         mov.l   c19_pay, r8
         bra     c19_Da             ! delayed branch; delay slot faults DMISS
         .word   0x2085                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c19_poison, r0
 c19_Da:
         mov.l   c19_snapa, r2
         mov.l   r0, @r2
@@ -1295,6 +1408,7 @@ c19_snapb:  .long SNAP_B
 c19_id:     .long 19
 c19_cmp:    .long 0x80000000 + _m8_cmp
 c19_flush:  .long 0x80000000 + _m8_flush
+c19_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_20:                       ! STC.L GBR, @-Rn  (General, D-side in delay slot)
@@ -1313,6 +1427,11 @@ _m8_case_20:                       ! STC.L GBR, @-Rn  (General, D-side in delay 
         mov.l   c20_pay, r8
         bra     c20_Da             ! delayed branch; delay slot faults DMISS
         .word   0x4013                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c20_poison, r0
 c20_Da:
         mov.l   c20_snapa, r2
         mov.l   r0, @r2
@@ -1356,6 +1475,7 @@ c20_snapb:  .long SNAP_B
 c20_id:     .long 20
 c20_cmp:    .long 0x80000000 + _m8_cmp
 c20_flush:  .long 0x80000000 + _m8_flush
+c20_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_21:                       ! STC.L SR, @-Rn  (General, D-side in delay slot)
@@ -1374,6 +1494,11 @@ _m8_case_21:                       ! STC.L SR, @-Rn  (General, D-side in delay s
         mov.l   c21_pay, r8
         bra     c21_Da             ! delayed branch; delay slot faults DMISS
         .word   0x4003                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c21_poison, r0
 c21_Da:
         mov.l   c21_snapa, r2
         mov.l   r0, @r2
@@ -1417,6 +1542,7 @@ c21_snapb:  .long SNAP_B
 c21_id:     .long 21
 c21_cmp:    .long 0x80000000 + _m8_cmp
 c21_flush:  .long 0x80000000 + _m8_flush
+c21_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_22:                       ! STC.L VBR, @-Rn  (General, D-side in delay slot)
@@ -1435,6 +1561,11 @@ _m8_case_22:                       ! STC.L VBR, @-Rn  (General, D-side in delay 
         mov.l   c22_pay, r8
         bra     c22_Da             ! delayed branch; delay slot faults DMISS
         .word   0x4023                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c22_poison, r0
 c22_Da:
         mov.l   c22_snapa, r2
         mov.l   r0, @r2
@@ -1478,6 +1609,7 @@ c22_snapb:  .long SNAP_B
 c22_id:     .long 22
 c22_cmp:    .long 0x80000000 + _m8_cmp
 c22_flush:  .long 0x80000000 + _m8_flush
+c22_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_23:                       ! STS.L MACH, @-Rn  (General, D-side in delay slot)
@@ -1496,6 +1628,11 @@ _m8_case_23:                       ! STS.L MACH, @-Rn  (General, D-side in delay
         mov.l   c23_pay, r8
         bra     c23_Da             ! delayed branch; delay slot faults DMISS
         .word   0x4002                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c23_poison, r0
 c23_Da:
         mov.l   c23_snapa, r2
         mov.l   r0, @r2
@@ -1539,6 +1676,7 @@ c23_snapb:  .long SNAP_B
 c23_id:     .long 23
 c23_cmp:    .long 0x80000000 + _m8_cmp
 c23_flush:  .long 0x80000000 + _m8_flush
+c23_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_24:                       ! STS.L MACL, @-Rn  (General, D-side in delay slot)
@@ -1557,6 +1695,11 @@ _m8_case_24:                       ! STS.L MACL, @-Rn  (General, D-side in delay
         mov.l   c24_pay, r8
         bra     c24_Da             ! delayed branch; delay slot faults DMISS
         .word   0x4012                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c24_poison, r0
 c24_Da:
         mov.l   c24_snapa, r2
         mov.l   r0, @r2
@@ -1600,6 +1743,7 @@ c24_snapb:  .long SNAP_B
 c24_id:     .long 24
 c24_cmp:    .long 0x80000000 + _m8_cmp
 c24_flush:  .long 0x80000000 + _m8_flush
+c24_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_25:                       ! STS.L PR, @-Rn  (General, D-side in delay slot)
@@ -1618,6 +1762,11 @@ _m8_case_25:                       ! STS.L PR, @-Rn  (General, D-side in delay s
         mov.l   c25_pay, r8
         bra     c25_Da             ! delayed branch; delay slot faults DMISS
         .word   0x4022                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c25_poison, r0
 c25_Da:
         mov.l   c25_snapa, r2
         mov.l   r0, @r2
@@ -1661,6 +1810,7 @@ c25_snapb:  .long SNAP_B
 c25_id:     .long 25
 c25_cmp:    .long 0x80000000 + _m8_cmp
 c25_flush:  .long 0x80000000 + _m8_flush
+c25_poison: .long 0xBADC0DE1
 
         .balign 4
 _m8_case_26:                       ! TAS.B @Rn  (General, D-side in delay slot)
@@ -1679,6 +1829,11 @@ _m8_case_26:                       ! TAS.B @Rn  (General, D-side in delay slot)
         mov.l   c26_pay, r8
         bra     c26_Da             ! delayed branch; delay slot faults DMISS
         .word   0x401B                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c26_poison, r0
 c26_Da:
         mov.l   c26_snapa, r2
         mov.l   r0, @r2
@@ -1722,6 +1877,7 @@ c26_snapb:  .long SNAP_B
 c26_id:     .long 26
 c26_cmp:    .long 0x80000000 + _m8_cmp
 c26_flush:  .long 0x80000000 + _m8_flush
+c26_poison: .long 0xBADC0DE1
 
 ENTRY(_m8_run_all)
         sts.l   pr, @-r15

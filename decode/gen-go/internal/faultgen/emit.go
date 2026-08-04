@@ -1271,9 +1271,17 @@ c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
 // FETCH never faults), and the delay-slot instruction's DATA access to the cold
 // workload page DMISSes. The restart must land on the branch (bra); when the
 // branch re-runs, the delay-slot instruction re-executes -- its base auto-modify
-// (@Rm+/@-Rn) must be restored so it applies exactly once. bra Lx uses disp=0
-// (Lx = branch+4 = right after the delay slot). Snapshot {base reg, dest/probe}
-// on the faulting leg must equal the warm leg.
+// (@Rm+/@-Rn) must be restored so it applies exactly once. Snapshot {base reg,
+// dest/probe} on the faulting leg must equal the warm leg.
+//
+// The faulting leg's branch target is DISTINCT from the delay slot's
+// fall-through address (mirrors sim/tests/mmudslot.S's taken_target/_fail
+// split): a wrong restart PC (re-executing the delay-slot instruction
+// sequentially instead of re-issuing it via the branch) falls into a poison
+// trap that clobbers r0 before merging back into the capture code, so the
+// SNAP_A/SNAP_B compare deterministically diverges instead of the two paths
+// coincidentally converging on an identical PC. The warm/control leg never
+// faults, so its branch is always taken correctly and disp=0 is fine there.
 const generalDSlotText = `        .balign 4
 _m8_case_{{.ID}}:                       ! {{.Name}}  (General, D-side in delay slot)
         sts.l   pr, @-r15
@@ -1292,6 +1300,11 @@ _m8_case_{{.ID}}:                       ! {{.Name}}  (General, D-side in delay s
 {{else}}        mov     #0, r8
 {{end}}        bra     c{{.ID}}_Da             ! delayed branch; delay slot faults DMISS
         .word   {{.Word}}                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached if the restart re-executed the
+        ! delay-slot instruction sequentially instead of re-issuing it via the
+        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
+        ! cannot coincidentally match the warm leg.
+        mov.l   c{{.ID}}_poison, r0
 c{{.ID}}_Da:
         mov.l   c{{.ID}}_snapa, r2
         mov.l   r0, @r2
@@ -1338,6 +1351,7 @@ c{{.ID}}_snapb:  .long SNAP_B
 c{{.ID}}_id:     .long {{.ID}}
 c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
 c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
+c{{.ID}}_poison: .long 0xBADC0DE1
 `
 
 // PrivMem D-side: as General plus the DestCtrl register. Original control reg

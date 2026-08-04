@@ -1,0 +1,43 @@
+# Authoritative CPU variant table. Read by cpugen (Make consumers, via
+# `cpugen variants -format=make`) and by jcore-soc's
+# tools/socgen/elaborate/cpumap.go. This is the ONLY place that defines what
+# distinguishes one CPU variant from another.
+#
+# generics    : cpu-level VHDL generics the variant binds true
+# overlay     : cpugen decoder overlay under decode/gen-go/spec/ ("" = base)
+# extra_files : cpu-submodule-relative sources only this variant needs
+# config_file : the variant's VHDL configuration file (see core/cpu_config_*.vhd)
+#
+# NOTE: core/register_file_two_bank.vhd is deliberately NOT variant-specific.
+# Every configuration except cpu_j1 binds register_file(two_bank), including
+# cpu_j2, so it belongs in the shared base list.
+
+# config_file is core/cpu_config.vhd for EVERY variant until Task 7 splits that
+# file. Keeping it uniform here is what makes Task 4 provably list-neutral;
+# Task 7 changes these four values and nothing else.
+
+[j1]
+overlay     = ""
+extra_files = []
+config_file = "core/cpu_config.vhd"
+
+[j2]
+overlay     = ""
+extra_files = []
+config_file = "core/cpu_config.vhd"
+
+[j2a]
+generics    = { SH2A_ARCH = "true" }
+overlay     = "sh2a"
+extra_files = []
+config_file = "core/cpu_config.vhd"
+
+# J4 = the multi-tenant family: privileged architecture + MMU, and later the
+# hypervisor. PRIV_ARCH implies MMU; there is deliberately no separate knob.
+# core/tlb.vhd must be analyzed BEFORE core/cpu.vhd, which instantiates
+# work.tlb inside `g_mmu : if PRIV_ARCH generate`.
+[j4]
+generics    = { PRIV_ARCH = "true" }
+overlay     = "sh4"
+extra_files = ["core/tlb.vhd"]
+config_file = "core/cpu_config.vhd"

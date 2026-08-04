@@ -8,6 +8,14 @@
 #
 # Paths appended to $(VHDLS) are relative to components/cpu/, matching what
 # mk_utils.mk expects; it prefixes them with the directory it is scanning.
+#
+# NOTE TO INCLUDERS: this file defines Make rules (the variants.mk bootstrap,
+# the decode regeneration rule). GNU Make's default goal is the first target
+# defined anywhere it has read so far -- so if you `include` this file before
+# your own first target, one of ITS rules silently becomes your default goal.
+# Either include this file AFTER your own first target, or set
+# .DEFAULT_GOAL yourself beforehand. This file deliberately does not set
+# .DEFAULT_GOAL, since doing so here would override the includer's intent.
 
 CPU_INC_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 CPU_VARIANT ?= j2
@@ -69,7 +77,28 @@ CPU_DECODE_GEN_NAMES := decode_pkg.vhd decode.vhd decode_body.vhd \
 CPU_DECODE_GENERATED := $(addprefix $(DECODE_GEN_DIR)/decode/,$(CPU_DECODE_GEN_NAMES))
 CPU_ROM_WIDTH ?= 72
 
-$(CPU_DECODE_GENERATED): $(CPU_INC_DIR)variants.toml
+# Spec inputs cpugen actually reads: the always-loaded base spec/*.toml, plus
+# -- only when this variant has an overlay -- that overlay's own
+# spec/<overlay>/*.toml subtree. A variant with no overlay (e.g. j2) must NOT
+# depend on spec/sh4/*.toml: touching the sh4 spec would otherwise force a
+# pointless j2 regeneration. We also depend on the cpugen Go sources
+# themselves (cmd/cpugen + internal/), since a generator bug fix changes the
+# output just as much as a spec edit does, and both are equally capable of
+# leaving a stale decoder in place undetected.
+CPU_DECODE_GEN_BASE_SPEC    := $(wildcard $(CPU_INC_DIR)decode/gen-go/spec/*.toml)
+CPU_DECODE_GEN_OVERLAY_SPEC := $(if $(CPU_OVERLAY),$(wildcard $(CPU_INC_DIR)decode/gen-go/spec/$(CPU_OVERLAY)/*.toml))
+CPU_DECODE_GEN_SRC          := $(shell find $(CPU_INC_DIR)decode/gen-go/cmd/cpugen \
+                                 $(CPU_INC_DIR)decode/gen-go/internal -name '*.go')
+
+# Grouped target (GNU Make 4.3+ "&:"): one recipe invocation produces all six
+# files atomically. Without this, classic "targets: prereqs" syntax treats
+# each of the six names as an independent rule sharing the recipe text, so
+# `make -jN` can (and does) launch N concurrent, redundant `cpugen` runs all
+# writing the same six files in the same directory -- wasteful, and a race
+# that can leave DECODE_GEN_DIR partially populated. `go`'s own `-C`-based
+# in-tree module cache builds are not safe to run N-way concurrently either.
+$(CPU_DECODE_GENERATED) &: $(CPU_INC_DIR)variants.toml $(CPU_DECODE_GEN_BASE_SPEC) \
+                            $(CPU_DECODE_GEN_OVERLAY_SPEC) $(CPU_DECODE_GEN_SRC)
 	@command -v go >/dev/null 2>&1 || { \
 	  echo "ERROR: go is required to generate the $(CPU_VARIANT) decoder." >&2; exit 1; }
 	@mkdir -p $(DECODE_GEN_DIR)/decode

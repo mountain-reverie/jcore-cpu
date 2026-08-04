@@ -16,27 +16,41 @@
 ! Leg B's load-side alternating shape is still uncovered; leg D covers the
 ! alternating shape on the STORE side only.
 !
-! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! LEG D IS CURRENTLY **RED** ON THIS TREE -- IT HAS FOUND A DEFECT.
-! Measured (see the report under .superpowers/sdd/2026-07-31-mmudrain-test/):
-!   fault count  = 21 = 2*N_FAULTS+1  EXACTLY as expected -- the leg is not
-!                  vacuous, every store faulted once and every stub IMISSed once
-!   page data    = all ten pages hold the leg-D sentinel -- every store landed
-!   base regs    = r0 correct; r1..r9 are each 4 LOW, sum of deltas -36 = 9*(-4)
-!                  -> the `@-Rn` pre-decrement COMMITTED TWICE in nine of the
-!                     ten stubs.  That is the Model-C (concurrent) undo path of
-!                     docs/architecture/tlb.md section 9.4 (mem_predec) failing
-!                     under the alternating store->IMISS pattern.
-!   r12          = stub_base + 10*PAGE_SZ, one PAGE_SZ short of the expected
-!                  stub_base + 11*PAGE_SZ -> one delay-slot advance short
-!                  (fail 0x0B is what fires first only if the reg check is
-!                  moved; as ordered below, fail 9 fires first).
-! Ruled out as harness error: plain `jmp @Rn` + delay-slot write to Rn was
+! ---- what leg D found (FIXED; all three legs pass on this tree) ----------
+! Leg D was RED when it was written and it earned its keep: it exposed a
+! PRE-EXISTING z-port age-blindness in the precise-exception squash
+! (core/datapath.vhm, reg_wr_z_g), fixed by the one-shot `z_grace' bit in the
+! g_restore2 generate. On an instruction-side fault whose restart PC is NOT
+! backed up -- an IMISS on a branch TARGET, as here -- the squash window also
+! suppressed the writeback of an instruction that had issued BEFORE the
+! faulting fetch and is therefore architecturally OLDER than it. Since the
+! restart PC is (correctly) the target, that instruction never re-executed and
+! its register write was lost forever.
+!
+! READ THIS BEFORE DEBUGGING A FAILURE HERE -- the symptom points at the wrong
+! subsystem. What failed first was layer 1: nine of the ten `@-Rn' bases read 4
+! LOW, which looks exactly like the Model-C (concurrent) base-restore undo of
+! docs/architecture/tlb.md section 9.4 mis-firing. It was not. The base restore
+! fired in ALL TEN stubs, on time, with the right value, into the right
+! register, with RB=0. The real chain runs the other way round:
+!
+!   the lost write WAS the r12 advance (the `add r11,r12' in the delay slot of
+!   `jmp @r12')  ->  r12 stopped advancing, so the next stub was entered with
+!   r12 == its own address  ->  its `jmp @r12' self-looped  ->  the whole stub
+!   body, INCLUDING `mov.l r13,@-Rn', executed TWICE  ->  two pre-decrements,
+!   base 4 low.
+!
+! So the r12 shortfall (layer 3) is the CAUSE and the doubled pre-decrement
+! (layer 1) is the consequence -- not the other way round, and not a restore
+! defect at all. Layer 1 fires first only because of the check order below; the
+! layer-3 r12 check is the one that names the actual mechanism. If this guard
+! goes red again, read layer 3 first even if layer 1 is what reported.
+!
+! Ruled out as harness error: plain `jmp @Rn' + delay-slot write to Rn was
 ! verified SH-2-correct on this core with a standalone non-MMU probe (the jump
 ! uses the PRE-delay-slot value), and leg C -- the same stores, same sentinel,
-! same staging, but drained by a single IMISS instead of alternating -- PASSES
-! all three of its layers.  DO NOT weaken this leg to make the suite green.
-! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! same staging, but drained by a single IMISS instead of alternating -- passed
+! throughout. DO NOT weaken this leg to make the suite green.
 !
 ! ---- why the store legs matter (docs/architecture/tlb.md section 9) --------
 ! Section 9.1 states the contract: on a precise TLB fault, the base register of

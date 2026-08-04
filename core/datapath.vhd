@@ -888,6 +888,20 @@ end generate;
    -- * I-side fault on a DELAY-SLOT fetch (delay_slot='1'): the restart is
    -- backed up to the branch (tlb_fault_va - 2), so the branch re-issues
    -- and re-executes its delay slot. No grace.
+   -- COVERAGE WARNING -- this arm of the gate is UNGUARDED, reasoning
+   -- only. Dropping the term (z_grace <= tlb_exc_is_i) leaves all 68
+   -- guards passing, so `not delay_slot' is NOT proven load-bearing; it
+   -- may well be benign here, since for an I-side delay-slot fetch fault
+   -- the pending write is plausibly older and not re-executed either.
+   -- It is kept because it is what the restart-PC arm does and because
+   -- the equivalence stated below is the property we actually want. The
+   -- sweep that would settle it is m8_idslot_0-2, which are the rotted
+   -- orphans named in docs/architecture/tlb.md section 9.5 item 3. Do
+   -- not read this term as tested, and do not delete it on the strength
+   -- of a green suite.
+   -- (The tlb_exc_is_i half IS proven load-bearing in both directions:
+   -- forcing z_grace to '0' fails mmudrain leg D, and forcing it to '1'
+   -- -- i.e. granting grace on the D-side too -- fails leg A.)
    -- * I-side fault whose restart PC IS the faulting fetch VA
    -- (tlb_exc_is_i='1', delay_slot='0'): nothing younger than the faulting
    -- FETCH can be in EX -- the instruction at the faulting VA never
@@ -904,7 +918,22 @@ end generate;
    -- commit edge; while the slot is stretched (slot_o='0') the pipeline is
    -- frozen and the bit correctly persists. One bit suffices for the same
    -- reason it does on the w-port: the fault redirect lands a slot late, so at
-   -- most one pre-fault writeback can still be in flight.
+   -- most one pre-fault writeback can still be in flight. (Depth > 1 -- two
+   -- pending pre-fault writebacks -- is uncovered either way.)
+   --
+   -- WHY THERE IS NO `and not slot_o' QUALIFIER, unlike wb_grace. On the
+   -- w-port that qualifier means "the pending writeback commits on THIS edge,
+   -- ungated, because tlb_squash is not visible until the next cycle, so no
+   -- grace is needed". The z-port has no such cycle: the write this bit
+   -- protects presents in N+1, not in N, so slot_o at the arming edge says
+   -- nothing about it and the qualifier would merely suppress the grace
+   -- whenever the fault happened to arm on a slot boundary -- i.e. break the
+   -- fix. The cost of leaving it out is that if squash_arm coincides with
+   -- slot_o='1' the bit can stay set across the following slot and admit a
+   -- second z write. That is benign under the I-side-only gate: on a fetch
+   -- fault nothing younger than the faulting fetch exists in the pipe, so any
+   -- write that appears in the window is older and would have to commit
+   -- anyway. The asymmetry with wb_grace is deliberate, not an oversight.
    signal z_grace : std_logic;
  begin
    process(clk, rst)

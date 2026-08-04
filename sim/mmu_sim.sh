@@ -193,6 +193,9 @@ else
   run_guard m8_ifetch_0 "" 12ms 240
   run_guard m8_ifetch_1 "" 12ms 240
   run_guard m8_ifetch_2 "" 12ms 240
+  # m8_dsdslot_0 measured completion (MMU_VCD final timestamp, -n reuse build,
+  # 2026-08-04): 46.95us; stop-time set to ~4x that, not the 12ms default.
+  run_guard m8_dsdslot_0 "" 180us 240
 fi
 
 if [ "$fail" = 0 ]; then echo "==> all guards PASSED"; else echo "==> FAILURES above" >&2; exit 1; fi

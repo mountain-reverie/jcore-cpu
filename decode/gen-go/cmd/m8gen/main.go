@@ -85,6 +85,14 @@ func main() {
 		fmt.Fprintln(os.Stderr, "emit ifetch-dslot:", err)
 		os.Exit(1)
 	}
+	// The D-side-delay-slot axis (memory instruction planted in a branch delay
+	// slot; its DATA access DMISSes; the restart must land on the branch and the
+	// per-form base restore must apply exactly once).
+	dsdslotImgs, err := faultgen.EmitDSideDSlotImages(classes)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "emit dside-dslot:", err)
+		os.Exit(1)
+	}
 	manifest := buildManifest(classes, skip)
 
 	if err := os.MkdirAll(*outDir, 0o755); err != nil {
@@ -100,6 +108,9 @@ func main() {
 	}
 	for i, img := range idslotImgs {
 		outputs[fmt.Sprintf("m8_idslot_%d.S", i)] = img
+	}
+	for i, img := range dsdslotImgs {
+		outputs[fmt.Sprintf("m8_dsdslot_%d.S", i)] = img
 	}
 	for name, content := range outputs {
 		if err := os.WriteFile(filepath.Join(*outDir, name), []byte(content), 0o644); err != nil {
@@ -160,6 +171,7 @@ func buildManifest(classes []faultgen.Class, skip map[int]bool) string {
 	}{
 		{faultgen.DSide, "D-side", "m8_dside.S"},
 		{faultgen.IFetch, "I-fetch", "m8_ifetch_N.S"},
+		{faultgen.DSideDSlot, "D-side-delay-slot", "m8_dsdslot_N.S"},
 	} {
 		fmt.Fprintf(&b, "\n## %s axis (%s)\n", ax.name, ax.file)
 		entries := faultgen.ImageManifest(classes, ax.axis)

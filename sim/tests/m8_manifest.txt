@@ -380,3 +380,193 @@
 #   TRAPA #imm           TRAPA #imm writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 #   TST.B #imm, @(R0, GBR) TST.B #imm, @(R0, GBR) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 #   XOR.B #imm, @(R0, GBR) XOR.B #imm, @(R0, GBR) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
+
+## D-side-delay-slot axis (m8_dsdslot_N.S)
+1    CAS.L Rm, Rn, @R0    General
+2    MOV.B @(disp, Rm), R0 General
+3    MOV.B @Rm+, Rn       General
+4    MOV.B @Rm, Rn        General
+5    MOV.B R0, @(disp, Rn) General
+6    MOV.B Rm, @Rn        General
+7    MOV.B Rm,@-Rn        General
+8    MOV.L @(disp, Rm), Rn General
+9    MOV.L @Rm+, Rn       General
+10   MOV.L @Rm, Rn        General
+11   MOV.L Rm, @(disp, Rn) General
+12   MOV.L Rm, @Rn        General
+13   MOV.L Rm,@-Rn        General
+14   MOV.W @(disp, Rm), R0 General
+15   MOV.W @Rm+, Rn       General
+16   MOV.W @Rm, Rn        General
+17   MOV.W R0, @(disp, Rn) General
+18   MOV.W Rm, @Rn        General
+19   MOV.W Rm,@-Rn        General
+20   STC.L GBR, @-Rn      General
+21   STC.L SR, @-Rn       PrivMem
+22   STC.L VBR, @-Rn      PrivMem
+23   STS.L MACH, @-Rn     General
+24   STS.L MACL, @-Rn     General
+25   STS.L PR, @-Rn       General
+26   TAS.B @Rn            General
+# 26 emitted; skipped:
+#   ADD #imm, Rn         ADD #imm, Rn has no D-side memory access
+#   ADD Rm, Rn           ADD Rm, Rn has no D-side memory access
+#   ADDC Rm, Rn          ADDC Rm, Rn has no D-side memory access
+#   ADDV Rm, Rn          ADDV Rm, Rn has no D-side memory access
+#   AND #imm, R0         AND #imm, R0 has no D-side memory access
+#   AND Rm, Rn           AND Rm, Rn has no D-side memory access
+#   AND.B #imm, @(R0, GBR) AND.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+#   BF /S label          BF /S label is Bespoke (dedicated guard)
+#   BF label             BF label is Bespoke (dedicated guard)
+#   BGND                 BGND has no D-side memory access
+#   BRA label            BRA label is Bespoke (dedicated guard)
+#   BRAF Rm              BRAF Rm is Bespoke (dedicated guard)
+#   BSR label            BSR label is Bespoke (dedicated guard)
+#   BSRF Rm              BSRF Rm is Bespoke (dedicated guard)
+#   BT /S label          BT /S label is Bespoke (dedicated guard)
+#   BT label             BT label is Bespoke (dedicated guard)
+#   Break                Break has no D-side memory access
+#   CLDS CP0_Rm, CP0_COM CLDS CP0_Rm, CP0_COM has no D-side memory access
+#   CLDS CPI_Rm, CPI_COM CLDS CPI_Rm, CPI_COM has no D-side memory access
+#   CLRMAC               CLRMAC has no D-side memory access
+#   CLRT                 CLRT has no D-side memory access
+#   CMP /EQ #imm, R0     CMP /EQ #imm, R0 has no D-side memory access
+#   CMP /EQ Rm, Rn       CMP /EQ Rm, Rn has no D-side memory access
+#   CMP /GE Rm, Rn       CMP /GE Rm, Rn has no D-side memory access
+#   CMP /GT Rm, Rn       CMP /GT Rm, Rn has no D-side memory access
+#   CMP /HI Rm, Rn       CMP /HI Rm, Rn has no D-side memory access
+#   CMP /HS Rm, Rn       CMP /HS Rm, Rn has no D-side memory access
+#   CMP /STR Rm, Rn      CMP /STR Rm, Rn has no D-side memory access
+#   CMP/EQ ASIDR, Rn     CMP/EQ ASIDR, Rn has no D-side memory access
+#   CMP/EQ PTEH, Rn      CMP/EQ PTEH, Rn has no D-side memory access
+#   CMP/PL Rn            CMP/PL Rn has no D-side memory access
+#   CMP/PZ Rn            CMP/PZ Rn has no D-side memory access
+#   CSTS CP0_COM, CP0_Rn CSTS CP0_COM, CP0_Rn has no D-side memory access
+#   CSTS CPI_COM, CPI_Rn CSTS CPI_COM, CPI_Rn has no D-side memory access
+#   DIV0S Rm, Rn         DIV0S Rm, Rn has no D-side memory access
+#   DIV0U                DIV0U has no D-side memory access
+#   DIV1 Rm, Rn          DIV1 Rm, Rn has no D-side memory access
+#   DMULS.L Rm, Rn       DMULS.L Rm, Rn has no D-side memory access
+#   DMULU.L Rm, Rn       DMULU.L Rm, Rn has no D-side memory access
+#   DT Rn                DT Rn has no D-side memory access
+#   EXTS.B Rm, Rn        EXTS.B Rm, Rn has no D-side memory access
+#   EXTS.W Rm, Rn        EXTS.W Rm, Rn has no D-side memory access
+#   EXTU.B Rm, Rn        EXTU.B Rm, Rn has no D-side memory access
+#   EXTU.W Rm, Rn        EXTU.W Rm, Rn has no D-side memory access
+#   Error                Error has no D-side memory access
+#   General Illegal      General Illegal has no D-side memory access
+#   Interrupt            Interrupt has no D-side memory access
+#   JMP @Rm              JMP @Rm is Bespoke (dedicated guard)
+#   JSR @Rm              JSR @Rm is Bespoke (dedicated guard)
+#   LDC Rm, ASIDR        LDC Rm, ASIDR has no D-side memory access
+#   LDC Rm, PTEH         LDC Rm, PTEH has no D-side memory access
+#   LDC Rm, PTEL         LDC Rm, PTEL has no D-side memory access
+#   LDC Rm, Rn_BANK      LDC Rm, Rn_BANK has no D-side memory access
+#   LDC Rm, SPC          LDC Rm, SPC has no D-side memory access
+#   LDC Rm, SR           LDC Rm, SR has no D-side memory access
+#   LDC Rm, SSR          LDC Rm, SSR has no D-side memory access
+#   LDC Rm, VBR          LDC Rm, VBR has no D-side memory access
+#   LDC, Rm, GBR         LDC, Rm, GBR has no D-side memory access
+#   LDC.L @Rm+, GBR      LDC.L @Rm+, GBR: control-register memory load in a delay slot not yet modelled by DSideDSlot
+#   LDC.L @Rm+, SR       LDC.L @Rm+, SR: control-register memory load in a delay slot not yet modelled by DSideDSlot
+#   LDC.L @Rm+, VBR      LDC.L @Rm+, VBR: control-register memory load in a delay slot not yet modelled by DSideDSlot
+#   LDS Rm, CP0_COM      LDS Rm, CP0_COM has no D-side memory access
+#   LDS Rm, CPI_COM      LDS Rm, CPI_COM has no D-side memory access
+#   LDS Rm, MACH         LDS Rm, MACH has no D-side memory access
+#   LDS Rm, MACL         LDS Rm, MACL has no D-side memory access
+#   LDS Rm, PR           LDS Rm, PR has no D-side memory access
+#   LDS.L @Rm+, MACH     LDS.L @Rm+, MACH: control-register memory load in a delay slot not yet modelled by DSideDSlot
+#   LDS.L @Rm+, MACL     LDS.L @Rm+, MACL: control-register memory load in a delay slot not yet modelled by DSideDSlot
+#   LDS.L @Rm+, PR       LDS.L @Rm+, PR: control-register memory load in a delay slot not yet modelled by DSideDSlot
+#   LDTLB                LDTLB is Bespoke (dedicated guard)
+#   LDTLB.RN             LDTLB.RN is Bespoke (dedicated guard)
+#   LDTLB.RN Rm          LDTLB.RN Rm has no D-side memory access
+#   MAC.L @Rm+, @Rn+     MAC.L @Rm+, @Rn+: MAC dual-pointer in a delay slot not yet modelled by DSideDSlot (the General @Rm+/@-Rn forms already exercise the delay-slot restart + base-restore path)
+#   MAC.W @Rm+, @Rn+     MAC.W @Rm+, @Rn+: MAC dual-pointer in a delay slot not yet modelled by DSideDSlot (the General @Rm+/@-Rn forms already exercise the delay-slot restart + base-restore path)
+#   MOV #imm, Rn         MOV #imm, Rn has no D-side memory access
+#   MOV Rm, Rn           MOV Rm, Rn has no D-side memory access
+#   MOV.B @(R0, Rm), Rn  MOV.B @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+#   MOV.B @(disp, GBR), R0 MOV.B @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+#   MOV.B R0, @(disp, GBR) MOV.B R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+#   MOV.B Rm, @(R0, Rn)  MOV.B Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+#   MOV.L @(R0, Rm), Rn  MOV.L @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+#   MOV.L @(disp, GBR), R0 MOV.L @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+#   MOV.L @(disp, PC), Rn MOV.L @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
+#   MOV.L R0, @(disp, GBR) MOV.L R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+#   MOV.L Rm, @(R0, Rn)  MOV.L Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+#   MOV.W @(R0, Rm), Rn  MOV.W @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+#   MOV.W @(disp, GBR), R0 MOV.W @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+#   MOV.W @(disp, PC), Rn MOV.W @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
+#   MOV.W R0, @(disp, GBR) MOV.W R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+#   MOV.W Rm, @(R0, Rn)  MOV.W Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+#   MOVA @(disp, PC), R0 MOVA @(disp, PC), R0 has no D-side memory access
+#   MOVT Rn              MOVT Rn has no D-side memory access
+#   MUL.L Rm, Rn         MUL.L Rm, Rn has no D-side memory access
+#   MULS.W Rm, Rn        MULS.W Rm, Rn has no D-side memory access
+#   MULU.W Rm, Rn        MULU.W Rm, Rn has no D-side memory access
+#   NEG Rm, Rn           NEG Rm, Rn has no D-side memory access
+#   NEGC Rm, Rn          NEGC Rm, Rn has no D-side memory access
+#   NOP                  NOP has no D-side memory access
+#   NOT Rm, Rn           NOT Rm, Rn has no D-side memory access
+#   OR #imm, R0          OR #imm, R0 has no D-side memory access
+#   OR Rm, Rn            OR Rm, Rn has no D-side memory access
+#   OR.B #imm, @(R0, GBR) OR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+#   ROTCL Rn             ROTCL Rn has no D-side memory access
+#   ROTCR Rn             ROTCR Rn has no D-side memory access
+#   ROTL Rn              ROTL Rn has no D-side memory access
+#   ROTR Rn              ROTR Rn has no D-side memory access
+#   RTE                  RTE is Bespoke (dedicated guard)
+#   RTS                  RTS is Bespoke (dedicated guard)
+#   Reset CPU            Reset CPU: control-register memory store in a delay slot not yet modelled by DSideDSlot
+#   SETT                 SETT has no D-side memory access
+#   SHAD Rm, Rn          SHAD Rm, Rn has no D-side memory access
+#   SHAL Rn              SHAL Rn has no D-side memory access
+#   SHAR Rn              SHAR Rn has no D-side memory access
+#   SHLD Rm, Rn          SHLD Rm, Rn has no D-side memory access
+#   SHLL Rn              SHLL Rn has no D-side memory access
+#   SHLL16 Rn            SHLL16 Rn has no D-side memory access
+#   SHLL2 Rn             SHLL2 Rn has no D-side memory access
+#   SHLL8 Rn             SHLL8 Rn has no D-side memory access
+#   SHLR Rn              SHLR Rn has no D-side memory access
+#   SHLR16 Rn            SHLR16 Rn has no D-side memory access
+#   SHLR2 Rn             SHLR2 Rn has no D-side memory access
+#   SHLR8 Rn             SHLR8 Rn has no D-side memory access
+#   SLEEP                SLEEP is Bespoke (dedicated guard)
+#   STC ASIDR, Rn        STC ASIDR, Rn has no D-side memory access
+#   STC EXPEVT, Rn       STC EXPEVT, Rn has no D-side memory access
+#   STC GBR, Rn          STC GBR, Rn has no D-side memory access
+#   STC INTEVT, Rn       STC INTEVT, Rn has no D-side memory access
+#   STC PTEH, Rn         STC PTEH, Rn has no D-side memory access
+#   STC PTEL, Rn         STC PTEL, Rn has no D-side memory access
+#   STC Rm_BANK, Rn      STC Rm_BANK, Rn has no D-side memory access
+#   STC SPC, Rn          STC SPC, Rn has no D-side memory access
+#   STC SR, Rn           STC SR, Rn has no D-side memory access
+#   STC SSR, Rn          STC SSR, Rn has no D-side memory access
+#   STC TRA, Rn          STC TRA, Rn has no D-side memory access
+#   STC TSBPTR, Rn       STC TSBPTR, Rn has no D-side memory access
+#   STC VBR, Rn          STC VBR, Rn has no D-side memory access
+#   STS CP0_COM, Rn      STS CP0_COM, Rn has no D-side memory access
+#   STS CPI_COM, Rn      STS CPI_COM, Rn has no D-side memory access
+#   STS MACH, Rn         STS MACH, Rn has no D-side memory access
+#   STS MACL, Rn         STS MACL, Rn has no D-side memory access
+#   STS PR, Rn           STS PR, Rn has no D-side memory access
+#   SUB Rm, Rn           SUB Rm, Rn has no D-side memory access
+#   SUBC Rm, Rn          SUBC Rm, Rn has no D-side memory access
+#   SUBV Rm, Rn          SUBV Rm, Rn has no D-side memory access
+#   SWAP.B Rm, Rn        SWAP.B Rm, Rn has no D-side memory access
+#   SWAP.W Rm, Rn        SWAP.W Rm, Rn has no D-side memory access
+#   Slot Illegal         Slot Illegal has no D-side memory access
+#   TLB DMISS R          TLB DMISS R has no D-side memory access
+#   TLB DMISS W          TLB DMISS W has no D-side memory access
+#   TLB DPROT R          TLB DPROT R has no D-side memory access
+#   TLB DPROT W          TLB DPROT W has no D-side memory access
+#   TLB IMISS            TLB IMISS has no D-side memory access
+#   TLB IPROT            TLB IPROT has no D-side memory access
+#   TRAPA #imm           TRAPA #imm has no D-side memory access
+#   TST #imm, R0         TST #imm, R0 has no D-side memory access
+#   TST Rm, Rn           TST Rm, Rn has no D-side memory access
+#   TST.B #imm, @(R0, GBR) TST.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+#   XOR #imm, R0         XOR #imm, R0 has no D-side memory access
+#   XOR Rm, Rn           XOR Rm, Rn has no D-side memory access
+#   XOR.B #imm, @(R0, GBR) XOR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+#   XTRACT Rm, Rn        XTRACT Rm, Rn has no D-side memory access

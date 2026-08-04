@@ -106,10 +106,15 @@ else
   echo "== priv-arch + MMU guards (cpu_tb) =="
   for t in exctest trapatest pm3vec pm3guard privmode banktest excguard \
            rteredir mmureg mmuguard mmuxlate mmurte mmustore mmuimiss mmuimiss_illegal \
-           mmusr mmufault mmufsr mmudslot mmuidslot mmuldtlbr mmutsb mmuidx mmustres mmustr2 mmudrain mmuimissrest mmushadowld mmushadowst mmurestartpc \
+           mmusr mmufault mmufsr mmudslot mmuidslot mmuldtlbr mmutsb mmuidx mmustres mmustr2 mmuimissrest mmushadowld mmushadowst mmurestartpc \
            mmustale mmuasid mmuglobal mmumultihit mmudblflt mmunest_trapa mmunest_slotill mmunest mmuremap mmucmpcsr mmurun mmuirun mmuainc mmuainc2 mmusmep j4_illegal_trap; do
     run_guard "$t"
   done
+  # mmudrain needs an explicit 600us entry: at the default 80us the suite loop
+  # never reached legs C or D at all (leg D writes its result at ~400us), so a
+  # store-side regression passed silently.
+  run_guard mmudrain "" 600us
+
   # Restart-PC EXACTNESS probes. Run explicitly (200us) rather than from the
   # loop above: they are the only guards that measure HOW FAR the D-side
   # TLB-fault restart PC lands from the faulting instruction, in units of

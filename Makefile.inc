@@ -58,4 +58,23 @@ CPU_CONFIG_FILE := $(CPU_VARIANT_$(CPU_VARIANT)_CONFIG_FILE)
 CPU_CONFIG_DEFINES := $(foreach g,$(CPU_GENERICS),\
   -DCONFIG_$(word 1,$(subst =, ,$(g)))=$(if $(filter true,$(word 2,$(subst =, ,$(g)))),1,0))
 
+# Decode sources are GENERATED per variant, always out-of-tree. Overlays are
+# additive and produce the SAME filenames as the base generation, so a variant's
+# decoder cannot be expressed as a file list -- only as a regeneration. The
+# committed decode/*.vhd stay the base generation forever (pr-quick.yml enforces
+# it); nothing here writes into the working tree.
+CPU_DECODE_GEN_NAMES := decode_pkg.vhd decode.vhd decode_body.vhd \
+                        decode_table_simple.vhd decode_table_direct.vhd \
+                        decode_table_rom.vhd
+CPU_DECODE_GENERATED := $(addprefix $(DECODE_GEN_DIR)/decode/,$(CPU_DECODE_GEN_NAMES))
+CPU_ROM_WIDTH ?= 72
+
+$(CPU_DECODE_GENERATED): $(CPU_INC_DIR)variants.toml
+	@command -v go >/dev/null 2>&1 || { \
+	  echo "ERROR: go is required to generate the $(CPU_VARIANT) decoder." >&2; exit 1; }
+	@mkdir -p $(DECODE_GEN_DIR)/decode
+	go -C $(CPU_INC_DIR)decode/gen-go run ./cmd/cpugen -w $(CPU_ROM_WIDTH) \
+	  $(if $(CPU_OVERLAY),-overlay spec/$(CPU_OVERLAY)) -illegal full \
+	  -o $(abspath $(DECODE_GEN_DIR)/decode)
+
 include $(CPU_INC_DIR)build_core.mk

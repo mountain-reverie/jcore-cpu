@@ -220,7 +220,7 @@ jobs:
           cd sim
           rm -f work-obj93.cf cpu_tb.vhh cpu_ctb
           make TOOLS_DIR="$TOOLS_DIR" JCORE_SOC="$JCORE_SOC" \
-            CONFIG_PRIV_ARCH=1 \
+            CPU_VARIANT=j4 \
             cpu_ctb cpu_tb cpu_cache_tb work-obj93.cf >/dev/null
           grep -q 'PRIV_ARCH => true' cpu_tb.vhh \
             || { echo "FAIL: build is not MMU-on (stale cpu_tb.vhh?)"; exit 1; }
@@ -234,7 +234,7 @@ jobs:
             # "exit code 2" and no diagnostic at all -- 48 guards would pass,
             # then nothing. Show the tail and name the guard instead.
             local build
-            if ! build="$(make CONFIG_PRIV_ARCH=1 -C tests $t.img 2>&1)"; then
+            if ! build="$(make CPU_VARIANT=j4 -C tests $t.img 2>&1)"; then
               echo "  FAIL  $t${top:+ [$top]} (build)"
               echo "$build" | tail -20
               fail=1

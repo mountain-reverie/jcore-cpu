@@ -258,26 +258,21 @@ jobs:
           TOOLS_DIR: ${{ github.workspace }}/jcore-soc/tools
         run: |
           set -euo pipefail
-          # Generate the J4 (sh4 overlay) decoder and analyze the DUT with
-          # CONFIG_PRIV_ARCH=1. Building work-obj93.cf runs `ghdl -a` over all
-          # three decoder architectures (decode_table_{simple,direct,rom}.vhd)
-          # against the overlay-generated tables. This is the elaboration gate
-          # the base steps don't exercise: a constant-immediate (or any other)
-          # overlay codegen break that generates cleanly but won't elaborate
-          # fails HERE rather than silently on a developer's local J4 build.
-          echo "==> generate-j4 (sh4 overlay)"
-          make -C decode generate-j4
-          echo "==> analyze J4 DUT [CONFIG_PRIV_ARCH=1] — all three decoders"
+          # Build the J4 (sh4 overlay, PRIV_ARCH=1) DUT via CPU_VARIANT=j4.
+          # sim/Makefile regenerates decode/*.vhd OUT-OF-TREE (DECODE_GEN_DIR,
+          # via Makefile.inc's grouped-target rule) before analyzing it, so
+          # nothing under the committed decode/ tree is touched. Building
+          # work-obj93.cf runs `ghdl -a` over all three decoder architectures
+          # (decode_table_{simple,direct,rom}.vhd) against the overlay-
+          # generated tables. This is the elaboration gate the base steps
+          # don't exercise: a constant-immediate (or any other) overlay
+          # codegen break that generates cleanly but won't elaborate fails
+          # HERE rather than silently on a developer's local J4 build.
+          echo "==> analyze J4 DUT [CPU_VARIANT=j4] — all three decoders"
           cd sim
           rm -f work-obj93.cf cpu_tb.vhh cpu_ctb
-          make TOOLS_DIR="$TOOLS_DIR" CONFIG_PRIV_ARCH=1 work-obj93.cf >/dev/null
+          make TOOLS_DIR="$TOOLS_DIR" CPU_VARIANT=j4 work-obj93.cf >/dev/null
           cd ..
-          # Restore the base (production, PRIV_ARCH=0) decoder so the working
-          # tree matches the committed generated files, and assert the base
-          # output is byte-identical (generate-j4 must not perturb base).
-          echo "==> restore base decoder + verify byte-identical"
-          make -C decode generate
-          make -C decode diff
           echo "==> Step 4b: J4 overlay elaboration PASSED"
 
       - name: insns.json is in sync with the spec

@@ -11,9 +11,7 @@ $(VHDLS) += core/shifter_seq.vhd
 $(VHDLS) += core/datapath.vhd
 $(VHDLS) += core/register_file.vhd
 
-$(VHDLS) += decode/decode_pkg.vhd
-$(VHDLS) += decode/decode.vhd
-$(VHDLS) += decode/decode_body.vhd
+$(VHDLS) += $(CPU_DECODE_GENERATED)
 $(VHDLS) += decode/decode_table.vhd
 $(VHDLS) += decode/decode_core.vhd
 

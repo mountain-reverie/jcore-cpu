@@ -60,7 +60,7 @@ _sim_instr_end: .long 0
 
         ! Stay in .vect (linker VMA 0) so .org below places code at ABSOLUTE VAs.
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- Ensure RB=0. REQUIRED: the I-side TLB fault path is gated on
         !      SR.RB='0' (core/cpu.vhd i_at_translated consumer). With RB=1 (reset
@@ -120,7 +120,7 @@ p_ptel_nx:      .long 0x000000A8        ! W|U|C  (X=0 -> IPROT on fetch)
 p_pio:          .long 0xABCD0000        ! PIO/LED marker port
 p_critical:     .long critical
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -141,7 +141,7 @@ ENTRY(_fail)
 p_test_result:  .long TEST_RESULT_ADDRESS
 p_test_result_pass:  .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ================================================================
         ! IMISS handler at VBR+0x400 = _v_imiss (on page 0). Installs a
@@ -221,4 +221,4 @@ critical:                               ! = VA 0x0FFE (last halfword of page 0)
         ! page-1 fetches before the TLB exception fires.
         .org 0x1800
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH

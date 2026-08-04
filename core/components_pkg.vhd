@@ -78,7 +78,7 @@ package cpu2j0_components_pack is
 
   constant priv_reg_reset : priv_reg_t := (others => (others => '0'));
 
-  -- SH-4 MMU control registers (J4 + MMU_ARCH). A dedicated flop block, NOT the
+  -- SH-4 MMU control registers (J4 + PRIV_ARCH). A dedicated flop block, NOT the
   -- regfile: these are CSRs read/written broadside by the TLB/fault logic.
   -- All-0 at reset (hardware-spec §9). M1 wires PTEH/PTEL/ASIDR to LDC/STC;
   -- MMUCR/TEA/TTB exist (reset 0) but get their software path in M2 (P4 decode).
@@ -105,7 +105,7 @@ package cpu2j0_components_pack is
 
   constant mmu_reg_reset : mmu_reg_t := (others => (others => '0'));
 
-  -- TLB entry and array types (MMU_ARCH). ppn is PA[31:10] = 22-bit PFN at 4 KB
+  -- TLB entry and array types (PRIV_ARCH). ppn is PA[31:10] = 22-bit PFN at 4 KB
   -- granularity; i_pa_tag/d_pa_tag use ppn(27 downto 13) = PA[27:13] = 15 bits
   -- (matches CACHE_PA_TAG_WIDTH for the 28-bit cache region).
 
@@ -178,13 +178,13 @@ package cpu2j0_components_pack is
     pc   : std_logic_vector(bits - 1 downto 0);
     sr   : sr_t;
     priv : priv_reg_t; -- SH-4 EXPEVT/INTEVT/TRA (J4)
-    mmu  : mmu_reg_t;  -- SH-4 MMU CSRs: PTEH/PTEL/ASIDR/MMUCR/TEA/TTB (J4+MMU_ARCH)
+    mmu  : mmu_reg_t;  -- SH-4 MMU CSRs: PTEH/PTEL/ASIDR/MMUCR/TEA/TTB (J4+PRIV_ARCH)
     -- High after TEA/PTEH have been captured for the current TLB-fault episode,
     -- so the capture happens once (on the first faulting cycle) and is not
     -- overwritten by a later cycle of the same fault. Needed for IMISS, where the
-    -- I-fetch stream advances a word while the miss persists (J4+MMU_ARCH).
+    -- I-fetch stream advances a word while the miss persists (J4+PRIV_ARCH).
     tlb_exc_captured : std_logic;
-    -- Faulting-instruction restart-PC capture (J4+MMU_ARCH). ma_pc shadows the
+    -- Faulting-instruction restart-PC capture (J4+PRIV_ARCH). ma_pc shadows the
     -- architectural PC of the instruction that launches each data access (a fixed
     -- pipeline point, so the offset to the access's own instruction is constant
     -- regardless of how far the fetch pointer later runs ahead). On the first
@@ -201,7 +201,7 @@ package cpu2j0_components_pack is
     -- VA at fetch (before any redirect); it is routed out to decode, re-registered
     -- EX-aligned (ex_if_pc), and shadowed at the MA-launch as ma_if_pc, from which
     -- the D-fault restart PC is derived. if_pc_next tracks if_dr_next; if_pc tracks
-    -- if_dr. (J4+MMU_ARCH only; unused/pruned on J1/J2.)
+    -- if_dr. (J4+PRIV_ARCH only; unused/pruned on J1/J2.)
     if_pc_next : std_logic_vector(31 downto 0);
     if_pc      : std_logic_vector(31 downto 0);
     ma_if_pc   : std_logic_vector(31 downto 0);
@@ -213,7 +213,7 @@ package cpu2j0_components_pack is
     -- bank 1 and user code reads uninitialised bank-1 registers. The captured
     -- value is stable across the stalled slot's re-evaluations.
     tlb_exc_sr : sr_t;
-    -- Precise-exception squash (J4+MMU_ARCH). Set on the first cycle a D/I-side
+    -- Precise-exception squash (J4+PRIV_ARCH). Set on the first cycle a D/I-side
     -- TLB fault is detected and held until the handler is entered (SR.RB=1). The
     -- faulting access stalls/redirects a slot late, so the instruction(s) issued
     -- behind the faulting one would otherwise commit their GPR writeback before
@@ -224,7 +224,7 @@ package cpu2j0_components_pack is
     -- restart. (The EX-stage we is left live so the exception entry's own
     -- SPC/SSR saves to the regfile are not suppressed.)
     tlb_squash : std_logic;
-    -- Precise auto-increment restore (J4+MMU_ARCH). On an @Rn+ load the base
+    -- Precise auto-increment restore (J4+PRIV_ARCH). On an @Rn+ load the base
     -- post-increment commits via the EX-stage z-write one cycle BEFORE the load's
     -- TLB fault is detectable in MEM, so neither the we_wb squash nor any later
     -- gate can suppress it -> Rn is double-incremented when RTE re-executes the
@@ -398,7 +398,7 @@ package cpu2j0_components_pack is
     a : std_logic_vector
   ) return std_logic;
 
-  -- PageMask helpers (MMU_ARCH variable page sizes, docs/architecture/tlb.md).
+  -- PageMask helpers (PRIV_ARCH variable page sizes, docs/architecture/tlb.md).
   -- page_offset_mask: bit p = '1' iff PA bit 12+p is within the page offset (use VA).
   --   pm: 0=4KB(0 extra bits) 1=16KB(2) 2=64KB(4) ... 8=256MB(16) 9+=1GB(18, capped).
 

@@ -58,7 +58,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- Ensure RB=0 (bank 0). ----
         stc     sr, r0
@@ -127,7 +127,7 @@ p_mmucr:        .long 0xFF000010
 p_ptel_page0:   .long 0x000000C8        ! W|X|C (U cleared: kernel code, SMEP)
 c_page1_va:     .long 0x00001000
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -148,7 +148,7 @@ ENTRY(_fail)
 p_test_result:  .long TEST_RESULT_ADDRESS
 p_test_result_pass:  .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ================================================================
         ! DMISS_R / DPROT_R handler at VBR+0x400 = _v_load.
@@ -179,4 +179,4 @@ Hptel1:         .long 0x000010E8        ! PA 0x1000 (identity) | W|X|U|C
 _fault_pages:
         .space 0x1000, 0
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH

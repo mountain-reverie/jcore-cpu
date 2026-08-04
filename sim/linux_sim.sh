@@ -75,8 +75,8 @@ if [ "$BUILD" = 1 ]; then
   echo "== build MMU-on cosim (cpu_ctb + cpu_tb) =="
   cd sim
   rm -f work-obj93.cf cpu_tb.vhh cpu_ctb
-  make CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 cpu_ctb cpu_tb cpu_tb.vhh work-obj93.cf >/dev/null
-  grep -q 'MMU_ARCH => true' cpu_tb.vhh \
+  make CONFIG_PRIV_ARCH=1 cpu_ctb cpu_tb cpu_tb.vhh work-obj93.cf >/dev/null
+  grep -q 'PRIV_ARCH => true' cpu_tb.vhh \
     || { echo "FAIL: build is not MMU-on (stale cpu_tb.vhh?)" >&2; exit 1; }
   cd ..
 fi
@@ -88,7 +88,7 @@ echo "== build $name.img (real linux@jcore objects, J4-built ld) =="
 rm -f "tests/$name.img" "tests/$name.o" "tests/$name.elf"
 make -C tests LINUX_SRC="$LINUX_SRC" J4GAS="$J4GAS" J4LD="$J4LD" \
      J4OBJCOPY="$J4OBJCOPY" J4BIN="$J4BIN" \
-     CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 "$name.img"
+     CONFIG_PRIV_ARCH=1 "$name.img"
 
 out="$(timeout 120 ./cpu_ctb --stop-time=200us -i "tests/$name.img" --ieee-asserts=disable 2>&1 || true)"
 echo "$out"

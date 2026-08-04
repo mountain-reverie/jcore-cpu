@@ -49,7 +49,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- Load known CSR values (privileged; runs at MD=1). ----
         mov.l   p_pteh_val, r0

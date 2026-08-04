@@ -1,6 +1,6 @@
 ! sh2a_movmu_pop_restart.S -- restart-safety proof for SH-2A MOVMU.L @R15+,Rn
 ! (multi-register pop incl. PR) under a MID-LOOP data TLB fault
-! (CONFIG_SH2A_ARCH && CONFIG_MMU_ARCH).
+! (CONFIG_SH2A_ARCH && CONFIG_PRIV_ARCH).
 !
 ! Design property under test: MOVMU.L @R15+,R4 (pop R0..R4, then PR; opcode
 ! 0100 0100 1111 0100 = 0x44F4) is implemented in decode_core.vhm as a
@@ -93,7 +93,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH
+#if CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH
 
         ! ---- Ensure RB=0 (bank 0). ----
         stc     sr, r0
@@ -225,7 +225,7 @@ p_s3:  .long 0xD3D3D333
 p_s4:  .long 0xE4E4E444
 p_spr: .long 0xF5F5F555
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH
+#endif  ! CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH
 
         .global _done
 ENTRY(_done)
@@ -288,7 +288,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH
+#if CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH
 
         ! ================================================================
         ! DMISS_R handler at VBR+0x400 (the single TLB-fault vector) = _v_dmiss.
@@ -373,4 +373,4 @@ _g_fault_count: .long 0
 _fault_pages:
         .space 0x1000, 0
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH
+#endif  ! CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH

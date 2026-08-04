@@ -419,7 +419,7 @@ func assignXBus(v, rn, rm string, out AssignMap) error {
 	case up == "PC":
 		out[SigXbusSel] = "SEL_PC"
 	case up == "TLBPC":
-		// J4+MMU_ARCH: the hardware-captured faulting-instruction PC, used by the
+		// J4: the hardware-captured faulting-instruction PC, used by the
 		// D-side TLB-fault exception entry so SPC<-restart re-executes the access.
 		out[SigXbusSel] = "SEL_TLBPC"
 	case up == "W":
@@ -471,7 +471,7 @@ func assignYBus(v, rn, rm string, out AssignMap) error {
 	case up == "SR":
 		out[SigYbusSel] = "SEL_SR"
 	case up == "TLBSR":
-		// J4+MMU_ARCH: the user SR captured at the first D-fault cycle, used by
+		// J4: the user SR captured at the first D-fault cycle, used by
 		// the D-fault entry's SSR save so a stalled-slot re-evaluation cannot
 		// capture the post-entry SR (RB=1).
 		out[SigYbusSel] = "SEL_TLBSR"
@@ -483,7 +483,7 @@ func assignYBus(v, rn, rm string, out AssignMap) error {
 	case up == "TRA":
 		out[SigYbusSel] = "SEL_TRA"
 	case up == "PTEH" || up == "PTEL" || up == "ASIDR" || up == "TSBPTR":
-		// SH-4 MMU register read (J4 + MMU_ARCH): consolidated ybus source
+		// SH-4 MMU register read (J4): consolidated ybus source
 		// SEL_MMU, sub-selected by mmu_reg_sel. STC PTEH/PTEL/ASIDR/TSBPTR, Rn.
 		// TSBPTR is read-only (M5): it appears here but NOT in the zbus write
 		// case below, so no LDC path exists for it.
@@ -528,7 +528,7 @@ func assignZBus(v, rn, rm string, out AssignMap) error {
 			out[SigRegnumZ] = rm
 		}
 	case up == "PTEH" || up == "PTEL" || up == "ASIDR":
-		// SH-4 MMU register write (J4 + MMU_ARCH): latch zbus into the addressed
+		// SH-4 MMU register write (J4): latch zbus into the addressed
 		// MMU flop. NOT a regfile write — no wrreg_z. LDC Rm,PTEH/PTEL/ASIDR.
 		out[SigMmuRegWr] = "1"
 		out[SigMmuRegSelWr] = "SEL_" + up

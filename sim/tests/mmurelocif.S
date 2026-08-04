@@ -32,7 +32,7 @@
 _sim_instr_end: .long 0
 
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
         ! --- page 0: code+literals, identity, C=1 ---
         mov     #0, r0
         .word   0x405E                  ! LDC r0, PTEH (VPN=0)
@@ -90,7 +90,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
         ! --- decoy stub at PA 0x4000 (VA's identity location): returns 0x11 ---
         .org 0x4000
         mov     #0x11, r0

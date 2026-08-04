@@ -173,7 +173,7 @@ case "$SYNTH_VARIANT" in
     case "$SYNTH_VARIANT" in
       j4c)
         TOP="cpu_cache_timing_j4"
-        # M3: for j4c asic/ecp5, use the PRIV_ARCH=true + MMU_ARCH=true variant of
+        # M3: for j4c asic/ecp5, use the PRIV_ARCH=true variant of
         # the cache timing top (cpu_cache_timing_j4_priv_mmu in
         # cpu_cache_timing_config.vhd) so the real J4+MMU+cache core is synthesized.
         AREA_TOP="cpu_cache_timing_j4_priv_mmu"

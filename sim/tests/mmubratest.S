@@ -20,7 +20,7 @@
 _sim_instr_end: .long 0
 
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
         stc     sr, r0                  ! RB=0 clear (as mmuidslot does)
         mov.l   p_rbclear, r1
         and     r1, r0

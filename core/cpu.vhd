@@ -11,7 +11,6 @@ entity cpu is
   generic (
     copro_decode : boolean := true;
     priv_arch    : boolean := false;
-    mmu_arch     : boolean := false; -- MMU control-register file (subordinate to PRIV_ARCH)
     sh2a_arch    : boolean := false; -- SH-2A extensions (inert plumbing only)
     -- Elaboration tag: distinguishes two cpu instances that share this entity/
     -- arch/generics but whose nested register-file architecture is bound
@@ -36,7 +35,7 @@ entity cpu is
     cop_o   : out   cop_o_t;
     cop_i   : in    cop_i_t;
     priv_o  : out   cpu_priv_o_t := NULL_PRIV_O; -- SH-4 EXPEVT/INTEVT/TRA (J4)
-    mmu_o   : out   cpu_mmu_o_t  := NULL_MMU_O   -- TLB PA tags for cache wrappers (J4+MMU_ARCH)
+    mmu_o   : out   cpu_mmu_o_t  := NULL_MMU_O   -- TLB PA tags for cache wrappers (J4)
   );
 end entity cpu;
 
@@ -80,7 +79,7 @@ architecture stru of cpu is
   -- Intermediate bus signals so TLB can read addresses (VHDL-93: out ports unreadable).
   signal sig_db_o   : cpu_data_o_t;
   signal sig_inst_o : cpu_instruction_o_t;
-  -- Datapath MMU state exported for TLB (MMU_ARCH only; tied-off otherwise).
+  -- Datapath MMU state exported for TLB (PRIV_ARCH only; tied-off otherwise).
   signal dp_mmu_regs : mmu_reg_t;
   signal dp_sr       : sr_t;
   -- TLB output signals (Task 8 will consume hit/prot; mmu_o carries PA tags out).
@@ -311,7 +310,7 @@ begin
 
   u_datapath : component datapath
     generic map (
-      priv_arch => priv_arch, mmu_arch => mmu_arch, sh2a_arch => sh2a_arch
+      priv_arch => priv_arch, sh2a_arch => sh2a_arch
     )
     port map (
       clk                => clk,
@@ -371,7 +370,7 @@ begin
       ex_if_pc           => dec_ex_if_pc
     );
 
-  -- D-store TLB-fault write suppression (J4+MMU_ARCH). A store that misses or
+  -- D-store TLB-fault write suppression (J4). A store that misses or
   -- violates the TLB must not mutate memory, but a write acks and commits in the
   -- same cycle the fault is detected combinationally -- one cycle before the
   -- registered TLB exception request can latch. Demote the faulting store to a
@@ -388,12 +387,12 @@ begin
   -- collateral-damage such a non-faulting in-flight store (back-to-back fault:
   -- a resumed store followed by another faulting access loses its write). Key
   -- the demote on the D-side's own hit/prot status instead.
-  d_store_faulting <= '1' when mmu_arch and d_at_translated = '1'
+  d_store_faulting <= '1' when priv_arch and d_at_translated = '1'
                                and sig_db_o.en = '1' and sig_db_o.wr = '1'
                                and (tlb_d_hit = '0' or tlb_d_prot = '1') else
                       '0';
 
-  g_dstore_squash : if MMU_ARCH generate
+  g_dstore_squash : if PRIV_ARCH generate
 
     process (sig_db_o, d_store_faulting, d_at_translated, tlb_d_hit,
              tlb_d_pa, tlb_d_pa12, tlb_d_page_mask) is
@@ -428,11 +427,11 @@ begin
 
   end generate g_dstore_squash;
 
-  g_no_dstore_squash : if not MMU_ARCH generate
+  g_no_dstore_squash : if not PRIV_ARCH generate
     db_o <= sig_db_o;
   end generate g_no_dstore_squash;
 
-  g_inst_p1_fold : if MMU_ARCH generate
+  g_inst_p1_fold : if PRIV_ARCH generate
     -- SH P1 (0x8000_0000-0x9FFF_FFFF) is untranslated: PA = VA and 0x1FFFFFFF.
     -- inst_o.a is PA[31:1] (indices preserved 31..1, not reindexed), so P1 is
     -- a(31 downto 29)="100". Fold AFTER i_va_32 has sampled sig_inst_o.a, so
@@ -459,7 +458,7 @@ begin
 
   end generate g_inst_p1_fold;
 
-  g_inst_no_fold : if not MMU_ARCH generate
+  g_inst_no_fold : if not PRIV_ARCH generate
     inst_o <= sig_inst_o;
   end generate g_inst_no_fold;
 
@@ -468,11 +467,11 @@ begin
   coproc.coproc_cmd   <= coproc_decode.coproc_cmd when copro_decode else
                          NOP;
 
-  -- TLB instantiation (MMU_ARCH=true only).
+  -- TLB instantiation (J4 only).
   -- The TLB is combinational for lookups; it is clocked only for TI flush and
   -- LDTLB writes: tlb_wr comes from decoder (sr.tlb_wr); ti is MMUCR bit[2].
 
-  g_mmu : if MMU_ARCH generate
+  g_mmu : if PRIV_ARCH generate
   begin
     -- Reconstruct 32-bit VAs from the registered bus outputs.
     -- inst_o.a is PA[31:1]; bit 0 is always 0 for instruction fetch.
@@ -556,7 +555,7 @@ begin
       -- handler". (SR.BL, the architectural block bit, is left set from reset by
       -- the bare-metal guards, so it cannot serve as the gate here.) The lingering
       -- second access then raises no exception while RB=1; it re-faults cleanly
-      -- after the handler returns (RB back to 0). (J4+MMU_ARCH.)
+      -- after the handler returns (RB back to 0). (J4.)
       if (i_at_translated = '1' and sig_inst_o.en = '1' and dp_sr.rb = '0') then
         if (tlb_i_multihit = '1') then                                                          -- S-I5: hit-count fault, priority over hit_found/prot
           exc_en   := '1';
@@ -691,7 +690,7 @@ begin
 
   end generate g_mmu;
 
-  g_no_mmu : if not MMU_ARCH generate
+  g_no_mmu : if not PRIV_ARCH generate
     mmu_o          <= NULL_MMU_O;
     tlb_exc_en     <= '0';
     tlb_exc_kind   <= IMISS;

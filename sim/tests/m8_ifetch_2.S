@@ -124,7 +124,7 @@
 !   separate CPU reset) to stay under the co-sim cumulative-fetch ceiling.
 #include "m8_runtime.inc"
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
         .text
         .balign 4
 _m8_case_49:                       ! SHAR Rn  (General non-memory, I-fetch)

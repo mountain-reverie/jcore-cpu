@@ -6,7 +6,7 @@ use work.cache_pack.all;
 
 entity icache_ccl is
   generic (
-    MMU_ARCH : boolean := false);
+    PRIV_ARCH : boolean := false);
   port (
    clk    : in std_logic; -- cpu clock, 125MHz
    rst    : in std_logic;
@@ -209,7 +209,7 @@ begin
     -- --------------------------  |
     -- --------------------------  V
     vsel := this.ffv(vtoi(a.a(CACHE_INDEX_MSB downto 5)));
-    if MMU_ARCH and this.a_prev.mmu.at = '1' then
+    if PRIV_ARCH and this.a_prev.mmu.at = '1' then
       tag_to_compare := this.a_prev.mmu.pa_tag;
     else
       tag_to_compare := (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
@@ -405,7 +405,7 @@ begin
 
   -- tag ram       control signals --------------------------------------------
   ry_ccl.ten <= '1';
-  ry_ccl.tag <= this'register.ma0_pa_tag when MMU_ARCH and this'register.ma0_at = '1'
+  ry_ccl.tag <= this'register.ma0_pa_tag when PRIV_ARCH and this'register.ma0_at = '1'
                 else (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
                      & this'register.ma0 (27 downto CACHE_LINE_WIDTH_BITS+CACHE_INDEX_BITS);
 

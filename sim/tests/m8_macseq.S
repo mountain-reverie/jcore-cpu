@@ -17,7 +17,7 @@
 
 #include "m8_runtime.inc"
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
         .text
 ENTRY(_m8_run_all)
         sts.l   pr, @-r15

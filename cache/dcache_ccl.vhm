@@ -8,7 +8,7 @@ use work.data_bus_pack.all;
 
 entity dcache_ccl is
   generic (
-    MMU_ARCH : boolean := false);
+    PRIV_ARCH : boolean := false);
   port (
    clk    : in std_logic; -- cpu clock, 125MHz
    rst    : in std_logic;
@@ -253,7 +253,7 @@ begin
     -- --------------------------  |
     -- --------------------------  V
     vsel := this.ffv(vtoi(a.a(CACHE_INDEX_MSB downto 5)));
-    if MMU_ARCH and this.a_prev_mmu.at = '1' then
+    if PRIV_ARCH and this.a_prev_mmu.at = '1' then
       tag_to_compare := this.a_prev_mmu.pa_tag;
     else
       tag_to_compare := (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
@@ -291,7 +291,7 @@ begin
     -- ------------------------------------------------------------------------
     -- create hit check, (snoop)
     -- ------------------------------------------------------------------------
-    -- FIXME(MMU_ARCH): snoop compare uses VA-based tag (15 bits). When AT=1,
+    -- FIXME(PRIV_ARCH): snoop compare uses VA-based tag (15 bits). When AT=1,
     -- stored tags are PA-based (15 bits); a VA snoop will not match.
     -- Full snoop correctness under translation requires PA-based invalidation
     -- (planned for a later MMU milestone, not M2 scope).
@@ -611,7 +611,7 @@ begin
 
   -- tag ram       control signals --------------------------------------------
   ry_ccl.ten0 <= '1';
-  ry_ccl.tag0 <= this'register.ma0_pa_tag when MMU_ARCH and this'register.ma0_at = '1'
+  ry_ccl.tag0 <= this'register.ma0_pa_tag when PRIV_ARCH and this'register.ma0_at = '1'
                  else (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
                       & this'register.ma0 (27 downto CACHE_LINE_WIDTH_BITS+CACHE_INDEX_BITS);
 

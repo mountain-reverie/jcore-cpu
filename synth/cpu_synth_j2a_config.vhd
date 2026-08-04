@@ -82,7 +82,6 @@ architecture stru of cpu_j2a_top is
     generic (
       copro_decode : boolean := true;
       priv_arch    : boolean := false;
-      mmu_arch     : boolean := false;
       sh2a_arch    : boolean := false
     );
     port (

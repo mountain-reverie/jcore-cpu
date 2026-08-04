@@ -53,7 +53,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
         ! ---- Ensure RB=0 (keep MD=1) so handler entry causes bank switch. ----
         stc     sr, r0
         mov.l   p_rbclear, r1
@@ -151,7 +151,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
         ! ===================== DMISS_W handler at VBR+0x400 =====================
         ! Pad so _v_store lands past 0x440 from binary start, keeping VBR
         ! = _v_store - 0x400 as a positive address (avoiding 32-bit wrap, which

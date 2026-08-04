@@ -155,7 +155,7 @@
 ! case 35 skipped: XTRACT Rm, Rn has no D-side memory access
 #include "m8_runtime.inc"
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
         .text
         .balign 4
 _m8_case_1:                       ! CAS.L Rm, Rn, @R0  (General, D-side)

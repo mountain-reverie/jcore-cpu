@@ -205,18 +205,10 @@ begin
   cpu1: configuration work.cpu_sim
 #endif
 #if CONFIG_PRIV_ARCH
-#if CONFIG_MMU_ARCH
-#if CONFIG_SH2A_ARCH
-            generic map(PRIV_ARCH => true, MMU_ARCH => true, SH2A_ARCH => true)
-#else
-            generic map(PRIV_ARCH => true, MMU_ARCH => true)
-#endif
-#else
 #if CONFIG_SH2A_ARCH
             generic map(PRIV_ARCH => true, SH2A_ARCH => true)
 #else
             generic map(PRIV_ARCH => true)
-#endif
 #endif
 #else
 #if CONFIG_SH2A_ARCH

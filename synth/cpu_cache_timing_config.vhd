@@ -20,23 +20,6 @@ configuration cpu_cache_timing_j4 of cpu_cache_timing_top is
   end for;
 end configuration;
 
--- M0: J4+cache asic/ecp5 area build with PRIV_ARCH=true (real SH-4 privileged
--- datapath).  Identical to cpu_cache_timing_j4 except u_cpu uses cpu_synth_j4
--- with generic map(PRIV_ARCH => true), exactly as cpu_timing_j4 does for the
--- bare-cpu timing backend.  Used by cpu_synth.sh AREA_TOP for j4c asic/ecp5.
-configuration cpu_cache_timing_j4_priv of cpu_cache_timing_top is
-  for timing
-    for u_cpu : cpu
-      use configuration work.cpu_synth_j4
-generic map (
-  priv_arch => true
-);
-    end for;
-    for u_icache : icache_adapter use configuration work.icache_adapter_fpga; end for;
-    for u_dcache : dcache_adapter use configuration work.dcache_adapter_fpga; end for;
-  end for;
-end configuration;
-
 -- J2A+cache asic/ecp5/timing: SH-2A core (cpu_synth_j2a + SH2A_ARCH=>true) wrapped
 -- with the same cache as j2c. Identical to cpu_cache_timing_j2 except u_cpu binds
 -- cpu_synth_j2a generic map(SH2A_ARCH=>true), as cpu_timing_j2a does for bare cpu.
@@ -52,18 +35,18 @@ generic map (
   end for;
 end configuration;
 
--- M3: J4+cache asic/ecp5 area build with PRIV_ARCH=true AND MMU_ARCH=true (real
--- SH-4 MMU: TLB/CAM, D-store fault squash, MMU control-register file, VIPT seam).
--- Identical to cpu_cache_timing_j4_priv except u_cpu also sets MMU_ARCH => true,
--- so the MMU hardware is actually synthesized and timing-checked. Used by
--- cpu_synth.sh AREA_TOP for j4c asic/ecp5. Requires the J4 overlay decoder
--- (make -C decode generate-j4) which exposes the mmu_reg_* control signals.
+-- M3: J4+cache asic/ecp5 area build with PRIV_ARCH=true (real SH-4 privileged
+-- datapath + MMU: TLB/CAM, D-store fault squash, MMU control-register file,
+-- VIPT seam). PRIV_ARCH implies the MMU hardware, so it is synthesized and
+-- timing-checked whenever PRIV_ARCH is set. Used by cpu_synth.sh AREA_TOP for
+-- j4c asic/ecp5. Requires the J4 overlay decoder (make -C decode generate-j4)
+-- which exposes the mmu_reg_* control signals.
 configuration cpu_cache_timing_j4_priv_mmu of cpu_cache_timing_top is
   for timing
     for u_cpu : cpu
       use configuration work.cpu_synth_j4
 generic map (
-  priv_arch => true, mmu_arch => true
+  priv_arch => true
 );
     end for;
     for u_icache : icache_adapter use configuration work.icache_adapter_fpga; end for;

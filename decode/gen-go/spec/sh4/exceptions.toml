@@ -360,7 +360,7 @@
     zbus = "Rn"
     zbus_sel = "Y"
 
-# ---- TLB miss/protection exceptions (J4+MMU_ARCH; system-plane) ----
+# ---- TLB miss/protection exceptions (J4; system-plane) ----
 # Restart = faulting instruction, with distinct EXPEVT codes and per-access-type
 # vector offsets.
 # SPC source differs by fault stage:

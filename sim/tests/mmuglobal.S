@@ -85,7 +85,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- Ensure RB=0 (bank 0). ----
         stc     sr, r0
@@ -250,7 +250,7 @@ p_g_resume:               .long _g_resume
 p_leg_a_after:            .long leg_a_after
 p_leg_b_after:            .long leg_b_after
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -271,7 +271,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- DMISS_R/DPROT_R handler at VBR+0x400 (the ONLY pass path for
         ! Legs A and B). Disables AT, verifies EXPEVT == DPROT_R (0x0C0)
@@ -317,4 +317,4 @@ _g_resume:      .long 0
 _fault_pages:
         .space 0x8000, 0
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH

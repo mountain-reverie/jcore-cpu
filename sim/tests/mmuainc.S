@@ -51,7 +51,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
         ! Relocate SP into P1 and jump to the P1 alias of kmain so ALL code,
         ! stack, and structure accesses are untranslated from here on.
         mov.l   p_sp,   r15            ! r15 = 0x80002F00
@@ -181,7 +181,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
         ! ===================== Exception vector base =====================
         ! VBR points at the P1 alias of _vbase; hardware adds 0x400 (all TLB faults).
         .balign 4

@@ -49,9 +49,9 @@ if [ "$BUILD" = 1 ]; then
   echo "== build MMU-on cosim (cpu_ctb + cpu_tb + cpu_cache_tb) =="
   cd sim
   rm -f work-obj93.cf cpu_tb.vhh cpu_cache_tb.vhh cpu_ctb cpu_cache_tb
-  make CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 \
+  make CONFIG_PRIV_ARCH=1 \
        cpu_ctb cpu_tb cpu_cache_tb cpu_tb.vhh work-obj93.cf >/dev/null
-  grep -q 'MMU_ARCH => true' cpu_tb.vhh \
+  grep -q 'PRIV_ARCH => true' cpu_tb.vhh \
     || { echo "FAIL: build is not MMU-on (stale cpu_tb.vhh?)" >&2; exit 1; }
   cd ..
 fi
@@ -66,7 +66,7 @@ run_guard() {  # <name> <sim_top-or-default> [stop-time] [wall-timeout-s]
   # Capture the build rather than discarding it: a failing make otherwise
   # produces no diagnostic and the guard just looks like it vanished.
   local build
-  if ! build="$(make CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 -C tests $t.img 2>&1)"; then
+  if ! build="$(make CONFIG_PRIV_ARCH=1 -C tests $t.img 2>&1)"; then
     echo "  FAIL  $t${top:+ [$top]} (build)"
     echo "$build" | tail -20
     fail=1

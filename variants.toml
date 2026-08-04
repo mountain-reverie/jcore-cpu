@@ -12,25 +12,21 @@
 # Every configuration except cpu_j1 binds register_file(two_bank), including
 # cpu_j2, so it belongs in the shared base list.
 
-# config_file is core/cpu_config.vhd for EVERY variant until Task 7 splits that
-# file. Keeping it uniform here is what makes Task 4 provably list-neutral;
-# Task 7 changes these four values and nothing else.
-
 [j1]
 overlay     = ""
 extra_files = []
-config_file = "core/cpu_config.vhd"
+config_file = "core/cpu_config_j1.vhd"
 
 [j2]
 overlay     = ""
 extra_files = []
-config_file = "core/cpu_config.vhd"
+config_file = "core/cpu_config_j2.vhd"
 
 [j2a]
 generics    = { SH2A_ARCH = "true" }
 overlay     = "sh2a"
 extra_files = []
-config_file = "core/cpu_config.vhd"
+config_file = "core/cpu_config_j2.vhd"
 
 # J4 = the multi-tenant family: privileged architecture + MMU, and later the
 # hypervisor. PRIV_ARCH implies MMU; there is deliberately no separate knob.
@@ -45,4 +41,4 @@ config_file = "core/cpu_config.vhd"
 generics    = { PRIV_ARCH = "true" }
 overlay     = "sh4"
 extra_files = ["core/tlb.vhd"]
-config_file = "core/cpu_config.vhd"
+config_file = "core/cpu_config_j4.vhd"

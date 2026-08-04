@@ -45,9 +45,22 @@ endif
 
 CFLAGS := -Wall -Werror -Isim -g -Wno-deprecated-declarations
 
+# Makefile.inc (included below, transitively via ../cache/build.mk too) defines
+# rules of its own (the variants.mk bootstrap, the decode regeneration rule)
+# before this file's own `all:` target is reached, so without this, GNU Make's
+# default goal (the first target defined anywhere) silently becomes one of
+# ITS targets instead of `all`. Set it explicitly here, as Makefile.inc's own
+# header comment instructs includers to do.
+.DEFAULT_GOAL := all
+
 VHDLS := CPU_VHDS
-include ../build.mk
-CPU_VHDS := $(addprefix ../,$(CPU_VHDS))
+CPU_VARIANT ?= j2
+DECODE_GEN_DIR := $(CURDIR)/gen
+include ../Makefile.inc
+# $(CPU_DECODE_GENERATED) paths are already rooted at DECODE_GEN_DIR (i.e.
+# under sim/gen), so only ../-prefix the entries that are tree-relative to
+# components/cpu/; prefixing the generated ones again would mangle them.
+CPU_VHDS := $(foreach f,$(CPU_VHDS),$(if $(filter $(DECODE_GEN_DIR)/%,$(f)),$(f),../$(f)))
 
 # including ring bus is optional
 ifeq ($(CONFIG_RING_BUS),1)
@@ -73,6 +86,12 @@ VHDS := $(CPU_VHDS) bridge_pkg.vhd monitor_pkg.vhd bus_monitor.vhd timeout_cnt.v
 # (same idiom as core/mult_ice40dsp.vhd).
 VHDS += ../core/dsp_arith.vhd ../core/sb_mac16_sim.vhd
 VHDS += mem/cpu_sram.vhd mem/asymmetric_ram.vhd
+# core/tlb.vhd is only a CPU_VHDS member for the j4 variant (variants.toml
+# extra_files); tlb_match_tb/tlb_tb directly instantiate `entity work.tlb` as
+# their DUT regardless of CPU_VARIANT, so analyze it unconditionally here
+# (same idiom as core/dsp_arith.vhd above) rather than forcing the whole sim
+# onto CPU_VARIANT=j4.
+VHDS += ../core/tlb.vhd
 VHDS += tlb_match_tb.vhd
 VHDS += tlb_tb.vhd
 VHDS += seg_decode_tb.vhd
@@ -91,22 +110,13 @@ VHDS += $(JCORE_SOC)/lib/memory_tech_lib/ram_2rw.vhd
 VHDS += $(JCORE_SOC)/lib/memory_tech_lib/ram_2x8x2048_2rw.vhd
 VHDS += $(JCORE_SOC)/lib/memory_tech_lib/tech/sim/ram_2x8x2048_2rw_sim.vhd
 VHDS += $(JCORE_SOC)/lib/memory_tech_lib/ram_2rw_mems.vhd
-VHDS += ../cache/cache_clkmode_sc.vhd
-VHDS += ../cache/cache_pkg.vhd
-VHDS += ../cache/dcache_ram.vhd
-VHDS += ../cache/dcache_mcl.vhd
-VHDS += ../cache/dcache_ccl.vhd
-VHDS += ../cache/dcache.vhd
-VHDS += ../cache/dcache_adapter.vhd
-VHDS += ../cache/dcache_cacheable_mux.vhd
-VHDS += ../cache/icache_ram.vhd
-VHDS += ../cache/icache_ccl.vhd
-VHDS += ../cache/icache_mcl.vhd
-VHDS += ../cache/icache.vhd
-VHDS += ../cache/icache_adapter.vhd
-VHDS += ../cache/icache_cacheable_mux.vhd
+CACHE_VHDS :=
+VHDLS := CACHE_VHDS
+include ../cache/build.mk
+VHDS += $(addprefix ../cache/,$(CACHE_VHDS))
+# Testbenches are sim-only; they stay hand-listed here rather than living in
+# cache/build_core.mk (which FPGA/ASIC board builds also consume).
 VHDS += ../cache/icache_cacheable_mux_tb.vhd
-VHDS += ../cache/icache_modereg.vhd
 VHDS += ../cache/is_cacheable_tb.vhd
 VHDS += ../cache/dcache_color_tb.vhd
 VHDS += bus_mux_pkg.vhd multi_master_bus_mux.vhd

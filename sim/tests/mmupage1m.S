@@ -1,5 +1,5 @@
 ! mmupage1m.S -- 1 MB page: a sub-page access hits the one entry and relocates
-! (J4+MMU_ARCH, cpu_cache_tb). RED on fixed-4KB RTL (VA 0x101000 unmapped); GREEN
+! (J4, cpu_cache_tb). RED on fixed-4KB RTL (VA 0x101000 unmapped); GREEN
 ! once PageMask=4 makes one entry cover VA 0x100000-0x1FFFFF and relocate per offset.
 ! Sub-region at offset 0x1000 into the 1MB page (keeps image at ~1 MB).
 !

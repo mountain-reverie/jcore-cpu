@@ -1,4 +1,4 @@
-! mmustale.S -- STALE-bit (PTEL[1]) revocation guard (J4 + MMU_ARCH).
+! mmustale.S -- STALE-bit (PTEL[1]) revocation guard (J4).
 !
 ! Security hardening (security-review H-I1): the STALE bit is loaded into the TLB
 ! at LDTLB time but the lookup never consults it, so an entry software marked

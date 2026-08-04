@@ -1,4 +1,4 @@
-! mmupagereloc16k.S -- 16 KB page with a NON-IDENTITY frame (J4+MMU_ARCH, cpu_cache_tb).
+! mmupagereloc16k.S -- 16 KB page with a NON-IDENTITY frame (J4, cpu_cache_tb).
 ! Closes the coverage gap that every other large-page guard is identity (PA==VA):
 ! maps VA 0x10000 -> PA 0x40000 (frame != VA), pm=1. A store through a sub-region
 ! VA 0x12000 (offset 0x2000 within the 16 KB page) must relocate to PA 0x42000

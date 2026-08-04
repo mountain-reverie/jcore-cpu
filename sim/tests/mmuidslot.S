@@ -1,5 +1,5 @@
 ! mmuidslot.S -- I-side TLB fault (IMISS) in a branch delay slot: does the
-! restart land on the BRANCH or elsewhere? (J4 + MMU_ARCH). Companion to
+! restart land on the BRANCH or elsewhere? (J4). Companion to
 ! mmudslot.S (the data-side case). CONFIRMS the I-side restart is BUGGY.
 !
 ! FINDING (measured 2026-07-06): the delay-slot fetch at VA 0x1000 IMISSes; the

@@ -4,7 +4,7 @@
 ! SA (fail 1) and load from 0x11000 must return SB (fail 2). RED if the match
 ! logic ignores pm=0 and merges them; GREEN once the pm=0 masked compare keeps
 ! adjacent 4 KB entries distinct.
-! (J4+MMU_ARCH, cpu_cache_tb)
+! (J4, cpu_cache_tb)
 !
 ! ---- _fail integrity net ----
 ! _fail writes r9 verbatim to TEST_RESULT_ADDRESS; sim/cpu_ctb.c's test_result()

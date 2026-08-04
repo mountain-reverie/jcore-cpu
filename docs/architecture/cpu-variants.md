@@ -37,8 +37,8 @@ descriptions, and its design goal:
   best performance-per-watt / per-area (kernel-space SH-4 compat is a non-goal).
   Adds privilege (`SR.MD/RB/BL`), an MMU with a 32-entry hardware TLB, banked
   registers, and SH-4 register-model exceptions (`SPC`/`SSR`, replacing J2's SH-2
-  stack model — see [j4.md](j4.md) → *Exception model*), gated by the `PRIV_ARCH`/`MMU_ARCH`
-  generics (bare `cpu_j4` is byte-identical to J2).
+  stack model — see [j4.md](j4.md) → *Exception model*), gated by the single
+  `PRIV_ARCH` generic, which implies the MMU (bare `cpu_j4` is byte-identical to J2).
 
 This document covers the cross-cutting concerns shared by all three (configuration
 mechanism, build/sim/synth flows, the L1-cache CDC, and the J2 invariant).
@@ -138,7 +138,7 @@ J4 = green.
 ## J4 extension seams
 
 Every SH-4 feature attaches at a defined seam WITHOUT touching J2 sources — either
-inside a `PRIV_ARCH`/`MMU_ARCH` generate guard or in an additive file (overlay
+inside a `PRIV_ARCH` generate guard or in an additive file (overlay
 `.toml`, new architecture, new entity). The table below records the seam *and* its
 current realization. Full detail is in [j4.md](j4.md).
 
@@ -146,7 +146,7 @@ current realization. Full detail is in [j4.md](j4.md).
 |---|---|---|
 | **Privilege / `SR.MD/RB/BL`, exceptions** | `spec/sh4/{mmu,exceptions}.toml` overlay + `if PRIV_ARCH` logic in `core/datapath.vhm` / `decode/decode_core.vhm` | **Implemented & tested** (SH-4 register-model exceptions overriding the SH-2 stack model, `EXPEVT/INTEVT/TRA` on `priv_o`). Gated by `PRIV_ARCH`; J2 unchanged. |
 | **Banked registers (R0–R7)** | `register_file(two_bank)` with `BANKED ⇐ PRIV_ARCH`; `bank_remap` in datapath; `bank.toml` moves | **Implemented & tested** (`banktest`, `STC Rm_BANK`). `.L` multi-slot variants deferred (microcode-ROM budget). |
-| **MMU / TLB** | `core/tlb.vhd` instantiated under `core/cpu.vhd` `g_mmu : if MMU_ARCH generate`; MMU CSRs + `mmu_o` PA tags | **Implemented, tested & synthesizable** (32-entry CAM, j4c ASIC `+9k` cells). Gated by `MMU_ARCH`. |
+| **MMU / TLB** | `core/tlb.vhd` instantiated under `core/cpu.vhd` `g_mmu : if PRIV_ARCH generate`; MMU CSRs + `mmu_o` PA tags | **Implemented, tested & synthesizable** (32-entry CAM, j4c ASIC `+9k` cells). Gated by `PRIV_ARCH` (there is no separate MMU generic; `PRIV_ARCH` implies the MMU). |
 | **L2 cache** | new hierarchy entity composed around the existing `cache/` I/D caches; bound in the J4 SoC config | **Future** — not yet implemented; new files only when added. |
 
 The J2 `datapath(stru)`, the base decode tables, and the L1 cache entities all
@@ -190,9 +190,9 @@ no-edit. The real rule has two parts:
    `core/tlb.vhd`, new configurations.
 2. **Guarded when shared sources must change** — where a shared file *is* touched
    (`core/cpu.vhd`, `core/datapath.vhm`, `decode/decode_core.vhm` all carry SH-4
-   logic today), every addition sits inside an `if PRIV_ARCH`/`if MMU_ARCH`
+   logic today), every addition sits inside an `if PRIV_ARCH`
    generate or generic guard that is **inert when the generic is `false`**. With
-   the generics off, the netlist is byte-identical to the pre-J4 baseline, and CI
+   the generic off, the netlist is byte-identical to the pre-J4 baseline, and CI
    asserts this (j1/j2/j4 byte-identical synth; base decode tables unchanged after
    `generate-j4`).
 
@@ -215,7 +215,7 @@ The following J2 sources must therefore remain byte-stable *in their off-path*
 | `decode/gen-go/spec/*.toml` | SH-2 instruction set specification |
 
 Any J4 logic added to one of these shared files must be confined to a
-generic-guarded block (`if PRIV_ARCH` / `if MMU_ARCH`) so that with the generics
+generic-guarded block (`if PRIV_ARCH`) so that with the generic
 off J2's build and benchmark series remain byte-stable. Anything that cannot be so
 guarded must instead become a new file (new architecture, new overlay `.toml`, new
 configuration).

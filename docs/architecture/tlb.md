@@ -5,7 +5,7 @@ guarantees, the contract a kernel must uphold to use it safely for multi-tenant
 isolation, and the security properties it does and does not provide. For the
 hardware block view and synthesis cost see [j4.md](j4.md); the RTL is
 [`core/tlb.vhd`](../../core/tlb.vhd) (instantiated in `core/cpu.vhd` under
-`g_mmu : if MMU_ARCH generate`). The behaviour described here is locked by the
+`g_mmu : if PRIV_ARCH generate`). The behaviour described here is locked by the
 `sim/tests/mmu*.S` regression guards (named per property below).
 
 > **Audience:** OS / hypervisor / firmware authors and security reviewers. This

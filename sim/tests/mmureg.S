@@ -1,4 +1,4 @@
-! MMU register round-trip test (J4, MMU_ARCH).
+! MMU register round-trip test (J4).
 ! Covers PTEH/PTEL/ASIDR individual round-trips (two distinct patterns each)
 ! plus an independence check: write three distinct values then STC each back
 ! to prove no cross-clobber (the bug: LDC Rm,PTEL wrote PTEH instead).

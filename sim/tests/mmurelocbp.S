@@ -1,4 +1,4 @@
-! mmurelocbp.S -- MMU address relocation pin -- uncacheable bypass (C=0) (J4+MMU_ARCH, cpu_cache_tb).
+! mmurelocbp.S -- MMU address relocation pin -- uncacheable bypass (C=0) (J4, cpu_cache_tb).
 ! Maps VPN 0x4 (VA 0x4000) -> PPN 0x6 (PA 0x6000), NON-identity, coloring-aligned
 ! (VA[12]=0 == PA[12]=0). Stores SENTINEL through the translated VA; asserts it
 ! landed at PA 0x6000 (the PPN) and PA 0x4000 (the VA's identity location) is

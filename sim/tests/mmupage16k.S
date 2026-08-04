@@ -1,5 +1,5 @@
 ! mmupage16k.S -- 16 KB page: a sub-page access hits the one entry and relocates
-! (J4+MMU_ARCH, cpu_cache_tb). RED on fixed-4KB RTL (VA 0x11000 unmapped); GREEN
+! (J4, cpu_cache_tb). RED on fixed-4KB RTL (VA 0x11000 unmapped); GREEN
 ! once PageMask=1 makes one entry cover VA 0x10000-0x13FFF and relocate per offset.
 !
 ! ---- _fail integrity net ----

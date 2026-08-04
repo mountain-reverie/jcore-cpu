@@ -1,7 +1,7 @@
 ! mmupagemix2.S -- mixed-page-size coexistence: 4KB entry installed FIRST, then
 ! 16KB. Identical semantics to mmupagemix.S but reversed install order, proving
 ! resolution depends on each entry's own PageMask, not slot position.
-! (J4+MMU_ARCH, cpu_cache_tb)
+! (J4, cpu_cache_tb)
 !
 ! ---- _fail integrity net ----
 ! _fail writes r9 verbatim to TEST_RESULT_ADDRESS; sim/cpu_ctb.c's test_result()

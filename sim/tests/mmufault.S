@@ -1,4 +1,4 @@
-! mmufault.S -- comprehensive TLB fault coverage test (J4 + MMU_ARCH).
+! mmufault.S -- comprehensive TLB fault coverage test (J4).
 !
 ! Exercises all six TLB fault kinds, asserting EXPEVT and TEA for each.
 ! All TLB faults (I/D, miss/prot) vector to the single merged VBR+0x400.

@@ -34,7 +34,16 @@ endif
 CPU_INC_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 CPU_VARIANT ?= j2
 TARGET_KIND ?= fpga
-DECODE_GEN_DIR ?= $(CPU_INC_DIR)gen
+# Per-variant subdirectory (not just $(CPU_INC_DIR)gen): jcore-soc's top-level
+# Makefile builds one board at a time, but each board can select a different
+# CPU_VARIANT while sharing this same components/cpu working tree. The
+# regeneration rule below only depends on variants.toml/spec/cpugen-source
+# timestamps, NOT on CPU_VARIANT's value -- so a single shared DECODE_GEN_DIR
+# would let a stale OTHER variant's decoder (e.g. j2's, with no LDTLB) survive
+# untouched across a `make ulx3s && make gf180_j4mmu` sequence, since none of
+# the rule's prerequisites changed. Keying the directory by $(CPU_VARIANT)
+# gives every variant its own persistent, never-confused output location.
+DECODE_GEN_DIR ?= $(CPU_INC_DIR)gen/$(CPU_VARIANT)
 
 # variants.mk is generated from variants.toml. GNU Make remakes included files
 # and re-execs, so this bootstraps on a clean tree. Go is a baseline build

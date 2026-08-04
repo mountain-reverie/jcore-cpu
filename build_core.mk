@@ -11,7 +11,23 @@ $(VHDLS) += core/shifter_seq.vhd
 $(VHDLS) += core/datapath.vhd
 $(VHDLS) += core/register_file.vhd
 
-$(VHDLS) += $(CPU_DECODE_GENERATED)
+# Relative to $(CPU_INC_DIR) when CPU_DECODE_GENERATED actually lives under it
+# (the default, $(CPU_INC_DIR)gen/$(CPU_VARIANT)/decode/...), so that mk_utils.mk
+# consumers (jcore-soc's Makefile, via include_vhdl_var's `$(addprefix $(1)/,...)`
+# where $(1)=components/cpu) get a SINGLY-prefixed path instead of
+# components/cpu/components/cpu/gen/... To find that bug: jcore-soc's Makefile
+# scans this directory by `include components/cpu/build.mk` and re-prefixes
+# every entry with "components/cpu/" itself -- entries already rooted at
+# $(CPU_INC_DIR) (== "components/cpu/" in that context) would otherwise be
+# prefixed twice. $(patsubst) is a no-op (leaves the path untouched) whenever
+# CPU_DECODE_GENERATED does NOT start with $(CPU_INC_DIR) -- which is exactly
+# what happens for the OTHER consumer, sim/Makefile, which overrides
+# DECODE_GEN_DIR to an absolute path ($(CURDIR)/gen) before including this
+# file; CPU_INC_DIR there is "../", which is not a prefix of an absolute path,
+# so this patsubst leaves those entries alone and sim/Makefile's own
+# DECODE_GEN_DIR-based filter (see sim/Makefile's own comment above CPU_VHDS)
+# keeps working unmodified.
+$(VHDLS) += $(patsubst $(CPU_INC_DIR)%,%,$(CPU_DECODE_GENERATED))
 $(VHDLS) += decode/decode_table.vhd
 $(VHDLS) += decode/decode_core.vhd
 

@@ -220,9 +220,9 @@ jobs:
           cd sim
           rm -f work-obj93.cf cpu_tb.vhh cpu_ctb
           make TOOLS_DIR="$TOOLS_DIR" JCORE_SOC="$JCORE_SOC" \
-            CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 \
+            CONFIG_PRIV_ARCH=1 \
             cpu_ctb cpu_tb cpu_cache_tb work-obj93.cf >/dev/null
-          grep -q 'MMU_ARCH => true' cpu_tb.vhh \
+          grep -q 'PRIV_ARCH => true' cpu_tb.vhh \
             || { echo "FAIL: build is not MMU-on (stale cpu_tb.vhh?)"; exit 1; }
 
           fail=0
@@ -234,7 +234,7 @@ jobs:
             # "exit code 2" and no diagnostic at all -- 48 guards would pass,
             # then nothing. Show the tail and name the guard instead.
             local build
-            if ! build="$(make CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 -C tests $t.img 2>&1)"; then
+            if ! build="$(make CONFIG_PRIV_ARCH=1 -C tests $t.img 2>&1)"; then
               echo "  FAIL  $t${top:+ [$top]} (build)"
               echo "$build" | tail -20
               fail=1
@@ -340,7 +340,7 @@ jobs:
 
   # SP3-d: the 2-core SMP-bring-up guard (spin-table secondary release + IPI via
   # the real icache_modereg) runs on cpu_dualcore_tb. It is a BASE-J2 SMP test
-  # and MUST be built with the base decoder + no PRIV_ARCH/MMU_ARCH: the
+  # and MUST be built with the base decoder + no PRIV_ARCH: the
   # J4/priv-arch overlay changes the SR/banking/exception model and breaks the
   # guard's cpu1 path after release. So it gets its own lightweight base-J2 job
   # (no binutils/linux needed -- the test is pure SH-2 built by sh2-elf-gcc).

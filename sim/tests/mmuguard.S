@@ -2,7 +2,7 @@
 ! the SAME code asserts OPPOSITE outcomes per build, so it fails if the MMU
 ! privilege trap is absent on J4+MMU OR if a MMU opcode executes on J2/non-MMU.
 !
-! Test A — MD=0 privilege trap (J4 + CONFIG_MMU_ARCH=1):
+! Test A — MD=0 privilege trap (J4 (CONFIG_PRIV_ARCH=1)):
 !   Drop to user mode (clear SR.MD); execute STC PTEH,R1 (.word 0x0153).
 !   Must NOT execute but instead vector to VBR+0x100 (General-Illegal handler)
 !   with EXPEVT=0x180. Handler reads EXPEVT via STC EXPEVT,R0 (.word 0x0052)
@@ -10,7 +10,7 @@
 !   Fall-through without trapping = FAIL (result 5).
 !   Wrong EXPEVT value = FAIL (result 2).
 !
-! Test B — J2-illegal guard (CONFIG_MMU_ARCH=0 / J2):
+! Test B — J2-illegal guard (CONFIG_PRIV_ARCH=0 / J2):
 !   LDC R0,PTEH (.word 0x405E) is not in the J2 base decoder.
 !   On J2/non-MMU it must trap as Illegal Instruction via the SH-2 indirect
 !   vector table. Landing in the handler is PASS; fall-through is FAIL.
@@ -51,7 +51,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH
+#if CONFIG_PRIV_ARCH
         ! J4+MMU path (Test A): set RB=0, set VBR so VBR+0x100 == handler,
         ! drop to user mode, execute privileged STC PTEH,R1.
         stc     sr, r3
@@ -140,7 +140,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if !CONFIG_MMU_ARCH
+#if !CONFIG_PRIV_ARCH
         ! SH-2 indirect vector table: every entry points to exception_handler.
         .align 2
 ENTRY(_myvbr)

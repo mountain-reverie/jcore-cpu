@@ -31,7 +31,7 @@
 _sim_instr_end: .long 0
 
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
         ! page 0: identity code, C=1
         mov     #0, r0
         .word   0x405E

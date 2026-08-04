@@ -2,9 +2,9 @@ configuration cpu_sim of cpu is
   for stru
     for u_decode : decode
 -- MMU-enabled decode binding: cpu_sim is the functional build that runs
--- with the cpu's MMU_ARCH generic = true (set by the testbench), so the
+-- with the cpu's PRIV_ARCH generic = true (set by the testbench), so the
 -- decoder must keep the TLB exception dispatch. Synth/non-MMU configs use
--- plain cpu_decode_direct (MMU_ARCH defaults false, TLB logic pruned).
+-- plain cpu_decode_direct (PRIV_ARCH defaults false, TLB logic pruned).
       use configuration work.cpu_decode_direct_mmu;
     end for;
     for u_datapath : datapath

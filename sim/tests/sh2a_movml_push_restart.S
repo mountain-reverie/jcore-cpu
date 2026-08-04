@@ -1,7 +1,7 @@
 ! sh2a_movml_push_restart.S -- restart-safety proof for SH-2A MOVML.L Rm,@-R15
 ! (multi-register PUSH) under a MID-LOOP data TLB *store* fault, AND the
 ! companion leak-detection guard for push_active / movml_pushinit_r
-! (CONFIG_SH2A_ARCH && CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH).
+! (CONFIG_SH2A_ARCH && CONFIG_PRIV_ARCH).
 !
 ! Design property under test: MOVML.L R4,@-R15 (push R0..R4, opcode
 ! 0100 0100 1111 0001 = 0x44F1) is implemented in decode_core.vhm /
@@ -77,7 +77,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH
+#if CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH
 
         ! ---- Ensure RB=0 (bank 0). ----
         stc     sr, r0
@@ -205,7 +205,7 @@ p_s2:  .long 0xC2C2C222
 p_s3:  .long 0xD3D3D333
 p_s4:  .long 0xE4E4E444
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH
+#endif  ! CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH
 
         .global _done
 ENTRY(_done)
@@ -268,7 +268,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH
+#if CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH
 
         ! ================================================================
         ! DMISS_W handler at VBR+0x400 (the single TLB-fault vector) = _v_dstore.
@@ -355,4 +355,4 @@ _g_fault_count: .long 0
 _fault_pages:
         .space 0x1000, 0
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH
+#endif  ! CONFIG_PRIV_ARCH && CONFIG_SH2A_ARCH

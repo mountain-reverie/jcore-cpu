@@ -115,7 +115,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- Ensure RB=0 (bank 0). ----
         stc     sr, r0
@@ -313,7 +313,7 @@ p_l_dedup_fault:          .long l_dedup_fault
 p_l_negctrl_fault:        .long l_negctrl_fault
 p_l_multihit_fault:       .long l_multihit_fault
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -334,7 +334,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- General Illegal handler at VBR+0x100. Disables AT, verifies
         ! EXPEVT == g_exp_expevt (distinguishing S-I5's multi-hit dispatch
@@ -380,4 +380,4 @@ _g_resume:      .long 0
 _fault_pages:
         .space 0xA000, 0
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH

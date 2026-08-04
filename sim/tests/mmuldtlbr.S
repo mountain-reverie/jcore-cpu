@@ -55,7 +55,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- Ensure RB=0 (bank 0). ----
         stc     sr, r0
@@ -123,7 +123,7 @@ p_ptel_code:    .long start + 0x000000C8        ! identity PPN | (W+X+C) U clear
 c_sentinel_va:  .long _sentinel
 c_sentinel_val: .long SENTINEL
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -144,7 +144,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- DMISS_R handler at VBR+0x400 ----
         ! Pad so _v_load lands at >= 0x420 and clear of page 0's code.
@@ -180,4 +180,4 @@ _fault_page:
 _sentinel:      .long SENTINEL
         .space 0x1000 - 4, 0
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH

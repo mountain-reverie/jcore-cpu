@@ -277,7 +277,7 @@ package mult_pkg is
     in2     : std_logic_vector(31 downto 0);
     -- Squash the MAC accumulate-commit (mach/macl latch) on a faulting
     -- MAC @Rm+,@Rn+ pass: driven by the datapath tlb_squash export
-    -- (MMU_ARCH-gated, '0' on J1/J2). The FSM still sequences/drains busy;
+    -- (PRIV_ARCH-gated, '0' on J1/J2). The FSM still sequences/drains busy;
     -- only the register write is suppressed so the clean restart accumulates
     -- exactly once. See core/datapath.vhm tlb_squash.
     acc_squash : std_logic;

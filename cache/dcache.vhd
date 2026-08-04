@@ -8,7 +8,7 @@ library ieee;
 
 entity dcache is
   generic (
-    mmu_arch : boolean := false
+    priv_arch : boolean := false
   );
   port (
     clk125 : in    std_logic;
@@ -89,7 +89,7 @@ begin
   -- cpu clock domain, sub module ---------------------------------------------
   udcache_ccl : component dcache_ccl
     generic map (
-      mmu_arch => mmu_arch
+      priv_arch => priv_arch
     )
     port map (
       clk => clk125,

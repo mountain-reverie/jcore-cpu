@@ -9,7 +9,6 @@ use work.decode_pack.all;
 entity datapath is
 	generic (
 	  PRIV_ARCH : boolean := false;
-	  MMU_ARCH  : boolean := false;  -- MMU control-register file (subordinate to PRIV_ARCH)
 	  SH2A_ARCH : boolean := false;  -- SH-2A extensions (inert plumbing only)
 	  -- J1 only: drive the register file's early-read addresses and let
 	  -- architecture(ebr) read on the rising edge (full cycle). false for J2/J4.
@@ -73,12 +72,12 @@ entity datapath is
 		     cop_i : in cop_i_t;
 		     cop_o : out cop_o_t;
 		     priv_o    : out cpu_priv_o_t := NULL_PRIV_O;  -- SH-4 EXPEVT/INTEVT/TRA (J4)
-		     mmu_regs_o : out mmu_reg_t := MMU_REG_RESET;  -- MMU CSRs for TLB (J4+MMU_ARCH)
+		     mmu_regs_o : out mmu_reg_t := MMU_REG_RESET;  -- MMU CSRs for TLB (J4)
 		     sr_o       : out sr_t;                         -- committed SR for TLB md bit
 		     -- Accumulate-squash export: the registered tlb_squash (armed on the
 		     -- first fault cycle, held until handler entry SR.RB='1') gates the MAC
 		     -- mach/macl accumulate-commit so MAC @Rm+,@Rn+ stays precise across a
-		     -- D-side TLB fault. '0' when not MMU_ARCH (J1/J2 bit-identical).
+		     -- D-side TLB fault. '0' when not PRIV_ARCH (J1/J2 bit-identical).
 		     tlb_squash_o : out std_logic := '0';
 		     -- TLB fault side-effects: when tlb_exc_pend='1', write TEA, PTEH[31:14]
 		     -- and EXPEVT (the latter selected from the fault kind by cpu.vhd).
@@ -101,7 +100,7 @@ entity datapath is
 		     -- faulting fetch VA) with a delay-slot bias, instead of the D-side
 		     -- ma_pc shadow. '0' -> D-side capture (existing).
 		     tlb_exc_is_i   : in std_logic := '0';
-		     -- Per-instruction fetch-PC round-trip (J4+MMU_ARCH). if_pc = the VA of
+		     -- Per-instruction fetch-PC round-trip (J4). if_pc = the VA of
 		     -- the instruction currently in if_dr (its own PC, captured at fetch
 		     -- before any branch redirect). decode re-registers it EX-aligned and
 		     -- returns it as ex_if_pc, which the datapath shadows at the MA-launch
@@ -141,9 +140,9 @@ signal manip_sel : std_logic_vector(31 downto 0);
 	signal sr_slv : std_logic_vector(31 downto 0);
 	signal sr : sr_t;
 	signal priv_regs : priv_reg_t;   -- SH-4 EXPEVT/INTEVT/TRA (J4); 0 on J1/J2
-	signal mmu_regs  : mmu_reg_t;    -- SH-4 MMU CSRs (J4+MMU_ARCH); 0 otherwise
+	signal mmu_regs  : mmu_reg_t;    -- SH-4 MMU CSRs (J4); 0 otherwise
 	signal mmu_ybus  : std_logic_vector(31 downto 0);  -- sub-mux for SEL_MMU
-	-- Faulting-instruction restart-PC capture (J4+MMU_ARCH): registered copy
+	-- Faulting-instruction restart-PC capture (J4): registered copy
 	-- routed onto xbus via SEL_TLBPC for the D-fault exception entry.
 	signal tlb_exc_pc : std_logic_vector(31 downto 0);
 	signal tlb_exc_sr_r : sr_t;  -- registered captured user SR (SEL_TLBSR)
@@ -162,12 +161,12 @@ signal manip_sel : std_logic_vector(31 downto 0);
 
 	signal reg_wr_data_o : std_logic_vector(31 downto 0);
 	-- GPR write-enables, gated low during the precise-exception squash window
-	-- (J4+MMU_ARCH). On a non-MMU build these are exactly reg.wr_z/reg.wr_w, so
+	-- (J4). On a non-MMU build these are exactly reg.wr_z/reg.wr_w, so
 	-- J1/J2 behaviour is byte-identical and tlb_squash prunes away.
 	signal reg_wr_z_g, reg_wr_w_g : std_logic;
 	signal ybus_override : bus_val_t;
 	signal slot_o : std_logic;
-	-- Precise auto-increment restore (J4+MMU_ARCH). mem_autoupd marks the current
+	-- Precise auto-increment restore (J4). mem_autoupd marks the current
 	-- EX op as a memory base post-increment (@Rn+): a data access whose base
 	-- register (xbus = Rn) feeds the address while the z-bus writes Rn+size back.
 	-- restore_fire drives the one-shot base restore on the first EX-write slot the
@@ -407,7 +406,7 @@ begin
 
 	-- On the precise auto-increment restore cycle the EX write data is the
 	-- captured pre-increment base (tlb_restore_val); otherwise the normal z path.
-	gpf_zwd <= this'register.tlb_restore_val when (MMU_ARCH and restore_fire = '1')
+	gpf_zwd <= this'register.tlb_restore_val when (PRIV_ARCH and restore_fire = '1')
 	           else pc when pc_ctrl.wrpr = '1' else zbus;
 	-- mem_autoupd: marks the memory-access slot of a post-increment load @Rm+.
 	-- In j-core a post-increment is a two-slot op: slot0 commits Rm := Rm+size on
@@ -416,8 +415,8 @@ begin
 	-- READ. That arith=SUB + ZBUS-addressed READ is unique to @Rm+ (plain @Rm uses
 	-- zbus_sel=Y; @(disp,Rm) and indexed loads use ADD; pre-decrement @-Rn is a
 	-- WRITE). The faulting VA equals Rm-size = the original pre-increment base, so
-	-- restoring Rm := tlb_fault_va undoes slot0's early bump. MMU_ARCH only.
-	mem_autoupd <= '1' when MMU_ARCH and mem.issue = '1' and mem.wr = '0'
+	-- restoring Rm := tlb_fault_va undoes slot0's early bump. J4 only.
+	mem_autoupd <= '1' when PRIV_ARCH and mem.issue = '1' and mem.wr = '0'
 	                        and mem.addr_sel = SEL_ZBUS and func.arith.func = SUB
 	               else '0';
 	-- mem_predec: marks the memory-access slot of a pre-decrement store @-Rn
@@ -428,8 +427,8 @@ begin
 	-- is unique to @-Rn (plain @Rn stores use addr_sel=YBUS/XBUS; @(disp,Rn) and
 	-- indexed stores use ADD). Because the faulting VA equals Rn-size (the post-
 	-- decrement address) NOT the pre-decrement base, the original base is captured
-	-- separately (ma_base = xbus = Rn) for the restore. MMU_ARCH only.
-	mem_predec <= '1' when MMU_ARCH and mem.issue = '1' and mem.wr = '1'
+	-- separately (ma_base = xbus = Rn) for the restore. J4 only.
+	mem_predec <= '1' when PRIV_ARCH and mem.issue = '1' and mem.wr = '1'
 	                       and mem.addr_sel = SEL_ZBUS and func.arith.func = SUB
 	              else '0';
 	-- mem_autoinc1: marks the memory-access slot of a SINGLE-SLOT post-increment
@@ -442,7 +441,7 @@ begin
 	-- SAME register being addressed) and routed through the base-restore path:
 	-- the faulting VA equals the original Rm (ma_addy=XBUS), so restoring
 	-- Rm := tlb_fault_va undoes the early bump exactly like mem_autoupd.
-	mem_autoinc1 <= '1' when MMU_ARCH and mem.issue = '1' and mem.wr = '0'
+	mem_autoinc1 <= '1' when PRIV_ARCH and mem.issue = '1' and mem.wr = '0'
 	                         and mem.addr_sel = SEL_XBUS
 	                         and reg.wr_z = '1' and buses.z_sel = SEL_ARITH
 	                         and func.arith.func = ADD and num_z_r = num_x_r
@@ -451,7 +450,7 @@ begin
 	-- the microcode itself is not driving the z-write port (reg.wr_z='0'): this is
 	-- clear of the exception entry's slot0/slot1 SPC(21)/SSR(22) saves, so the two
 	-- never collide on the shared EX write port.
-	restore_fire <= '1' when MMU_ARCH and this'register.tlb_restore_pend = '1'
+	restore_fire <= '1' when PRIV_ARCH and this'register.tlb_restore_pend = '1'
 	                         and reg.wr_z = '0' and slot_o = '1'
 	                else '0';
 	-- push_ptr_init: the once-per-instruction MOVML.L Rm,@-R15 push slot that
@@ -613,7 +612,7 @@ end generate;
 	-- SH-4 register-bank remap on the four address ports; pass-through on J2.
 	num_x_r <= bank_remap(reg.num_x, sr.md, sr.rb) when PRIV_ARCH else reg.num_x;
 	num_y_r <= bank_remap(reg.num_y, sr.md, sr.rb) when PRIV_ARCH else reg.num_y;
-	num_z_r <= this'register.tlb_fault_zreg when (MMU_ARCH and restore_fire = '1')
+	num_z_r <= this'register.tlb_fault_zreg when (PRIV_ARCH and restore_fire = '1')
 	           else bank_remap(reg.num_z, sr.md, sr.rb) when PRIV_ARCH else reg.num_z;
 	num_w_r <= bank_remap(reg.num_w, sr.md, sr.rb) when PRIV_ARCH else reg.num_w;
 	-- Bank-remap the dedicated R0-index read port too (drives dout_0); pass-through
@@ -621,7 +620,7 @@ end generate;
 	num_0_r <= bank_remap("00000", sr.md, sr.rb) when PRIV_ARCH else "00000";
 	-- Suppress memory-load writeback retirement while a TLB fault is pending
 	-- entry, so the load instruction(s) behind the faulting access cannot
-	-- corrupt its operands before the precise restart (J4+MMU_ARCH only;
+	-- corrupt its operands before the precise restart (J4 only;
 	-- pass-through otherwise). BOTH ports are gated:
 	--   * we_wb (writeback): plain MOV @Rm+ et al. retire their loaded value
 	--     here a slot late, in the fault shadow -- suppressed. Faulting @-Rn
@@ -667,8 +666,8 @@ end generate;
 	-- we_ex squash at all) and the exposure window is only 1-2 slots.
 	reg_wr_z_g <= ((reg.wr_z and (not this'register.tlb_squash
 	                              or (num_z_r(4) and not num_z_r(3))))
-	               or restore_fire) when MMU_ARCH else reg.wr_z;
-	reg_wr_w_g <= reg.wr_w and not this'register.tlb_squash when MMU_ARCH else reg.wr_w;
+	               or restore_fire) when PRIV_ARCH else reg.wr_z;
+	reg_wr_w_g <= reg.wr_w and not this'register.tlb_squash when PRIV_ARCH else reg.wr_w;
 	-- J1 early-read addresses (architecture(ebr) reads on rising edge); zero on J2/J4.
 	num_x_early_r <= reg.num_x_early when EARLY_REGFILE_READ else (others => '0');
 	num_y_early_r <= reg.num_y_early when EARLY_REGFILE_READ else (others => '0');
@@ -823,7 +822,7 @@ end generate;
         begin
           this.debug_o.ack := '0';
 
-          -- TLB fault hardware side-effects (J4+MMU_ARCH): on the first cycle a
+          -- TLB fault hardware side-effects (J4): on the first cycle a
           -- fault is detected (tlb_exc_pend='1') capture TEA and PTEH[31:14] from
           -- the faulting VA. Done at the top of the process (not gated by a slot
           -- boundary) so the capture window cannot be missed. EXPEVT is NOT
@@ -842,7 +841,7 @@ end generate;
           -- every cycle would latch the second fetch's VA (e.g. 0x1002) instead
           -- of the faulting instruction's VA (0x1000). The flag clears as soon as
           -- tlb_exc_pend deasserts, re-arming for the next fault.
-          if MMU_ARCH and tlb_exc_pend = '1' and this.tlb_exc_captured = '0' then
+          if PRIV_ARCH and tlb_exc_pend = '1' and this.tlb_exc_captured = '0' then
             this.mmu.tea                := tlb_fault_va;
             -- PTEH captures the 4 KB-granular VPN on a miss: VA[31:12]. 4 KB is
             -- the finest supported page size (PageMask 0); the actual page size
@@ -928,7 +927,7 @@ end generate;
             -- pre-decrement stores restore the captured pre-decrement base
             -- (ma_base) since their faulting VA is the ALREADY-decremented
             -- address. Both retarget the same shadowed base register (ma_numz).
-            if MMU_ARCH and this.ma_predec = '1' then
+            if PRIV_ARCH and this.ma_predec = '1' then
               this.tlb_restore_val  := this.ma_base;
               this.tlb_restore_pend := '1';
             else
@@ -963,7 +962,7 @@ end generate;
             -- it persists past the handler prologue. (TEA/PTEH stay here:
             -- they are VA-dependent and consumed before any slot boundary.)
           end if;
-          if MMU_ARCH and tlb_exc_pend = '0' then
+          if PRIV_ARCH and tlb_exc_pend = '0' then
             this.tlb_exc_captured := '0';
           end if;
 
@@ -975,7 +974,7 @@ end generate;
           -- register_file instantiation) to keep the faulting access's operands
           -- intact for the restart. RB=1 gates tlb_exc_pend off in cpu.vhd, so a
           -- fault never arms this while already in the handler.
-          if MMU_ARCH then
+          if PRIV_ARCH then
             if this.sr.rb = '1' then
               this.tlb_squash := '0';
             elsif tlb_exc_pend = '1' then
@@ -985,7 +984,7 @@ end generate;
 
           -- One-shot: once the base restore has been driven onto the EX write
           -- port (restore_fire), disarm so it commits exactly once.
-          if MMU_ARCH and restore_fire = '1' then
+          if PRIV_ARCH and restore_fire = '1' then
             this.tlb_restore_pend := '0';
           end if;
 
@@ -993,8 +992,8 @@ end generate;
           -- the TI bit set; here -- evaluated against the REGISTERED mmucr at the
           -- top of the process, i.e. one cycle after the write -- it is cleared.
           -- That leaves mmucr(2) registered high for exactly one cycle, which the
-          -- TLB's clocked ti port samples to flush all entries. (J4+MMU_ARCH.)
-          if MMU_ARCH and this.mmu.mmucr(2) = '1' then
+          -- TLB's clocked ti port samples to flush all entries. (J4.)
+          if PRIV_ARCH and this.mmu.mmucr(2) = '1' then
             this.mmu.mmucr(2) := '0';
           end if;
 
@@ -1060,7 +1059,7 @@ end generate;
             -- valid here (NULLed just below). Taken before any branch redirect, so
             -- a delay-slot load carries its true PC (=branch+2), not the run-ahead
             -- fetch PC. Rides with if_dr_next -> if_dr -> out to decode.
-            if MMU_ARCH then
+            if PRIV_ARCH then
               this.if_pc_next := this.inst_o.a & '0';
             end if;
             this.if_en      := '1';
@@ -1125,7 +1124,7 @@ end generate;
             end if;
             if this.if_en = '1' then
               this.if_dr := this.if_dr_next;
-              if MMU_ARCH then
+              if PRIV_ARCH then
                 this.if_pc := this.if_pc_next;  -- carry the fetch VA with if_dr
               end if;
               -- Retimed: the opcode-derived part of these was already computed
@@ -1173,7 +1172,7 @@ end generate;
               -- P4 MMU register access (MMUCR=0xFF000010, TTB=0xFF000008, TEA=0xFF00000C)
               -- handled entirely within the datapath: no bus transaction is issued and
               -- the read result is injected directly into the wbus pipeline.
-              if MMU_ARCH then
+              if PRIV_ARCH then
                 seg_v := seg_decode(ma_ad);
                 -- Default p4_sel_v every visit so it is never read holding a
                 -- value from a prior process iteration: an unconditional read-
@@ -1192,7 +1191,7 @@ end generate;
                 elsif ma_ad(7 downto 0) = x"28" then p4_sel_v := P4_MMUFSR;
                 end if;
               end if;
-              if MMU_ARCH and seg_v = SEG_P4 then
+              if PRIV_ARCH and seg_v = SEG_P4 then
                 if mem.wr = '1' then
                   case p4_sel_v is
                     when P4_MMUCR =>
@@ -1229,8 +1228,8 @@ end generate;
                 -- Shadow the architectural PC of the instruction launching this
                 -- data access (a fixed pipeline point). On a later fault this is
                 -- the faulting instruction's PC, independent of how far the fetch
-                -- pointer has since advanced. (J4+MMU_ARCH only.)
-                if MMU_ARCH then
+                -- pointer has since advanced. (J4 only.)
+                if PRIV_ARCH then
                   this.ma_pc := this.pc;
                   -- Shadow the (bank-remapped) base register (Rm = num_x in the
                   -- @Rm+ access slot) and the post-increment marker of the
@@ -1367,11 +1366,11 @@ end generate;
             -- lives outside sr_t/this.sr entirely -- see the g_cs generate
             -- below and the note on sr_t in core/components_pkg.vhd.
 
-            -- LDC Rm,PTEH/PTEL/ASIDR write path (J4+MMU_ARCH).
+            -- LDC Rm,PTEH/PTEL/ASIDR write path (J4).
             -- When the decoder asserts mmu_reg_wr the zbus carries the source
             -- GPR value; latch it into the addressed MMU CSR flop.
-            -- Gated under MMU_ARCH so J1/J2 (MMU_ARCH=false) are byte-unchanged.
-            if MMU_ARCH and sr_ctrl.mmu_reg_wr = '1' then
+            -- Gated under PRIV_ARCH so J1/J2 (PRIV_ARCH=false) are byte-unchanged.
+            if PRIV_ARCH and sr_ctrl.mmu_reg_wr = '1' then
               case sr_ctrl.mmu_reg_sel is
                 when SEL_PTEH  => this.mmu.pteh  := zbus;
                 when SEL_PTEL  => this.mmu.ptel  := zbus;
@@ -1413,12 +1412,12 @@ end generate;
 	end process;
 
 	pc <= this'register.pc;
-	tlb_exc_pc         <= this'register.tlb_exc_pc when MMU_ARCH else (others => '0');
+	tlb_exc_pc         <= this'register.tlb_exc_pc when PRIV_ARCH else (others => '0');
 	tlb_exc_sr_r       <= this'register.tlb_exc_sr;
 	sr <= this'register.sr;
 	priv_regs <= this'register.priv;
-	-- MMU CSR registered copy + ybus sub-mux (J4+MMU_ARCH); constant-0 otherwise
-	mmu_regs <= this'register.mmu when MMU_ARCH else MMU_REG_RESET;
+	-- MMU CSR registered copy + ybus sub-mux (J4); constant-0 otherwise
+	mmu_regs <= this'register.mmu when PRIV_ARCH else MMU_REG_RESET;
 	mmu_ybus <= mmu_regs.ptel   when buses.mmu_reg_sel = SEL_PTEL   else
 	            mmu_regs.asidr  when buses.mmu_reg_sel = SEL_ASIDR  else
 	            mmu_regs.mmucr  when buses.mmu_reg_sel = SEL_MMUCR  else
@@ -1432,17 +1431,17 @@ end generate;
 	priv_o.expevt <= priv_regs.expevt when PRIV_ARCH else (others => '0');
 	priv_o.intevt <= priv_regs.intevt when PRIV_ARCH else (others => '0');
 	priv_o.tra    <= priv_regs.tra    when PRIV_ARCH else (others => '0');
-	-- Export MMU CSRs and committed SR for TLB use in cpu.vhd (MMU_ARCH).
+	-- Export MMU CSRs and committed SR for TLB use in cpu.vhd (PRIV_ARCH).
 	mmu_regs_o <= mmu_regs;
 	sr_o       <= sr;
-	tlb_squash_o <= this'register.tlb_squash when MMU_ARCH else '0';
+	tlb_squash_o <= this'register.tlb_squash when PRIV_ARCH else '0';
 	mac_s <= this'register.mac_s;
         db_lock <= this'register.data_o_lock;
         db_o <= this'register.data_o;
         inst_o <= this'register.inst_o;
         if_dr <= this'register.if_dr;
         if_dr_next <= this'register.if_dr_next;
-        if_pc <= this'register.if_pc when MMU_ARCH else (others => '0');
+        if_pc <= this'register.if_pc when PRIV_ARCH else (others => '0');
         illegal_delay_slot <= this'register.illegal_delay_slot;
         illegal_instr <= this'register.illegal_instr;
         cop_o.rna <= copreg(7 downto 4);

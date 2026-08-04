@@ -72,7 +72,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- Ensure RB=0 (bank 0). ----
         stc     sr, r0
@@ -215,7 +215,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
         ! ================================================================
         ! DMISS_R handler at VBR+0x400 (_v_load).
         ! On entry: AT is still on. We do NOT disable AT (the mmurun bug
@@ -305,4 +305,4 @@ Hpcrel_marker:  .long 0x12345678
         ! not fault before the TLB exception fires. No explicit .space needed
         ! (RAM is zero-filled by the loader up to 16 MB).
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH

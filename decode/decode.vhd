@@ -59,7 +59,7 @@ architecture arch of decode is
     signal delay_slot_c : std_logic;
     signal delay_slot_r : std_logic;
     -- Per-instruction fetch-PC, already EX-aligned inside decode_core (op-latch +
-    -- one slot-gated stage, MMU_ARCH-gated so it prunes on non-MMU). ex_if_pc is
+    -- one slot-gated stage, PRIV_ARCH-gated so it prunes on non-MMU). ex_if_pc is
     -- just this signal; the datapath shadows the faulting instruction's OWN PC.
     signal if_pc_c : std_logic_vector(31 downto 0);
     signal dispatch : std_logic;
@@ -199,7 +199,7 @@ begin
     end process;
     delay_slot <= delay_slot_r;
     -- if_pc_c is already EX-aligned: decode_core registers the fetch VA twice
-    -- (op-latch + one slot-gated stage) INSIDE decode_core, MMU_ARCH-gated so the
+    -- (op-latch + one slot-gated stage) INSIDE decode_core, PRIV_ARCH-gated so the
     -- whole per-instruction-PC chain prunes on non-MMU (j1/j2). Just pass it out.
     ex_if_pc <= if_pc_c;
     -- assign outputs

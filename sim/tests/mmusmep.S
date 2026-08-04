@@ -88,7 +88,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- Ensure RB=0 (bank 0). ----
         stc     sr, r0
@@ -276,7 +276,7 @@ p_ownpage_flags: .long 0x000000C8       ! W|X|C -- U=0 (kernel-only). This is th
                                          ! below), so MD=0 is never observed while
                                          ! fetching from this U=0 page.
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -297,7 +297,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ================================================================
         ! TRAPA handler at VBR+0x100 (_v_trapa), used only by the negative-
@@ -418,4 +418,4 @@ _user_ok_page:
 1:      bra     1b
         nop
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH

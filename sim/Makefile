@@ -16,8 +16,6 @@ CONFIG_PREFETCHER=0
 # Build the DUT with the SH-4 privileged architecture (J4). Default 0 (J2) so the
 # standard test ROM regression is unaffected; the privmode test needs this = 1.
 CONFIG_PRIV_ARCH=0
-# Enable MMU control-register file (J4 MMU). Requires CONFIG_PRIV_ARCH=1. Default 0.
-CONFIG_MMU_ARCH=0
 # Enable SH-2A ("J2A") extensions generic. Currently inert plumbing only
 # (no gated behavior yet). Default 0.
 CONFIG_SH2A_ARCH ?= 0
@@ -190,13 +188,13 @@ cpu_pure_tb: ram.img
 # Add dependencies to particular vhh files. TODO: how to avoid
 # repeating this rule?
 cpu_tb.vhh: cpu_tb.vhd cpu_signals.h sim/sim_macros.h
-	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -DCONFIG_SH2A_ARCH=$(CONFIG_SH2A_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -DCONFIG_DECODE_ROM=$(CONFIG_DECODE_ROM) -I. -I../config -Isim $< -o $@
+	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_SH2A_ARCH=$(CONFIG_SH2A_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -DCONFIG_DECODE_ROM=$(CONFIG_DECODE_ROM) -I. -I../config -Isim $< -o $@
 
 cpu_cache_tb.vhh: cpu_cache_tb.vhd cpu_signals.h sim/sim_macros.h
-	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -I. -I../config -Isim $< -o $@
+	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -I. -I../config -Isim $< -o $@
 
 cpu_dualcore_tb.vhh: cpu_dualcore_tb.vhd cpu_signals.h sim/sim_macros.h
-	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_MMU_ARCH=$(CONFIG_MMU_ARCH) -I. -I../config -Isim $< -o $@
+	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -I. -I../config -Isim $< -o $@
 
 %.vpi:
 	$(IVERILOG_VPI) --name=$* $^

@@ -5,7 +5,7 @@
 ! (base-J2 cpu_ctb does not fire illegal-instruction exceptions at all -- a
 ! pre-existing testbench limitation -- so this MUST run under the J4/PRIV
 ! decoder built by sim/mmu_sim.sh, i.e. `make -C decode generate-j4` +
-! CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1).
+! CONFIG_PRIV_ARCH=1 CONFIG_PRIV_ARCH=1).
 !
 ! Faulting single-word opcodes are exercised, in order, each requiring the
 ! supervisor exception handler to be reached (sentinel set) before continuing:

@@ -58,7 +58,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- Ensure RB=0 (bank 0). ----
         stc     sr, r0
@@ -117,7 +117,7 @@ p_tsbcfg_addr:  .long 0xFF000018
 p_tsbcfg_val:   .long 0x00000061
 c_fault_va:     .long 0x00042000
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -138,7 +138,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- DMISS_R handler at VBR+0x400 ----
         .balign 4
@@ -187,4 +187,4 @@ He_tsbptr:      .long EXPECTED_TSBPTR
 _pad_page:
         .space 0x1000, 0
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH

@@ -37,10 +37,10 @@ configuration cpu_decode_rom_fpga of cpu is
 end configuration;
 
   -- MMU-enabled decode binding (used by cpu_sim below). Mirrors the generated
-  -- cpu_decode_direct but sets decode_core's MMU_ARCH generic true, keeping the
+  -- cpu_decode_direct but sets decode_core's PRIV_ARCH generic true, keeping the
   -- TLB miss/protection exception dispatch. Lives here (hand-written) rather than
   -- in the generated decode_table_direct_config.vhd. Synth builds do not compile
-  -- cpu_config.vhd and use plain cpu_decode_direct (MMU_ARCH defaults false), so
+  -- cpu_config.vhd and use plain cpu_decode_direct (PRIV_ARCH defaults false), so
   -- the TLB decode logic is pruned from the non-MMU j1/j2 critical path.
   use work.decode_pack.all;
 configuration cpu_decode_direct_mmu of decode is
@@ -50,7 +50,7 @@ configuration cpu_decode_direct_mmu of decode is
 generic map (
   decode_type => DIRECT,
   reset_vector => DEC_CORE_RESET,
-  mmu_arch => true
+  priv_arch => true
 );
     end for;
     for table : decode_table
@@ -61,7 +61,7 @@ end configuration;
 
 -- SH2A-enabled decode binding (used by cpu_j2a below). Mirrors
 -- cpu_decode_direct_mmu but sets decode_core's SH2A_ARCH generic true instead
--- of MMU_ARCH. Task 1.1 is inert plumbing only, so SH2A_ARCH has no gated
+-- of PRIV_ARCH. Task 1.1 is inert plumbing only, so SH2A_ARCH has no gated
 -- logic yet; this configuration exists so later SH-2A tasks have a build
 -- target to extend.
 configuration cpu_decode_direct_sh2a of decode is
@@ -93,7 +93,7 @@ configuration cpu_decode_direct_mmu_sh2a of decode is
 generic map (
   decode_type => DIRECT,
   reset_vector => DEC_CORE_RESET,
-  mmu_arch => true,
+  priv_arch => true,
   sh2a_arch => true
 );
     end for;

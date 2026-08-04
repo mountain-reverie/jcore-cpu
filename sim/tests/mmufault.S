@@ -94,7 +94,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- Ensure RB=0 (bank 0). ----
         stc     sr, r0
@@ -460,7 +460,7 @@ c_page4_pteh:       .long 0x00005000
 ! P4 TEA register
 p_h_tea_addr:       .long 0xFF00000C
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -481,7 +481,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ================================================================
         ! Three VBR entry handlers placed at exactly VBR+0x400/0x420/0x440.
@@ -690,4 +690,4 @@ _user_tramp_f:
 tf_page4_va: .long 0x00005000
 tf_fail_addr: .long _fail
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH

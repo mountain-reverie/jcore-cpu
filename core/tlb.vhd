@@ -1,5 +1,5 @@
 -- ===========================================================================
--- tlb -- J4 software-loaded translation lookaside buffer (MMU_ARCH only).
+-- tlb -- J4 software-loaded translation lookaside buffer (PRIV_ARCH only).
 --
 -- 32-entry, fully associative, software-loaded TLB. Parallel I-side and D-side
 -- COMBINATIONAL lookup each cycle; a clocked process handles LDTLB installs and
@@ -7,7 +7,7 @@
 -- access-type exception and privileged software installs the entry (LDTLB /
 -- LDTLB.RN). Variable page sizes via PageMask ptel(11:8) (4KB..1GB); Linux uses
 -- a 16KB base page plus 64KB..256MB huge pages. Instantiated in core/cpu.vhd
--- under `g_mmu : if MMU_ARCH generate`.
+-- under `g_mmu : if PRIV_ARCH generate`.
 --
 -- This is the multi-tenant isolation boundary. The lookup hit condition is
 --     VALID and STALE=0 and VPN-match and (GLOBAL or ASID_TAG=ASIDR)

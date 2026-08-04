@@ -70,7 +70,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- Ensure RB=0 (bank 0) on every entry, including post-reboot. ----
         stc     sr, r0
@@ -146,7 +146,7 @@ p_vbr_val:      .long _h_general_illegal - 0x100
 p_flag:         .long _flag
 p_neg_ctrl:     .long _neg_ctrl
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -167,7 +167,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- Shared GENERAL_ILLEGAL handler at VBR+0x100. ----
         .balign 4
@@ -247,7 +247,7 @@ Hp_rbbit:           .long 0x20000000
 Hp_trigger_nested:  .long trigger_nested
 Hp_test_result:     .long TEST_RESULT_ADDRESS
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH
 
         ! Cross-reboot state lives here as ordinary writable .text-resident
         ! storage (not .data -- avoided so the guard doesn't depend on an

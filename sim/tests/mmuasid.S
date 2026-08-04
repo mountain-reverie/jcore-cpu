@@ -50,7 +50,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- Ensure RB=0 (bank 0). ----
         stc     sr, r0
@@ -132,7 +132,7 @@ p_sentinel:     .long 0xA51DA51D
 p_p1_4000:      .long 0x80004000
 c_va4:          .long 0x00004000
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -153,7 +153,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- DMISS_R handler at VBR+0x400 (the ONLY pass path). ----
         .balign 4
@@ -180,4 +180,4 @@ Hresult_pass:        .long   TEST_PASS_MAGIC
 _fault_pages:
         .space 0x4000, 0
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH

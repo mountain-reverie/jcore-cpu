@@ -73,7 +73,7 @@ VCD="${TMPDIR:-/tmp}/tlb_hotpath_bench.vcd"
 P1=0x80000000                                 # mmurun runs code from the P1 alias
 
 # --- symbol addresses from the guard ELF (fast-path start _h_common, end _h_slow) ---
-make CONFIG_PRIV_ARCH=1 CONFIG_MMU_ARCH=1 -C sim/tests mmurun.elf >/dev/null 2>&1 \
+make CONFIG_PRIV_ARCH=1 -C sim/tests mmurun.elf >/dev/null 2>&1 \
   || { echo "bench: failed to build sim/tests/mmurun.elf" >&2; exit 1; }
 syms=$("$NM" sim/tests/mmurun.elf 2>/dev/null) \
   || { echo "bench: $NM not found (set NM=<sh toolchain nm>)" >&2; exit 1; }

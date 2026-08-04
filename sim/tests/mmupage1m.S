@@ -28,7 +28,7 @@
         .long CMD_ENABLE_TEST_RESULT
 _sim_instr_end: .long 0
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
         ! page 0: identity code, 4 KB, C=1
         mov     #0, r0
         .word   0x405E

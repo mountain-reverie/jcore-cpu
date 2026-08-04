@@ -1,4 +1,4 @@
-# SH-4 MMU control-register LDC/STC (J4 overlay, MMU_ARCH). PT-register family:
+# SH-4 MMU control-register LDC/STC (J4 overlay, PRIV_ARCH). PT-register family:
 #   LDC = 0100 mmmm xxxx 1110 ; STC = 0000 nnnn xxxx 0011
 #   xxxx: 0101 PTEH · 0110 PTEL · 0111 ASIDR. All privileged.
 # These are additive overlay entries: absent from the base J2 decoder, so
@@ -82,7 +82,7 @@
     zbus = "Rn"
     zbus_sel = "Y"
 
-# ---- TLB-miss hot-path tag compares (jcore-only, MMU_ARCH). Fuse the CSR read
+# ---- TLB-miss hot-path tag compares (jcore-only, PRIV_ARCH). Fuse the CSR read
 # and the tag compare that the software TSB probe does on every miss: replace
 # `STC PTEH,Rt; CMP/EQ Rn,Rt` (2 insns + a scratch reg) with one instruction
 # that compares Rn directly against the CSR and sets T. Microcode = CMP/EQ
@@ -226,10 +226,10 @@
     if_issue = "YES"
     pc = "INC"
 
-# ---- Break / Reset CPU: bit-11 pin (J4+MMU_ARCH overlay only) ----
+# ---- Break / Reset CPU: bit-11 pin (J4 overlay only) ----
 # The base spec uses don't-care bit 11 (---- -010 / ---- -011). That is correct
 # for J1/J2/J4 without MMU, because no TLB exception opcodes exist to alias with.
-# With MMU_ARCH, nibbles 0xA (TLB DMISS_W) and 0xB (TLB IPROT) occupy bit 11 = 1
+# With PRIV_ARCH, nibbles 0xA (TLB DMISS_W) and 0xB (TLB IPROT) occupy bit 11 = 1
 # in the system plane. A don't-care bit 11 in Break ("-010") aliases nibble 0xA,
 # causing a D-store TLB miss to assert `debug` and stall the CPU. Similarly
 # "-011" aliases nibble 0xB (IPROT). Pinning bit 11 = 0 here, in the overlay only,

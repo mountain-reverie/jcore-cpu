@@ -22,7 +22,7 @@ never edit J2 sources.
 |---|---|---|---|---|---|
 | **J2** | Baseline SH-2 core; 2–3 cycle Karatsuba multiplier (`mult(stru)`) | `cpu_j2` | `cpu_synth_direct` (`SYNTH_VARIANT=j2`) | `make -C decode generate` | Unchanged baseline |
 | **J1** | Smaller variant; sequential shift-add multiplier (`mult(seq)`, ~34 cycles/32-bit) replaces the hardware array. Same ISA; multiply stalls longer; ~9% fewer cells (≈17 059 → ≈15 542 on ECP5) | `cpu_j1` | `cpu_synth_j1` | `make -C decode generate` (same as J2) | Working; area reduction verified |
-| **J4** | SH-4 **user-space** target (perf/watt, perf/area; not kernel-space compatible). Privileged core: MMU + 32-entry TLB, banked R0–R7, register-model exceptions. Gated by `PRIV_ARCH`/`MMU_ARCH` generics; bare `cpu_j4` (both false) == J2 | `cpu_j4` / `cpu_sim` | `cpu_synth_j4` · `cpu_synth_j4_priv` · `cpu_cache_timing_j4_priv_mmu` (j4c) | `make -C decode generate-j4` (base SH-2 + populated `sh4/` overlay) | Implemented & tested; MMU synthesizable (j4c ASIC, +9k cells) |
+| **J4** | SH-4 **user-space** target (perf/watt, perf/area; not kernel-space compatible). Privileged core: MMU + 32-entry TLB, banked R0–R7, register-model exceptions. Gated by the single `PRIV_ARCH` generic (implies the MMU); bare `cpu_j4` (`PRIV_ARCH=false`) == J2 | `cpu_j4` / `cpu_sim` | `cpu_synth_j4` · `cpu_synth_j4_priv` · `cpu_cache_timing_j4_priv_mmu` (j4c) | `make -C decode generate-j4` (base SH-2 + populated `sh4/` overlay) | Implemented & tested; MMU synthesizable (j4c ASIC, +9k cells) |
 
 ### Per-variant architecture documents
 

@@ -45,7 +45,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- Ensure RB=0 (bank 0). ----
         stc     sr, r0
@@ -104,7 +104,7 @@ p_mmucr:        .long 0xFF000010
 p_ptel_page0:   .long 0x000000C8
 c_page1_va:     .long 0x00001000
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -125,7 +125,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- IMISS handler at VBR+0x400 ----
         ! Pad so _v_ifetch lands at >= 0x400 (kept clear of page 0's code and
@@ -165,4 +165,4 @@ Hres_addr:      .long TEST_RESULT_ADDRESS
 _fault_pages:
         .space 0x2000, 0
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH

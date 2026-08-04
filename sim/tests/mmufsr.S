@@ -121,7 +121,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- Ensure RB=0 (bank 0). ----
         stc     sr, r0
@@ -585,7 +585,7 @@ p_tramp_b_addr:      .long _user_tramp_b
 p_tramp_f_addr:      .long _user_tramp_f
 p_ptel_tramp:        .long 0x000000E8   ! W|X|U|C, trampoline pages
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -606,7 +606,7 @@ ENTRY(_fail)
 p_test_result: .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long   TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ================================================================
         ! Single handler at exactly VBR+0x400 (all six TLB-vectored faults,
@@ -784,4 +784,4 @@ _user_tramp_f:
 tf_page3_va:  .long 0x00004000
 tf_fail_addr: .long _fail
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH

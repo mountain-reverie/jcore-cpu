@@ -43,7 +43,7 @@ _sim_instr_end: .long 0
 
         .text
 ENTRY(start)
-#if CONFIG_MMU_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! --- Test A: AT=0 sanity: write and read phys_buf directly -----
         ! phys_buf is in .bss (P0 range); read it via phys_buf directly.

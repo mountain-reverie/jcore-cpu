@@ -40,10 +40,10 @@ package cpu2j0_pack is
     rdy : std_logic;
   end record cpu_debug_o_t;
 
-  -- TLB output from cpu to SoC cache wrappers (J4+MMU_ARCH).
+  -- TLB output from cpu to SoC cache wrappers (J4).
   -- Carries the PA tag (PA[27:13] = 15 bits, matches CACHE_PA_TAG_WIDTH), the
   -- AT-translated flag, and the PTE C-bit (cacheable) for both I-cache and
-  -- D-cache ports. All-zero / at='0' / c='0' when MMU_ARCH=false.
+  -- D-cache ports. All-zero / at='0' / c='0' when PRIV_ARCH=false.
 
   type cpu_mmu_o_t is record
     i_pa_tag : std_logic_vector(14 downto 0); -- PA[27:13], 15 b (matches CACHE_PA_TAG_WIDTH)
@@ -150,7 +150,6 @@ package cpu2j0_pack is
   component cpu is generic (
       copro_decode : boolean := true;
       priv_arch    : boolean := false;
-      mmu_arch     : boolean := false;
       -- Elaboration tag distinguishing per-instance nested regfile configs (see
       -- cpu entity). No functional effect.
       core_id : integer := 0

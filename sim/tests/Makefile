@@ -4,9 +4,13 @@ AR = sh2-elf-ar
 OBJCOPY = sh2-elf-objcopy
 RANLIB = sh2-elf-ranlib
 LIBGCC = `sh2-elf-gcc -print-file-name=libgcc.a`
-# Must match the DUT's PRIV_ARCH generic (see ../Makefile). 0 = J2/J1 (no
-# privilege; privmode expects no trap), 1 = J4 (privmode expects the trap).
-CONFIG_PRIV_ARCH ?= 0
+# CPU_VARIANT selects the same variant as ../Makefile / variants.toml.
+# CONFIG_PRIV_ARCH is DERIVED from it (variants.toml: only [j4] sets
+# PRIV_ARCH=true) rather than being a standalone flag callers set directly.
+# 0 = J2/J1 (no privilege; privmode expects no trap), 1 = J4 (privmode
+# expects the trap).
+CPU_VARIANT ?= j2
+CONFIG_PRIV_ARCH := $(if $(filter j4,$(CPU_VARIANT)),1,0)
 CONFIG_SH2A_ARCH ?= 0
 CFLAGS = -m2 -g -Os -Wall -Iinclude -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_SH2A_ARCH=$(CONFIG_SH2A_ARCH)
 LDFLAGS = -T sh32.x -Map main.map

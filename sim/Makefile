@@ -13,8 +13,12 @@ endif
 
 CONFIG_RING_BUS=0
 CONFIG_PREFETCHER=0
-# Build the DUT with the SH-4 privileged architecture (J4). Default 0 (J2) so the
-# standard test ROM regression is unaffected; the privmode test needs this = 1.
+# CONFIG_PRIV_ARCH used to be a standalone flag callers set directly
+# (CONFIG_PRIV_ARCH=1). It is now DERIVED from CPU_VARIANT's variants.toml
+# generics (see the override below, after `include ../Makefile.inc`):
+# CPU_VARIANT=j4 -> PRIV_ARCH=true -> CONFIG_PRIV_ARCH=1. Default 0 here only
+# covers the window before that include; every real build gets the derived
+# value.
 CONFIG_PRIV_ARCH=0
 # Enable SH-2A ("J2A") extensions generic. Currently inert plumbing only
 # (no gated behavior yet). Default 0.
@@ -55,6 +59,10 @@ VHDLS := CPU_VHDS
 CPU_VARIANT ?= j2
 DECODE_GEN_DIR := $(CURDIR)/gen
 include ../Makefile.inc
+# Derive CONFIG_PRIV_ARCH from the selected variant's generics (CPU_GENERICS
+# comes from Makefile.inc, which reads variants.toml). This is the interface
+# CI and developers use: CPU_VARIANT=j4 (not a raw CONFIG_PRIV_ARCH=1 flag).
+CONFIG_PRIV_ARCH := $(if $(filter PRIV_ARCH=true,$(CPU_GENERICS)),1,0)
 # $(CPU_DECODE_GENERATED) paths are already rooted at DECODE_GEN_DIR (i.e.
 # under sim/gen), so only ../-prefix the entries that are tree-relative to
 # components/cpu/; prefixing the generated ones again would mangle them.

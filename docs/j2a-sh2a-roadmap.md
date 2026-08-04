@@ -192,12 +192,13 @@ Each group is a PR against master, gated behind `SH2A_ARCH`, with in-pipeline
   byte-identity set, so it's free to change.
 - **`SH2A_ARCH` reaches `decode_core` only by CONFIGURATION**, not generic map
   (like `PRIV_ARCH`, which implies the MMU as of the MMU_ARCH merge). The sim
-  needs `cpu_sim_sh2a`/`cpu_decode_direct_mmu_sh2a`
-  (in `core/cpu_config.vhd`) selected by `CONFIG_SH2A_ARCH` in `sim/cpu_tb.vhd`.
+  needs `cpu_sim_sh2a` (`core/cpu_config_sim.vhd`) / `cpu_decode_direct_mmu_sh2a`
+  (`core/cpu_config_common.vhd`) selected by `CONFIG_SH2A_ARCH` in `sim/cpu_tb.vhd`.
   A generic-map alone reaches the datapath but leaves `decode_core` gated off.
 - **Do NOT cross decode→datapath with a new variant-additive `decode` port.**
-  It forces wrapping `u_decode` in a generate, which breaks every `cpu_config.vhd`
-  `for u_decode` configuration ("no component instantiation u_decode"). Keep
+  It forces wrapping `u_decode` in a generate, which breaks every
+  `core/cpu_config_{common,j1,j2,j4,sim}.vhd` `for u_decode` configuration
+  ("no component instantiation u_decode"). Keep
   new loop/counter logic inside `decode_core` (op.code override) or inside the
   datapath keyed off an existing control record.
 - **`decode_core.vhm` is preprocessed by `tools/v2p`, not cpp** — use VHDL
@@ -280,7 +281,9 @@ Each group is a PR against master, gated behind `SH2A_ARCH`, with in-pipeline
   (immediates), `internal/spec` (Opcode2, fields), `internal/model` (build,
   variant-additive), `spec/sh2a/*.toml` (the overlay), `timing/j2a.toml`.
 - Hardware: `decode/decode_core.vhm` (`g_ext_word`, `g_movml`, sequencer),
-  `core/datapath.vhm`, `core/cpu_config.vhd` (sh2a configs), `core/cpu.vhd`.
+  `core/datapath.vhm`, `core/cpu_config_sim.vhd` (`cpu_sim_sh2a`) +
+  `core/cpu_config_common.vhd` (`cpu_decode_direct_sh2a`,
+  `cpu_decode_direct_mmu_sh2a`), `core/cpu.vhd`.
 - Sim: `sim/cpu_tb.vhd` (`CONFIG_SH2A_ARCH`), `sim/tests/sh2a_*.S`,
   `sim/tests/Makefile`.
 - Build: `make -C decode generate-j2a`, `make -C decode diff`,

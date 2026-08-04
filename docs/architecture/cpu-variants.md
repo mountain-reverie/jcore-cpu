@@ -45,10 +45,12 @@ mechanism, build/sim/synth flows, the L1-cache CDC, and the J2 invariant).
 
 ### Configuration file locations
 
-Simulation configurations — `core/cpu_config.vhd`:
-- `cpu_j2` — binds `mult(stru)`, direct decoder, two-bank register file.
-- `cpu_j1` — identical to `cpu_j2` except binds `mult(seq)`.
-- `cpu_j4` — identical to `cpu_j2` today; SH-4 units will bind here.
+Simulation configurations — one file per variant plus a shared/sim-only split:
+- `core/cpu_config_j2.vhd` — `cpu_j2`; binds `mult(stru)`, direct decoder, two-bank register file.
+- `core/cpu_config_j1.vhd` — `cpu_j1`; identical to `cpu_j2` except binds `mult(seq)`.
+- `core/cpu_config_j4.vhd` — `cpu_j4`; identical to `cpu_j2` today; SH-4 units bind via the generics.
+- `core/cpu_config_common.vhd` — decode bindings shared across variants (e.g. `cpu_decode_direct_mmu`).
+- `core/cpu_config_sim.vhd` — functional sim-only configurations (`cpu_sim`, `cpu_sim_sh2a`, `cpu_sim_dsp_alu`, `cpu_sim_rom`).
 
 Synthesis configurations — `synth/`:
 - `synth/cpu_synth_config.vhd` — original J2 synth config (`cpu_synth_direct`).

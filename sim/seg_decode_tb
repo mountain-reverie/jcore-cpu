@@ -1,0 +1,2 @@
+#!/bin/sh
+ghdl -c -fexplicit --ieee=synopsys -r seg_decode_tb $@

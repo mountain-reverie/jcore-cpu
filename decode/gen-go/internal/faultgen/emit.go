@@ -495,6 +495,14 @@ type modePreservingData struct {
 // byte-identical save cold-vs-warm TLB. No benign-init / restore is needed since
 // the payload equals the current value (the load changes nothing). `store` is the
 // STC mnemonic with a single "%s" GPR placeholder.
+//
+// COVERAGE BOUNDARY: the control-register write itself is NOT exercised by
+// this case. Because the loaded value equals the current value, both legs
+// snapshot an identical unchanged value regardless of whether the write was
+// correct, happened twice, or never happened. What this case DOES guard is the
+// base auto-modify restore (Rm+4). Same trade-off: we avoid an RB/MD bank change
+// interleaved with the fault, at the cost of losing control-register-write
+// observability.
 func emitModePreservingCtrlLoadD(c Class, id int, store string) (string, string, error) {
 	word, err := encodeWord(c)
 	if err != nil {
@@ -1093,6 +1101,12 @@ func emitDSideDSlot(c Class, id int) (string, string, error) {
 		Probe:    fmt.Sprintf("0x%08X", probeAddr),
 		IsWrite:  c.Mem == Write,
 	}
+	// Note on reporting: cases that fail due to a Defect 7 form (access launches
+	// in a slot after slot 0, wrong restart PC lands on delay-slot instruction,
+	// falls into the poison trap) report as a bus-ACK hang, not a named Result=N.
+	// Cases with slot-0 access (correct restart PC, never reach poison trap) report
+	// as a clean _m8_cmp mismatch with the case ID. A bus-ACK hang from this axis
+	// signals "Defect 7 form failed", not "harness is broken".
 	return render(tmplGeneralDSlot, d)
 }
 
@@ -1183,9 +1197,8 @@ var (
 // emitCtrlLoadDSlot emits a control-register post-increment load (LDC.L/
 // LDS.L @Rm+,ctrl) with the instruction planted in a branch delay slot --
 // the DSlot counterpart of emitCtrlLoadD. Mirrors emitCtrlLoadD's
-// exception-critical/mode-preserving split (SR routes through
-// emitModePreservingCtrlLoadDSlot; VBR has no ctrlStore mode-preserving
-// payload defined and is skipped honestly here just as on the D-side axis).
+// exception-critical/mode-preserving split (SR and VBR both route through
+// emitModePreservingCtrlLoadDSlot when their ctrlStore payload is defined).
 func emitCtrlLoadDSlot(c Class, id int) (string, string, error) {
 	reg := ctrlLoadDest(c.Instr.Name)
 	if exceptionCritical[reg] {
@@ -1216,13 +1229,23 @@ func emitCtrlLoadDSlot(c Class, id int) (string, string, error) {
 	return render(tmplPrivMemDSlot, d)
 }
 
-// emitModePreservingCtrlLoadDSlot emits LDC.L @Rm+,SR with the instruction
+// emitModePreservingCtrlLoadDSlot emits LDC.L @Rm+,{SR,VBR} with the instruction
 // planted in a branch delay slot -- the DSlot counterpart of
 // emitModePreservingCtrlLoadD. The @Rm+ payload is seeded to the CURRENT
 // control-register value, so the load is a machine-state no-op (including
 // RB/MD for SR: payload==current means no bank switch actually occurs)
 // while the base auto-modify (Rm:=Rm+4) is still exercised under a
 // delay-slot restart.
+//
+// COVERAGE BOUNDARY: the control-register write itself is NOT exercised by
+// this case. Because the loaded value equals the current value, both the
+// faulting (cold-TLB) and warm-TLB legs snapshot an identical unchanged
+// control-register value regardless of whether the write was correct, happened
+// twice, or never happened. What this case DOES guard is the base auto-modify
+// restore (Rm+4) under a delay-slot fault restart. Same trade-off as the
+// D-side axis's emitModePreservingCtrlLoadD: we avoid an RB/MD bank change
+// interleaved with the fault, at the cost of losing control-register-write
+// observability.
 func emitModePreservingCtrlLoadDSlot(c Class, id int, store string) (string, string, error) {
 	word, err := encodeWord(c)
 	if err != nil {
@@ -1588,10 +1611,9 @@ c{{.ID}}_poison: .long 0xBADC0DE1
 `
 
 // Mode-preserving PrivMem DSlot: modePreservingDText with the instruction
-// under test planted in the delay slot, for LDC.L @Rm+,SR (VBR is not
-// emitted on this axis today -- see emitCtrlLoadDSlot). The @Rm+ payload is
-// seeded to the CURRENT SR value (via stc), so the load changes no machine
-// state (RB/MD included -- payload==current means no bank switch actually
+// under test planted in the delay slot, for LDC.L @Rm+,{SR,VBR}. The @Rm+ payload is
+// seeded to the CURRENT control-register value (via stc), so the load changes no machine
+// state (RB/MD included for SR -- payload==current means no bank switch actually
 // happens) while the base auto-modify is still exercised under a delay-slot
 // restart.
 const modePreservingDSlotText = `        .balign 4

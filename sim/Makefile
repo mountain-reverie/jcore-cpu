@@ -21,8 +21,12 @@ CONFIG_PREFETCHER=0
 # value.
 CONFIG_PRIV_ARCH=0
 # Enable SH-2A ("J2A") extensions generic. Currently inert plumbing only
-# (no gated behavior yet). Default 0.
-CONFIG_SH2A_ARCH ?= 0
+# (no gated behavior yet). Like CONFIG_PRIV_ARCH above, this is now DERIVED
+# from CPU_VARIANT's variants.toml generics (see the override below, after
+# `include ../Makefile.inc`): CPU_VARIANT=j2a -> SH2A_ARCH=true ->
+# CONFIG_SH2A_ARCH=1. Default 0 here only covers the window before that
+# include.
+CONFIG_SH2A_ARCH=0
 # J1/iCESugar DSP-ALU verification variant ONLY: bind cpu_sim_dsp_alu (datapath
 # DSP_ALU=>true, core/dsp_arith.vhd exercised) instead of cpu_sim. Default 0
 # leaves the default sim config (and its DSP_ALU=false datapath) untouched.
@@ -79,6 +83,11 @@ include ../Makefile.inc
 # comes from Makefile.inc, which reads variants.toml). This is the interface
 # CI and developers use: CPU_VARIANT=j4 (not a raw CONFIG_PRIV_ARCH=1 flag).
 CONFIG_PRIV_ARCH := $(if $(filter PRIV_ARCH=true,$(CPU_GENERICS)),1,0)
+# Derive CONFIG_SH2A_ARCH the same way: CPU_VARIANT=j2a -> SH2A_ARCH=true (see
+# variants.toml's [j2a]) -> CONFIG_SH2A_ARCH=1. Like CONFIG_PRIV_ARCH, a
+# command-line CONFIG_SH2A_ARCH=... override still wins (GNU Make command-line
+# variables take precedence over in-makefile `:=` assignments).
+CONFIG_SH2A_ARCH := $(if $(filter SH2A_ARCH=true,$(CPU_GENERICS)),1,0)
 # $(CPU_DECODE_GENERATED) paths are already rooted at DECODE_GEN_DIR (i.e.
 # under sim/gen), so only ../-prefix the entries that are tree-relative to
 # components/cpu/; prefixing the generated ones again would mangle them.

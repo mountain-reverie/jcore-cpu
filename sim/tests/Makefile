@@ -11,7 +11,9 @@ LIBGCC = `sh2-elf-gcc -print-file-name=libgcc.a`
 # expects the trap).
 CPU_VARIANT ?= j2
 CONFIG_PRIV_ARCH := $(if $(filter j4,$(CPU_VARIANT)),1,0)
-CONFIG_SH2A_ARCH ?= 0
+# CONFIG_SH2A_ARCH is likewise DERIVED from CPU_VARIANT (variants.toml: only
+# [j2a] sets SH2A_ARCH=true) rather than being a standalone flag.
+CONFIG_SH2A_ARCH := $(if $(filter j2a,$(CPU_VARIANT)),1,0)
 CFLAGS = -m2 -g -Os -Wall -Iinclude -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_SH2A_ARCH=$(CONFIG_SH2A_ARCH)
 LDFLAGS = -T sh32.x -Map main.map
 

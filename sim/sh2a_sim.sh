@@ -11,14 +11,11 @@
 # touches the committed in-tree decode/*.vhd (which must stay base; never
 # commit the J2A overlay tables).
 #
-# CONFIG_SH2A_ARCH is NOT derived from CPU_VARIANT anywhere (sim/Makefile
-# only derives CONFIG_PRIV_ARCH from CPU_GENERICS; sim/tests/Makefile has
-# the same gap, `CONFIG_SH2A_ARCH ?= 0` with no CPU_VARIANT-based override),
-# even though [j2a] sets the SH2A_ARCH=true generic in variants.toml. So it
-# is still passed explicitly below alongside CPU_VARIANT=j2a. This is a real
-# derivation gap, reported rather than silently worked around further; today
-# it is harmless because CONFIG_SH2A_ARCH is documented as "inert plumbing
-# only (no gated behavior yet)" in sim/Makefile.
+# CONFIG_SH2A_ARCH is now DERIVED from CPU_VARIANT (sim/Makefile derives it
+# from CPU_GENERICS' SH2A_ARCH=true, mirroring CONFIG_PRIV_ARCH's own
+# derivation; sim/tests/Makefile derives it from CPU_VARIANT=j2a directly,
+# mirroring its own CONFIG_PRIV_ARCH derivation), so CPU_VARIANT=j2a alone
+# is now sufficient -- no raw CONFIG_SH2A_ARCH=1 flag needed below.
 #
 # Usage:
 #   sim/sh2a_sim.sh                 # build + run sh2a_movl12
@@ -40,7 +37,7 @@ if [ "$BUILD" = 1 ]; then
   echo "== build SH2A-on cosim (cpu_ctb + cpu_tb) =="
   cd sim
   rm -f work-obj93.cf cpu_tb.vhh cpu_ctb
-  make CPU_VARIANT=j2a CONFIG_SH2A_ARCH=1 cpu_ctb cpu_tb cpu_tb.vhh work-obj93.cf \
+  make CPU_VARIANT=j2a cpu_ctb cpu_tb cpu_tb.vhh work-obj93.cf \
        TOOLS_DIR="$TOOLS_DIR"
   grep -q 'SH2A_ARCH => true' cpu_tb.vhh \
     || { echo "FAIL: build is not SH2A-on (stale cpu_tb.vhh?)" >&2; exit 1; }
@@ -52,7 +49,7 @@ cd sim
 
 echo "== build test image: tests/$TEST.img =="
 rm -f tests/$TEST.img tests/$TEST.o tests/$TEST.elf
-make CPU_VARIANT=j2a CONFIG_SH2A_ARCH=1 -C tests $TEST.img
+make CPU_VARIANT=j2a -C tests $TEST.img
 
 echo "== run: cpu_ctb --stop-time=$STOP -i tests/$TEST.img =="
 ./cpu_ctb --stop-time="$STOP" -i tests/$TEST.img --ieee-asserts=disable

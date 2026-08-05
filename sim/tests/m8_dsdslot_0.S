@@ -596,6 +596,18 @@ _m8_case_7:                       ! MOV.B @(disp, Rm), R0  (General, D-side dela
         mov.l   cA7_flush, r3
         jsr     @r3
         nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
+        mov.l   cA7_flush, r3
+        jsr     @r3
+        nop
         mov.l   cA7_base, r0
         mov     #0, r8
         mov.l   cA7_dva, r11
@@ -759,6 +771,18 @@ _m8_case_8:                       ! MOV.B @Rm, Rn  (General, D-side delay-slot m
         mov.l   cA8_flush, r3
         jsr     @r3
         nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
+        mov.l   cA8_flush, r3
+        jsr     @r3
+        nop
         mov.l   cA8_base, r0
         mov     #0, r8
         mov.l   cA8_dva, r11
@@ -919,6 +943,18 @@ _m8_case_9:                       ! MOV.B R0, @(disp, Rn)  (General, D-side dela
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
+        mov.l   cA9_flush, r3
+        jsr     @r3
+        nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
         mov.l   cA9_flush, r3
         jsr     @r3
         nop
@@ -1093,6 +1129,18 @@ _m8_case_10:                       ! MOV.B Rm, @Rn  (General, D-side delay-slot 
         mov.l   cA10_flush, r3
         jsr     @r3
         nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
+        mov.l   cA10_flush, r3
+        jsr     @r3
+        nop
         mov.l   cA10_base, r0
         mov.l   cA10_pay, r8
         mov.l   cA10_dva, r11
@@ -1261,6 +1309,18 @@ _m8_case_11:                       ! MOV.B Rm,@-Rn  (General, D-side delay-slot 
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
+        mov.l   cA11_flush, r3
+        jsr     @r3
+        nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
         mov.l   cA11_flush, r3
         jsr     @r3
         nop
@@ -1435,6 +1495,18 @@ _m8_case_12:                       ! MOV.L @(disp, Rm), Rn  (General, D-side del
         mov.l   cA12_flush, r3
         jsr     @r3
         nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
+        mov.l   cA12_flush, r3
+        jsr     @r3
+        nop
         mov.l   cA12_base, r0
         mov     #0, r8
         mov.l   cA12_dva, r11
@@ -1598,6 +1670,18 @@ _m8_case_13:                       ! MOV.L @Rm, Rn  (General, D-side delay-slot 
         mov.l   cA13_flush, r3
         jsr     @r3
         nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
+        mov.l   cA13_flush, r3
+        jsr     @r3
+        nop
         mov.l   cA13_base, r0
         mov     #0, r8
         mov.l   cA13_dva, r11
@@ -1758,6 +1842,18 @@ _m8_case_14:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side del
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
+        mov.l   cA14_flush, r3
+        jsr     @r3
+        nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
         mov.l   cA14_flush, r3
         jsr     @r3
         nop
@@ -1932,6 +2028,18 @@ _m8_case_15:                       ! MOV.L Rm, @Rn  (General, D-side delay-slot 
         mov.l   cA15_flush, r3
         jsr     @r3
         nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
+        mov.l   cA15_flush, r3
+        jsr     @r3
+        nop
         mov.l   cA15_base, r0
         mov.l   cA15_pay, r8
         mov.l   cA15_dva, r11
@@ -2100,6 +2208,18 @@ _m8_case_16:                       ! MOV.L Rm,@-Rn  (General, D-side delay-slot 
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
+        mov.l   cA16_flush, r3
+        jsr     @r3
+        nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
         mov.l   cA16_flush, r3
         jsr     @r3
         nop
@@ -2274,6 +2394,18 @@ _m8_case_17:                       ! MOV.W @(disp, Rm), R0  (General, D-side del
         mov.l   cA17_flush, r3
         jsr     @r3
         nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
+        mov.l   cA17_flush, r3
+        jsr     @r3
+        nop
         mov.l   cA17_base, r0
         mov     #0, r8
         mov.l   cA17_dva, r11
@@ -2437,6 +2569,18 @@ _m8_case_18:                       ! MOV.W @Rm, Rn  (General, D-side delay-slot 
         mov.l   cA18_flush, r3
         jsr     @r3
         nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
+        mov.l   cA18_flush, r3
+        jsr     @r3
+        nop
         mov.l   cA18_base, r0
         mov     #0, r8
         mov.l   cA18_dva, r11
@@ -2597,6 +2741,18 @@ _m8_case_19:                       ! MOV.W R0, @(disp, Rn)  (General, D-side del
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
+        mov.l   cA19_flush, r3
+        jsr     @r3
+        nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
         mov.l   cA19_flush, r3
         jsr     @r3
         nop
@@ -2771,6 +2927,18 @@ _m8_case_20:                       ! MOV.W Rm, @Rn  (General, D-side delay-slot 
         mov.l   cA20_flush, r3
         jsr     @r3
         nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
+        mov.l   cA20_flush, r3
+        jsr     @r3
+        nop
         mov.l   cA20_base, r0
         mov.l   cA20_pay, r8
         mov.l   cA20_dva, r11
@@ -2939,6 +3107,18 @@ _m8_case_21:                       ! MOV.W Rm,@-Rn  (General, D-side delay-slot 
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
+        mov.l   cA21_flush, r3
+        jsr     @r3
+        nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
         mov.l   cA21_flush, r3
         jsr     @r3
         nop
@@ -3113,6 +3293,18 @@ _m8_case_22:                       ! STC.L GBR, @-Rn  (General, D-side delay-slo
         mov.l   cA22_flush, r3
         jsr     @r3
         nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
+        mov.l   cA22_flush, r3
+        jsr     @r3
+        nop
         mov.l   cA22_base, r0
         mov.l   cA22_pay, r8
         mov.l   cA22_dva, r11
@@ -3281,6 +3473,18 @@ _m8_case_23:                       ! STC.L SR, @-Rn  (General, D-side delay-slot
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
+        mov.l   cA23_flush, r3
+        jsr     @r3
+        nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
         mov.l   cA23_flush, r3
         jsr     @r3
         nop
@@ -3455,6 +3659,18 @@ _m8_case_24:                       ! STC.L VBR, @-Rn  (General, D-side delay-slo
         mov.l   cA24_flush, r3
         jsr     @r3
         nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
+        mov.l   cA24_flush, r3
+        jsr     @r3
+        nop
         mov.l   cA24_base, r0
         mov.l   cA24_pay, r8
         mov.l   cA24_dva, r11
@@ -3623,6 +3839,18 @@ _m8_case_25:                       ! STS.L MACH, @-Rn  (General, D-side delay-sl
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
+        mov.l   cA25_flush, r3
+        jsr     @r3
+        nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
         mov.l   cA25_flush, r3
         jsr     @r3
         nop
@@ -3797,6 +4025,18 @@ _m8_case_26:                       ! STS.L MACL, @-Rn  (General, D-side delay-sl
         mov.l   cA26_flush, r3
         jsr     @r3
         nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
+        mov.l   cA26_flush, r3
+        jsr     @r3
+        nop
         mov.l   cA26_base, r0
         mov.l   cA26_pay, r8
         mov.l   cA26_dva, r11
@@ -3968,6 +4208,18 @@ _m8_case_27:                       ! STS.L PR, @-Rn  (General, D-side delay-slot
         mov.l   cA27_flush, r3
         jsr     @r3
         nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
+        mov.l   cA27_flush, r3
+        jsr     @r3
+        nop
         mov.l   cA27_base, r0
         mov.l   cA27_pay, r8
         mov.l   cA27_dva, r11
@@ -4136,6 +4388,18 @@ _m8_case_28:                       ! TAS.B @Rn  (General, D-side delay-slot maxi
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
+        mov.l   cA28_flush, r3
+        jsr     @r3
+        nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
         mov.l   cA28_flush, r3
         jsr     @r3
         nop

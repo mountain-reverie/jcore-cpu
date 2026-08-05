@@ -1578,6 +1578,18 @@ _m8_case_{{.ID}}:                       ! {{.Name}}  (General, D-side delay-slot
         mov.l   cA{{.ID}}_flush, r3
         jsr     @r3
         nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
+        mov.l   cA{{.ID}}_flush, r3
+        jsr     @r3
+        nop
         mov.l   cA{{.ID}}_base, r0
 {{if .IsWrite}}        mov.l   cA{{.ID}}_pay, r8
 {{else}}        mov     #0, r8

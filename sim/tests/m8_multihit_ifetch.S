@@ -76,6 +76,26 @@
 !    (instead of specifically for the I-side case) would pass sub-test 2
 !    while silently breaking this one.
 !
+!    NON-VACUITY. Proven directly (2026-08-05), at the RTL interception
+!    point core/datapath.vhm's restore_fire (the base-restore arm shared by
+!    I-side and D-side): forcing `restore_fire <= '0'` unconditionally (the
+!    base restore never fires, for ANY kind/side) turns this sub-test RED
+!    with Result=17 ("D-side restore did NOT fire"), while all other
+!    sub-tests still see their expected exception path. This is a lower,
+!    more direct mutation than either of the two that were tried first and
+!    did NOT turn it red: reverting commit 30af728 (which mutates the
+!    tlb_restore_pend ARMING predicate, not restore_fire itself, and left
+!    this control green because 30af728's revert only reintroduced the
+!    tlb_exc_is_i mix-up on the I-side, leaving the D-side arm untouched),
+!    and a hand-added "disable restore for all MULTI_HITs" clause (which is
+!    reachable only through the same arming predicate and is apparently
+!    short-circuited before reaching this sub-test's D-side path). The
+!    restore_fire mutation is not side-selective, so it does not by itself
+!    prove the I-side/D-side DISCRIMINATOR is exercised here -- that half
+!    is already covered by sub-test 2 -- but it does prove sub-test 3
+!    genuinely observes whether the D-side restore fires at all, which is
+!    what it was written to check.
+!
 ! Result codes:
 !   0   pass
 !   1   sub-test 1: no exception (multi-hit not reached)

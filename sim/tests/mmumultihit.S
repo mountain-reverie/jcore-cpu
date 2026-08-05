@@ -34,10 +34,30 @@
 !      cannot reach (more than one pre-existing entry independently overlaps
 !      a single new install -- LDTLB only evicts the first match found -- or
 !      any other inconsistent SW/HW state). This guard's Test B can no
-!      longer exercise the fault path through a normal install sequence,
-!      because normal LDTLB installs are exactly what the fix now resolves
-!      before a multi-hit can occur; it instead exercises the eviction that
-!      prevents this construction from ever reaching a multi-hit.
+!      longer exercise the fault path through a normal install sequence
+!      USING THIS PARTICULAR (page-size-aliasing) CONSTRUCTION, because
+!      normal LDTLB installs are exactly what the fix now resolves before a
+!      multi-hit can occur via that route; it instead exercises the
+!      eviction that prevents this construction from ever reaching a
+!      multi-hit.
+!
+!      This is NOT true of normal LDTLB installs in general: a genuine
+!      multi-hit IS still reachable through an ordinary install sequence,
+!      via the exact gap named above ("more than one pre-existing entry
+!      independently overlaps a single new install -- LDTLB only evicts the
+!      first match found"). sim/tests/m8_multihit_ifetch.S is the guard
+!      that demonstrates this: install A (ASID=A, non-global) and B
+!      (ASID=B, non-global) at the SAME VPN -- they coexist because the
+!      dedup predicate (OR of: entry.global, new.global, entry.asid_tag=
+!      new.asid) is false between two non-global entries of different
+!      ASIDs; then install a global entry C overlapping both -- its global
+!      bit makes the predicate true against both A and B, but the
+!      install-loop dedup latches on and evicts only the FIRST match (A),
+!      leaving B resident alongside C. A lookup with ASIDR=B then matches
+!      both B (ASID match) and C (global), a genuine S-I5 multi-hit through
+!      three ordinary LDTLBs. Do not read this file's Test B as evidence
+!      that the fault path is unreachable in general -- only that this one
+!      construction no longer reaches it.
 !
 ! Construction (all under ASID A, page 0 identity kernel code W|X|C=0xC8):
 !   - VPN 0x4 (VA 0x4000): installed TWICE -- PA 0x4000 then PA 0x9000. Dedup

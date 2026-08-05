@@ -115,11 +115,18 @@ kmain:
         mov.l   k_pgd0, r1             ! 0x80002401
         mov.l   r1, @r0
 
-        ! ---- Build the PTEs (PTEL image: backing PA | 0x0F1). Two adjacent
+        ! ---- Build the PTEs (PTEL image: backing PA | 0x0F1). Four adjacent
         ! identity pages: 0x100 (workload) and 0x101 (MAC dual-base second
-        ! operand, so the two @Rm+/@Rn+ accesses fault on DISTINCT cold pages). ----
+        ! operand, so the two @Rm+/@Rn+ accesses fault on DISTINCT cold pages);
+        ! 0x102/0x103 (DSideDSlot Case A/B data page C / branch-target page D --
+        ! the TLB is UNIFIED (one array for I and D, core/tlb.vhd) so a delay-
+        ! slot D-access and a branch-target I-fetch each need their OWN page
+        ! distinct from the branch (A) and delay-slot-fetch (B) pages, or they
+        ! silently re-hit a TLB entry the other access type already installed. ----
         mov.l   k_pteA, r0 ; mov.l v_pteA, r1 ; mov.l r1, @r0
         mov.l   k_pteB, r0 ; mov.l v_pteB, r1 ; mov.l r1, @r0
+        mov.l   k_pteC, r0 ; mov.l v_pteC, r1 ; mov.l r1, @r0
+        mov.l   k_pteD, r0 ; mov.l v_pteD, r1 ; mov.l r1, @r0
 
         ! ---- Zero the 16-entry TSB (64 words). ----
         mov.l   k_tsb,  r0
@@ -158,6 +165,10 @@ k_pteA:    .long 0x80002800
 v_pteA:    .long 0x001000D1    ! identity PTE: PA(==VA) | flags 0x0D1 (U cleared: kernel code, SMEP)
 k_pteB:    .long 0x80002804    ! pte_tab[0x101] (= 0x80002400 + 0x101*4)
 v_pteB:    .long 0x001010D1    ! identity PTE for VA 0x00101000, U cleared: kernel code, SMEP
+k_pteC:    .long 0x80002808    ! pte_tab[0x102] (= 0x80002400 + 0x102*4)
+v_pteC:    .long 0x001020D1    ! identity PTE for VA 0x00102000 (DSideDSlot data page C)
+k_pteD:    .long 0x8000280C    ! pte_tab[0x103] (= 0x80002400 + 0x103*4)
+v_pteD:    .long 0x001030D1    ! identity PTE for VA 0x00103000 (DSideDSlot target page D)
 k_tsb:     .long 0x80002C00
 k_vbr:     .long 0x80000000 + _vbase
 k_tsbbr_a: .long 0xFF000014

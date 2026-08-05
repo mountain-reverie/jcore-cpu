@@ -556,1454 +556,3718 @@ c6_flush:  .long 0x80000000 + _m8_flush
 c6_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_7:                       ! MOV.B @(disp, Rm), R0  (General, D-side in delay slot)
+_m8_case_7:                       ! MOV.B @(disp, Rm), R0  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c7_seedva, r0
-        mov.l   c7_seed, r1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA7_brva, r5
+        mov.w   cA7_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA7_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA7_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA7_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA7_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA7_dva, r5
+        mov.w   cA7_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA7_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA7_cva, r0
+        mov.l   cA7_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c7_flush, r3
+        mov.l   cA7_flush, r3
         jsr     @r3
         nop
-        mov.l   c7_va, r0
+        mov.l   cA7_base, r0
         mov     #0, r8
-        bra     c7_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x8400                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c7_poison, r0
-c7_Da:
-        mov.l   c7_snapa, r2
+        mov.l   cA7_dva, r11
+        mov.l   cA7_reta, r12
+        mov.l   cA7_brva, r5
+        jmp     @r5
+        nop
+cA7_reta_l:
+        mov.l   cA7_snapa, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c7_seedva, r0
-        mov.l   c7_seed, r1
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA7_cva, r0
+        mov.l   cA7_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c7_va, r0
+        mov.l   cA7_base, r0
         mov     #0, r8
-        bra     c7_Db
-        .word   0x8400
-c7_Db:
-        mov.l   c7_snapb, r2
+        mov.l   cA7_dva, r11
+        mov.l   cA7_retb, r12
+        mov.l   cA7_brva, r5
+        jmp     @r5
+        nop
+cA7_retb_l:
+        mov.l   cA7_snapb, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
-        ! ---- compare ----
         mov     #8, r4
-        mov.l   c7_id, r5
-        mov.l   c7_cmp, r3
+        mov.l   cA7_id, r5
+        mov.l   cA7_cmp, r3
         jsr     @r3
         nop
-        lds.l   @r15+, pr
-        rts
-        nop
-        .align 2
-c7_va:     .long 0x00100000
-c7_seedva: .long 0x00100000
-c7_probe:  .long 0x00100000
-c7_seed:   .long 0xA11C0001
-c7_pay:    .long 0x57013333
-c7_snapa:  .long SNAP_A
-c7_snapb:  .long SNAP_B
-c7_id:     .long 7
-c7_cmp:    .long 0x80000000 + _m8_cmp
-c7_flush:  .long 0x80000000 + _m8_flush
-c7_poison: .long 0xBADC0DE1
 
-        .balign 4
-_m8_case_8:                       ! MOV.B @Rm, Rn  (General, D-side in delay slot)
-        sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c8_seedva, r0
-        mov.l   c8_seed, r1
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB7_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA7_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB7_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA7_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA7_cva, r0
+        mov.l   cA7_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c8_flush, r3
-        jsr     @r3
-        nop
-        mov.l   c8_va, r0
+        mov.l   cA7_base, r0
         mov     #0, r8
-        bra     c8_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x6800                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c8_poison, r0
-c8_Da:
-        mov.l   c8_snapa, r2
+        mov.l   cA7_dva, r11
+        mov.l   cB7_reta, r12
+        mov.l   cA7_brva, r5
+        jmp     @r5
+        nop
+cB7_reta_l:
+        mov.l   cB7_snapa, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c8_seedva, r0
-        mov.l   c8_seed, r1
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA7_cva, r0
+        mov.l   cA7_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c8_va, r0
+        mov.l   cA7_base, r0
         mov     #0, r8
-        bra     c8_Db
-        .word   0x6800
-c8_Db:
-        mov.l   c8_snapb, r2
+        mov.l   cA7_dva, r11
+        mov.l   cB7_retb, r12
+        mov.l   cA7_brva, r5
+        jmp     @r5
+        nop
+cB7_retb_l:
+        mov.l   cB7_snapb, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
-        ! ---- compare ----
         mov     #8, r4
-        mov.l   c8_id, r5
-        mov.l   c8_cmp, r3
+        mov.l   cB7_id, r5
+        mov.l   cB7_cmp, r3
         jsr     @r3
         nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c8_va:     .long 0x00100000
-c8_seedva: .long 0x00100000
-c8_probe:  .long 0x00100000
-c8_seed:   .long 0xA11C0001
-c8_pay:    .long 0x57013333
-c8_snapa:  .long SNAP_A
-c8_snapb:  .long SNAP_B
-c8_id:     .long 8
-c8_cmp:    .long 0x80000000 + _m8_cmp
-c8_flush:  .long 0x80000000 + _m8_flush
-c8_poison: .long 0xBADC0DE1
-
-        .balign 4
-_m8_case_9:                       ! MOV.B R0, @(disp, Rn)  (General, D-side in delay slot)
-        sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c9_seedva, r0
-        mov.l   c9_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c9_flush, r3
-        jsr     @r3
-        nop
-        mov.l   c9_va, r0
-        mov.l   c9_pay, r8
-        bra     c9_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x8000                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c9_poison, r0
-c9_Da:
-        mov.l   c9_snapa, r2
-        mov.l   r0, @r2
-        mov.l   c9_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c9_seedva, r0
-        mov.l   c9_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c9_va, r0
-        mov.l   c9_pay, r8
-        bra     c9_Db
-        .word   0x8000
-c9_Db:
-        mov.l   c9_snapb, r2
-        mov.l   r0, @r2
-        mov.l   c9_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- compare ----
-        mov     #8, r4
-        mov.l   c9_id, r5
-        mov.l   c9_cmp, r3
-        jsr     @r3
-        nop
-        lds.l   @r15+, pr
-        rts
-        nop
+cA7_brva:      .long 0x00100FFE
+cA7_dva:       .long 0x00103000
+cA7_cva:       .long 0x00102000
+cA7_base:      .long 0x00102000
+cA7_probe:     .long 0x00102000
+cA7_seed:      .long 0xA11C0002
+cA7_pay:       .long 0x57014444
+cA7_braw:      .word 0x4B2B            ! jmp @r11
+cA7_instrw:    .word 0x8400
+cA7_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA7_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA7_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA7_nopw:      .word 0x0009
         .align 2
-c9_va:     .long 0x00100000
-c9_seedva: .long 0x00100000
-c9_probe:  .long 0x00100000
-c9_seed:   .long 0xA11C0001
-c9_pay:    .long 0x57013333
-c9_snapa:  .long SNAP_A
-c9_snapb:  .long SNAP_B
-c9_id:     .long 9
-c9_cmp:    .long 0x80000000 + _m8_cmp
-c9_flush:  .long 0x80000000 + _m8_flush
-c9_poison: .long 0xBADC0DE1
+cA7_reta:      .long 0x80000000 + cA7_reta_l
+cA7_retb:      .long 0x80000000 + cA7_retb_l
+cA7_snapa:     .long SNAP_A
+cA7_snapb:     .long SNAP_B
+cA7_id:        .long 1007
+cA7_cmp:       .long 0x80000000 + _m8_cmp
+cA7_flush:     .long 0x80000000 + _m8_flush
+cB7_flush:     .long 0x80000000 + _m8_flush
+cB7_dsva:      .long 0x00101000
+cB7_reta:      .long 0x80000000 + cB7_reta_l
+cB7_retb:      .long 0x80000000 + cB7_retb_l
+cB7_snapa:     .long SNAP_A
+cB7_snapb:     .long SNAP_B
+cB7_id:        .long 2007
+cB7_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_10:                       ! MOV.B Rm, @Rn  (General, D-side in delay slot)
+_m8_case_8:                       ! MOV.B @Rm, Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c10_seedva, r0
-        mov.l   c10_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c10_flush, r3
-        jsr     @r3
-        nop
-        mov.l   c10_va, r0
-        mov.l   c10_pay, r8
-        bra     c10_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x2080                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c10_poison, r0
-c10_Da:
-        mov.l   c10_snapa, r2
-        mov.l   r0, @r2
-        mov.l   c10_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c10_seedva, r0
-        mov.l   c10_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c10_va, r0
-        mov.l   c10_pay, r8
-        bra     c10_Db
-        .word   0x2080
-c10_Db:
-        mov.l   c10_snapb, r2
-        mov.l   r0, @r2
-        mov.l   c10_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- compare ----
-        mov     #8, r4
-        mov.l   c10_id, r5
-        mov.l   c10_cmp, r3
-        jsr     @r3
-        nop
-        lds.l   @r15+, pr
-        rts
-        nop
-        .align 2
-c10_va:     .long 0x00100000
-c10_seedva: .long 0x00100000
-c10_probe:  .long 0x00100000
-c10_seed:   .long 0xA11C0001
-c10_pay:    .long 0x57013333
-c10_snapa:  .long SNAP_A
-c10_snapb:  .long SNAP_B
-c10_id:     .long 10
-c10_cmp:    .long 0x80000000 + _m8_cmp
-c10_flush:  .long 0x80000000 + _m8_flush
-c10_poison: .long 0xBADC0DE1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA8_brva, r5
+        mov.w   cA8_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA8_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA8_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA8_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA8_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA8_dva, r5
+        mov.w   cA8_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA8_nopw, r6
+        mov.w   r6, @r5
 
-        .balign 4
-_m8_case_11:                       ! MOV.B Rm,@-Rn  (General, D-side in delay slot)
-        sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c11_seedva, r0
-        mov.l   c11_seed, r1
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA8_cva, r0
+        mov.l   cA8_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c11_flush, r3
+        mov.l   cA8_flush, r3
         jsr     @r3
         nop
-        mov.l   c11_va, r0
-        mov.l   c11_pay, r8
-        bra     c11_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x2084                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c11_poison, r0
-c11_Da:
-        mov.l   c11_snapa, r2
-        mov.l   r0, @r2
-        mov.l   c11_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c11_seedva, r0
-        mov.l   c11_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c11_va, r0
-        mov.l   c11_pay, r8
-        bra     c11_Db
-        .word   0x2084
-c11_Db:
-        mov.l   c11_snapb, r2
-        mov.l   r0, @r2
-        mov.l   c11_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- compare ----
-        mov     #8, r4
-        mov.l   c11_id, r5
-        mov.l   c11_cmp, r3
-        jsr     @r3
-        nop
-        lds.l   @r15+, pr
-        rts
-        nop
-        .align 2
-c11_va:     .long 0x00100008
-c11_seedva: .long 0x00100000
-c11_probe:  .long 0x00100004
-c11_seed:   .long 0xA11C0001
-c11_pay:    .long 0x57013333
-c11_snapa:  .long SNAP_A
-c11_snapb:  .long SNAP_B
-c11_id:     .long 11
-c11_cmp:    .long 0x80000000 + _m8_cmp
-c11_flush:  .long 0x80000000 + _m8_flush
-c11_poison: .long 0xBADC0DE1
-
-        .balign 4
-_m8_case_12:                       ! MOV.L @(disp, Rm), Rn  (General, D-side in delay slot)
-        sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c12_seedva, r0
-        mov.l   c12_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c12_flush, r3
-        jsr     @r3
-        nop
-        mov.l   c12_va, r0
+        mov.l   cA8_base, r0
         mov     #0, r8
-        bra     c12_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x5800                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c12_poison, r0
-c12_Da:
-        mov.l   c12_snapa, r2
+        mov.l   cA8_dva, r11
+        mov.l   cA8_reta, r12
+        mov.l   cA8_brva, r5
+        jmp     @r5
+        nop
+cA8_reta_l:
+        mov.l   cA8_snapa, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c12_seedva, r0
-        mov.l   c12_seed, r1
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA8_cva, r0
+        mov.l   cA8_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c12_va, r0
+        mov.l   cA8_base, r0
         mov     #0, r8
-        bra     c12_Db
-        .word   0x5800
-c12_Db:
-        mov.l   c12_snapb, r2
+        mov.l   cA8_dva, r11
+        mov.l   cA8_retb, r12
+        mov.l   cA8_brva, r5
+        jmp     @r5
+        nop
+cA8_retb_l:
+        mov.l   cA8_snapb, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
-        ! ---- compare ----
         mov     #8, r4
-        mov.l   c12_id, r5
-        mov.l   c12_cmp, r3
+        mov.l   cA8_id, r5
+        mov.l   cA8_cmp, r3
         jsr     @r3
         nop
-        lds.l   @r15+, pr
-        rts
-        nop
-        .align 2
-c12_va:     .long 0x00100000
-c12_seedva: .long 0x00100000
-c12_probe:  .long 0x00100000
-c12_seed:   .long 0xA11C0001
-c12_pay:    .long 0x57013333
-c12_snapa:  .long SNAP_A
-c12_snapb:  .long SNAP_B
-c12_id:     .long 12
-c12_cmp:    .long 0x80000000 + _m8_cmp
-c12_flush:  .long 0x80000000 + _m8_flush
-c12_poison: .long 0xBADC0DE1
 
-        .balign 4
-_m8_case_13:                       ! MOV.L @Rm, Rn  (General, D-side in delay slot)
-        sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c13_seedva, r0
-        mov.l   c13_seed, r1
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB8_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA8_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB8_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA8_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA8_cva, r0
+        mov.l   cA8_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c13_flush, r3
-        jsr     @r3
-        nop
-        mov.l   c13_va, r0
+        mov.l   cA8_base, r0
         mov     #0, r8
-        bra     c13_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x6802                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c13_poison, r0
-c13_Da:
-        mov.l   c13_snapa, r2
+        mov.l   cA8_dva, r11
+        mov.l   cB8_reta, r12
+        mov.l   cA8_brva, r5
+        jmp     @r5
+        nop
+cB8_reta_l:
+        mov.l   cB8_snapa, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c13_seedva, r0
-        mov.l   c13_seed, r1
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA8_cva, r0
+        mov.l   cA8_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c13_va, r0
+        mov.l   cA8_base, r0
         mov     #0, r8
-        bra     c13_Db
-        .word   0x6802
-c13_Db:
-        mov.l   c13_snapb, r2
+        mov.l   cA8_dva, r11
+        mov.l   cB8_retb, r12
+        mov.l   cA8_brva, r5
+        jmp     @r5
+        nop
+cB8_retb_l:
+        mov.l   cB8_snapb, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
-        ! ---- compare ----
         mov     #8, r4
-        mov.l   c13_id, r5
-        mov.l   c13_cmp, r3
+        mov.l   cB8_id, r5
+        mov.l   cB8_cmp, r3
         jsr     @r3
         nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c13_va:     .long 0x00100000
-c13_seedva: .long 0x00100000
-c13_probe:  .long 0x00100000
-c13_seed:   .long 0xA11C0001
-c13_pay:    .long 0x57013333
-c13_snapa:  .long SNAP_A
-c13_snapb:  .long SNAP_B
-c13_id:     .long 13
-c13_cmp:    .long 0x80000000 + _m8_cmp
-c13_flush:  .long 0x80000000 + _m8_flush
-c13_poison: .long 0xBADC0DE1
+cA8_brva:      .long 0x00100FFE
+cA8_dva:       .long 0x00103000
+cA8_cva:       .long 0x00102000
+cA8_base:      .long 0x00102000
+cA8_probe:     .long 0x00102000
+cA8_seed:      .long 0xA11C0002
+cA8_pay:       .long 0x57014444
+cA8_braw:      .word 0x4B2B            ! jmp @r11
+cA8_instrw:    .word 0x6800
+cA8_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA8_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA8_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA8_nopw:      .word 0x0009
+        .align 2
+cA8_reta:      .long 0x80000000 + cA8_reta_l
+cA8_retb:      .long 0x80000000 + cA8_retb_l
+cA8_snapa:     .long SNAP_A
+cA8_snapb:     .long SNAP_B
+cA8_id:        .long 1008
+cA8_cmp:       .long 0x80000000 + _m8_cmp
+cA8_flush:     .long 0x80000000 + _m8_flush
+cB8_flush:     .long 0x80000000 + _m8_flush
+cB8_dsva:      .long 0x00101000
+cB8_reta:      .long 0x80000000 + cB8_reta_l
+cB8_retb:      .long 0x80000000 + cB8_retb_l
+cB8_snapa:     .long SNAP_A
+cB8_snapb:     .long SNAP_B
+cB8_id:        .long 2008
+cB8_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_14:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side in delay slot)
+_m8_case_9:                       ! MOV.B R0, @(disp, Rn)  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c14_seedva, r0
-        mov.l   c14_seed, r1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA9_brva, r5
+        mov.w   cA9_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA9_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA9_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA9_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA9_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA9_dva, r5
+        mov.w   cA9_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA9_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA9_cva, r0
+        mov.l   cA9_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c14_flush, r3
+        mov.l   cA9_flush, r3
         jsr     @r3
         nop
-        mov.l   c14_va, r0
-        mov.l   c14_pay, r8
-        bra     c14_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x1080                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c14_poison, r0
-c14_Da:
-        mov.l   c14_snapa, r2
+        mov.l   cA9_base, r0
+        mov.l   cA9_pay, r8
+        mov.l   cA9_dva, r11
+        mov.l   cA9_reta, r12
+        mov.l   cA9_brva, r5
+        jmp     @r5
+        nop
+cA9_reta_l:
+        mov.l   cA9_snapa, r2
         mov.l   r0, @r2
-        mov.l   c14_probe, r3
+        mov.l   cA9_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c14_seedva, r0
-        mov.l   c14_seed, r1
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA9_cva, r0
+        mov.l   cA9_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c14_va, r0
-        mov.l   c14_pay, r8
-        bra     c14_Db
-        .word   0x1080
-c14_Db:
-        mov.l   c14_snapb, r2
+        mov.l   cA9_base, r0
+        mov.l   cA9_pay, r8
+        mov.l   cA9_dva, r11
+        mov.l   cA9_retb, r12
+        mov.l   cA9_brva, r5
+        jmp     @r5
+        nop
+cA9_retb_l:
+        mov.l   cA9_snapb, r2
         mov.l   r0, @r2
-        mov.l   c14_probe, r3
+        mov.l   cA9_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- compare ----
         mov     #8, r4
-        mov.l   c14_id, r5
-        mov.l   c14_cmp, r3
+        mov.l   cA9_id, r5
+        mov.l   cA9_cmp, r3
         jsr     @r3
         nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB9_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA9_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB9_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA9_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA9_cva, r0
+        mov.l   cA9_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA9_base, r0
+        mov.l   cA9_pay, r8
+        mov.l   cA9_dva, r11
+        mov.l   cB9_reta, r12
+        mov.l   cA9_brva, r5
+        jmp     @r5
+        nop
+cB9_reta_l:
+        mov.l   cB9_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA9_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA9_cva, r0
+        mov.l   cA9_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA9_base, r0
+        mov.l   cA9_pay, r8
+        mov.l   cA9_dva, r11
+        mov.l   cB9_retb, r12
+        mov.l   cA9_brva, r5
+        jmp     @r5
+        nop
+cB9_retb_l:
+        mov.l   cB9_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA9_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB9_id, r5
+        mov.l   cB9_cmp, r3
+        jsr     @r3
+        nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c14_va:     .long 0x00100000
-c14_seedva: .long 0x00100000
-c14_probe:  .long 0x00100000
-c14_seed:   .long 0xA11C0001
-c14_pay:    .long 0x57013333
-c14_snapa:  .long SNAP_A
-c14_snapb:  .long SNAP_B
-c14_id:     .long 14
-c14_cmp:    .long 0x80000000 + _m8_cmp
-c14_flush:  .long 0x80000000 + _m8_flush
-c14_poison: .long 0xBADC0DE1
+cA9_brva:      .long 0x00100FFE
+cA9_dva:       .long 0x00103000
+cA9_cva:       .long 0x00102000
+cA9_base:      .long 0x00102000
+cA9_probe:     .long 0x00102000
+cA9_seed:      .long 0xA11C0002
+cA9_pay:       .long 0x57014444
+cA9_braw:      .word 0x4B2B            ! jmp @r11
+cA9_instrw:    .word 0x8000
+cA9_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA9_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA9_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA9_nopw:      .word 0x0009
+        .align 2
+cA9_reta:      .long 0x80000000 + cA9_reta_l
+cA9_retb:      .long 0x80000000 + cA9_retb_l
+cA9_snapa:     .long SNAP_A
+cA9_snapb:     .long SNAP_B
+cA9_id:        .long 1009
+cA9_cmp:       .long 0x80000000 + _m8_cmp
+cA9_flush:     .long 0x80000000 + _m8_flush
+cB9_flush:     .long 0x80000000 + _m8_flush
+cB9_dsva:      .long 0x00101000
+cB9_reta:      .long 0x80000000 + cB9_reta_l
+cB9_retb:      .long 0x80000000 + cB9_retb_l
+cB9_snapa:     .long SNAP_A
+cB9_snapb:     .long SNAP_B
+cB9_id:        .long 2009
+cB9_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_15:                       ! MOV.L Rm, @Rn  (General, D-side in delay slot)
+_m8_case_10:                       ! MOV.B Rm, @Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c15_seedva, r0
-        mov.l   c15_seed, r1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA10_brva, r5
+        mov.w   cA10_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA10_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA10_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA10_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA10_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA10_dva, r5
+        mov.w   cA10_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA10_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA10_cva, r0
+        mov.l   cA10_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c15_flush, r3
+        mov.l   cA10_flush, r3
         jsr     @r3
         nop
-        mov.l   c15_va, r0
-        mov.l   c15_pay, r8
-        bra     c15_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x2082                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c15_poison, r0
-c15_Da:
-        mov.l   c15_snapa, r2
+        mov.l   cA10_base, r0
+        mov.l   cA10_pay, r8
+        mov.l   cA10_dva, r11
+        mov.l   cA10_reta, r12
+        mov.l   cA10_brva, r5
+        jmp     @r5
+        nop
+cA10_reta_l:
+        mov.l   cA10_snapa, r2
         mov.l   r0, @r2
-        mov.l   c15_probe, r3
+        mov.l   cA10_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c15_seedva, r0
-        mov.l   c15_seed, r1
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA10_cva, r0
+        mov.l   cA10_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c15_va, r0
-        mov.l   c15_pay, r8
-        bra     c15_Db
-        .word   0x2082
-c15_Db:
-        mov.l   c15_snapb, r2
+        mov.l   cA10_base, r0
+        mov.l   cA10_pay, r8
+        mov.l   cA10_dva, r11
+        mov.l   cA10_retb, r12
+        mov.l   cA10_brva, r5
+        jmp     @r5
+        nop
+cA10_retb_l:
+        mov.l   cA10_snapb, r2
         mov.l   r0, @r2
-        mov.l   c15_probe, r3
+        mov.l   cA10_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- compare ----
         mov     #8, r4
-        mov.l   c15_id, r5
-        mov.l   c15_cmp, r3
+        mov.l   cA10_id, r5
+        mov.l   cA10_cmp, r3
         jsr     @r3
         nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB10_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA10_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB10_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA10_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA10_cva, r0
+        mov.l   cA10_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA10_base, r0
+        mov.l   cA10_pay, r8
+        mov.l   cA10_dva, r11
+        mov.l   cB10_reta, r12
+        mov.l   cA10_brva, r5
+        jmp     @r5
+        nop
+cB10_reta_l:
+        mov.l   cB10_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA10_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA10_cva, r0
+        mov.l   cA10_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA10_base, r0
+        mov.l   cA10_pay, r8
+        mov.l   cA10_dva, r11
+        mov.l   cB10_retb, r12
+        mov.l   cA10_brva, r5
+        jmp     @r5
+        nop
+cB10_retb_l:
+        mov.l   cB10_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA10_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB10_id, r5
+        mov.l   cB10_cmp, r3
+        jsr     @r3
+        nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c15_va:     .long 0x00100000
-c15_seedva: .long 0x00100000
-c15_probe:  .long 0x00100000
-c15_seed:   .long 0xA11C0001
-c15_pay:    .long 0x57013333
-c15_snapa:  .long SNAP_A
-c15_snapb:  .long SNAP_B
-c15_id:     .long 15
-c15_cmp:    .long 0x80000000 + _m8_cmp
-c15_flush:  .long 0x80000000 + _m8_flush
-c15_poison: .long 0xBADC0DE1
+cA10_brva:      .long 0x00100FFE
+cA10_dva:       .long 0x00103000
+cA10_cva:       .long 0x00102000
+cA10_base:      .long 0x00102000
+cA10_probe:     .long 0x00102000
+cA10_seed:      .long 0xA11C0002
+cA10_pay:       .long 0x57014444
+cA10_braw:      .word 0x4B2B            ! jmp @r11
+cA10_instrw:    .word 0x2080
+cA10_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA10_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA10_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA10_nopw:      .word 0x0009
+        .align 2
+cA10_reta:      .long 0x80000000 + cA10_reta_l
+cA10_retb:      .long 0x80000000 + cA10_retb_l
+cA10_snapa:     .long SNAP_A
+cA10_snapb:     .long SNAP_B
+cA10_id:        .long 1010
+cA10_cmp:       .long 0x80000000 + _m8_cmp
+cA10_flush:     .long 0x80000000 + _m8_flush
+cB10_flush:     .long 0x80000000 + _m8_flush
+cB10_dsva:      .long 0x00101000
+cB10_reta:      .long 0x80000000 + cB10_reta_l
+cB10_retb:      .long 0x80000000 + cB10_retb_l
+cB10_snapa:     .long SNAP_A
+cB10_snapb:     .long SNAP_B
+cB10_id:        .long 2010
+cB10_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_16:                       ! MOV.L Rm,@-Rn  (General, D-side in delay slot)
+_m8_case_11:                       ! MOV.B Rm,@-Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c16_seedva, r0
-        mov.l   c16_seed, r1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA11_brva, r5
+        mov.w   cA11_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA11_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA11_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA11_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA11_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA11_dva, r5
+        mov.w   cA11_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA11_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA11_cva, r0
+        mov.l   cA11_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c16_flush, r3
+        mov.l   cA11_flush, r3
         jsr     @r3
         nop
-        mov.l   c16_va, r0
-        mov.l   c16_pay, r8
-        bra     c16_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x2086                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c16_poison, r0
-c16_Da:
-        mov.l   c16_snapa, r2
+        mov.l   cA11_base, r0
+        mov.l   cA11_pay, r8
+        mov.l   cA11_dva, r11
+        mov.l   cA11_reta, r12
+        mov.l   cA11_brva, r5
+        jmp     @r5
+        nop
+cA11_reta_l:
+        mov.l   cA11_snapa, r2
         mov.l   r0, @r2
-        mov.l   c16_probe, r3
+        mov.l   cA11_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c16_seedva, r0
-        mov.l   c16_seed, r1
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA11_cva, r0
+        mov.l   cA11_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c16_va, r0
-        mov.l   c16_pay, r8
-        bra     c16_Db
-        .word   0x2086
-c16_Db:
-        mov.l   c16_snapb, r2
+        mov.l   cA11_base, r0
+        mov.l   cA11_pay, r8
+        mov.l   cA11_dva, r11
+        mov.l   cA11_retb, r12
+        mov.l   cA11_brva, r5
+        jmp     @r5
+        nop
+cA11_retb_l:
+        mov.l   cA11_snapb, r2
         mov.l   r0, @r2
-        mov.l   c16_probe, r3
+        mov.l   cA11_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- compare ----
         mov     #8, r4
-        mov.l   c16_id, r5
-        mov.l   c16_cmp, r3
+        mov.l   cA11_id, r5
+        mov.l   cA11_cmp, r3
         jsr     @r3
         nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB11_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA11_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB11_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA11_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA11_cva, r0
+        mov.l   cA11_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA11_base, r0
+        mov.l   cA11_pay, r8
+        mov.l   cA11_dva, r11
+        mov.l   cB11_reta, r12
+        mov.l   cA11_brva, r5
+        jmp     @r5
+        nop
+cB11_reta_l:
+        mov.l   cB11_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA11_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA11_cva, r0
+        mov.l   cA11_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA11_base, r0
+        mov.l   cA11_pay, r8
+        mov.l   cA11_dva, r11
+        mov.l   cB11_retb, r12
+        mov.l   cA11_brva, r5
+        jmp     @r5
+        nop
+cB11_retb_l:
+        mov.l   cB11_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA11_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB11_id, r5
+        mov.l   cB11_cmp, r3
+        jsr     @r3
+        nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c16_va:     .long 0x00100008
-c16_seedva: .long 0x00100000
-c16_probe:  .long 0x00100004
-c16_seed:   .long 0xA11C0001
-c16_pay:    .long 0x57013333
-c16_snapa:  .long SNAP_A
-c16_snapb:  .long SNAP_B
-c16_id:     .long 16
-c16_cmp:    .long 0x80000000 + _m8_cmp
-c16_flush:  .long 0x80000000 + _m8_flush
-c16_poison: .long 0xBADC0DE1
+cA11_brva:      .long 0x00100FFE
+cA11_dva:       .long 0x00103000
+cA11_cva:       .long 0x00102000
+cA11_base:      .long 0x00102008
+cA11_probe:     .long 0x00102004
+cA11_seed:      .long 0xA11C0002
+cA11_pay:       .long 0x57014444
+cA11_braw:      .word 0x4B2B            ! jmp @r11
+cA11_instrw:    .word 0x2084
+cA11_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA11_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA11_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA11_nopw:      .word 0x0009
+        .align 2
+cA11_reta:      .long 0x80000000 + cA11_reta_l
+cA11_retb:      .long 0x80000000 + cA11_retb_l
+cA11_snapa:     .long SNAP_A
+cA11_snapb:     .long SNAP_B
+cA11_id:        .long 1011
+cA11_cmp:       .long 0x80000000 + _m8_cmp
+cA11_flush:     .long 0x80000000 + _m8_flush
+cB11_flush:     .long 0x80000000 + _m8_flush
+cB11_dsva:      .long 0x00101000
+cB11_reta:      .long 0x80000000 + cB11_reta_l
+cB11_retb:      .long 0x80000000 + cB11_retb_l
+cB11_snapa:     .long SNAP_A
+cB11_snapb:     .long SNAP_B
+cB11_id:        .long 2011
+cB11_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_17:                       ! MOV.W @(disp, Rm), R0  (General, D-side in delay slot)
+_m8_case_12:                       ! MOV.L @(disp, Rm), Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c17_seedva, r0
-        mov.l   c17_seed, r1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA12_brva, r5
+        mov.w   cA12_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA12_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA12_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA12_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA12_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA12_dva, r5
+        mov.w   cA12_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA12_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA12_cva, r0
+        mov.l   cA12_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c17_flush, r3
+        mov.l   cA12_flush, r3
         jsr     @r3
         nop
-        mov.l   c17_va, r0
+        mov.l   cA12_base, r0
         mov     #0, r8
-        bra     c17_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x8500                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c17_poison, r0
-c17_Da:
-        mov.l   c17_snapa, r2
+        mov.l   cA12_dva, r11
+        mov.l   cA12_reta, r12
+        mov.l   cA12_brva, r5
+        jmp     @r5
+        nop
+cA12_reta_l:
+        mov.l   cA12_snapa, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c17_seedva, r0
-        mov.l   c17_seed, r1
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA12_cva, r0
+        mov.l   cA12_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c17_va, r0
+        mov.l   cA12_base, r0
         mov     #0, r8
-        bra     c17_Db
-        .word   0x8500
-c17_Db:
-        mov.l   c17_snapb, r2
+        mov.l   cA12_dva, r11
+        mov.l   cA12_retb, r12
+        mov.l   cA12_brva, r5
+        jmp     @r5
+        nop
+cA12_retb_l:
+        mov.l   cA12_snapb, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
-        ! ---- compare ----
         mov     #8, r4
-        mov.l   c17_id, r5
-        mov.l   c17_cmp, r3
+        mov.l   cA12_id, r5
+        mov.l   cA12_cmp, r3
         jsr     @r3
         nop
-        lds.l   @r15+, pr
-        rts
-        nop
-        .align 2
-c17_va:     .long 0x00100000
-c17_seedva: .long 0x00100000
-c17_probe:  .long 0x00100000
-c17_seed:   .long 0xA11C0001
-c17_pay:    .long 0x57013333
-c17_snapa:  .long SNAP_A
-c17_snapb:  .long SNAP_B
-c17_id:     .long 17
-c17_cmp:    .long 0x80000000 + _m8_cmp
-c17_flush:  .long 0x80000000 + _m8_flush
-c17_poison: .long 0xBADC0DE1
 
-        .balign 4
-_m8_case_18:                       ! MOV.W @Rm, Rn  (General, D-side in delay slot)
-        sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c18_seedva, r0
-        mov.l   c18_seed, r1
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB12_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA12_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB12_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA12_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA12_cva, r0
+        mov.l   cA12_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c18_flush, r3
-        jsr     @r3
-        nop
-        mov.l   c18_va, r0
+        mov.l   cA12_base, r0
         mov     #0, r8
-        bra     c18_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x6801                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c18_poison, r0
-c18_Da:
-        mov.l   c18_snapa, r2
+        mov.l   cA12_dva, r11
+        mov.l   cB12_reta, r12
+        mov.l   cA12_brva, r5
+        jmp     @r5
+        nop
+cB12_reta_l:
+        mov.l   cB12_snapa, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c18_seedva, r0
-        mov.l   c18_seed, r1
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA12_cva, r0
+        mov.l   cA12_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c18_va, r0
+        mov.l   cA12_base, r0
         mov     #0, r8
-        bra     c18_Db
-        .word   0x6801
-c18_Db:
-        mov.l   c18_snapb, r2
+        mov.l   cA12_dva, r11
+        mov.l   cB12_retb, r12
+        mov.l   cA12_brva, r5
+        jmp     @r5
+        nop
+cB12_retb_l:
+        mov.l   cB12_snapb, r2
         mov.l   r0, @r2
         mov.l   r8, @(4,r2)
-        ! ---- compare ----
         mov     #8, r4
-        mov.l   c18_id, r5
-        mov.l   c18_cmp, r3
+        mov.l   cB12_id, r5
+        mov.l   cB12_cmp, r3
         jsr     @r3
         nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c18_va:     .long 0x00100000
-c18_seedva: .long 0x00100000
-c18_probe:  .long 0x00100000
-c18_seed:   .long 0xA11C0001
-c18_pay:    .long 0x57013333
-c18_snapa:  .long SNAP_A
-c18_snapb:  .long SNAP_B
-c18_id:     .long 18
-c18_cmp:    .long 0x80000000 + _m8_cmp
-c18_flush:  .long 0x80000000 + _m8_flush
-c18_poison: .long 0xBADC0DE1
+cA12_brva:      .long 0x00100FFE
+cA12_dva:       .long 0x00103000
+cA12_cva:       .long 0x00102000
+cA12_base:      .long 0x00102000
+cA12_probe:     .long 0x00102000
+cA12_seed:      .long 0xA11C0002
+cA12_pay:       .long 0x57014444
+cA12_braw:      .word 0x4B2B            ! jmp @r11
+cA12_instrw:    .word 0x5800
+cA12_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA12_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA12_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA12_nopw:      .word 0x0009
+        .align 2
+cA12_reta:      .long 0x80000000 + cA12_reta_l
+cA12_retb:      .long 0x80000000 + cA12_retb_l
+cA12_snapa:     .long SNAP_A
+cA12_snapb:     .long SNAP_B
+cA12_id:        .long 1012
+cA12_cmp:       .long 0x80000000 + _m8_cmp
+cA12_flush:     .long 0x80000000 + _m8_flush
+cB12_flush:     .long 0x80000000 + _m8_flush
+cB12_dsva:      .long 0x00101000
+cB12_reta:      .long 0x80000000 + cB12_reta_l
+cB12_retb:      .long 0x80000000 + cB12_retb_l
+cB12_snapa:     .long SNAP_A
+cB12_snapb:     .long SNAP_B
+cB12_id:        .long 2012
+cB12_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_19:                       ! MOV.W R0, @(disp, Rn)  (General, D-side in delay slot)
+_m8_case_13:                       ! MOV.L @Rm, Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c19_seedva, r0
-        mov.l   c19_seed, r1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA13_brva, r5
+        mov.w   cA13_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA13_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA13_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA13_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA13_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA13_dva, r5
+        mov.w   cA13_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA13_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA13_cva, r0
+        mov.l   cA13_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c19_flush, r3
+        mov.l   cA13_flush, r3
         jsr     @r3
         nop
-        mov.l   c19_va, r0
-        mov.l   c19_pay, r8
-        bra     c19_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x8100                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c19_poison, r0
-c19_Da:
-        mov.l   c19_snapa, r2
+        mov.l   cA13_base, r0
+        mov     #0, r8
+        mov.l   cA13_dva, r11
+        mov.l   cA13_reta, r12
+        mov.l   cA13_brva, r5
+        jmp     @r5
+        nop
+cA13_reta_l:
+        mov.l   cA13_snapa, r2
         mov.l   r0, @r2
-        mov.l   c19_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c19_seedva, r0
-        mov.l   c19_seed, r1
+        mov.l   r8, @(4,r2)
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA13_cva, r0
+        mov.l   cA13_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c19_va, r0
-        mov.l   c19_pay, r8
-        bra     c19_Db
-        .word   0x8100
-c19_Db:
-        mov.l   c19_snapb, r2
+        mov.l   cA13_base, r0
+        mov     #0, r8
+        mov.l   cA13_dva, r11
+        mov.l   cA13_retb, r12
+        mov.l   cA13_brva, r5
+        jmp     @r5
+        nop
+cA13_retb_l:
+        mov.l   cA13_snapb, r2
         mov.l   r0, @r2
-        mov.l   c19_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- compare ----
+        mov.l   r8, @(4,r2)
         mov     #8, r4
-        mov.l   c19_id, r5
-        mov.l   c19_cmp, r3
+        mov.l   cA13_id, r5
+        mov.l   cA13_cmp, r3
         jsr     @r3
         nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB13_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA13_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB13_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA13_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA13_cva, r0
+        mov.l   cA13_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA13_base, r0
+        mov     #0, r8
+        mov.l   cA13_dva, r11
+        mov.l   cB13_reta, r12
+        mov.l   cA13_brva, r5
+        jmp     @r5
+        nop
+cB13_reta_l:
+        mov.l   cB13_snapa, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA13_cva, r0
+        mov.l   cA13_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA13_base, r0
+        mov     #0, r8
+        mov.l   cA13_dva, r11
+        mov.l   cB13_retb, r12
+        mov.l   cA13_brva, r5
+        jmp     @r5
+        nop
+cB13_retb_l:
+        mov.l   cB13_snapb, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        mov     #8, r4
+        mov.l   cB13_id, r5
+        mov.l   cB13_cmp, r3
+        jsr     @r3
+        nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c19_va:     .long 0x00100000
-c19_seedva: .long 0x00100000
-c19_probe:  .long 0x00100000
-c19_seed:   .long 0xA11C0001
-c19_pay:    .long 0x57013333
-c19_snapa:  .long SNAP_A
-c19_snapb:  .long SNAP_B
-c19_id:     .long 19
-c19_cmp:    .long 0x80000000 + _m8_cmp
-c19_flush:  .long 0x80000000 + _m8_flush
-c19_poison: .long 0xBADC0DE1
+cA13_brva:      .long 0x00100FFE
+cA13_dva:       .long 0x00103000
+cA13_cva:       .long 0x00102000
+cA13_base:      .long 0x00102000
+cA13_probe:     .long 0x00102000
+cA13_seed:      .long 0xA11C0002
+cA13_pay:       .long 0x57014444
+cA13_braw:      .word 0x4B2B            ! jmp @r11
+cA13_instrw:    .word 0x6802
+cA13_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA13_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA13_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA13_nopw:      .word 0x0009
+        .align 2
+cA13_reta:      .long 0x80000000 + cA13_reta_l
+cA13_retb:      .long 0x80000000 + cA13_retb_l
+cA13_snapa:     .long SNAP_A
+cA13_snapb:     .long SNAP_B
+cA13_id:        .long 1013
+cA13_cmp:       .long 0x80000000 + _m8_cmp
+cA13_flush:     .long 0x80000000 + _m8_flush
+cB13_flush:     .long 0x80000000 + _m8_flush
+cB13_dsva:      .long 0x00101000
+cB13_reta:      .long 0x80000000 + cB13_reta_l
+cB13_retb:      .long 0x80000000 + cB13_retb_l
+cB13_snapa:     .long SNAP_A
+cB13_snapb:     .long SNAP_B
+cB13_id:        .long 2013
+cB13_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_20:                       ! MOV.W Rm, @Rn  (General, D-side in delay slot)
+_m8_case_14:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c20_seedva, r0
-        mov.l   c20_seed, r1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA14_brva, r5
+        mov.w   cA14_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA14_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA14_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA14_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA14_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA14_dva, r5
+        mov.w   cA14_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA14_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA14_cva, r0
+        mov.l   cA14_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c20_flush, r3
+        mov.l   cA14_flush, r3
         jsr     @r3
         nop
-        mov.l   c20_va, r0
-        mov.l   c20_pay, r8
-        bra     c20_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x2081                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c20_poison, r0
-c20_Da:
-        mov.l   c20_snapa, r2
+        mov.l   cA14_base, r0
+        mov.l   cA14_pay, r8
+        mov.l   cA14_dva, r11
+        mov.l   cA14_reta, r12
+        mov.l   cA14_brva, r5
+        jmp     @r5
+        nop
+cA14_reta_l:
+        mov.l   cA14_snapa, r2
         mov.l   r0, @r2
-        mov.l   c20_probe, r3
+        mov.l   cA14_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c20_seedva, r0
-        mov.l   c20_seed, r1
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA14_cva, r0
+        mov.l   cA14_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c20_va, r0
-        mov.l   c20_pay, r8
-        bra     c20_Db
-        .word   0x2081
-c20_Db:
-        mov.l   c20_snapb, r2
+        mov.l   cA14_base, r0
+        mov.l   cA14_pay, r8
+        mov.l   cA14_dva, r11
+        mov.l   cA14_retb, r12
+        mov.l   cA14_brva, r5
+        jmp     @r5
+        nop
+cA14_retb_l:
+        mov.l   cA14_snapb, r2
         mov.l   r0, @r2
-        mov.l   c20_probe, r3
+        mov.l   cA14_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- compare ----
         mov     #8, r4
-        mov.l   c20_id, r5
-        mov.l   c20_cmp, r3
+        mov.l   cA14_id, r5
+        mov.l   cA14_cmp, r3
         jsr     @r3
         nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB14_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA14_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB14_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA14_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA14_cva, r0
+        mov.l   cA14_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA14_base, r0
+        mov.l   cA14_pay, r8
+        mov.l   cA14_dva, r11
+        mov.l   cB14_reta, r12
+        mov.l   cA14_brva, r5
+        jmp     @r5
+        nop
+cB14_reta_l:
+        mov.l   cB14_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA14_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA14_cva, r0
+        mov.l   cA14_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA14_base, r0
+        mov.l   cA14_pay, r8
+        mov.l   cA14_dva, r11
+        mov.l   cB14_retb, r12
+        mov.l   cA14_brva, r5
+        jmp     @r5
+        nop
+cB14_retb_l:
+        mov.l   cB14_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA14_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB14_id, r5
+        mov.l   cB14_cmp, r3
+        jsr     @r3
+        nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c20_va:     .long 0x00100000
-c20_seedva: .long 0x00100000
-c20_probe:  .long 0x00100000
-c20_seed:   .long 0xA11C0001
-c20_pay:    .long 0x57013333
-c20_snapa:  .long SNAP_A
-c20_snapb:  .long SNAP_B
-c20_id:     .long 20
-c20_cmp:    .long 0x80000000 + _m8_cmp
-c20_flush:  .long 0x80000000 + _m8_flush
-c20_poison: .long 0xBADC0DE1
+cA14_brva:      .long 0x00100FFE
+cA14_dva:       .long 0x00103000
+cA14_cva:       .long 0x00102000
+cA14_base:      .long 0x00102000
+cA14_probe:     .long 0x00102000
+cA14_seed:      .long 0xA11C0002
+cA14_pay:       .long 0x57014444
+cA14_braw:      .word 0x4B2B            ! jmp @r11
+cA14_instrw:    .word 0x1080
+cA14_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA14_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA14_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA14_nopw:      .word 0x0009
+        .align 2
+cA14_reta:      .long 0x80000000 + cA14_reta_l
+cA14_retb:      .long 0x80000000 + cA14_retb_l
+cA14_snapa:     .long SNAP_A
+cA14_snapb:     .long SNAP_B
+cA14_id:        .long 1014
+cA14_cmp:       .long 0x80000000 + _m8_cmp
+cA14_flush:     .long 0x80000000 + _m8_flush
+cB14_flush:     .long 0x80000000 + _m8_flush
+cB14_dsva:      .long 0x00101000
+cB14_reta:      .long 0x80000000 + cB14_reta_l
+cB14_retb:      .long 0x80000000 + cB14_retb_l
+cB14_snapa:     .long SNAP_A
+cB14_snapb:     .long SNAP_B
+cB14_id:        .long 2014
+cB14_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_21:                       ! MOV.W Rm,@-Rn  (General, D-side in delay slot)
+_m8_case_15:                       ! MOV.L Rm, @Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c21_seedva, r0
-        mov.l   c21_seed, r1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA15_brva, r5
+        mov.w   cA15_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA15_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA15_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA15_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA15_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA15_dva, r5
+        mov.w   cA15_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA15_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA15_cva, r0
+        mov.l   cA15_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c21_flush, r3
+        mov.l   cA15_flush, r3
         jsr     @r3
         nop
-        mov.l   c21_va, r0
-        mov.l   c21_pay, r8
-        bra     c21_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x2085                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c21_poison, r0
-c21_Da:
-        mov.l   c21_snapa, r2
+        mov.l   cA15_base, r0
+        mov.l   cA15_pay, r8
+        mov.l   cA15_dva, r11
+        mov.l   cA15_reta, r12
+        mov.l   cA15_brva, r5
+        jmp     @r5
+        nop
+cA15_reta_l:
+        mov.l   cA15_snapa, r2
         mov.l   r0, @r2
-        mov.l   c21_probe, r3
+        mov.l   cA15_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c21_seedva, r0
-        mov.l   c21_seed, r1
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA15_cva, r0
+        mov.l   cA15_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c21_va, r0
-        mov.l   c21_pay, r8
-        bra     c21_Db
-        .word   0x2085
-c21_Db:
-        mov.l   c21_snapb, r2
+        mov.l   cA15_base, r0
+        mov.l   cA15_pay, r8
+        mov.l   cA15_dva, r11
+        mov.l   cA15_retb, r12
+        mov.l   cA15_brva, r5
+        jmp     @r5
+        nop
+cA15_retb_l:
+        mov.l   cA15_snapb, r2
         mov.l   r0, @r2
-        mov.l   c21_probe, r3
+        mov.l   cA15_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- compare ----
         mov     #8, r4
-        mov.l   c21_id, r5
-        mov.l   c21_cmp, r3
+        mov.l   cA15_id, r5
+        mov.l   cA15_cmp, r3
         jsr     @r3
         nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB15_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA15_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB15_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA15_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA15_cva, r0
+        mov.l   cA15_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA15_base, r0
+        mov.l   cA15_pay, r8
+        mov.l   cA15_dva, r11
+        mov.l   cB15_reta, r12
+        mov.l   cA15_brva, r5
+        jmp     @r5
+        nop
+cB15_reta_l:
+        mov.l   cB15_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA15_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA15_cva, r0
+        mov.l   cA15_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA15_base, r0
+        mov.l   cA15_pay, r8
+        mov.l   cA15_dva, r11
+        mov.l   cB15_retb, r12
+        mov.l   cA15_brva, r5
+        jmp     @r5
+        nop
+cB15_retb_l:
+        mov.l   cB15_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA15_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB15_id, r5
+        mov.l   cB15_cmp, r3
+        jsr     @r3
+        nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c21_va:     .long 0x00100008
-c21_seedva: .long 0x00100000
-c21_probe:  .long 0x00100004
-c21_seed:   .long 0xA11C0001
-c21_pay:    .long 0x57013333
-c21_snapa:  .long SNAP_A
-c21_snapb:  .long SNAP_B
-c21_id:     .long 21
-c21_cmp:    .long 0x80000000 + _m8_cmp
-c21_flush:  .long 0x80000000 + _m8_flush
-c21_poison: .long 0xBADC0DE1
+cA15_brva:      .long 0x00100FFE
+cA15_dva:       .long 0x00103000
+cA15_cva:       .long 0x00102000
+cA15_base:      .long 0x00102000
+cA15_probe:     .long 0x00102000
+cA15_seed:      .long 0xA11C0002
+cA15_pay:       .long 0x57014444
+cA15_braw:      .word 0x4B2B            ! jmp @r11
+cA15_instrw:    .word 0x2082
+cA15_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA15_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA15_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA15_nopw:      .word 0x0009
+        .align 2
+cA15_reta:      .long 0x80000000 + cA15_reta_l
+cA15_retb:      .long 0x80000000 + cA15_retb_l
+cA15_snapa:     .long SNAP_A
+cA15_snapb:     .long SNAP_B
+cA15_id:        .long 1015
+cA15_cmp:       .long 0x80000000 + _m8_cmp
+cA15_flush:     .long 0x80000000 + _m8_flush
+cB15_flush:     .long 0x80000000 + _m8_flush
+cB15_dsva:      .long 0x00101000
+cB15_reta:      .long 0x80000000 + cB15_reta_l
+cB15_retb:      .long 0x80000000 + cB15_retb_l
+cB15_snapa:     .long SNAP_A
+cB15_snapb:     .long SNAP_B
+cB15_id:        .long 2015
+cB15_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_22:                       ! STC.L GBR, @-Rn  (General, D-side in delay slot)
+_m8_case_16:                       ! MOV.L Rm,@-Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c22_seedva, r0
-        mov.l   c22_seed, r1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA16_brva, r5
+        mov.w   cA16_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA16_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA16_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA16_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA16_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA16_dva, r5
+        mov.w   cA16_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA16_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA16_cva, r0
+        mov.l   cA16_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c22_flush, r3
+        mov.l   cA16_flush, r3
         jsr     @r3
         nop
-        mov.l   c22_va, r0
-        mov.l   c22_pay, r8
-        bra     c22_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4013                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c22_poison, r0
-c22_Da:
-        mov.l   c22_snapa, r2
+        mov.l   cA16_base, r0
+        mov.l   cA16_pay, r8
+        mov.l   cA16_dva, r11
+        mov.l   cA16_reta, r12
+        mov.l   cA16_brva, r5
+        jmp     @r5
+        nop
+cA16_reta_l:
+        mov.l   cA16_snapa, r2
         mov.l   r0, @r2
-        mov.l   c22_probe, r3
+        mov.l   cA16_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c22_seedva, r0
-        mov.l   c22_seed, r1
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA16_cva, r0
+        mov.l   cA16_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c22_va, r0
-        mov.l   c22_pay, r8
-        bra     c22_Db
-        .word   0x4013
-c22_Db:
-        mov.l   c22_snapb, r2
+        mov.l   cA16_base, r0
+        mov.l   cA16_pay, r8
+        mov.l   cA16_dva, r11
+        mov.l   cA16_retb, r12
+        mov.l   cA16_brva, r5
+        jmp     @r5
+        nop
+cA16_retb_l:
+        mov.l   cA16_snapb, r2
         mov.l   r0, @r2
-        mov.l   c22_probe, r3
+        mov.l   cA16_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- compare ----
         mov     #8, r4
-        mov.l   c22_id, r5
-        mov.l   c22_cmp, r3
+        mov.l   cA16_id, r5
+        mov.l   cA16_cmp, r3
         jsr     @r3
         nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB16_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA16_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB16_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA16_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA16_cva, r0
+        mov.l   cA16_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA16_base, r0
+        mov.l   cA16_pay, r8
+        mov.l   cA16_dva, r11
+        mov.l   cB16_reta, r12
+        mov.l   cA16_brva, r5
+        jmp     @r5
+        nop
+cB16_reta_l:
+        mov.l   cB16_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA16_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA16_cva, r0
+        mov.l   cA16_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA16_base, r0
+        mov.l   cA16_pay, r8
+        mov.l   cA16_dva, r11
+        mov.l   cB16_retb, r12
+        mov.l   cA16_brva, r5
+        jmp     @r5
+        nop
+cB16_retb_l:
+        mov.l   cB16_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA16_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB16_id, r5
+        mov.l   cB16_cmp, r3
+        jsr     @r3
+        nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c22_va:     .long 0x00100008
-c22_seedva: .long 0x00100000
-c22_probe:  .long 0x00100004
-c22_seed:   .long 0xA11C0001
-c22_pay:    .long 0x57013333
-c22_snapa:  .long SNAP_A
-c22_snapb:  .long SNAP_B
-c22_id:     .long 22
-c22_cmp:    .long 0x80000000 + _m8_cmp
-c22_flush:  .long 0x80000000 + _m8_flush
-c22_poison: .long 0xBADC0DE1
+cA16_brva:      .long 0x00100FFE
+cA16_dva:       .long 0x00103000
+cA16_cva:       .long 0x00102000
+cA16_base:      .long 0x00102008
+cA16_probe:     .long 0x00102004
+cA16_seed:      .long 0xA11C0002
+cA16_pay:       .long 0x57014444
+cA16_braw:      .word 0x4B2B            ! jmp @r11
+cA16_instrw:    .word 0x2086
+cA16_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA16_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA16_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA16_nopw:      .word 0x0009
+        .align 2
+cA16_reta:      .long 0x80000000 + cA16_reta_l
+cA16_retb:      .long 0x80000000 + cA16_retb_l
+cA16_snapa:     .long SNAP_A
+cA16_snapb:     .long SNAP_B
+cA16_id:        .long 1016
+cA16_cmp:       .long 0x80000000 + _m8_cmp
+cA16_flush:     .long 0x80000000 + _m8_flush
+cB16_flush:     .long 0x80000000 + _m8_flush
+cB16_dsva:      .long 0x00101000
+cB16_reta:      .long 0x80000000 + cB16_reta_l
+cB16_retb:      .long 0x80000000 + cB16_retb_l
+cB16_snapa:     .long SNAP_A
+cB16_snapb:     .long SNAP_B
+cB16_id:        .long 2016
+cB16_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_23:                       ! STC.L SR, @-Rn  (General, D-side in delay slot)
+_m8_case_17:                       ! MOV.W @(disp, Rm), R0  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c23_seedva, r0
-        mov.l   c23_seed, r1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA17_brva, r5
+        mov.w   cA17_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA17_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA17_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA17_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA17_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA17_dva, r5
+        mov.w   cA17_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA17_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA17_cva, r0
+        mov.l   cA17_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c23_flush, r3
+        mov.l   cA17_flush, r3
         jsr     @r3
         nop
-        mov.l   c23_va, r0
-        mov.l   c23_pay, r8
-        bra     c23_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4003                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c23_poison, r0
-c23_Da:
-        mov.l   c23_snapa, r2
+        mov.l   cA17_base, r0
+        mov     #0, r8
+        mov.l   cA17_dva, r11
+        mov.l   cA17_reta, r12
+        mov.l   cA17_brva, r5
+        jmp     @r5
+        nop
+cA17_reta_l:
+        mov.l   cA17_snapa, r2
         mov.l   r0, @r2
-        mov.l   c23_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c23_seedva, r0
-        mov.l   c23_seed, r1
+        mov.l   r8, @(4,r2)
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA17_cva, r0
+        mov.l   cA17_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c23_va, r0
-        mov.l   c23_pay, r8
-        bra     c23_Db
-        .word   0x4003
-c23_Db:
-        mov.l   c23_snapb, r2
+        mov.l   cA17_base, r0
+        mov     #0, r8
+        mov.l   cA17_dva, r11
+        mov.l   cA17_retb, r12
+        mov.l   cA17_brva, r5
+        jmp     @r5
+        nop
+cA17_retb_l:
+        mov.l   cA17_snapb, r2
         mov.l   r0, @r2
-        mov.l   c23_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- compare ----
+        mov.l   r8, @(4,r2)
         mov     #8, r4
-        mov.l   c23_id, r5
-        mov.l   c23_cmp, r3
+        mov.l   cA17_id, r5
+        mov.l   cA17_cmp, r3
         jsr     @r3
         nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB17_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA17_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB17_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA17_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA17_cva, r0
+        mov.l   cA17_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA17_base, r0
+        mov     #0, r8
+        mov.l   cA17_dva, r11
+        mov.l   cB17_reta, r12
+        mov.l   cA17_brva, r5
+        jmp     @r5
+        nop
+cB17_reta_l:
+        mov.l   cB17_snapa, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA17_cva, r0
+        mov.l   cA17_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA17_base, r0
+        mov     #0, r8
+        mov.l   cA17_dva, r11
+        mov.l   cB17_retb, r12
+        mov.l   cA17_brva, r5
+        jmp     @r5
+        nop
+cB17_retb_l:
+        mov.l   cB17_snapb, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        mov     #8, r4
+        mov.l   cB17_id, r5
+        mov.l   cB17_cmp, r3
+        jsr     @r3
+        nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c23_va:     .long 0x00100008
-c23_seedva: .long 0x00100000
-c23_probe:  .long 0x00100004
-c23_seed:   .long 0xA11C0001
-c23_pay:    .long 0x57013333
-c23_snapa:  .long SNAP_A
-c23_snapb:  .long SNAP_B
-c23_id:     .long 23
-c23_cmp:    .long 0x80000000 + _m8_cmp
-c23_flush:  .long 0x80000000 + _m8_flush
-c23_poison: .long 0xBADC0DE1
+cA17_brva:      .long 0x00100FFE
+cA17_dva:       .long 0x00103000
+cA17_cva:       .long 0x00102000
+cA17_base:      .long 0x00102000
+cA17_probe:     .long 0x00102000
+cA17_seed:      .long 0xA11C0002
+cA17_pay:       .long 0x57014444
+cA17_braw:      .word 0x4B2B            ! jmp @r11
+cA17_instrw:    .word 0x8500
+cA17_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA17_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA17_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA17_nopw:      .word 0x0009
+        .align 2
+cA17_reta:      .long 0x80000000 + cA17_reta_l
+cA17_retb:      .long 0x80000000 + cA17_retb_l
+cA17_snapa:     .long SNAP_A
+cA17_snapb:     .long SNAP_B
+cA17_id:        .long 1017
+cA17_cmp:       .long 0x80000000 + _m8_cmp
+cA17_flush:     .long 0x80000000 + _m8_flush
+cB17_flush:     .long 0x80000000 + _m8_flush
+cB17_dsva:      .long 0x00101000
+cB17_reta:      .long 0x80000000 + cB17_reta_l
+cB17_retb:      .long 0x80000000 + cB17_retb_l
+cB17_snapa:     .long SNAP_A
+cB17_snapb:     .long SNAP_B
+cB17_id:        .long 2017
+cB17_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_24:                       ! STC.L VBR, @-Rn  (General, D-side in delay slot)
+_m8_case_18:                       ! MOV.W @Rm, Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c24_seedva, r0
-        mov.l   c24_seed, r1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA18_brva, r5
+        mov.w   cA18_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA18_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA18_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA18_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA18_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA18_dva, r5
+        mov.w   cA18_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA18_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA18_cva, r0
+        mov.l   cA18_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c24_flush, r3
+        mov.l   cA18_flush, r3
         jsr     @r3
         nop
-        mov.l   c24_va, r0
-        mov.l   c24_pay, r8
-        bra     c24_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4023                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c24_poison, r0
-c24_Da:
-        mov.l   c24_snapa, r2
+        mov.l   cA18_base, r0
+        mov     #0, r8
+        mov.l   cA18_dva, r11
+        mov.l   cA18_reta, r12
+        mov.l   cA18_brva, r5
+        jmp     @r5
+        nop
+cA18_reta_l:
+        mov.l   cA18_snapa, r2
         mov.l   r0, @r2
-        mov.l   c24_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c24_seedva, r0
-        mov.l   c24_seed, r1
+        mov.l   r8, @(4,r2)
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA18_cva, r0
+        mov.l   cA18_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c24_va, r0
-        mov.l   c24_pay, r8
-        bra     c24_Db
-        .word   0x4023
-c24_Db:
-        mov.l   c24_snapb, r2
+        mov.l   cA18_base, r0
+        mov     #0, r8
+        mov.l   cA18_dva, r11
+        mov.l   cA18_retb, r12
+        mov.l   cA18_brva, r5
+        jmp     @r5
+        nop
+cA18_retb_l:
+        mov.l   cA18_snapb, r2
         mov.l   r0, @r2
-        mov.l   c24_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- compare ----
+        mov.l   r8, @(4,r2)
         mov     #8, r4
-        mov.l   c24_id, r5
-        mov.l   c24_cmp, r3
+        mov.l   cA18_id, r5
+        mov.l   cA18_cmp, r3
         jsr     @r3
         nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB18_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA18_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB18_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA18_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA18_cva, r0
+        mov.l   cA18_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA18_base, r0
+        mov     #0, r8
+        mov.l   cA18_dva, r11
+        mov.l   cB18_reta, r12
+        mov.l   cA18_brva, r5
+        jmp     @r5
+        nop
+cB18_reta_l:
+        mov.l   cB18_snapa, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA18_cva, r0
+        mov.l   cA18_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA18_base, r0
+        mov     #0, r8
+        mov.l   cA18_dva, r11
+        mov.l   cB18_retb, r12
+        mov.l   cA18_brva, r5
+        jmp     @r5
+        nop
+cB18_retb_l:
+        mov.l   cB18_snapb, r2
+        mov.l   r0, @r2
+        mov.l   r8, @(4,r2)
+        mov     #8, r4
+        mov.l   cB18_id, r5
+        mov.l   cB18_cmp, r3
+        jsr     @r3
+        nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c24_va:     .long 0x00100008
-c24_seedva: .long 0x00100000
-c24_probe:  .long 0x00100004
-c24_seed:   .long 0xA11C0001
-c24_pay:    .long 0x57013333
-c24_snapa:  .long SNAP_A
-c24_snapb:  .long SNAP_B
-c24_id:     .long 24
-c24_cmp:    .long 0x80000000 + _m8_cmp
-c24_flush:  .long 0x80000000 + _m8_flush
-c24_poison: .long 0xBADC0DE1
+cA18_brva:      .long 0x00100FFE
+cA18_dva:       .long 0x00103000
+cA18_cva:       .long 0x00102000
+cA18_base:      .long 0x00102000
+cA18_probe:     .long 0x00102000
+cA18_seed:      .long 0xA11C0002
+cA18_pay:       .long 0x57014444
+cA18_braw:      .word 0x4B2B            ! jmp @r11
+cA18_instrw:    .word 0x6801
+cA18_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA18_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA18_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA18_nopw:      .word 0x0009
+        .align 2
+cA18_reta:      .long 0x80000000 + cA18_reta_l
+cA18_retb:      .long 0x80000000 + cA18_retb_l
+cA18_snapa:     .long SNAP_A
+cA18_snapb:     .long SNAP_B
+cA18_id:        .long 1018
+cA18_cmp:       .long 0x80000000 + _m8_cmp
+cA18_flush:     .long 0x80000000 + _m8_flush
+cB18_flush:     .long 0x80000000 + _m8_flush
+cB18_dsva:      .long 0x00101000
+cB18_reta:      .long 0x80000000 + cB18_reta_l
+cB18_retb:      .long 0x80000000 + cB18_retb_l
+cB18_snapa:     .long SNAP_A
+cB18_snapb:     .long SNAP_B
+cB18_id:        .long 2018
+cB18_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_25:                       ! STS.L MACH, @-Rn  (General, D-side in delay slot)
+_m8_case_19:                       ! MOV.W R0, @(disp, Rn)  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c25_seedva, r0
-        mov.l   c25_seed, r1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA19_brva, r5
+        mov.w   cA19_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA19_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA19_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA19_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA19_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA19_dva, r5
+        mov.w   cA19_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA19_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA19_cva, r0
+        mov.l   cA19_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c25_flush, r3
+        mov.l   cA19_flush, r3
         jsr     @r3
         nop
-        mov.l   c25_va, r0
-        mov.l   c25_pay, r8
-        bra     c25_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4002                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c25_poison, r0
-c25_Da:
-        mov.l   c25_snapa, r2
+        mov.l   cA19_base, r0
+        mov.l   cA19_pay, r8
+        mov.l   cA19_dva, r11
+        mov.l   cA19_reta, r12
+        mov.l   cA19_brva, r5
+        jmp     @r5
+        nop
+cA19_reta_l:
+        mov.l   cA19_snapa, r2
         mov.l   r0, @r2
-        mov.l   c25_probe, r3
+        mov.l   cA19_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c25_seedva, r0
-        mov.l   c25_seed, r1
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA19_cva, r0
+        mov.l   cA19_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c25_va, r0
-        mov.l   c25_pay, r8
-        bra     c25_Db
-        .word   0x4002
-c25_Db:
-        mov.l   c25_snapb, r2
+        mov.l   cA19_base, r0
+        mov.l   cA19_pay, r8
+        mov.l   cA19_dva, r11
+        mov.l   cA19_retb, r12
+        mov.l   cA19_brva, r5
+        jmp     @r5
+        nop
+cA19_retb_l:
+        mov.l   cA19_snapb, r2
         mov.l   r0, @r2
-        mov.l   c25_probe, r3
+        mov.l   cA19_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- compare ----
         mov     #8, r4
-        mov.l   c25_id, r5
-        mov.l   c25_cmp, r3
+        mov.l   cA19_id, r5
+        mov.l   cA19_cmp, r3
         jsr     @r3
         nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB19_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA19_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB19_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA19_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA19_cva, r0
+        mov.l   cA19_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA19_base, r0
+        mov.l   cA19_pay, r8
+        mov.l   cA19_dva, r11
+        mov.l   cB19_reta, r12
+        mov.l   cA19_brva, r5
+        jmp     @r5
+        nop
+cB19_reta_l:
+        mov.l   cB19_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA19_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA19_cva, r0
+        mov.l   cA19_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA19_base, r0
+        mov.l   cA19_pay, r8
+        mov.l   cA19_dva, r11
+        mov.l   cB19_retb, r12
+        mov.l   cA19_brva, r5
+        jmp     @r5
+        nop
+cB19_retb_l:
+        mov.l   cB19_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA19_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB19_id, r5
+        mov.l   cB19_cmp, r3
+        jsr     @r3
+        nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c25_va:     .long 0x00100008
-c25_seedva: .long 0x00100000
-c25_probe:  .long 0x00100004
-c25_seed:   .long 0xA11C0001
-c25_pay:    .long 0x57013333
-c25_snapa:  .long SNAP_A
-c25_snapb:  .long SNAP_B
-c25_id:     .long 25
-c25_cmp:    .long 0x80000000 + _m8_cmp
-c25_flush:  .long 0x80000000 + _m8_flush
-c25_poison: .long 0xBADC0DE1
+cA19_brva:      .long 0x00100FFE
+cA19_dva:       .long 0x00103000
+cA19_cva:       .long 0x00102000
+cA19_base:      .long 0x00102000
+cA19_probe:     .long 0x00102000
+cA19_seed:      .long 0xA11C0002
+cA19_pay:       .long 0x57014444
+cA19_braw:      .word 0x4B2B            ! jmp @r11
+cA19_instrw:    .word 0x8100
+cA19_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA19_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA19_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA19_nopw:      .word 0x0009
+        .align 2
+cA19_reta:      .long 0x80000000 + cA19_reta_l
+cA19_retb:      .long 0x80000000 + cA19_retb_l
+cA19_snapa:     .long SNAP_A
+cA19_snapb:     .long SNAP_B
+cA19_id:        .long 1019
+cA19_cmp:       .long 0x80000000 + _m8_cmp
+cA19_flush:     .long 0x80000000 + _m8_flush
+cB19_flush:     .long 0x80000000 + _m8_flush
+cB19_dsva:      .long 0x00101000
+cB19_reta:      .long 0x80000000 + cB19_reta_l
+cB19_retb:      .long 0x80000000 + cB19_retb_l
+cB19_snapa:     .long SNAP_A
+cB19_snapb:     .long SNAP_B
+cB19_id:        .long 2019
+cB19_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_26:                       ! STS.L MACL, @-Rn  (General, D-side in delay slot)
+_m8_case_20:                       ! MOV.W Rm, @Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c26_seedva, r0
-        mov.l   c26_seed, r1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA20_brva, r5
+        mov.w   cA20_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA20_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA20_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA20_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA20_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA20_dva, r5
+        mov.w   cA20_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA20_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA20_cva, r0
+        mov.l   cA20_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c26_flush, r3
+        mov.l   cA20_flush, r3
         jsr     @r3
         nop
-        mov.l   c26_va, r0
-        mov.l   c26_pay, r8
-        bra     c26_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4012                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c26_poison, r0
-c26_Da:
-        mov.l   c26_snapa, r2
+        mov.l   cA20_base, r0
+        mov.l   cA20_pay, r8
+        mov.l   cA20_dva, r11
+        mov.l   cA20_reta, r12
+        mov.l   cA20_brva, r5
+        jmp     @r5
+        nop
+cA20_reta_l:
+        mov.l   cA20_snapa, r2
         mov.l   r0, @r2
-        mov.l   c26_probe, r3
+        mov.l   cA20_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c26_seedva, r0
-        mov.l   c26_seed, r1
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA20_cva, r0
+        mov.l   cA20_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c26_va, r0
-        mov.l   c26_pay, r8
-        bra     c26_Db
-        .word   0x4012
-c26_Db:
-        mov.l   c26_snapb, r2
+        mov.l   cA20_base, r0
+        mov.l   cA20_pay, r8
+        mov.l   cA20_dva, r11
+        mov.l   cA20_retb, r12
+        mov.l   cA20_brva, r5
+        jmp     @r5
+        nop
+cA20_retb_l:
+        mov.l   cA20_snapb, r2
         mov.l   r0, @r2
-        mov.l   c26_probe, r3
+        mov.l   cA20_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- compare ----
         mov     #8, r4
-        mov.l   c26_id, r5
-        mov.l   c26_cmp, r3
+        mov.l   cA20_id, r5
+        mov.l   cA20_cmp, r3
         jsr     @r3
         nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB20_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA20_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB20_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA20_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA20_cva, r0
+        mov.l   cA20_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA20_base, r0
+        mov.l   cA20_pay, r8
+        mov.l   cA20_dva, r11
+        mov.l   cB20_reta, r12
+        mov.l   cA20_brva, r5
+        jmp     @r5
+        nop
+cB20_reta_l:
+        mov.l   cB20_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA20_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA20_cva, r0
+        mov.l   cA20_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA20_base, r0
+        mov.l   cA20_pay, r8
+        mov.l   cA20_dva, r11
+        mov.l   cB20_retb, r12
+        mov.l   cA20_brva, r5
+        jmp     @r5
+        nop
+cB20_retb_l:
+        mov.l   cB20_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA20_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB20_id, r5
+        mov.l   cB20_cmp, r3
+        jsr     @r3
+        nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c26_va:     .long 0x00100008
-c26_seedva: .long 0x00100000
-c26_probe:  .long 0x00100004
-c26_seed:   .long 0xA11C0001
-c26_pay:    .long 0x57013333
-c26_snapa:  .long SNAP_A
-c26_snapb:  .long SNAP_B
-c26_id:     .long 26
-c26_cmp:    .long 0x80000000 + _m8_cmp
-c26_flush:  .long 0x80000000 + _m8_flush
-c26_poison: .long 0xBADC0DE1
+cA20_brva:      .long 0x00100FFE
+cA20_dva:       .long 0x00103000
+cA20_cva:       .long 0x00102000
+cA20_base:      .long 0x00102000
+cA20_probe:     .long 0x00102000
+cA20_seed:      .long 0xA11C0002
+cA20_pay:       .long 0x57014444
+cA20_braw:      .word 0x4B2B            ! jmp @r11
+cA20_instrw:    .word 0x2081
+cA20_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA20_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA20_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA20_nopw:      .word 0x0009
+        .align 2
+cA20_reta:      .long 0x80000000 + cA20_reta_l
+cA20_retb:      .long 0x80000000 + cA20_retb_l
+cA20_snapa:     .long SNAP_A
+cA20_snapb:     .long SNAP_B
+cA20_id:        .long 1020
+cA20_cmp:       .long 0x80000000 + _m8_cmp
+cA20_flush:     .long 0x80000000 + _m8_flush
+cB20_flush:     .long 0x80000000 + _m8_flush
+cB20_dsva:      .long 0x00101000
+cB20_reta:      .long 0x80000000 + cB20_reta_l
+cB20_retb:      .long 0x80000000 + cB20_retb_l
+cB20_snapa:     .long SNAP_A
+cB20_snapb:     .long SNAP_B
+cB20_id:        .long 2020
+cB20_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_27:                       ! STS.L PR, @-Rn  (General, D-side in delay slot)
+_m8_case_21:                       ! MOV.W Rm,@-Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c27_seedva, r0
-        mov.l   c27_seed, r1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA21_brva, r5
+        mov.w   cA21_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA21_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA21_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA21_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA21_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA21_dva, r5
+        mov.w   cA21_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA21_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA21_cva, r0
+        mov.l   cA21_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c27_flush, r3
+        mov.l   cA21_flush, r3
         jsr     @r3
         nop
-        mov.l   c27_va, r0
-        mov.l   c27_pay, r8
-        bra     c27_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4022                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c27_poison, r0
-c27_Da:
-        mov.l   c27_snapa, r2
+        mov.l   cA21_base, r0
+        mov.l   cA21_pay, r8
+        mov.l   cA21_dva, r11
+        mov.l   cA21_reta, r12
+        mov.l   cA21_brva, r5
+        jmp     @r5
+        nop
+cA21_reta_l:
+        mov.l   cA21_snapa, r2
         mov.l   r0, @r2
-        mov.l   c27_probe, r3
+        mov.l   cA21_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c27_seedva, r0
-        mov.l   c27_seed, r1
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA21_cva, r0
+        mov.l   cA21_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c27_va, r0
-        mov.l   c27_pay, r8
-        bra     c27_Db
-        .word   0x4022
-c27_Db:
-        mov.l   c27_snapb, r2
+        mov.l   cA21_base, r0
+        mov.l   cA21_pay, r8
+        mov.l   cA21_dva, r11
+        mov.l   cA21_retb, r12
+        mov.l   cA21_brva, r5
+        jmp     @r5
+        nop
+cA21_retb_l:
+        mov.l   cA21_snapb, r2
         mov.l   r0, @r2
-        mov.l   c27_probe, r3
+        mov.l   cA21_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- compare ----
         mov     #8, r4
-        mov.l   c27_id, r5
-        mov.l   c27_cmp, r3
+        mov.l   cA21_id, r5
+        mov.l   cA21_cmp, r3
         jsr     @r3
         nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB21_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA21_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB21_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA21_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA21_cva, r0
+        mov.l   cA21_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA21_base, r0
+        mov.l   cA21_pay, r8
+        mov.l   cA21_dva, r11
+        mov.l   cB21_reta, r12
+        mov.l   cA21_brva, r5
+        jmp     @r5
+        nop
+cB21_reta_l:
+        mov.l   cB21_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA21_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA21_cva, r0
+        mov.l   cA21_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA21_base, r0
+        mov.l   cA21_pay, r8
+        mov.l   cA21_dva, r11
+        mov.l   cB21_retb, r12
+        mov.l   cA21_brva, r5
+        jmp     @r5
+        nop
+cB21_retb_l:
+        mov.l   cB21_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA21_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB21_id, r5
+        mov.l   cB21_cmp, r3
+        jsr     @r3
+        nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c27_va:     .long 0x00100008
-c27_seedva: .long 0x00100000
-c27_probe:  .long 0x00100004
-c27_seed:   .long 0xA11C0001
-c27_pay:    .long 0x57013333
-c27_snapa:  .long SNAP_A
-c27_snapb:  .long SNAP_B
-c27_id:     .long 27
-c27_cmp:    .long 0x80000000 + _m8_cmp
-c27_flush:  .long 0x80000000 + _m8_flush
-c27_poison: .long 0xBADC0DE1
+cA21_brva:      .long 0x00100FFE
+cA21_dva:       .long 0x00103000
+cA21_cva:       .long 0x00102000
+cA21_base:      .long 0x00102008
+cA21_probe:     .long 0x00102004
+cA21_seed:      .long 0xA11C0002
+cA21_pay:       .long 0x57014444
+cA21_braw:      .word 0x4B2B            ! jmp @r11
+cA21_instrw:    .word 0x2085
+cA21_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA21_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA21_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA21_nopw:      .word 0x0009
+        .align 2
+cA21_reta:      .long 0x80000000 + cA21_reta_l
+cA21_retb:      .long 0x80000000 + cA21_retb_l
+cA21_snapa:     .long SNAP_A
+cA21_snapb:     .long SNAP_B
+cA21_id:        .long 1021
+cA21_cmp:       .long 0x80000000 + _m8_cmp
+cA21_flush:     .long 0x80000000 + _m8_flush
+cB21_flush:     .long 0x80000000 + _m8_flush
+cB21_dsva:      .long 0x00101000
+cB21_reta:      .long 0x80000000 + cB21_reta_l
+cB21_retb:      .long 0x80000000 + cB21_retb_l
+cB21_snapa:     .long SNAP_A
+cB21_snapb:     .long SNAP_B
+cB21_id:        .long 2021
+cB21_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_28:                       ! TAS.B @Rn  (General, D-side in delay slot)
+_m8_case_22:                       ! STC.L GBR, @-Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c28_seedva, r0
-        mov.l   c28_seed, r1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA22_brva, r5
+        mov.w   cA22_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA22_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA22_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA22_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA22_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA22_dva, r5
+        mov.w   cA22_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA22_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA22_cva, r0
+        mov.l   cA22_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c28_flush, r3
+        mov.l   cA22_flush, r3
         jsr     @r3
         nop
-        mov.l   c28_va, r0
-        mov.l   c28_pay, r8
-        bra     c28_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x401B                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c28_poison, r0
-c28_Da:
-        mov.l   c28_snapa, r2
+        mov.l   cA22_base, r0
+        mov.l   cA22_pay, r8
+        mov.l   cA22_dva, r11
+        mov.l   cA22_reta, r12
+        mov.l   cA22_brva, r5
+        jmp     @r5
+        nop
+cA22_reta_l:
+        mov.l   cA22_snapa, r2
         mov.l   r0, @r2
-        mov.l   c28_probe, r3
+        mov.l   cA22_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c28_seedva, r0
-        mov.l   c28_seed, r1
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA22_cva, r0
+        mov.l   cA22_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c28_va, r0
-        mov.l   c28_pay, r8
-        bra     c28_Db
-        .word   0x401B
-c28_Db:
-        mov.l   c28_snapb, r2
+        mov.l   cA22_base, r0
+        mov.l   cA22_pay, r8
+        mov.l   cA22_dva, r11
+        mov.l   cA22_retb, r12
+        mov.l   cA22_brva, r5
+        jmp     @r5
+        nop
+cA22_retb_l:
+        mov.l   cA22_snapb, r2
         mov.l   r0, @r2
-        mov.l   c28_probe, r3
+        mov.l   cA22_probe, r3
         mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- compare ----
         mov     #8, r4
-        mov.l   c28_id, r5
-        mov.l   c28_cmp, r3
+        mov.l   cA22_id, r5
+        mov.l   cA22_cmp, r3
         jsr     @r3
         nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB22_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA22_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB22_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA22_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA22_cva, r0
+        mov.l   cA22_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA22_base, r0
+        mov.l   cA22_pay, r8
+        mov.l   cA22_dva, r11
+        mov.l   cB22_reta, r12
+        mov.l   cA22_brva, r5
+        jmp     @r5
+        nop
+cB22_reta_l:
+        mov.l   cB22_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA22_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA22_cva, r0
+        mov.l   cA22_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA22_base, r0
+        mov.l   cA22_pay, r8
+        mov.l   cA22_dva, r11
+        mov.l   cB22_retb, r12
+        mov.l   cA22_brva, r5
+        jmp     @r5
+        nop
+cB22_retb_l:
+        mov.l   cB22_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA22_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB22_id, r5
+        mov.l   cB22_cmp, r3
+        jsr     @r3
+        nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c28_va:     .long 0x00100000
-c28_seedva: .long 0x00100000
-c28_probe:  .long 0x00100000
-c28_seed:   .long 0xA11C0001
-c28_pay:    .long 0x57013333
-c28_snapa:  .long SNAP_A
-c28_snapb:  .long SNAP_B
-c28_id:     .long 28
-c28_cmp:    .long 0x80000000 + _m8_cmp
-c28_flush:  .long 0x80000000 + _m8_flush
-c28_poison: .long 0xBADC0DE1
+cA22_brva:      .long 0x00100FFE
+cA22_dva:       .long 0x00103000
+cA22_cva:       .long 0x00102000
+cA22_base:      .long 0x00102008
+cA22_probe:     .long 0x00102004
+cA22_seed:      .long 0xA11C0002
+cA22_pay:       .long 0x57014444
+cA22_braw:      .word 0x4B2B            ! jmp @r11
+cA22_instrw:    .word 0x4013
+cA22_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA22_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA22_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA22_nopw:      .word 0x0009
+        .align 2
+cA22_reta:      .long 0x80000000 + cA22_reta_l
+cA22_retb:      .long 0x80000000 + cA22_retb_l
+cA22_snapa:     .long SNAP_A
+cA22_snapb:     .long SNAP_B
+cA22_id:        .long 1022
+cA22_cmp:       .long 0x80000000 + _m8_cmp
+cA22_flush:     .long 0x80000000 + _m8_flush
+cB22_flush:     .long 0x80000000 + _m8_flush
+cB22_dsva:      .long 0x00101000
+cB22_reta:      .long 0x80000000 + cB22_reta_l
+cB22_retb:      .long 0x80000000 + cB22_retb_l
+cB22_snapa:     .long SNAP_A
+cB22_snapb:     .long SNAP_B
+cB22_id:        .long 2022
+cB22_cmp:       .long 0x80000000 + _m8_cmp
+
+        .balign 4
+_m8_case_23:                       ! STC.L SR, @-Rn  (General, D-side delay-slot maximal + target-only)
+        sts.l   pr, @-r15
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA23_brva, r5
+        mov.w   cA23_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA23_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA23_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA23_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA23_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA23_dva, r5
+        mov.w   cA23_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA23_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA23_cva, r0
+        mov.l   cA23_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA23_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA23_base, r0
+        mov.l   cA23_pay, r8
+        mov.l   cA23_dva, r11
+        mov.l   cA23_reta, r12
+        mov.l   cA23_brva, r5
+        jmp     @r5
+        nop
+cA23_reta_l:
+        mov.l   cA23_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA23_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA23_cva, r0
+        mov.l   cA23_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA23_base, r0
+        mov.l   cA23_pay, r8
+        mov.l   cA23_dva, r11
+        mov.l   cA23_retb, r12
+        mov.l   cA23_brva, r5
+        jmp     @r5
+        nop
+cA23_retb_l:
+        mov.l   cA23_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA23_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cA23_id, r5
+        mov.l   cA23_cmp, r3
+        jsr     @r3
+        nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB23_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA23_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB23_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA23_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA23_cva, r0
+        mov.l   cA23_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA23_base, r0
+        mov.l   cA23_pay, r8
+        mov.l   cA23_dva, r11
+        mov.l   cB23_reta, r12
+        mov.l   cA23_brva, r5
+        jmp     @r5
+        nop
+cB23_reta_l:
+        mov.l   cB23_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA23_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA23_cva, r0
+        mov.l   cA23_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA23_base, r0
+        mov.l   cA23_pay, r8
+        mov.l   cA23_dva, r11
+        mov.l   cB23_retb, r12
+        mov.l   cA23_brva, r5
+        jmp     @r5
+        nop
+cB23_retb_l:
+        mov.l   cB23_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA23_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB23_id, r5
+        mov.l   cB23_cmp, r3
+        jsr     @r3
+        nop
+
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+cA23_brva:      .long 0x00100FFE
+cA23_dva:       .long 0x00103000
+cA23_cva:       .long 0x00102000
+cA23_base:      .long 0x00102008
+cA23_probe:     .long 0x00102004
+cA23_seed:      .long 0xA11C0002
+cA23_pay:       .long 0x57014444
+cA23_braw:      .word 0x4B2B            ! jmp @r11
+cA23_instrw:    .word 0x4003
+cA23_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA23_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA23_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA23_nopw:      .word 0x0009
+        .align 2
+cA23_reta:      .long 0x80000000 + cA23_reta_l
+cA23_retb:      .long 0x80000000 + cA23_retb_l
+cA23_snapa:     .long SNAP_A
+cA23_snapb:     .long SNAP_B
+cA23_id:        .long 1023
+cA23_cmp:       .long 0x80000000 + _m8_cmp
+cA23_flush:     .long 0x80000000 + _m8_flush
+cB23_flush:     .long 0x80000000 + _m8_flush
+cB23_dsva:      .long 0x00101000
+cB23_reta:      .long 0x80000000 + cB23_reta_l
+cB23_retb:      .long 0x80000000 + cB23_retb_l
+cB23_snapa:     .long SNAP_A
+cB23_snapb:     .long SNAP_B
+cB23_id:        .long 2023
+cB23_cmp:       .long 0x80000000 + _m8_cmp
+
+        .balign 4
+_m8_case_24:                       ! STC.L VBR, @-Rn  (General, D-side delay-slot maximal + target-only)
+        sts.l   pr, @-r15
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA24_brva, r5
+        mov.w   cA24_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA24_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA24_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA24_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA24_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA24_dva, r5
+        mov.w   cA24_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA24_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA24_cva, r0
+        mov.l   cA24_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA24_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA24_base, r0
+        mov.l   cA24_pay, r8
+        mov.l   cA24_dva, r11
+        mov.l   cA24_reta, r12
+        mov.l   cA24_brva, r5
+        jmp     @r5
+        nop
+cA24_reta_l:
+        mov.l   cA24_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA24_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA24_cva, r0
+        mov.l   cA24_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA24_base, r0
+        mov.l   cA24_pay, r8
+        mov.l   cA24_dva, r11
+        mov.l   cA24_retb, r12
+        mov.l   cA24_brva, r5
+        jmp     @r5
+        nop
+cA24_retb_l:
+        mov.l   cA24_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA24_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cA24_id, r5
+        mov.l   cA24_cmp, r3
+        jsr     @r3
+        nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB24_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA24_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB24_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA24_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA24_cva, r0
+        mov.l   cA24_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA24_base, r0
+        mov.l   cA24_pay, r8
+        mov.l   cA24_dva, r11
+        mov.l   cB24_reta, r12
+        mov.l   cA24_brva, r5
+        jmp     @r5
+        nop
+cB24_reta_l:
+        mov.l   cB24_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA24_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA24_cva, r0
+        mov.l   cA24_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA24_base, r0
+        mov.l   cA24_pay, r8
+        mov.l   cA24_dva, r11
+        mov.l   cB24_retb, r12
+        mov.l   cA24_brva, r5
+        jmp     @r5
+        nop
+cB24_retb_l:
+        mov.l   cB24_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA24_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB24_id, r5
+        mov.l   cB24_cmp, r3
+        jsr     @r3
+        nop
+
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+cA24_brva:      .long 0x00100FFE
+cA24_dva:       .long 0x00103000
+cA24_cva:       .long 0x00102000
+cA24_base:      .long 0x00102008
+cA24_probe:     .long 0x00102004
+cA24_seed:      .long 0xA11C0002
+cA24_pay:       .long 0x57014444
+cA24_braw:      .word 0x4B2B            ! jmp @r11
+cA24_instrw:    .word 0x4023
+cA24_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA24_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA24_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA24_nopw:      .word 0x0009
+        .align 2
+cA24_reta:      .long 0x80000000 + cA24_reta_l
+cA24_retb:      .long 0x80000000 + cA24_retb_l
+cA24_snapa:     .long SNAP_A
+cA24_snapb:     .long SNAP_B
+cA24_id:        .long 1024
+cA24_cmp:       .long 0x80000000 + _m8_cmp
+cA24_flush:     .long 0x80000000 + _m8_flush
+cB24_flush:     .long 0x80000000 + _m8_flush
+cB24_dsva:      .long 0x00101000
+cB24_reta:      .long 0x80000000 + cB24_reta_l
+cB24_retb:      .long 0x80000000 + cB24_retb_l
+cB24_snapa:     .long SNAP_A
+cB24_snapb:     .long SNAP_B
+cB24_id:        .long 2024
+cB24_cmp:       .long 0x80000000 + _m8_cmp
+
+        .balign 4
+_m8_case_25:                       ! STS.L MACH, @-Rn  (General, D-side delay-slot maximal + target-only)
+        sts.l   pr, @-r15
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA25_brva, r5
+        mov.w   cA25_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA25_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA25_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA25_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA25_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA25_dva, r5
+        mov.w   cA25_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA25_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA25_cva, r0
+        mov.l   cA25_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA25_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA25_base, r0
+        mov.l   cA25_pay, r8
+        mov.l   cA25_dva, r11
+        mov.l   cA25_reta, r12
+        mov.l   cA25_brva, r5
+        jmp     @r5
+        nop
+cA25_reta_l:
+        mov.l   cA25_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA25_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA25_cva, r0
+        mov.l   cA25_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA25_base, r0
+        mov.l   cA25_pay, r8
+        mov.l   cA25_dva, r11
+        mov.l   cA25_retb, r12
+        mov.l   cA25_brva, r5
+        jmp     @r5
+        nop
+cA25_retb_l:
+        mov.l   cA25_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA25_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cA25_id, r5
+        mov.l   cA25_cmp, r3
+        jsr     @r3
+        nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB25_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA25_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB25_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA25_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA25_cva, r0
+        mov.l   cA25_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA25_base, r0
+        mov.l   cA25_pay, r8
+        mov.l   cA25_dva, r11
+        mov.l   cB25_reta, r12
+        mov.l   cA25_brva, r5
+        jmp     @r5
+        nop
+cB25_reta_l:
+        mov.l   cB25_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA25_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA25_cva, r0
+        mov.l   cA25_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA25_base, r0
+        mov.l   cA25_pay, r8
+        mov.l   cA25_dva, r11
+        mov.l   cB25_retb, r12
+        mov.l   cA25_brva, r5
+        jmp     @r5
+        nop
+cB25_retb_l:
+        mov.l   cB25_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA25_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB25_id, r5
+        mov.l   cB25_cmp, r3
+        jsr     @r3
+        nop
+
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+cA25_brva:      .long 0x00100FFE
+cA25_dva:       .long 0x00103000
+cA25_cva:       .long 0x00102000
+cA25_base:      .long 0x00102008
+cA25_probe:     .long 0x00102004
+cA25_seed:      .long 0xA11C0002
+cA25_pay:       .long 0x57014444
+cA25_braw:      .word 0x4B2B            ! jmp @r11
+cA25_instrw:    .word 0x4002
+cA25_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA25_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA25_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA25_nopw:      .word 0x0009
+        .align 2
+cA25_reta:      .long 0x80000000 + cA25_reta_l
+cA25_retb:      .long 0x80000000 + cA25_retb_l
+cA25_snapa:     .long SNAP_A
+cA25_snapb:     .long SNAP_B
+cA25_id:        .long 1025
+cA25_cmp:       .long 0x80000000 + _m8_cmp
+cA25_flush:     .long 0x80000000 + _m8_flush
+cB25_flush:     .long 0x80000000 + _m8_flush
+cB25_dsva:      .long 0x00101000
+cB25_reta:      .long 0x80000000 + cB25_reta_l
+cB25_retb:      .long 0x80000000 + cB25_retb_l
+cB25_snapa:     .long SNAP_A
+cB25_snapb:     .long SNAP_B
+cB25_id:        .long 2025
+cB25_cmp:       .long 0x80000000 + _m8_cmp
+
+        .balign 4
+_m8_case_26:                       ! STS.L MACL, @-Rn  (General, D-side delay-slot maximal + target-only)
+        sts.l   pr, @-r15
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA26_brva, r5
+        mov.w   cA26_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA26_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA26_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA26_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA26_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA26_dva, r5
+        mov.w   cA26_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA26_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA26_cva, r0
+        mov.l   cA26_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA26_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA26_base, r0
+        mov.l   cA26_pay, r8
+        mov.l   cA26_dva, r11
+        mov.l   cA26_reta, r12
+        mov.l   cA26_brva, r5
+        jmp     @r5
+        nop
+cA26_reta_l:
+        mov.l   cA26_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA26_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA26_cva, r0
+        mov.l   cA26_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA26_base, r0
+        mov.l   cA26_pay, r8
+        mov.l   cA26_dva, r11
+        mov.l   cA26_retb, r12
+        mov.l   cA26_brva, r5
+        jmp     @r5
+        nop
+cA26_retb_l:
+        mov.l   cA26_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA26_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cA26_id, r5
+        mov.l   cA26_cmp, r3
+        jsr     @r3
+        nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB26_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA26_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB26_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA26_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA26_cva, r0
+        mov.l   cA26_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA26_base, r0
+        mov.l   cA26_pay, r8
+        mov.l   cA26_dva, r11
+        mov.l   cB26_reta, r12
+        mov.l   cA26_brva, r5
+        jmp     @r5
+        nop
+cB26_reta_l:
+        mov.l   cB26_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA26_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA26_cva, r0
+        mov.l   cA26_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA26_base, r0
+        mov.l   cA26_pay, r8
+        mov.l   cA26_dva, r11
+        mov.l   cB26_retb, r12
+        mov.l   cA26_brva, r5
+        jmp     @r5
+        nop
+cB26_retb_l:
+        mov.l   cB26_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA26_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB26_id, r5
+        mov.l   cB26_cmp, r3
+        jsr     @r3
+        nop
+
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+cA26_brva:      .long 0x00100FFE
+cA26_dva:       .long 0x00103000
+cA26_cva:       .long 0x00102000
+cA26_base:      .long 0x00102008
+cA26_probe:     .long 0x00102004
+cA26_seed:      .long 0xA11C0002
+cA26_pay:       .long 0x57014444
+cA26_braw:      .word 0x4B2B            ! jmp @r11
+cA26_instrw:    .word 0x4012
+cA26_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA26_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA26_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA26_nopw:      .word 0x0009
+        .align 2
+cA26_reta:      .long 0x80000000 + cA26_reta_l
+cA26_retb:      .long 0x80000000 + cA26_retb_l
+cA26_snapa:     .long SNAP_A
+cA26_snapb:     .long SNAP_B
+cA26_id:        .long 1026
+cA26_cmp:       .long 0x80000000 + _m8_cmp
+cA26_flush:     .long 0x80000000 + _m8_flush
+cB26_flush:     .long 0x80000000 + _m8_flush
+cB26_dsva:      .long 0x00101000
+cB26_reta:      .long 0x80000000 + cB26_reta_l
+cB26_retb:      .long 0x80000000 + cB26_retb_l
+cB26_snapa:     .long SNAP_A
+cB26_snapb:     .long SNAP_B
+cB26_id:        .long 2026
+cB26_cmp:       .long 0x80000000 + _m8_cmp
+
+        .balign 4
+_m8_case_27:                       ! STS.L PR, @-Rn  (General, D-side delay-slot maximal + target-only)
+        sts.l   pr, @-r15
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA27_brva, r5
+        mov.w   cA27_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA27_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA27_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA27_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA27_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA27_dva, r5
+        mov.w   cA27_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA27_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA27_cva, r0
+        mov.l   cA27_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA27_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA27_base, r0
+        mov.l   cA27_pay, r8
+        mov.l   cA27_dva, r11
+        mov.l   cA27_reta, r12
+        mov.l   cA27_brva, r5
+        jmp     @r5
+        nop
+cA27_reta_l:
+        mov.l   cA27_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA27_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA27_cva, r0
+        mov.l   cA27_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA27_base, r0
+        mov.l   cA27_pay, r8
+        mov.l   cA27_dva, r11
+        mov.l   cA27_retb, r12
+        mov.l   cA27_brva, r5
+        jmp     @r5
+        nop
+cA27_retb_l:
+        mov.l   cA27_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA27_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cA27_id, r5
+        mov.l   cA27_cmp, r3
+        jsr     @r3
+        nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB27_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA27_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB27_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA27_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA27_cva, r0
+        mov.l   cA27_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA27_base, r0
+        mov.l   cA27_pay, r8
+        mov.l   cA27_dva, r11
+        mov.l   cB27_reta, r12
+        mov.l   cA27_brva, r5
+        jmp     @r5
+        nop
+cB27_reta_l:
+        mov.l   cB27_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA27_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA27_cva, r0
+        mov.l   cA27_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA27_base, r0
+        mov.l   cA27_pay, r8
+        mov.l   cA27_dva, r11
+        mov.l   cB27_retb, r12
+        mov.l   cA27_brva, r5
+        jmp     @r5
+        nop
+cB27_retb_l:
+        mov.l   cB27_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA27_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB27_id, r5
+        mov.l   cB27_cmp, r3
+        jsr     @r3
+        nop
+
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+cA27_brva:      .long 0x00100FFE
+cA27_dva:       .long 0x00103000
+cA27_cva:       .long 0x00102000
+cA27_base:      .long 0x00102008
+cA27_probe:     .long 0x00102004
+cA27_seed:      .long 0xA11C0002
+cA27_pay:       .long 0x57014444
+cA27_braw:      .word 0x4B2B            ! jmp @r11
+cA27_instrw:    .word 0x4022
+cA27_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA27_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA27_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA27_nopw:      .word 0x0009
+        .align 2
+cA27_reta:      .long 0x80000000 + cA27_reta_l
+cA27_retb:      .long 0x80000000 + cA27_retb_l
+cA27_snapa:     .long SNAP_A
+cA27_snapb:     .long SNAP_B
+cA27_id:        .long 1027
+cA27_cmp:       .long 0x80000000 + _m8_cmp
+cA27_flush:     .long 0x80000000 + _m8_flush
+cB27_flush:     .long 0x80000000 + _m8_flush
+cB27_dsva:      .long 0x00101000
+cB27_reta:      .long 0x80000000 + cB27_reta_l
+cB27_retb:      .long 0x80000000 + cB27_retb_l
+cB27_snapa:     .long SNAP_A
+cB27_snapb:     .long SNAP_B
+cB27_id:        .long 2027
+cB27_cmp:       .long 0x80000000 + _m8_cmp
+
+        .balign 4
+_m8_case_28:                       ! TAS.B @Rn  (General, D-side delay-slot maximal + target-only)
+        sts.l   pr, @-r15
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA28_brva, r5
+        mov.w   cA28_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA28_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA28_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA28_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA28_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA28_dva, r5
+        mov.w   cA28_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA28_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA28_cva, r0
+        mov.l   cA28_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA28_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA28_base, r0
+        mov.l   cA28_pay, r8
+        mov.l   cA28_dva, r11
+        mov.l   cA28_reta, r12
+        mov.l   cA28_brva, r5
+        jmp     @r5
+        nop
+cA28_reta_l:
+        mov.l   cA28_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA28_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA28_cva, r0
+        mov.l   cA28_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA28_base, r0
+        mov.l   cA28_pay, r8
+        mov.l   cA28_dva, r11
+        mov.l   cA28_retb, r12
+        mov.l   cA28_brva, r5
+        jmp     @r5
+        nop
+cA28_retb_l:
+        mov.l   cA28_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA28_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cA28_id, r5
+        mov.l   cA28_cmp, r3
+        jsr     @r3
+        nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB28_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA28_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB28_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA28_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA28_cva, r0
+        mov.l   cA28_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA28_base, r0
+        mov.l   cA28_pay, r8
+        mov.l   cA28_dva, r11
+        mov.l   cB28_reta, r12
+        mov.l   cA28_brva, r5
+        jmp     @r5
+        nop
+cB28_reta_l:
+        mov.l   cB28_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA28_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA28_cva, r0
+        mov.l   cA28_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA28_base, r0
+        mov.l   cA28_pay, r8
+        mov.l   cA28_dva, r11
+        mov.l   cB28_retb, r12
+        mov.l   cA28_brva, r5
+        jmp     @r5
+        nop
+cB28_retb_l:
+        mov.l   cB28_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA28_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB28_id, r5
+        mov.l   cB28_cmp, r3
+        jsr     @r3
+        nop
+
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+cA28_brva:      .long 0x00100FFE
+cA28_dva:       .long 0x00103000
+cA28_cva:       .long 0x00102000
+cA28_base:      .long 0x00102000
+cA28_probe:     .long 0x00102000
+cA28_seed:      .long 0xA11C0002
+cA28_pay:       .long 0x57014444
+cA28_braw:      .word 0x4B2B            ! jmp @r11
+cA28_instrw:    .word 0x401B
+cA28_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA28_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA28_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA28_nopw:      .word 0x0009
+        .align 2
+cA28_reta:      .long 0x80000000 + cA28_reta_l
+cA28_retb:      .long 0x80000000 + cA28_retb_l
+cA28_snapa:     .long SNAP_A
+cA28_snapb:     .long SNAP_B
+cA28_id:        .long 1028
+cA28_cmp:       .long 0x80000000 + _m8_cmp
+cA28_flush:     .long 0x80000000 + _m8_flush
+cB28_flush:     .long 0x80000000 + _m8_flush
+cB28_dsva:      .long 0x00101000
+cB28_reta:      .long 0x80000000 + cB28_reta_l
+cB28_retb:      .long 0x80000000 + cB28_retb_l
+cB28_snapa:     .long SNAP_A
+cB28_snapb:     .long SNAP_B
+cB28_id:        .long 2028
+cB28_cmp:       .long 0x80000000 + _m8_cmp
 
 ENTRY(_m8_run_all)
         sts.l   pr, @-r15

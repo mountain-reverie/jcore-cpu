@@ -38,6 +38,26 @@ const (
 	regOther   = 8 // chosen GPR for the dest / "n" operand
 )
 
+// DSideDSlot Case A/B (maximal 3-fault + target-IMISS-only) additional pages.
+// The branch straddle for the I-fetch-in-delay-slot fault reuses the SAME two
+// identity pages as the rest of the runtime (A=workloadVA=0x00100000, tail at
+// 0x00100FFE; B=workloadVA+0x1000=0x00101000, the delay-slot fetch page). Two
+// MORE identity pages are needed on top of those because the TLB is UNIFIED
+// (work/tlb.vhd: one 32-entry array checked for both I and D accesses, see
+// core/tlb.vhd) -- an I-fetch of a page and a D-access to that SAME page share
+// one TLB entry, so a data operand pointed at page A or B would NOT fault a
+// second time once either page's I-fetch has installed it. dslotDataPage (C)
+// and dslotTargetPage (D) are two freshly-added identity pages (see
+// sim/tests/m8_runtime.inc PTE C/D) so the D-side access (fault 2) and the
+// branch-target fetch (fault 3) are each a genuine, distinct TLB miss.
+const (
+	dslotBranchVA   = workloadVA + 0x0FFE // page A tail: 0x00100FFE
+	dslotFetchVA    = workloadVA + 0x1000 // page B head: 0x00101000 (delay slot)
+	dslotPoisonVA   = dslotFetchVA + 2    // page B: 0x00101002 (wrong-restart trap)
+	dslotDataPage   = workloadVA + 0x2000 // page C head: 0x00102000
+	dslotTargetPage = workloadVA + 0x3000 // page D head: 0x00103000
+)
+
 // IFetchPerImage bounds how many I-fetch cases go into ONE generated sub-image.
 // Each I-fetch case plants an instruction into the translated code page and
 // fetches it cold then warm; every case is precise in isolation, but the co-sim
@@ -266,6 +286,8 @@ type caseData struct {
 	IsWrite  bool
 	CtrlSave string // formatted store insn (ctrl -> r1)
 	CtrlLoad string // formatted load insn  (r1 -> ctrl)
+	IDA      int    // DSideDSlot Case A (maximal, 3-fault) reported ID: 1000+ID
+	IDB      int    // DSideDSlot Case B (target-IMISS only) reported ID: 2000+ID
 }
 
 // EmitCase returns the assembly for one case routine (`block`) and its
@@ -1080,13 +1102,20 @@ func emitDSideDSlot(c Class, id int) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	base := fmt.Sprintf("0x%08X", workloadVA)
-	probeAddr := workloadVA
+	// dslotDataPage (page C, VA 0x00102000) is the delay-slot instruction's
+	// DATA operand page for both Case A and Case B -- distinct from the branch
+	// page (A, 0x00100FFE) and the delay-slot fetch page (B, 0x00101000) so a
+	// D-side DMISS there is a genuine third TLB miss, not a re-hit on a page
+	// already installed by an I-fetch of the same VA (the TLB is unified, so an
+	// I-fetch and a D-access to the SAME page share one entry -- see
+	// dslotDataPage/dslotTargetPage doc on the template below).
+	base := fmt.Sprintf("0x%08X", dslotDataPage)
+	probeAddr := dslotDataPage
 	if c.Addr == PreDec {
-		base = fmt.Sprintf("0x%08X", workloadVA+8)
+		base = fmt.Sprintf("0x%08X", dslotDataPage+8)
 	}
 	if c.Mem == Write {
-		pa, reason, ok := storeProbeAddr(c, word, workloadVA)
+		pa, reason, ok := storeProbeAddr(c, word, dslotDataPage)
 		if !ok {
 			return fmt.Sprintf("! case %d skipped: %s: %s\n", id, c.Instr.Name, reason),
 				"", errSkip
@@ -1100,14 +1129,17 @@ func emitDSideDSlot(c Class, id int) (string, string, error) {
 		BaseInit: base,
 		Probe:    fmt.Sprintf("0x%08X", probeAddr),
 		IsWrite:  c.Mem == Write,
+		IDA:      1000 + id,
+		IDB:      2000 + id,
 	}
 	// Note on reporting: cases that fail due to a Defect 7 form (access launches
 	// in a slot after slot 0, wrong restart PC lands on delay-slot instruction,
 	// falls into the poison trap) report as a bus-ACK hang, not a named Result=N.
 	// Cases with slot-0 access (correct restart PC, never reach poison trap) report
-	// as a clean _m8_cmp mismatch with the case ID. A bus-ACK hang from this axis
-	// signals "Defect 7 form failed", not "harness is broken".
-	return render(tmplGeneralDSlot, d)
+	// as a clean _m8_cmp mismatch with the case ID (1000+id for Case A, 2000+id
+	// for Case B -- the D-side MAC multi-position ID precedent). A bus-ACK hang
+	// from this axis signals "Defect 7 form failed", not "harness is broken".
+	return render(tmplDSlotAB, d)
 }
 
 // ManifestEntry records one instruction's place in an axis image. ID is the
@@ -1187,6 +1219,7 @@ var (
 	tmplIFetch       = template.Must(template.New("ifetch").Parse(iFetchText))
 	tmplIFetchDSlot  = template.Must(template.New("ifetchdslot").Parse(iFetchDSlotText))
 	tmplGeneralDSlot = template.Must(template.New("genDSlot").Parse(generalDSlotText))
+	tmplDSlotAB      = template.Must(template.New("dslotAB").Parse(dSlotABText))
 
 	tmplModePreservingD = template.Must(template.New("modePreservingD").Parse(modePreservingDText))
 
@@ -1462,6 +1495,226 @@ c{{.ID}}_id:     .long {{.ID}}
 c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
 c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
 c{{.ID}}_poison: .long 0xBADC0DE1
+`
+
+// dSlotABText emits ONE case routine that runs TWO precise-exception shapes
+// back to back on the same [bra-via-jmp ; instr] delay-slot pair (D-side MAC
+// multi-position ID precedent: distinct _m8_cmp IDs 1000+ID / 2000+ID name
+// each shape without a waveform):
+//
+//   - Case A (maximal): three faults taken in sequence as the instruction is
+//     retried -- (1) the delay-slot FETCH IMISSes (page B, 0x00101000) ->
+//     restart lands on the branch; (2) the delay-slot instruction's DATA
+//     access DMISSes (page C, 0x00102000, a page distinct from A/B so this is
+//     a genuine second miss, not a re-hit of an I-installed entry) -> restart
+//     lands on the branch AGAIN; (3) the branch TARGET IMISSes (page D,
+//     0x00103000) -> restart lands on the target. The branch+delay-slot pair
+//     is re-issued twice before the instruction retires, so any effect not
+//     restored/squashed exactly once shows up as a 2x/3x multiple.
+//   - Case B (target-IMISS only, Defect 6's exact shape): pages A/B/C are all
+//     pre-warmed (a plain load touches each) so the delay slot is CLEAN --
+//     only the branch target (page D) faults, isolating the shape where an
+//     I-fault whose restart PC is not backed up must not squash the OLDER
+//     delay-slot write.
+//
+// The "branch" is `jmp @r11` (register-indirect), not `bra`, because the
+// target must reach page D (0x00103000) -- 0x2000+ bytes away, outside a
+// `bra` displacement's range. Its own delay slot (the very next instruction,
+// at page B) is the instruction under test, planted via runtime code writes
+// (like iFetchDSlotText) because it must sit at an exact page-boundary VA.
+//
+// Poison trap: if a restart incorrectly resumes SEQUENTIALLY after the delay
+// slot (0x00101002) instead of re-issuing it via the branch -- the wrong-
+// restart-PC failure mode for both fault 1 and fault 2 -- a `mov #-1,r0`
+// there poisons r0 before falling through to a `jmp @r12` bounce back to the
+// capture code, so SNAP_A/SNAP_B deterministically diverge instead of
+// coincidentally converging (same technique generalDSlotText uses, and the
+// trap this axis's I-fetch-delay-slot sibling still lacks -- see emit.go's
+// package doc / task brief for why that convergent-target shape is vacuous).
+//
+// Each leg's whole sequence re-seeds the data page, sets the base/dest regs,
+// and re-enters via the SAME `jmp @r5` into the branch at 0x00100FFE; the
+// warm (control) leg needs no re-flush since the cold leg already installed
+// every page touched. Snapshot {base reg, dest/probe} (8 bytes), matching
+// generalDSlotText.
+const dSlotABText = `        .balign 4
+_m8_case_{{.ID}}:                       ! {{.Name}}  (General, D-side delay-slot maximal + target-only)
+        sts.l   pr, @-r15
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA{{.ID}}_brva, r5
+        mov.w   cA{{.ID}}_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA{{.ID}}_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA{{.ID}}_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA{{.ID}}_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA{{.ID}}_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA{{.ID}}_dva, r5
+        mov.w   cA{{.ID}}_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA{{.ID}}_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA{{.ID}}_cva, r0
+        mov.l   cA{{.ID}}_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA{{.ID}}_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA{{.ID}}_base, r0
+{{if .IsWrite}}        mov.l   cA{{.ID}}_pay, r8
+{{else}}        mov     #0, r8
+{{end}}        mov.l   cA{{.ID}}_dva, r11
+        mov.l   cA{{.ID}}_reta, r12
+        mov.l   cA{{.ID}}_brva, r5
+        jmp     @r5
+        nop
+cA{{.ID}}_reta_l:
+        mov.l   cA{{.ID}}_snapa, r2
+        mov.l   r0, @r2
+{{if .IsWrite}}        mov.l   cA{{.ID}}_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+{{else}}        mov.l   r8, @(4,r2)
+{{end}}        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA{{.ID}}_cva, r0
+        mov.l   cA{{.ID}}_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA{{.ID}}_base, r0
+{{if .IsWrite}}        mov.l   cA{{.ID}}_pay, r8
+{{else}}        mov     #0, r8
+{{end}}        mov.l   cA{{.ID}}_dva, r11
+        mov.l   cA{{.ID}}_retb, r12
+        mov.l   cA{{.ID}}_brva, r5
+        jmp     @r5
+        nop
+cA{{.ID}}_retb_l:
+        mov.l   cA{{.ID}}_snapb, r2
+        mov.l   r0, @r2
+{{if .IsWrite}}        mov.l   cA{{.ID}}_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+{{else}}        mov.l   r8, @(4,r2)
+{{end}}        mov     #8, r4
+        mov.l   cA{{.ID}}_id, r5
+        mov.l   cA{{.ID}}_cmp, r3
+        jsr     @r3
+        nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB{{.ID}}_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA{{.ID}}_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB{{.ID}}_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA{{.ID}}_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA{{.ID}}_cva, r0
+        mov.l   cA{{.ID}}_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA{{.ID}}_base, r0
+{{if .IsWrite}}        mov.l   cA{{.ID}}_pay, r8
+{{else}}        mov     #0, r8
+{{end}}        mov.l   cA{{.ID}}_dva, r11
+        mov.l   cB{{.ID}}_reta, r12
+        mov.l   cA{{.ID}}_brva, r5
+        jmp     @r5
+        nop
+cB{{.ID}}_reta_l:
+        mov.l   cB{{.ID}}_snapa, r2
+        mov.l   r0, @r2
+{{if .IsWrite}}        mov.l   cA{{.ID}}_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+{{else}}        mov.l   r8, @(4,r2)
+{{end}}        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA{{.ID}}_cva, r0
+        mov.l   cA{{.ID}}_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA{{.ID}}_base, r0
+{{if .IsWrite}}        mov.l   cA{{.ID}}_pay, r8
+{{else}}        mov     #0, r8
+{{end}}        mov.l   cA{{.ID}}_dva, r11
+        mov.l   cB{{.ID}}_retb, r12
+        mov.l   cA{{.ID}}_brva, r5
+        jmp     @r5
+        nop
+cB{{.ID}}_retb_l:
+        mov.l   cB{{.ID}}_snapb, r2
+        mov.l   r0, @r2
+{{if .IsWrite}}        mov.l   cA{{.ID}}_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+{{else}}        mov.l   r8, @(4,r2)
+{{end}}        mov     #8, r4
+        mov.l   cB{{.ID}}_id, r5
+        mov.l   cB{{.ID}}_cmp, r3
+        jsr     @r3
+        nop
+
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+cA{{.ID}}_brva:      .long 0x00100FFE
+cA{{.ID}}_dva:       .long 0x00103000
+cA{{.ID}}_cva:       .long 0x00102000
+cA{{.ID}}_base:      .long {{.BaseInit}}
+cA{{.ID}}_probe:     .long {{.Probe}}
+cA{{.ID}}_seed:      .long 0xA11C0002
+cA{{.ID}}_pay:       .long 0x57014444
+cA{{.ID}}_braw:      .word 0x4B2B            ! jmp @r11
+cA{{.ID}}_instrw:    .word {{.Word}}
+cA{{.ID}}_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA{{.ID}}_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA{{.ID}}_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA{{.ID}}_nopw:      .word 0x0009
+        .align 2
+cA{{.ID}}_reta:      .long 0x80000000 + cA{{.ID}}_reta_l
+cA{{.ID}}_retb:      .long 0x80000000 + cA{{.ID}}_retb_l
+cA{{.ID}}_snapa:     .long SNAP_A
+cA{{.ID}}_snapb:     .long SNAP_B
+cA{{.ID}}_id:        .long {{.IDA}}
+cA{{.ID}}_cmp:       .long 0x80000000 + _m8_cmp
+cA{{.ID}}_flush:     .long 0x80000000 + _m8_flush
+cB{{.ID}}_flush:     .long 0x80000000 + _m8_flush
+cB{{.ID}}_dsva:      .long 0x00101000
+cB{{.ID}}_reta:      .long 0x80000000 + cB{{.ID}}_reta_l
+cB{{.ID}}_retb:      .long 0x80000000 + cB{{.ID}}_retb_l
+cB{{.ID}}_snapa:     .long SNAP_A
+cB{{.ID}}_snapb:     .long SNAP_B
+cB{{.ID}}_id:        .long {{.IDB}}
+cB{{.ID}}_cmp:       .long 0x80000000 + _m8_cmp
 `
 
 // PrivMem D-side: as General plus the DestCtrl register. Original control reg

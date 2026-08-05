@@ -57,14 +57,23 @@ CFLAGS := -Wall -Werror -Isim -g -Wno-deprecated-declarations
 
 VHDLS := CPU_VHDS
 CPU_VARIANT ?= j2
-# Keyed by CPU_VARIANT (mirrors Makefile.inc's own default,
-# $(CPU_INC_DIR)gen/$(CPU_VARIANT)): un-keyed sim/gen was letting a
+# Must default the same as Makefile.inc's own CPU_ROM_WIDTH default (below,
+# before DECODE_GEN_DIR's key can include it) -- this file sets
+# DECODE_GEN_DIR itself (overriding Makefile.inc's own default computation)
+# so it has to know the width up front too.
+CPU_ROM_WIDTH ?= 72
+# Keyed by CPU_VARIANT AND CPU_ROM_WIDTH (mirrors Makefile.inc's own
+# default, $(CPU_INC_DIR)gen/$(CPU_VARIANT)-w$(CPU_ROM_WIDTH) -- see its
+# comment for the full rationale): un-keyed sim/gen was letting a
 # `make CPU_VARIANT=j4` run reuse a stale j2 decoder left behind by an
 # earlier `make CPU_VARIANT=j2` in the same sim/ tree (the regeneration
 # rule's prerequisites are variants.toml/spec/cpugen-source timestamps, not
-# CPU_VARIANT's value, so switching variants alone never invalidates a
-# shared directory).
-DECODE_GEN_DIR := $(CURDIR)/gen/$(CPU_VARIANT)
+# CPU_VARIANT's or CPU_ROM_WIDTH's value, so switching either alone never
+# invalidates a shared directory). Folding both into the directory name
+# (rather than a separate opt-in stamp file for the width) means a caller
+# here that only ever names the six .vhd targets (never a stamp) still
+# gets correct invalidation.
+DECODE_GEN_DIR := $(CURDIR)/gen/$(CPU_VARIANT)-w$(CPU_ROM_WIDTH)
 include ../Makefile.inc
 # Derive CONFIG_PRIV_ARCH from the selected variant's generics (CPU_GENERICS
 # comes from Makefile.inc, which reads variants.toml). This is the interface

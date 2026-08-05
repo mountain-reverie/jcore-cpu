@@ -34,16 +34,36 @@ endif
 CPU_INC_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 CPU_VARIANT ?= j2
 TARGET_KIND ?= fpga
-# Per-variant subdirectory (not just $(CPU_INC_DIR)gen): jcore-soc's top-level
-# Makefile builds one board at a time, but each board can select a different
-# CPU_VARIANT while sharing this same components/cpu working tree. The
-# regeneration rule below only depends on variants.toml/spec/cpugen-source
-# timestamps, NOT on CPU_VARIANT's value -- so a single shared DECODE_GEN_DIR
-# would let a stale OTHER variant's decoder (e.g. j2's, with no LDTLB) survive
-# untouched across a `make ulx3s && make gf180_j4mmu` sequence, since none of
-# the rule's prerequisites changed. Keying the directory by $(CPU_VARIANT)
-# gives every variant its own persistent, never-confused output location.
-DECODE_GEN_DIR ?= $(CPU_INC_DIR)gen/$(CPU_VARIANT)
+# CPU_ROM_WIDTH must be known before DECODE_GEN_DIR's default is computed
+# (see that comment) -- moved up from its old position further down.
+CPU_ROM_WIDTH ?= 72
+# Per-variant (AND per-width) subdirectory (not just $(CPU_INC_DIR)gen):
+# jcore-soc's top-level Makefile builds one board at a time, but each board
+# can select a different CPU_VARIANT while sharing this same components/cpu
+# working tree. The regeneration rule below only depends on variants.toml/
+# spec/cpugen-source timestamps, NOT on CPU_VARIANT's or CPU_ROM_WIDTH's
+# VALUE -- so a directory shared across variants (or across ROM widths of
+# the SAME variant) would let a stale decoder survive untouched across a
+# `make ulx3s && make gf180_j4mmu` sequence (variant) or across two builds
+# of one variant at different widths, since none of the rule's
+# prerequisites changed to force a rebuild.
+#
+# CPU_ROM_WIDTH used to be handled with a separate per-width STAMP file
+# (a marker inside a CPU_VARIANT-only directory) instead of being part of
+# this key. That only protected callers that remembered to request the
+# stamp as an explicit build goal ALONGSIDE the six .vhd files -- GNU
+# Make's grouped-target semantics mean requesting only some of a group's
+# members lets make consider the WHOLE group satisfied if those specific
+# files are newer than their prerequisites, without ever re-checking the
+# other members (the stamp) at all. Every caller had to opt in, and one
+# (components/cpu/sim/Makefile, and anything else going through
+# build_core.mk without deliberately requesting the stamp) did not --
+# latent today only because every caller happens to use the same width.
+# Folding CPU_ROM_WIDTH into the directory name instead needs NO caller
+# cooperation: a caller that names only the six .vhd targets still gets a
+# path that does not exist yet for a new width, so make must run the
+# recipe regardless of what that specific caller thought to ask for.
+DECODE_GEN_DIR ?= $(CPU_INC_DIR)gen/$(CPU_VARIANT)-w$(CPU_ROM_WIDTH)
 
 # variants.mk is generated from variants.toml. GNU Make remakes included files
 # and re-execs, so this bootstraps on a clean tree. Go is a baseline build
@@ -98,18 +118,6 @@ CPU_DECODE_GEN_NAMES := decode_pkg.vhd decode.vhd decode_body.vhd \
                         decode_table_simple.vhd decode_table_direct.vhd \
                         decode_table_rom.vhd
 CPU_DECODE_GENERATED := $(addprefix $(DECODE_GEN_DIR)/decode/,$(CPU_DECODE_GEN_NAMES))
-CPU_ROM_WIDTH ?= 72
-
-# CPU_ROM_WIDTH is NOT part of DECODE_GEN_DIR's key (only CPU_VARIANT is), so
-# two consumers of the SAME variant with different CPU_ROM_WIDTH would
-# otherwise silently share whichever one built first -- the identical
-# staleness class the per-variant directory exists to prevent, just one
-# level down. CPU_DECODE_ROM_WIDTH_STAMP is a marker for "this directory's
-# six files were built for THIS width"; it is a member of the grouped
-# target below, so a width mismatch (stamp for the requested width missing)
-# forces the whole group to regenerate -- atomically, like everything else
-# in the group -- rather than only rebuilding the stamp itself.
-CPU_DECODE_ROM_WIDTH_STAMP := $(DECODE_GEN_DIR)/decode/.rom_width_$(CPU_ROM_WIDTH)
 
 # Spec inputs cpugen actually reads: the always-loaded base spec/*.toml, plus
 # -- only when this variant has an overlay -- that overlay's own
@@ -131,7 +139,7 @@ CPU_DECODE_GEN_SRC          := $(shell find $(CPU_INC_DIR)decode/gen-go/cmd/cpug
 # writing the same six files in the same directory -- wasteful, and a race
 # that can leave DECODE_GEN_DIR partially populated. `go`'s own `-C`-based
 # in-tree module cache builds are not safe to run N-way concurrently either.
-$(CPU_DECODE_GENERATED) $(CPU_DECODE_ROM_WIDTH_STAMP) &: $(CPU_INC_DIR)variants.toml $(CPU_DECODE_GEN_BASE_SPEC) \
+$(CPU_DECODE_GENERATED) &: $(CPU_INC_DIR)variants.toml $(CPU_DECODE_GEN_BASE_SPEC) \
                             $(CPU_DECODE_GEN_OVERLAY_SPEC) $(CPU_DECODE_GEN_SRC)
 	@command -v go >/dev/null 2>&1 || { \
 	  echo "ERROR: go is required to generate the $(CPU_VARIANT) decoder." >&2; exit 1; }
@@ -139,7 +147,18 @@ $(CPU_DECODE_GENERATED) $(CPU_DECODE_ROM_WIDTH_STAMP) &: $(CPU_INC_DIR)variants.
 	go -C $(CPU_INC_DIR)decode/gen-go run ./cmd/cpugen -w $(CPU_ROM_WIDTH) \
 	  $(if $(CPU_OVERLAY),-overlay spec/$(CPU_OVERLAY)) -illegal full \
 	  -o $(abspath $(DECODE_GEN_DIR)/decode)
-	@rm -f $(DECODE_GEN_DIR)/decode/.rom_width_*
-	@touch $(CPU_DECODE_ROM_WIDTH_STAMP)
+
+# cpu-decode-gen: the ONE name external callers (jcore-soc's top-level
+# Makefile, and the board scripts that regenerate a variant's decoder
+# before invoking ghdl) need to know, so CPU_DECODE_GEN_NAMES' six literal
+# filenames don't have to be copy-pasted into every caller (they used to
+# be duplicated in the top-level Makefile AND three shell scripts -- the
+# same duplication disease this refactor exists to treat). Usage:
+#   make -f components/cpu/build.mk cpu-decode-gen \
+#     VHDLS=<unused-var-name> CPU_VARIANT=<variant> [CPU_ROM_WIDTH=<width>]
+# (VHDLS is required by the mk_utils.mk indirect-append idiom build_core.mk
+# uses even though this target's callers don't care about its value.)
+.PHONY: cpu-decode-gen
+cpu-decode-gen: $(CPU_DECODE_GENERATED)
 
 include $(CPU_INC_DIR)build_core.mk

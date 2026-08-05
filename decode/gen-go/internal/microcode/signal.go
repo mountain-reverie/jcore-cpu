@@ -17,23 +17,23 @@ type Signal string
 
 const (
 	// Bus selectors and register numbers (from x-bus/y-bus/z-bus/w-bus)
-	SigXbusSel   Signal = "xbus_sel"
-	SigYbusSel   Signal = "ybus_sel"
+	SigXbusSel     Signal = "xbus_sel"
+	SigYbusSel     Signal = "ybus_sel"
 	SigMmuRegSel   Signal = "mmu_reg_sel"
 	SigMmuRegSelWr Signal = "mmu_reg_sel_wr"
 	SigMmuRegWr    Signal = "mmu_reg_wr"
 	SigTlbWr       Signal = "tlb_wr"
-	SigZbusSel   Signal = "zbus_sel"
-	SigRegnumX   Signal = "regnum_x"
-	SigRegnumY   Signal = "regnum_y"
-	SigRegnumZ   Signal = "regnum_z"
-	SigRegnumW   Signal = "regnum_w"
-	SigWrregZ    Signal = "wrreg_z"
-	SigWrregW    Signal = "wrreg_w"
-	SigWrpcZ     Signal = "wrpc_z"
-	SigWrprPC    Signal = "wrpr_pc"
-	SigWrsrW     Signal = "wrsr_w"
-	SigWrsrZ     Signal = "wrsr_z"
+	SigZbusSel     Signal = "zbus_sel"
+	SigRegnumX     Signal = "regnum_x"
+	SigRegnumY     Signal = "regnum_y"
+	SigRegnumZ     Signal = "regnum_z"
+	SigRegnumW     Signal = "regnum_w"
+	SigWrregZ      Signal = "wrreg_z"
+	SigWrregW      Signal = "wrreg_w"
+	SigWrpcZ       Signal = "wrpc_z"
+	SigWrprPC      Signal = "wrpr_pc"
+	SigWrsrW       Signal = "wrsr_w"
+	SigWrsrZ       Signal = "wrsr_z"
 
 	// ALU
 	SigAluinxSel Signal = "aluinx_sel"
@@ -310,4 +310,63 @@ var AllSignals = []Signal{
 	SigIlevelCap, SigEventAck0, SigMaskInt,
 	SigCopCmd, SigCpuDataMux, SigDebug, SigSlp,
 	SigImmVal,
+}
+
+// SignalROMDefault returns the value a ROM selector block assigns in its
+// `when others` arm — i.e. what the hardware must see when the microcode
+// word does not name the signal.
+//
+// This is SignalDefault extended to the "nillable" signals. SignalDefault
+// deliberately reports no default for those, because the DIRECT decoder must
+// leave them undriven so QMC does not create false dependencies. The ROM
+// decoder has no such freedom: `with line(...) select` is a complete mux and
+// every code must map to some value, so the absent/all-zeros code has to
+// decode to the enum's first literal (the value the Clojure-era hand-written
+// ROM architecture used, and which decode_pkg.vhd declares first).
+func SignalROMDefault(s Signal) (string, bool) {
+	if v, ok := SignalDefault(s); ok {
+		if s.IsStdLogic() {
+			return "'" + v + "'", true
+		}
+		return v, true
+	}
+	if s.IsStdLogic() {
+		// Nillable std_logic (ma_wr, latch_ext, imm_from_ext): absent means
+		// "do not do this thing", which is '0'.
+		return "'0'", true
+	}
+	switch s {
+	case SigShiftFunc:
+		return "LOGIC", true
+	case SigImmVal:
+		return `x"00000000"`, true
+	case SigArithFunc:
+		return "ADD", true
+	case SigArithSrFn, SigLogicSrFn:
+		return "ZERO", true
+	case SigLogicFunc:
+		return "LOGIC_NOT", true
+	case SigZbusSel:
+		return "SEL_ARITH", true
+	case SigMemAddrSel:
+		return "SEL_XBUS", true
+	case SigMemSize:
+		return "BYTE", true
+	case SigMemWdataSel:
+		return "SEL_ZBUS", true
+	case SigRegnumW, SigRegnumX, SigRegnumY, SigRegnumZ:
+		return `"00000"`, true
+	}
+	return "", false
+}
+
+// SignalROMPath is the LHS the ROM architecture assigns for a signal. It is
+// SignalVHDLPath except for imm_val: the simple decoder routes that through
+// the imm_enum intermediate, but the ROM decoder muxes the 32-bit value
+// straight onto ex.imm_val from the ROM field.
+func SignalROMPath(s Signal) string {
+	if s == SigImmVal {
+		return "ex.imm_val"
+	}
+	return SignalVHDLPath[s]
 }

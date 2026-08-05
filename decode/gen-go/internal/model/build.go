@@ -379,6 +379,7 @@ func Build(s *spec.Spec, width int, mode IllegalMode) (*Decoder, error) {
 	// address is addressable; unused entries are zero words).
 	rom := &ROM{
 		TotalBits: enc.TotalBits,
+		Enc:       enc,
 	}
 	rom.Words = make([]ROMWord, romSize)
 	zeroWord := strings.Repeat("0", enc.TotalBits)
@@ -398,6 +399,12 @@ func Build(s *spec.Spec, width int, mode IllegalMode) (*Decoder, error) {
 		}
 		rom.Words[addr] = ROMWord{Bits: bin, Comment: comment}
 	}
+
+	sels, err := buildROMSelectors(enc)
+	if err != nil {
+		return nil, err
+	}
+	rom.Selectors = sels
 
 	d.ROM = rom
 

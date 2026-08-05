@@ -132,7 +132,36 @@ func TestDecodeTableROMAgainstClojureGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The DECLARATION half (header, signal/type declarations and the packed
+	// microcode_rom constant) must still match the Clojure golden
+	// byte-for-byte after normalization: that is the ROM content itself.
+	//
+	// The ARCHITECTURE BODY is now generated from the ROM Encoding instead of
+	// being hand-transcribed VHDL, so the order in which the selector blocks
+	// and their `when` arms appear is ours, not the Clojure generator's.
+	// Comparing it as a set of (signal, bit-range, code -> value) tuples
+	// ignores that ordering while still catching any real change -- a moved
+	// field, a reassigned code, a different value, a dropped or added signal.
+	// (Same rationale as the clause-sorted comparison in
+	// TestSh2instrAgainstClojureGolden.)
+	splitAt := func(text string) (head, body string) {
+		i := strings.Index(text, "\nbegin\n")
+		if i < 0 {
+			t.Fatal("decode_table_rom.vhd: no architecture body")
+		}
+		return text[:i], text[i:]
+	}
+	gotHead, _ := splitAt(buf.String())
+	wantHead, _ := splitAt(string(src))
+	if err := os.WriteFile(fmt.Sprintf("%s/decode_table_rom.vhd", outDir), []byte(gotHead), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(fmt.Sprintf("%s/decode_table_rom.vhd", goldDir), []byte(wantHead), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	runNormalizeAndDiff(t, outDir, goldDir, "decode_table_rom.vhd")
+
+	assertROMSemanticsEqual(t, string(src), buf.String(), "decode_table_rom.vhd")
 }
 
 // TestROMStructuralIntegrityWidth64 exercises the width-64 code path
@@ -190,9 +219,11 @@ func TestROMStructuralIntegrityWidth64(t *testing.T) {
 }
 
 // romEntryRE matches lines like:
-//   0 => "0101...", -- CLRT
-//   4 => "...", 5 => "...", 6 => "...", 7 => "...", -- RTE
-//   254 => "000...000", 255 => "000...000");
+//
+//	0 => "0101...", -- CLRT
+//	4 => "...", 5 => "...", 6 => "...", 7 => "...", -- RTE
+//	254 => "000...000", 255 => "000...000");
+//
 // We extract all addr => "bits" pairs from each line.
 var romEntryRE = regexp.MustCompile(`(\d+)\s*=>\s*"([01]+)"`)
 

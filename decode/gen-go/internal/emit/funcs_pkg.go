@@ -145,3 +145,13 @@ func allEnums(pkg *model.Package) []model.EnumType {
 	})
 	return enums
 }
+
+// romCodes renders a ROM selector arm's code list as the VHDL choice list
+// `"010" | "100"`.
+func romCodes(codes []string) string {
+	parts := make([]string, len(codes))
+	for i, c := range codes {
+		parts[i] = "\"" + c + "\""
+	}
+	return strings.Join(parts, " | ")
+}

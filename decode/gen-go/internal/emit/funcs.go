@@ -20,6 +20,7 @@ var funcMap = template.FuncMap{
 	"allEnums":       allEnums,
 	"sub1":           sub1,
 	"romTop":         romTop,
+	"romCodes":       romCodes,
 	"romLines":       romLines,
 	"romConstBody":   romConstBody,
 	"opcodeComment":  opcodeComment,

@@ -1,2 +1,0 @@
-#!/bin/sh
-ghdl -c -fexplicit --ieee=synopsys -r tlb_match_tb $@

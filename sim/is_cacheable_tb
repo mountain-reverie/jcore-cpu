@@ -1,2 +1,0 @@
-#!/bin/sh
-ghdl -c -fexplicit --ieee=synopsys -r is_cacheable_tb $@

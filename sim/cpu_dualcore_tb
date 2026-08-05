@@ -1,2 +1,0 @@
-#!/bin/sh
-ghdl -c -fexplicit --ieee=synopsys -r cpu_dualcore_tb $@

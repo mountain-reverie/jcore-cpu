@@ -1,2 +1,0 @@
-#!/bin/sh
-ghdl -c -fexplicit --ieee=synopsys -r icache_cacheable_mux_tb $@

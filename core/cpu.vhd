@@ -120,6 +120,24 @@ architecture stru of cpu is
   -- datapath uses it to capture the I-side restart PC from the faulting fetch
   -- VA (tlb_fault_va) instead of the D-side ex_if_pc derivation.
   signal tlb_exc_is_i : std_logic;
+  -- '1' whenever the pending TLB fault's VA (tlb_fault_va) is an
+  -- INSTRUCTION-FETCH VA -- i.e. it came from the i_at_translated branch
+  -- below, for ANY exc_kind raised there (IMISS, IPROT, or MULTI_HIT).
+  -- This is intentionally BROADER than tlb_exc_is_i: tlb_exc_is_i exists
+  -- only to select the I-side restart-PC derivation, and is correctly
+  -- narrowed to IMISS/IPROT there (MULTI_HIT dispatches through the
+  -- General Illegal register-model exception, not the TLB restart-PC
+  -- path -- see the comment below). tlb_exc_ifetch instead answers "is
+  -- ma_numz/ma_base/ma_autoupd -- the D-side access shadow -- stale for
+  -- THIS fault", which is true for every I-side fault kind, MULTI_HIT
+  -- included: those shadows are never cleared on an instruction that
+  -- issues no data access, so an I-side MULTI_HIT on an instruction
+  -- following a genuine @Rn+/@-Rn access sees the PREVIOUS instruction's
+  -- stale shadow. Used by the datapath to gate tlb_restore_pend/pend2_r
+  -- arming and z_grace. Do not reuse tlb_exc_is_i for that purpose (that
+  -- conflation was the bug: an I-side MULTI_HIT armed a D-side restore
+  -- from a stale shadow because tlb_exc_is_i='0' for it).
+  signal tlb_exc_ifetch : std_logic;
   -- Dynamic delay-slot flag (decode->datapath): lets a delay-slot D-side TLB
   -- fault restart at the branch. Phase-aligned to the EX control in decode.
   signal dslot : std_logic;
@@ -366,6 +384,7 @@ begin
       tlb_exc_fsr        => tlb_exc_fsr,
       delay_slot         => dslot,
       tlb_exc_is_i       => tlb_exc_is_i,
+      tlb_exc_ifetch     => tlb_exc_ifetch,
       if_pc              => dp_if_pc,
       ex_if_pc           => dec_ex_if_pc
     );
@@ -538,12 +557,18 @@ begin
       variable exc_en   : std_logic;
       variable exc_kind : tlb_exc_kind_t;
       variable fva      : std_logic_vector(31 downto 0);
+      -- Set inside the i_at_translated branch below, for ANY exc_kind it
+      -- raises (IMISS, IPROT, MULTI_HIT). See tlb_exc_ifetch's declaration
+      -- comment for why this must be broader than the exc_kind-narrowed
+      -- tlb_exc_is_i.
+      variable v_ifetch : std_logic;
 
     begin
 
       exc_en   := '0';
       exc_kind := IMISS;
       fva      := (others => '0');
+      v_ifetch := '0';
       -- Block further exceptions while one is being handled. Without this, a
       -- second faulting access (the instruction right after a faulting one, whose
       -- access already launched -- back-to-back D-faults) dispatches a SECOND
@@ -571,6 +596,11 @@ begin
           fva      := i_va_32;
         end if;
       end if;
+      -- Captured immediately: any exc_en set by the branch above came from
+      -- fva = i_va_32 (an instruction-fetch VA), for every exc_kind it can
+      -- raise. Must be read before the D-side branch below can overwrite
+      -- exc_en.
+      v_ifetch := exc_en;
 
       if (exc_en = '0' and d_at_translated = '1' and sig_db_o.en = '1' and dp_sr.rb = '0') then
         if (tlb_d_multihit = '1') then                                                          -- S-I5: hit-count fault, priority over hit_found/prot
@@ -613,6 +643,13 @@ begin
       else
         tlb_exc_is_i <= '0';
       end if;
+      -- tlb_exc_ifetch: "this fault's VA is an instruction-fetch VA", for
+      -- EVERY exc_kind the i_at_translated branch can raise, including
+      -- MULTI_HIT. See its declaration comment for why this must NOT be
+      -- narrowed the way tlb_exc_is_i correctly is: this predicate gates
+      -- whether the D-side access shadow (ma_numz/ma_base/ma_autoupd) may
+      -- be trusted, not which restart-PC derivation to use.
+      tlb_exc_ifetch <= v_ifetch;
 
     end process;
 
@@ -699,6 +736,7 @@ begin
     tlb_fault_va   <= (others => '0');
     tlb_exc_expevt <= (others => '0');
     tlb_exc_is_i   <= '0'; -- tie off so J1/J2 datapath sees a constant, not a float
+    tlb_exc_ifetch <= '0'; -- tie off so J1/J2 datapath sees a constant, not a float
   end generate g_no_mmu;
 
 end architecture stru;

@@ -198,8 +198,10 @@ else
 # in m8_dsdslot_0 (22 slot-0, all PASS; 4 late-access: CAS.L Rm,Rn,@R0,
 # MOV.B/L/W @Rm+,Rn, all Defect 7). The 4 late-access cases are now emitted
 # by the generator as explicit documented skips citing Defect 7 (see
-# decode/gen-go/internal/faultgen/emit.go's lateAccess + m8_manifest.txt);
-# the remaining 22 cases are wired in below. Per the same-shaped
+# decode/gen-go/internal/faultgen/emit.go's lateAccess + m8_manifest.txt).
+# The remaining 22 slot-0 cases are m8_dsdslot_0, which is PARKED below
+# (Task 4's Case A failure under investigation) -- NOT wired in. Per the
+# same-shaped
 # emitIFetchDSlot convergent-target flaw noted below, m8_idslot_* likely
 # share this same vacuity as a SEPARATE, still-uninvestigated defect, so
 # their bus-ACK-hang failures above may currently be masking it too; not

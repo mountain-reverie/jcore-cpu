@@ -100,7 +100,14 @@ entity datapath is
 		     -- faulting fetch VA) with a delay-slot bias, instead of the D-side
 		     -- ma_pc shadow. '0' -> D-side capture (existing).
 		     tlb_exc_is_i   : in std_logic := '0';
-		     -- Per-instruction fetch-PC round-trip (J4). if_pc = the VA of
+		     -- '1' iff this fault's VA is an instruction-fetch VA, for EVERY
+		     -- exc_kind that can raise it (IMISS/IPROT/MULTI_HIT) -- broader
+		     -- than tlb_exc_is_i, which is deliberately narrowed to IMISS/
+		     -- IPROT for restart-PC selection only. See cpu.vhd's declaration
+		     -- comment. Gates whether the D-side access shadow (ma_numz/
+		     -- ma_base/ma_autoupd) may be trusted for a restore.
+		     tlb_exc_ifetch : in std_logic := '0';
+		     -- Per-instruction fetch-PC round-trip (J4+PRIV_ARCH). if_pc = the VA of
 		     -- the instruction currently in if_dr (its own PC, captured at fetch
 		     -- before any branch redirect). decode re-registers it EX-aligned and
 		     -- returns it as ex_if_pc, from which the D-fault restart PC is derived
@@ -767,6 +774,26 @@ end generate;
 	-- thereafter, which IS that writeback's commit edge; while the slot is
 	-- stretched (slot_o = '0') the pipeline is frozen, so reg.wr_w/num_w_r are
 	-- held and the bit correctly persists.
+	--
+	-- FAULT-SIDE ASYMMETRY WITH z_grace (g_restore2, below). z_grace carries
+	-- an explicit `tlb_exc_ifetch and not delay_slot' discriminator with a
+	-- long derivation (see that generate's comment). wb_grace carries NO
+	-- fault-side term at all -- it is `reg.wr_w and not slot_o' -- and the
+	-- "WHY ONE BIT IS ENOUGH" argument above is a purely D-side argument
+	-- (only one memory transaction can be outstanding) that does not by
+	-- itself establish anything about an I-fetch fault, where no memory
+	-- transaction is involved at all. This is believed benign, REASONING
+	-- ONLY, not tested: the w-port only ever carries load RESULT data, and
+	-- if an I-side fault's squash window admits a stray extra w-port commit
+	-- from a re-executed delay-slot instruction, that instruction re-executes
+	-- and re-presents the SAME result to the SAME register -- an idempotent
+	-- rewrite, not a corruption, unlike the z-port case z_grace exists to
+	-- fix (which can drop a writeback entirely, or admit one from the wrong
+	-- register). No guard specifically exercises an I-fetch fault with a
+	-- genuinely pending w-port writeback whose delay slot is re-executed, so
+	-- this paragraph documents the gap rather than closing it -- matching
+	-- the honesty of z_grace's own COVERAGE WARNING above. Do not read a
+	-- green suite as evidence this asymmetry is safe.
 	g_wb_grace : if PRIV_ARCH generate
 	  -- Generate-local so J1/J2 elaborate with no trace of it (see the note at
 	  -- the declaration site above for why "tied off at architecture scope" is
@@ -889,23 +916,31 @@ end generate;
 	  -- faulting fetch, and the delay slot is still in EX when the squash arms.
 	  -- Its z writeback was being dropped while tlb_exc_pc was (correctly) set to
 	  -- the target, so it was never re-executed and the write was lost forever.
-	  -- (mmudrain leg D, at 19890000000 ps: tlb_squash_r=1, tlb_exc_is_i=1,
+	  -- (mmudrain leg D, at 19890000000 ps: tlb_squash_r=1, tlb_exc_ifetch=1,
 	  -- w_addr_ex=0xc, din_ex=0x6000, we_ex=0 -- the delay slot's `add r11,r12`
 	  -- vanished, the stub pointer stopped advancing, and every later stub
 	  -- `jmp @r12`-ed to itself and ran its `mov.l r13,@-Rn` twice.)
 	  --
-	  -- WHY THE DISCRIMINATOR IS EXACTLY (tlb_exc_is_i AND NOT delay_slot). Two
-	  -- cases share this machinery and need OPPOSITE handling; the gate below is
-	  -- the same predicate the restart-PC arm already uses:
-	  --   * D-side fault (tlb_exc_is_i='0'), including one taken BY a delay-slot
-	  --     instruction: the restart is at the BRANCH (or at the faulting
-	  --     instruction itself), so the pending write WILL be re-executed and
-	  --     MUST be squashed. No grace. This is case (a).
+	  -- WHY THE DISCRIMINATOR IS EXACTLY (tlb_exc_ifetch AND NOT delay_slot).
+	  -- Two cases share this machinery and need OPPOSITE handling. This USED
+	  -- to be phrased as "the same predicate the restart-PC arm already
+	  -- uses" (tlb_exc_is_i) -- that was the bug: tlb_exc_is_i is narrowed to
+	  -- IMISS/IPROT for restart-PC selection and is '0' for an I-side
+	  -- MULTI_HIT, which silently fell into the D-side "no grace" case below
+	  -- and reproduced the Defect-6 lost-writeback on that fault kind. The
+	  -- gate now uses tlb_exc_ifetch, which is true for every I-side
+	  -- exc_kind (IMISS/IPROT/MULTI_HIT); tlb_exc_is_i remains reserved for
+	  -- picking the restart-PC derivation only. The case analysis below is
+	  -- otherwise unchanged:
+	  --   * D-side fault (tlb_exc_ifetch='0'), including one taken BY a
+	  --     delay-slot instruction: the restart is at the BRANCH (or at the
+	  --     faulting instruction itself), so the pending write WILL be
+	  --     re-executed and MUST be squashed. No grace. This is case (a).
 	  --   * I-side fault on a DELAY-SLOT fetch (delay_slot='1'): the restart is
 	  --     backed up to the branch (tlb_fault_va - 2), so the branch re-issues
 	  --     and re-executes its delay slot. No grace.
 	  --     COVERAGE WARNING -- this arm of the gate is UNGUARDED, reasoning
-	  --     only. Dropping the term (z_grace <= tlb_exc_is_i) leaves all 68
+	  --     only. Dropping the term (z_grace <= tlb_exc_ifetch) leaves all 68
 	  --     guards passing, so `not delay_slot' is NOT proven load-bearing; it
 	  --     may well be benign here, since for an I-side delay-slot fetch fault
 	  --     the pending write is plausibly older and not re-executed either.
@@ -915,11 +950,13 @@ end generate;
 	  --     orphans named in docs/architecture/tlb.md section 9.5 item 3. Do
 	  --     not read this term as tested, and do not delete it on the strength
 	  --     of a green suite.
-	  --     (The tlb_exc_is_i half IS proven load-bearing in both directions:
+	  --     (The tlb_exc_ifetch half IS proven load-bearing in both directions:
 	  --     forcing z_grace to '0' fails mmudrain leg D, and forcing it to '1'
-	  --     -- i.e. granting grace on the D-side too -- fails leg A.)
+	  --     -- i.e. granting grace on the D-side too -- fails leg A. It is
+	  --     further exercised on the I-side MULTI_HIT guard added for this
+	  --     fix, see m8_multihit_ifetch below.)
 	  --   * I-side fault whose restart PC IS the faulting fetch VA
-	  --     (tlb_exc_is_i='1', delay_slot='0'): nothing younger than the faulting
+	  --     (tlb_exc_ifetch='1', delay_slot='0'): nothing younger than the faulting
 	  --     FETCH can be in EX -- the instruction at the faulting VA never
 	  --     entered the pipe -- so the writeback pending when the squash arms is
 	  --     architecturally OLDER and MUST commit. Grace. This is case (b).
@@ -958,7 +995,7 @@ end generate;
 	      z_grace <= '0';
 	    elsif clk = '1' and clk'event then
 	      if tlb_squash_r = '0' and squash_arm = '1' then
-	        z_grace <= tlb_exc_is_i and not delay_slot;
+	        z_grace <= tlb_exc_ifetch and not delay_slot;
 	      elsif slot_o = '1' then
 	        z_grace <= '0';
 	      end if;
@@ -1061,7 +1098,7 @@ end generate;
 	      -- ma_numz/ma_base/ma_autoupd are stale on an I-fetch fault.
 	      if tlb_squash_r = '0' and squash_arm = '1' then
 	        pend2_r <= ainc_pre_r and prev_ok and this'register.ma_autoupd
-	                   and (not tlb_exc_is_i);
+	                   and (not tlb_exc_ifetch);
 	      elsif restore2_fire = '1' then
 	        pend2_r <= '0';
 	      end if;
@@ -1210,7 +1247,7 @@ end generate;
 
 	ibit <= sr.int_mask;
 
-	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, squash_arm, tlb_fault_va, tlb_exc_expevt, tlb_exc_fsr, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, tlb_exc_is_i, ex_if_pc)
+	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, squash_arm, tlb_fault_va, tlb_exc_expevt, tlb_exc_fsr, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, tlb_exc_is_i, tlb_exc_ifetch, ex_if_pc)
 	  register this when clk='1' and clk'event reset when rst='1';
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
@@ -1349,16 +1386,23 @@ end generate;
             -- (ma_base) since their faulting VA is the ALREADY-decremented
             -- address. Both retarget the same shadowed base register (ma_numz).
             --
-            -- Gated on tlb_exc_is_i='0': arm the restore for D-SIDE faults ONLY.
-            -- ma_numz / ma_autoupd / ma_predec are written only at the
+            -- Gated on tlb_exc_ifetch='0': arm the restore for D-SIDE faults
+            -- ONLY. ma_numz / ma_autoupd / ma_predec are written only at the
             -- memory-access pipeline point and are never cleared on a non-memory
-            -- instruction, so on an INSTRUCTION-FETCH fault (IMISS/IPROT) they
-            -- still hold the last post-increment load's base register and a
-            -- stale ma_autoupd='1'.  Un-gated, that armed a bogus restore and
-            -- restore_fire wrote the I-side faulting FETCH VA into that GPR.
-            -- Both branches must be gated: a pre-decrement store shadow is
-            -- equally stale on an I-side fault.
-            if tlb_exc_is_i = '1' then
+            -- instruction, so on ANY instruction-fetch fault (IMISS/IPROT/
+            -- MULTI_HIT) they still hold the last post-increment load's base
+            -- register and a stale ma_autoupd='1'. Un-gated, that armed a bogus
+            -- restore and restore_fire wrote the I-side faulting FETCH VA into
+            -- that GPR. Both branches must be gated: a pre-decrement store
+            -- shadow is equally stale on an I-side fault.
+            --
+            -- MUST use tlb_exc_ifetch here, NOT tlb_exc_is_i: tlb_exc_is_i is
+            -- deliberately narrowed to IMISS/IPROT (it exists only to pick the
+            -- restart-PC derivation, see the comment above). An I-side
+            -- MULTI_HIT has tlb_exc_is_i='0' -- reusing it here left MULTI_HIT
+            -- taking the D-side arm below and clobbering a GPR from a stale
+            -- shadow (the bug this comment used to describe as fixed).
+            if tlb_exc_ifetch = '1' then
               this.tlb_restore_val  := tlb_fault_va;
               this.tlb_restore_pend := '0';
             elsif PRIV_ARCH and this.ma_predec = '1' then

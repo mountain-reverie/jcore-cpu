@@ -98,6 +98,7 @@ package datapath_pack is
       tlb_exc_fsr        : in    std_logic_vector(12 downto 0) := (others => '0');
       delay_slot         : in    std_logic := '0';
       tlb_exc_is_i       : in    std_logic := '0';
+      tlb_exc_ifetch     : in    std_logic := '0';
       if_pc              : out   std_logic_vector(31 downto 0);
       ex_if_pc           : in    std_logic_vector(31 downto 0) := (others => '0')
     );

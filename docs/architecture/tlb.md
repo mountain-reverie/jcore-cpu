@@ -388,25 +388,60 @@ original address by subtracting the 4 it just added.
 
 **Model C (concurrent) — 14:** every `@-Rn` store (`MOV.{B,W,L} Rm,@-Rn`,
 `STS.L {PR,MACH,MACL},@-Rn`, `STC.L {SR,GBR,VBR},@-Rn`), `LDS.L @Rm+,{MACH,MACL}`,
-`MAC.{L,W} @Rm+,@Rn+`, and `MOVMU.L Rm,@-R15`. The z-port write lands in the same
-slot as the access, one cycle before `tlb_squash` can arm — so `reg_wr_z_g`
-suppression cannot reach it and the undo path is mandatory.
+`MAC.{L,W} @Rm+,@Rn+`, `RTE` (two consecutive `@R15+` pops, base bump committing
+in the access slot — structurally identical to the MAC dual-base case; see
+`core/datapath.vhm:833-840`, which names it explicitly alongside MAC as the
+other dual-`mem_autoinc1` form), and `MOVMU.L Rm,@-R15`. The z-port write lands
+in the same slot as the access, one cycle before `tlb_squash` can arm — so
+`reg_wr_z_g` suppression cannot reach it and the undo path is mandatory.
+`RTE`'s restart safety is unexercised: `squash_arm` requires `sr.rb = '0'`
+(user mode), and RTE runs in the handler (`sr.rb = '1'`), so the squash window
+this whole section describes never arms for it in practice.
 
-**Multi-access forms (more than one base to restore): 4** — `MAC.L @Rm+,@Rn+`,
-`MAC.W @Rm+,@Rn+`, `MOVMU.L Rm,@-R15`, `MOVMU.L @R15+,Rn`.
+**Multi-access forms (more than one base to restore): 2** — `MAC.L @Rm+,@Rn+`,
+`MAC.W @Rm+,@Rn+` (plus `RTE`, see above — 3 including it). `MOVMU.L @R15+,Rn`
+is **not** a multi-access form: it is Model A (§9.3 above) — R15 is written
+once, in the terminal slot, not per-operand — and was previously listed here
+in error, contradicting its own Model-A classification two paragraphs up.
+`MOVMU.L Rm,@-R15` is also not a multi-*base* form: it is **one** base (R15)
+decremented N times, which two restore entries cannot structurally undo (see
+§9.4/§9.5 — this is a limitation, not a coverage gap to close by adding more
+entries).
 
 ### 9.4 How the contract is met today
 
 - **Model A** — nothing to do; the base never moves before the fault.
 - **Model B** — `reg_wr_z_g` suppression under `tlb_squash`, plus the
-  `mem_autoupd` restore for the case where the fault arrives after the bump has
-  committed.
-- **Model C** — the restore path only: `mem_autoinc1` (single-slot `@Rm+`),
+  `mem_autoupd` restore, **for the 3 base-ISA forms only**
+  (`MOV.{B,W,L} @Rm+,Rn`). The SH-2A forms nominally counted in the same
+  Model-B bucket are **not** covered by this mechanism:
+  - `MOV.{B,W,L} R0,@Rn+` (store direction) does not match `mem_autoupd` at
+    all (`mem_autoupd` requires `mem.wr = '0'`, a read). Its slot1 is
+    `ma_op=WRITE, ma_addy=ZBUS, arith=SUB` (`decode/gen-go/spec/sh2a/mov.toml:556-580`),
+    which instead matches `mem_predec` (`core/datapath.vhm:480-482`). But
+    `mem_predec`'s restore value is `ma_base := xbus` captured *at the fault
+    slot*, and on this instruction's shape `xbus` (= Rn) has **already been
+    bumped by slot0** by the time the fault slot runs — so the "restore"
+    writes back the already-bumped value and is a no-op.
+  - `MOV.{B,W,L} @-Rm,R0` (load direction) matches **no** restore signature at
+    all (neither `mem_autoupd` nor `mem_predec` nor `mem_autoinc1`).
+  - That is 6 of the 9 nominal Model-B forms (the 3 store + 3 load SH-2A
+    variants) silently uncovered. This is **latent, not live**: `SH2A_ARCH`
+    and `MMU_ARCH` are never both set in a shipping configuration today, so
+    no current build can exercise it — but the code as written does not
+    protect these 6 forms, and the SH-2A + MMU restart-safety gap is already
+    tracked in §9.5 item 1 for the multi-access forms; this extends the same
+    gap to these 6 single-access ones.
+- **Model C** — the restore path only: `mem_autoinc1` (single-slot `@Rm+`,
+  also covering `RTE`'s first pop via the second-entry mechanism below),
   `mem_predec` (`@-Rn` stores, restoring the captured pre-decrement base), and a
-  **second restore entry** for the MAC dual-base case, which restores operand 1's
-  base as well as operand 2's.
-- The restore arms for **D-side faults only** (`tlb_exc_is_i = '0'`); an
-  instruction-fetch fault must never inherit a stale data-side shadow.
+  **second restore entry** for dual-base forms (MAC, and structurally RTE),
+  which restores operand 1's base as well as operand 2's.
+- The restore arms for **D-side faults only**, gated on `tlb_exc_ifetch = '0'`
+  (not `tlb_exc_is_i`, which is deliberately narrower — reserved for the
+  restart-PC derivation, see `core/cpu.vhd`'s declaration comment for both
+  signals); an instruction-fetch fault of ANY kind (IMISS/IPROT/MULTI_HIT)
+  must never inherit a stale data-side shadow.
 - **Age exemptions on the squash.** The squash window is a pure *time* window,
   so on its own it also discards the writeback of an instruction that is
   architecturally **older** than the faulting access and will therefore never
@@ -444,10 +479,19 @@ positions), `mmurestartpc`, `mmupcprobe`, `mmudspcprobe` (restart-PC exactness).
 
 Known gaps, in priority order:
 
-1. **`MOVMU.L Rm,@-R15` is a Model-C multi-access form with no MMU coverage.**
-   It is the same shape as the MAC dual-base case, in the SH-2A variant, and
-   SH-2A + MMU restart safety is untested — the J2A decoder lacks the privileged
-   MMU instructions the guards need, so those tests have never genuinely run.
+1. **`MOVMU.L Rm,@-R15` is a Model-C form that is STRUCTURALLY unrestartable,
+   not merely uncovered.** It is not the MAC dual-base *shape*: MAC touches
+   two independent bases (Rm, Rn), one restore entry each. `MOVMU.L Rm,@-R15`
+   is **one** base (R15) decremented once per register in the mask, N times
+   in a single instruction. A fault partway through has already committed
+   N' < N of those decrements, and the two-entry restore mechanism (built for
+   *two bases*, not *N decrements of one base*) cannot reconstruct which N'
+   it was — the spec row says so explicitly ("NOT restart-safe, by design",
+   `decode/gen-go/spec/sh2a/mov.toml:406`). This is a structural limitation
+   of the instruction's restart contract, not a gap this machinery is meant
+   to close by adding more entries; SH-2A + MMU restart safety is separately
+   untested regardless — the J2A decoder lacks the privileged MMU
+   instructions the guards need, so those tests have never genuinely run.
 2. **Faulting-*load* trains alternating with an I-side miss are uncovered.**
    `mmudrain` legs C and D closed the store side (burst and alternating); the
    remaining hole is leg B, the alternating shape on the **load** side. Leg D

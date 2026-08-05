@@ -219,6 +219,22 @@ else
   # template. Parked so the suite stays readable, NOT because the failure is
   # dismissed. Re-enable when resolved.
   # run_guard m8_dsdslot_0 "" 200us
+  # mmudspcprobe_late: PARKED. This is a standing reproducer for Defect 7
+  # (D-side TLB fault in a branch delay slot restarts on the delay-slot
+  # instruction instead of the branch, when the faulting ACCESS launches in
+  # a slot after slot 0 -- see the Defect 7 writeup above and
+  # decode/gen-go/internal/faultgen/emit.go's lateAccess()). It is the
+  # single-case analogue of m8_dsdslot_0's 4 late-access exclusions, built
+  # from mmudspcprobe.S (which pins the slot-0 arm to exactness and PASSES)
+  # with the delay-slot instruction swapped for MOV.L @Rm+,Rn (access in
+  # slot 1). It is EXPECTED RED: measured Result=65793 (0x00010101), the
+  # guard's own documented encoding for "restart landed on the delay slot".
+  # Run it directly with:
+  #   sim/mmu_sim.sh -n mmudspcprobe_late cpu_tb 80us
+  # Do not "fix" the guard to make it pass -- move this run_guard line into
+  # the active list (and drop the "expected RED" comment above it) only
+  # once Defect 7 itself is fixed in core/datapath.vhm.
+  # run_guard mmudspcprobe_late cpu_tb 80us
   run_guard m8_macarith
   run_guard m8_macseq
   run_guard m8_ifetch_0 "" 12ms 240

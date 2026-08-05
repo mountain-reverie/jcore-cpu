@@ -100,6 +100,17 @@ CPU_DECODE_GEN_NAMES := decode_pkg.vhd decode.vhd decode_body.vhd \
 CPU_DECODE_GENERATED := $(addprefix $(DECODE_GEN_DIR)/decode/,$(CPU_DECODE_GEN_NAMES))
 CPU_ROM_WIDTH ?= 72
 
+# CPU_ROM_WIDTH is NOT part of DECODE_GEN_DIR's key (only CPU_VARIANT is), so
+# two consumers of the SAME variant with different CPU_ROM_WIDTH would
+# otherwise silently share whichever one built first -- the identical
+# staleness class the per-variant directory exists to prevent, just one
+# level down. CPU_DECODE_ROM_WIDTH_STAMP is a marker for "this directory's
+# six files were built for THIS width"; it is a member of the grouped
+# target below, so a width mismatch (stamp for the requested width missing)
+# forces the whole group to regenerate -- atomically, like everything else
+# in the group -- rather than only rebuilding the stamp itself.
+CPU_DECODE_ROM_WIDTH_STAMP := $(DECODE_GEN_DIR)/decode/.rom_width_$(CPU_ROM_WIDTH)
+
 # Spec inputs cpugen actually reads: the always-loaded base spec/*.toml, plus
 # -- only when this variant has an overlay -- that overlay's own
 # spec/<overlay>/*.toml subtree. A variant with no overlay (e.g. j2) must NOT
@@ -120,7 +131,7 @@ CPU_DECODE_GEN_SRC          := $(shell find $(CPU_INC_DIR)decode/gen-go/cmd/cpug
 # writing the same six files in the same directory -- wasteful, and a race
 # that can leave DECODE_GEN_DIR partially populated. `go`'s own `-C`-based
 # in-tree module cache builds are not safe to run N-way concurrently either.
-$(CPU_DECODE_GENERATED) &: $(CPU_INC_DIR)variants.toml $(CPU_DECODE_GEN_BASE_SPEC) \
+$(CPU_DECODE_GENERATED) $(CPU_DECODE_ROM_WIDTH_STAMP) &: $(CPU_INC_DIR)variants.toml $(CPU_DECODE_GEN_BASE_SPEC) \
                             $(CPU_DECODE_GEN_OVERLAY_SPEC) $(CPU_DECODE_GEN_SRC)
 	@command -v go >/dev/null 2>&1 || { \
 	  echo "ERROR: go is required to generate the $(CPU_VARIANT) decoder." >&2; exit 1; }
@@ -128,5 +139,7 @@ $(CPU_DECODE_GENERATED) &: $(CPU_INC_DIR)variants.toml $(CPU_DECODE_GEN_BASE_SPE
 	go -C $(CPU_INC_DIR)decode/gen-go run ./cmd/cpugen -w $(CPU_ROM_WIDTH) \
 	  $(if $(CPU_OVERLAY),-overlay spec/$(CPU_OVERLAY)) -illegal full \
 	  -o $(abspath $(DECODE_GEN_DIR)/decode)
+	@rm -f $(DECODE_GEN_DIR)/decode/.rom_width_*
+	@touch $(CPU_DECODE_ROM_WIDTH_STAMP)
 
 include $(CPU_INC_DIR)build_core.mk

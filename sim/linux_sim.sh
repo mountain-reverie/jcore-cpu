@@ -4,8 +4,9 @@
 # entry}.S) against the jcore-cpu GHDL cosim, via a bare-metal harness
 # (sim/tests/mmulinux.S) that links those real kbuild-produced objects.
 #
-# Mirrors sim/mmu_sim.sh (MMU-on cosim build/restore-base-decoder dance) plus
-# the two gotchas SP2 Task 0 de-risked:
+# Mirrors sim/mmu_sim.sh (MMU-on cosim via CPU_VARIANT=j4, out-of-tree overlay
+# decoder under sim/gen/j4-w<width>, never touching the committed in-tree
+# decode/*.vhd) plus the two gotchas SP2 Task 0 de-risked:
 #
 #  1. kbuild reaches the WIP J4 gas (binutils-gdb/build-sh2/gas/as-new) via
 #     CC="sh2-elf-gcc -B<dir-with-as-symlink>" -- there is no clean AS=
@@ -47,11 +48,6 @@ if [ "${1:-}" = "-n" ]; then BUILD=0; shift; fi
 
 name="${1:-mmulinux}"
 
-# Always restore the committed base decoder on exit (generate-j4 overwrites the
-# tracked decode/*.vhd + sh2instr.c with the J4 overlay).
-restore_base() { make -C "$ROOT/decode" generate >/dev/null 2>&1 || true; }
-trap restore_base EXIT
-
 if [ "$BUILD" = 1 ]; then
   echo "== build linux@jcore objects (kbuild via the WIP J4 gas) =="
   mkdir -p "$J4BIN"
@@ -65,8 +61,6 @@ if [ "$BUILD" = 1 ]; then
          arch/sh/kernel/cpu/jcore/mmu_enable.o
   ) || { echo "ERROR: linux@jcore object build failed" >&2; exit 1; }
 
-  echo "== generate-j4 (J4 overlay decoder: PRIV_ARCH + MMU instructions) =="
-  make -C decode generate-j4 >/dev/null
   echo "== preprocess dcache/icache .vhm cores -> .vhd =="
   for f in cache/dcache_ccl cache/dcache_mcl cache/icache_ccl cache/icache_mcl; do
     LD_LIBRARY_PATH='' perl "$JCORE_SOC/tools/v2p" < "$f.vhm" > "$f.vhd"
@@ -75,7 +69,7 @@ if [ "$BUILD" = 1 ]; then
   echo "== build MMU-on cosim (cpu_ctb + cpu_tb) =="
   cd sim
   rm -f work-obj93.cf cpu_tb.vhh cpu_ctb
-  make CONFIG_PRIV_ARCH=1 cpu_ctb cpu_tb cpu_tb.vhh work-obj93.cf >/dev/null
+  make CPU_VARIANT=j4 cpu_ctb cpu_tb cpu_tb.vhh work-obj93.cf >/dev/null
   grep -q 'PRIV_ARCH => true' cpu_tb.vhh \
     || { echo "FAIL: build is not MMU-on (stale cpu_tb.vhh?)" >&2; exit 1; }
   cd ..
@@ -88,7 +82,7 @@ echo "== build $name.img (real linux@jcore objects, J4-built ld) =="
 rm -f "tests/$name.img" "tests/$name.o" "tests/$name.elf"
 make -C tests LINUX_SRC="$LINUX_SRC" J4GAS="$J4GAS" J4LD="$J4LD" \
      J4OBJCOPY="$J4OBJCOPY" J4BIN="$J4BIN" \
-     CONFIG_PRIV_ARCH=1 "$name.img"
+     CPU_VARIANT=j4 "$name.img"
 
 out="$(timeout 120 ./cpu_ctb --stop-time=200us -i "tests/$name.img" --ieee-asserts=disable 2>&1 || true)"
 echo "$out"

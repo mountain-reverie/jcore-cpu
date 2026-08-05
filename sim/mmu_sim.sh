@@ -3,14 +3,17 @@
 # full-regression "functional-guards" job. Works on the local mcode GHDL.
 #
 # THE GOTCHA THIS SOLVES: the MMU instructions (LDTLB, PTEH/PTEL/ASIDR overlays,
-# LDTLB.R, ...) live in the J4 OVERLAY decoder. A plain `make -C decode generate`
-# (base decoder) build silently OMITS every MMU instruction -> LDTLB decodes to
-# nothing -> the TLB never installs -> every MMU guard fails or hangs (and
-# coverage-style guards can "pass" vacuously). The cosim MUST be built after
-# `make -C decode generate-j4`. This script does that, builds, runs, and then
-# RESTORES the committed base decoder on exit (committed tables must stay base;
-# committing J4-overlay tables is a known Fmax regression -- see
-# jcore-base-decoder-j4-overlay-regression).
+# LDTLB.R, ...) live in the J4 OVERLAY decoder. A plain base-decoder build
+# silently OMITS every MMU instruction -> LDTLB decodes to nothing -> the TLB
+# never installs -> every MMU guard fails or hangs (and coverage-style guards
+# can "pass" vacuously). The cosim MUST be built with CPU_VARIANT=j4, which
+# sim/Makefile (via ../Makefile.inc + variants.toml) resolves to the J4-overlay
+# decoder generated OUT-OF-TREE under sim/gen/j4-w<width>/decode -- it never
+# touches the committed in-tree decode/*.vhd (which must stay base; committing
+# J4-overlay tables is a known Fmax regression -- see
+# jcore-base-decoder-j4-overlay-regression). CONFIG_PRIV_ARCH is itself derived
+# from CPU_VARIANT by sim/Makefile and sim/tests/Makefile, so it is not passed
+# here directly.
 #
 # Usage:
 #   sim/mmu_sim.sh                       # build + run the full guard suite
@@ -24,16 +27,6 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
 export JCORE_SOC="${JCORE_SOC:-$ROOT/../jcore-soc}"
 [ -d "$JCORE_SOC" ] || { echo "ERROR: JCORE_SOC not found at $JCORE_SOC" >&2; exit 1; }
-
-if [ -z "${MMU_SIM_INNER:-}" ]; then
-  # Re-exec the whole script body under synth/with_overlay_decoder.sh, which
-  # regenerates the J4 overlay decoder (PRIV_ARCH + MMU instructions), runs
-  # the build + guards below, and ALWAYS restores the committed base decoder
-  # on exit (committed tables must stay base; committing J4-overlay tables is
-  # a known Fmax regression -- see jcore-base-decoder-j4-overlay-regression).
-  export MMU_SIM_INNER=1
-  exec "$ROOT/synth/with_overlay_decoder.sh" sh4 -- "$0" "$@"
-fi
 
 BUILD=1
 if [ "${1:-}" = "-n" ]; then BUILD=0; shift; fi
@@ -49,7 +42,7 @@ if [ "$BUILD" = 1 ]; then
   echo "== build MMU-on cosim (cpu_ctb + cpu_tb + cpu_cache_tb) =="
   cd sim
   rm -f work-obj93.cf cpu_tb.vhh cpu_cache_tb.vhh cpu_ctb cpu_cache_tb
-  make CONFIG_PRIV_ARCH=1 \
+  make CPU_VARIANT=j4 \
        cpu_ctb cpu_tb cpu_cache_tb cpu_tb.vhh work-obj93.cf >/dev/null
   grep -q 'PRIV_ARCH => true' cpu_tb.vhh \
     || { echo "FAIL: build is not MMU-on (stale cpu_tb.vhh?)" >&2; exit 1; }
@@ -66,7 +59,7 @@ run_guard() {  # <name> <sim_top-or-default> [stop-time] [wall-timeout-s]
   # Capture the build rather than discarding it: a failing make otherwise
   # produces no diagnostic and the guard just looks like it vanished.
   local build
-  if ! build="$(make CONFIG_PRIV_ARCH=1 -C tests $t.img 2>&1)"; then
+  if ! build="$(make CPU_VARIANT=j4 -C tests $t.img 2>&1)"; then
     echo "  FAIL  $t${top:+ [$top]} (build)"
     echo "$build" | tail -20
     fail=1

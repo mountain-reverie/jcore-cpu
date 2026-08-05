@@ -15,7 +15,7 @@ func TestEmitMake(t *testing.T) {
 		"CPU_VARIANT_j4_GENERICS := PRIV_ARCH=true",
 		"CPU_VARIANT_j4_OVERLAY := sh4",
 		"CPU_VARIANT_j4_EXTRA_FILES := core/tlb.vhd",
-		"CPU_VARIANT_j4_CONFIG_FILE := core/cpu_config.vhd",
+		"CPU_VARIANT_j4_CONFIG_FILE := core/cpu_config_j4.vhd",
 		"CPU_VARIANT_j2_OVERLAY :=",
 	} {
 		if !strings.Contains(got, want) {

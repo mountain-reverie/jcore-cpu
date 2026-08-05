@@ -139,6 +139,25 @@ func encodeWord(c Class) (uint16, error) {
 	return word, nil
 }
 
+// lateAccess reports whether the instruction's D-side memory access (the
+// slot carrying ma_op=READ/WRITE) launches in a slot AFTER slot 0. This is
+// the Defect 7 discriminator: ma_dslot is shadowed at the access-launch
+// point, so if the pipeline's delay-slot flag has already deasserted by the
+// time a later slot launches its access, the restart takes the normal
+// (non-delay-slot) arm and lands on the faulting instruction itself instead
+// of the branch. Slot-0-access forms launch before delay_slot can drop and
+// are unaffected; multi-slot forms whose access is not in slot 0 (locked
+// RMW forms, and post-increment @Rm+ loads/stores, which spend slot 0
+// computing/writing the incremented base before the access slot) are.
+func lateAccess(c Class) bool {
+	for i, sl := range c.Instr.Slots {
+		if sl["ma_op"] == "WRITE" || sl["ma_op"] == "READ" {
+			return i != 0
+		}
+	}
+	return false
+}
+
 // dispScale returns the displacement scale (1/2/4) of the memory-accessing
 // slot, read from its alu_y field ("U"=*1, "U*2", "U*4").
 func dispScale(c Class) int {
@@ -1044,6 +1063,10 @@ func emitDSideDSlot(c Class, id int) (string, string, error) {
 	}
 	if strings.HasPrefix(c.Instr.Name, "CAS.") && regBase != 0 {
 		return fmt.Sprintf("! case %d skipped: %s: implicit-R0 pointer requires regBase==r0 (currently r%d)\n", id, c.Instr.Name, regBase),
+			"", errSkip
+	}
+	if lateAccess(c) {
+		return fmt.Sprintf("! case %d skipped: %s: Defect 7: a D-side fault in a branch delay slot restarts at the delay-slot instruction instead of the branch when the faulting access launches in a slot after slot 0 (multi-slot memory forms -- locked RMW and post-increment @Rm+ -- shadow ma_dslot past deassertion at access-launch); re-enable when fixed\n", id, c.Instr.Name),
 			"", errSkip
 	}
 	word, err := encodeWord(c)

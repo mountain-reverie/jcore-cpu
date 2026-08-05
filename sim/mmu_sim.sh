@@ -182,28 +182,35 @@ else
 #   m8_idslot_0   Test failed. Result=2
 #   m8_idslot_1   Test failed. Result=2
 #   m8_idslot_2   Test failed. Result=2
-#   m8_dsdslot_0  Test failed. Result=1 (bus_monitor: "Rd did not see ACK for
-#                 data sram" @6990ns) -- HANGS, not a data mismatch. First
-#                 case is CAS.L Rm,Rn,@R0; bisected standalone (single-case
-#                 images) to confirm it is genuinely case-specific, not
-#                 accumulation: CAS.L alone hangs, MOV.B @Rm+,Rn alone also
-#                 hangs, MOV.B @Rm,Rn (no auto-modify) alone PASSES. This
-#                 axis's branch-target vacuity bug (buggy and correct restart
-#                 PCs coincided, so it could never fail) was fixed 2026-08-04
-#                 review round; fixing it immediately exposed this hang on
-#                 CLEAN RTL, before any mutation. Per the same-shaped
-#                 emitIFetchDSlot convergent-target flaw noted below,
-#                 m8_idslot_* likely share -- as a SEPARATE, already-being-
-#                 investigated defect -- this same vacuity, so their failures
-#                 may currently be masking it too. Root cause undiagnosed;
-#                 needs its own investigation like m8_idslot_*'s bus-ACK hang.
-#                 Not invoked below until diagnosed.
 #
-# m8_smoke passes and is wired into the run below. Fixing the other four is
-# its own piece of work; until then they are deliberately not invoked, and
-# this comment is the reason why.
+# m8_dsdslot_0 (2026-08-04 review round): the axis's branch-target vacuity
+# bug (buggy and correct restart PCs coincided, so it could never fail) was
+# fixed via a poison trap. Fixing it exposed a bus-ACK hang (Result=1, "Rd
+# did not see ACK for data sram") on CAS.L Rm,Rn,@R0 and MOV.B @Rm+,Rn on
+# CLEAN RTL. Root-caused via dp_if_pc + spec slot classification: BOTH are
+# the SAME defect ("Defect 7") -- any D-side memory access whose ma_op slot
+# launches after slot 0 (locked RMW forms, and post-increment @Rm+
+# loads/stores, which spend slot 0 writing the incremented base before the
+# access slot) shadows ma_dslot past its deassertion, so a DMISS in that
+# slot restarts at the delay-slot instruction itself instead of the branch.
+# Slot-0-access forms (plain @Rm, @-Rn, @(disp,Rm/Rn), register-direct) are
+# unaffected -- confirmed against every one of the 26 spec-classified cases
+# in m8_dsdslot_0 (22 slot-0, all PASS; 4 late-access: CAS.L Rm,Rn,@R0,
+# MOV.B/L/W @Rm+,Rn, all Defect 7). The 4 late-access cases are now emitted
+# by the generator as explicit documented skips citing Defect 7 (see
+# decode/gen-go/internal/faultgen/emit.go's lateAccess + m8_manifest.txt);
+# the remaining 22 cases are wired in below. Per the same-shaped
+# emitIFetchDSlot convergent-target flaw noted below, m8_idslot_* likely
+# share this same vacuity as a SEPARATE, still-uninvestigated defect, so
+# their bus-ACK-hang failures above may currently be masking it too; not
+# invoked below until diagnosed.
+#
+# m8_smoke passes and is wired into the run below. Fixing m8_idslot_* and
+# Defect 7 are their own pieces of work; until then m8_idslot_* stays out,
+# and this comment is the reason why.
   run_guard m8_smoke
   run_guard m8_dside    "" 200us
+  run_guard m8_dsdslot_0 "" 200us
   run_guard m8_macarith
   run_guard m8_macseq
   run_guard m8_ifetch_0 "" 12ms 240

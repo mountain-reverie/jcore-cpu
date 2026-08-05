@@ -17,7 +17,7 @@ CONFIG_SH2A_ARCH := $(if $(filter j2a,$(CPU_VARIANT)),1,0)
 CFLAGS = -m2 -g -Os -Wall -Iinclude -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_SH2A_ARCH=$(CONFIG_SH2A_ARCH)
 LDFLAGS = -T sh32.x -Map main.map
 
-all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img rteredir.img mmureg.img mmuguard.img mmuxlate.img mmufault.img mmufsr.img mmudslot.img mmurte.img mmustore.img mmuimiss.img mmuimiss_illegal.img mmusr.img mmuicolor.img mmudcbit.img mmuldtlbr.img mmutsb.img mmurun.img mmuidx.img mmustres.img mmustr2.img mmudrain.img mmuimissrest.img mmushadowld.img mmushadowst.img mmurestartpc.img mmupcprobe.img mmudspcprobe.img mmusmep.img mmuirun.img mmuainc.img mmuainc2.img mmureloc.img mmurelocif.img mmurelocbp.img mmustale.img mmuasid.img mmuglobal.img mmumultihit.img mmudblflt.img mmunest_trapa.img mmunest_slotill.img mmunest.img mmuremap.img mmucmpcsr.img mmupage4k.img mmupagereloc16k.img mmupage16k.img mmupage64k.img mmupage1m.img mmupagemix.img mmupagemix2.img mmupagewalk.img m8_smoke.img m8_dside.img m8_ifetch_0.img m8_ifetch_1.img m8_ifetch_2.img m8_macarith.img m8_macseq.img
+all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img rteredir.img mmureg.img mmuguard.img mmuxlate.img mmufault.img mmufsr.img mmudslot.img mmurte.img mmustore.img mmuimiss.img mmuimiss_illegal.img mmusr.img mmuicolor.img mmudcbit.img mmuldtlbr.img mmutsb.img mmurun.img mmuidx.img mmustres.img mmustr2.img mmudrain.img mmuimissrest.img mmushadowld.img mmushadowst.img mmurestartpc.img mmupcprobe.img mmudspcprobe.img mmusmep.img mmuirun.img mmuainc.img mmuainc2.img mmureloc.img mmurelocif.img mmurelocbp.img mmustale.img mmuasid.img mmuglobal.img mmumultihit.img mmudblflt.img mmunest_trapa.img mmunest_slotill.img mmunest.img mmuremap.img mmucmpcsr.img mmupage4k.img mmupagereloc16k.img mmupage16k.img mmupage64k.img mmupage1m.img mmupagemix.img mmupagemix2.img mmupagewalk.img m8_smoke.img m8_dside.img m8_ifetch_0.img m8_ifetch_1.img m8_ifetch_2.img m8_macarith.img m8_macseq.img m8_dsdslot_0.img
 
 # J4-only guard images. These require the J4/PRIV/MMU overlay decoder built
 # by sim/mmu_sim.sh to pass: the base-J2 cpu_ctb cannot fire illegal-
@@ -214,10 +214,18 @@ m8_idslot_0.elf: m8_idslot_0.o tlbwalk.o
 m8_idslot_1.elf: m8_idslot_1.o tlbwalk.o
 m8_idslot_2.elf: m8_idslot_2.o tlbwalk.o
 # m8_dsdslot_0: the data-side-fault-in-DELAY-SLOT sweep (General MOV.{B,W,L}
-# @Rm+/@-Rn forms planted in a branch delay slot, run straight-line P1; the
-# delay-slot instruction's DATA access DMISSes; the restart must land on the
-# branch and the per-form base-register restore apply exactly once). No
+# forms, STC.L/STS.L, TAS.B planted in a branch delay slot, run straight-line
+# P1; the delay-slot instruction's DATA access DMISSes; the restart must land
+# on the branch and any base-register update apply exactly once). No
 # cumulative-fetch ceiling applies here, so it is a single image.
+#
+# Cases whose faulting access launches in a slot AFTER slot 0 (CAS.L's locked
+# RMW, and the MOV.{B,W,L} @Rm+ post-increment loads) are emitter-skipped
+# with an explicit "Defect 7" reason: ma_dslot is shadowed at access-launch,
+# so a late-launching access restarts at the delay-slot instruction itself
+# instead of the branch. See sim/mmu_sim.sh and
+# decode/gen-go/internal/faultgen/emit.go (lateAccess). Re-enable those
+# cases via the emitter once Defect 7 is fixed.
 m8_dsdslot_0.elf: m8_dsdslot_0.o tlbwalk.o
 
 %.elf:

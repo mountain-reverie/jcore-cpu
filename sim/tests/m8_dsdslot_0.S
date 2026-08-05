@@ -25,156 +25,160 @@
 ! case 1 skipped: BT /S label is Bespoke (dedicated guard)
 ! case 1 skipped: BT label is Bespoke (dedicated guard)
 ! case 1 skipped: Break has no D-side memory access
-! case 2 skipped: CLDS CP0_Rm, CP0_COM has no D-side memory access
-! case 2 skipped: CLDS CPI_Rm, CPI_COM has no D-side memory access
-! case 2 skipped: CLRMAC has no D-side memory access
-! case 2 skipped: CLRT has no D-side memory access
-! case 2 skipped: CMP /EQ #imm, R0 has no D-side memory access
-! case 2 skipped: CMP /EQ Rm, Rn has no D-side memory access
-! case 2 skipped: CMP /GE Rm, Rn has no D-side memory access
-! case 2 skipped: CMP /GT Rm, Rn has no D-side memory access
-! case 2 skipped: CMP /HI Rm, Rn has no D-side memory access
-! case 2 skipped: CMP /HS Rm, Rn has no D-side memory access
-! case 2 skipped: CMP /STR Rm, Rn has no D-side memory access
-! case 2 skipped: CMP/EQ ASIDR, Rn has no D-side memory access
-! case 2 skipped: CMP/EQ PTEH, Rn has no D-side memory access
-! case 2 skipped: CMP/PL Rn has no D-side memory access
-! case 2 skipped: CMP/PZ Rn has no D-side memory access
-! case 2 skipped: CSTS CP0_COM, CP0_Rn has no D-side memory access
-! case 2 skipped: CSTS CPI_COM, CPI_Rn has no D-side memory access
-! case 2 skipped: DIV0S Rm, Rn has no D-side memory access
-! case 2 skipped: DIV0U has no D-side memory access
-! case 2 skipped: DIV1 Rm, Rn has no D-side memory access
-! case 2 skipped: DMULS.L Rm, Rn has no D-side memory access
-! case 2 skipped: DMULU.L Rm, Rn has no D-side memory access
-! case 2 skipped: DT Rn has no D-side memory access
-! case 2 skipped: EXTS.B Rm, Rn has no D-side memory access
-! case 2 skipped: EXTS.W Rm, Rn has no D-side memory access
-! case 2 skipped: EXTU.B Rm, Rn has no D-side memory access
-! case 2 skipped: EXTU.W Rm, Rn has no D-side memory access
-! case 2 skipped: Error has no D-side memory access
-! case 2 skipped: General Illegal has no D-side memory access
-! case 2 skipped: Interrupt has no D-side memory access
-! case 2 skipped: JMP @Rm is Bespoke (dedicated guard)
-! case 2 skipped: JSR @Rm is Bespoke (dedicated guard)
-! case 2 skipped: LDC Rm, ASIDR has no D-side memory access
-! case 2 skipped: LDC Rm, PTEH has no D-side memory access
-! case 2 skipped: LDC Rm, PTEL has no D-side memory access
-! case 2 skipped: LDC Rm, Rn_BANK has no D-side memory access
-! case 2 skipped: LDC Rm, SPC has no D-side memory access
-! case 2 skipped: LDC Rm, SR has no D-side memory access
-! case 2 skipped: LDC Rm, SSR has no D-side memory access
-! case 2 skipped: LDC Rm, VBR has no D-side memory access
-! case 2 skipped: LDC, Rm, GBR has no D-side memory access
-! case 2 skipped: LDC.L @Rm+, GBR: control-register memory load in a delay slot not yet modelled by DSideDSlot
-! case 2 skipped: LDC.L @Rm+, SR: control-register memory load in a delay slot not yet modelled by DSideDSlot
-! case 2 skipped: LDC.L @Rm+, VBR: control-register memory load in a delay slot not yet modelled by DSideDSlot
-! case 2 skipped: LDS Rm, CP0_COM has no D-side memory access
-! case 2 skipped: LDS Rm, CPI_COM has no D-side memory access
-! case 2 skipped: LDS Rm, MACH has no D-side memory access
-! case 2 skipped: LDS Rm, MACL has no D-side memory access
-! case 2 skipped: LDS Rm, PR has no D-side memory access
-! case 2 skipped: LDS.L @Rm+, MACH: control-register memory load in a delay slot not yet modelled by DSideDSlot
-! case 2 skipped: LDS.L @Rm+, MACL: control-register memory load in a delay slot not yet modelled by DSideDSlot
-! case 2 skipped: LDS.L @Rm+, PR: control-register memory load in a delay slot not yet modelled by DSideDSlot
-! case 2 skipped: LDTLB is Bespoke (dedicated guard)
-! case 2 skipped: LDTLB.RN is Bespoke (dedicated guard)
-! case 2 skipped: LDTLB.RN Rm has no D-side memory access
-! case 2 skipped: MAC.L @Rm+, @Rn+: MAC dual-pointer in a delay slot not yet modelled by DSideDSlot (the General @Rm+/@-Rn forms already exercise the delay-slot restart + base-restore path)
-! case 2 skipped: MAC.W @Rm+, @Rn+: MAC dual-pointer in a delay slot not yet modelled by DSideDSlot (the General @Rm+/@-Rn forms already exercise the delay-slot restart + base-restore path)
-! case 2 skipped: MOV #imm, Rn has no D-side memory access
-! case 2 skipped: MOV Rm, Rn has no D-side memory access
-! case 2 skipped: MOV.B @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 2 skipped: MOV.B @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 5 skipped: MOV.B R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 6 skipped: MOV.B Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 8 skipped: MOV.L @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 8 skipped: MOV.L @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 8 skipped: MOV.L @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
-! case 11 skipped: MOV.L R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 11 skipped: MOV.L Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 14 skipped: MOV.W @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 14 skipped: MOV.W @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 14 skipped: MOV.W @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
-! case 17 skipped: MOV.W R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 18 skipped: MOV.W Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 20 skipped: MOVA @(disp, PC), R0 has no D-side memory access
-! case 20 skipped: MOVT Rn has no D-side memory access
-! case 20 skipped: MUL.L Rm, Rn has no D-side memory access
-! case 20 skipped: MULS.W Rm, Rn has no D-side memory access
-! case 20 skipped: MULU.W Rm, Rn has no D-side memory access
-! case 20 skipped: NEG Rm, Rn has no D-side memory access
-! case 20 skipped: NEGC Rm, Rn has no D-side memory access
-! case 20 skipped: NOP has no D-side memory access
-! case 20 skipped: NOT Rm, Rn has no D-side memory access
-! case 20 skipped: OR #imm, R0 has no D-side memory access
-! case 20 skipped: OR Rm, Rn has no D-side memory access
-! case 20 skipped: OR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 20 skipped: ROTCL Rn has no D-side memory access
-! case 20 skipped: ROTCR Rn has no D-side memory access
-! case 20 skipped: ROTL Rn has no D-side memory access
-! case 20 skipped: ROTR Rn has no D-side memory access
-! case 20 skipped: RTE is Bespoke (dedicated guard)
-! case 20 skipped: RTS is Bespoke (dedicated guard)
-! case 20 skipped: Reset CPU: control-register memory store in a delay slot not yet modelled by DSideDSlot
-! case 20 skipped: SETT has no D-side memory access
-! case 20 skipped: SHAD Rm, Rn has no D-side memory access
-! case 20 skipped: SHAL Rn has no D-side memory access
-! case 20 skipped: SHAR Rn has no D-side memory access
-! case 20 skipped: SHLD Rm, Rn has no D-side memory access
-! case 20 skipped: SHLL Rn has no D-side memory access
-! case 20 skipped: SHLL16 Rn has no D-side memory access
-! case 20 skipped: SHLL2 Rn has no D-side memory access
-! case 20 skipped: SHLL8 Rn has no D-side memory access
-! case 20 skipped: SHLR Rn has no D-side memory access
-! case 20 skipped: SHLR16 Rn has no D-side memory access
-! case 20 skipped: SHLR2 Rn has no D-side memory access
-! case 20 skipped: SHLR8 Rn has no D-side memory access
-! case 20 skipped: SLEEP is Bespoke (dedicated guard)
-! case 20 skipped: STC ASIDR, Rn has no D-side memory access
-! case 20 skipped: STC EXPEVT, Rn has no D-side memory access
-! case 20 skipped: STC GBR, Rn has no D-side memory access
-! case 20 skipped: STC INTEVT, Rn has no D-side memory access
-! case 20 skipped: STC PTEH, Rn has no D-side memory access
-! case 20 skipped: STC PTEL, Rn has no D-side memory access
-! case 20 skipped: STC Rm_BANK, Rn has no D-side memory access
-! case 20 skipped: STC SPC, Rn has no D-side memory access
-! case 20 skipped: STC SR, Rn has no D-side memory access
-! case 20 skipped: STC SSR, Rn has no D-side memory access
-! case 20 skipped: STC TRA, Rn has no D-side memory access
-! case 20 skipped: STC TSBPTR, Rn has no D-side memory access
-! case 20 skipped: STC VBR, Rn has no D-side memory access
-! case 23 skipped: STS CP0_COM, Rn has no D-side memory access
-! case 23 skipped: STS CPI_COM, Rn has no D-side memory access
-! case 23 skipped: STS MACH, Rn has no D-side memory access
-! case 23 skipped: STS MACL, Rn has no D-side memory access
-! case 23 skipped: STS PR, Rn has no D-side memory access
-! case 26 skipped: SUB Rm, Rn has no D-side memory access
-! case 26 skipped: SUBC Rm, Rn has no D-side memory access
-! case 26 skipped: SUBV Rm, Rn has no D-side memory access
-! case 26 skipped: SWAP.B Rm, Rn has no D-side memory access
-! case 26 skipped: SWAP.W Rm, Rn has no D-side memory access
-! case 26 skipped: Slot Illegal has no D-side memory access
-! case 27 skipped: TLB DMISS R has no D-side memory access
-! case 27 skipped: TLB DMISS W has no D-side memory access
-! case 27 skipped: TLB DPROT R has no D-side memory access
-! case 27 skipped: TLB DPROT W has no D-side memory access
-! case 27 skipped: TLB IMISS has no D-side memory access
-! case 27 skipped: TLB IPROT has no D-side memory access
-! case 27 skipped: TRAPA #imm has no D-side memory access
-! case 27 skipped: TST #imm, R0 has no D-side memory access
-! case 27 skipped: TST Rm, Rn has no D-side memory access
-! case 27 skipped: TST.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 27 skipped: XOR #imm, R0 has no D-side memory access
-! case 27 skipped: XOR Rm, Rn has no D-side memory access
-! case 27 skipped: XOR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 27 skipped: XTRACT Rm, Rn has no D-side memory access
+! case 1 skipped: CAS.L Rm, Rn, @R0: Defect 7: a D-side fault in a branch delay slot restarts at the delay-slot instruction instead of the branch when the faulting access launches in a slot after slot 0 (multi-slot memory forms -- locked RMW and post-increment @Rm+ -- shadow ma_dslot past deassertion at access-launch); re-enable when fixed
+! case 1 skipped: CLDS CP0_Rm, CP0_COM has no D-side memory access
+! case 1 skipped: CLDS CPI_Rm, CPI_COM has no D-side memory access
+! case 1 skipped: CLRMAC has no D-side memory access
+! case 1 skipped: CLRT has no D-side memory access
+! case 1 skipped: CMP /EQ #imm, R0 has no D-side memory access
+! case 1 skipped: CMP /EQ Rm, Rn has no D-side memory access
+! case 1 skipped: CMP /GE Rm, Rn has no D-side memory access
+! case 1 skipped: CMP /GT Rm, Rn has no D-side memory access
+! case 1 skipped: CMP /HI Rm, Rn has no D-side memory access
+! case 1 skipped: CMP /HS Rm, Rn has no D-side memory access
+! case 1 skipped: CMP /STR Rm, Rn has no D-side memory access
+! case 1 skipped: CMP/EQ ASIDR, Rn has no D-side memory access
+! case 1 skipped: CMP/EQ PTEH, Rn has no D-side memory access
+! case 1 skipped: CMP/PL Rn has no D-side memory access
+! case 1 skipped: CMP/PZ Rn has no D-side memory access
+! case 1 skipped: CSTS CP0_COM, CP0_Rn has no D-side memory access
+! case 1 skipped: CSTS CPI_COM, CPI_Rn has no D-side memory access
+! case 1 skipped: DIV0S Rm, Rn has no D-side memory access
+! case 1 skipped: DIV0U has no D-side memory access
+! case 1 skipped: DIV1 Rm, Rn has no D-side memory access
+! case 1 skipped: DMULS.L Rm, Rn has no D-side memory access
+! case 1 skipped: DMULU.L Rm, Rn has no D-side memory access
+! case 1 skipped: DT Rn has no D-side memory access
+! case 1 skipped: EXTS.B Rm, Rn has no D-side memory access
+! case 1 skipped: EXTS.W Rm, Rn has no D-side memory access
+! case 1 skipped: EXTU.B Rm, Rn has no D-side memory access
+! case 1 skipped: EXTU.W Rm, Rn has no D-side memory access
+! case 1 skipped: Error has no D-side memory access
+! case 1 skipped: General Illegal has no D-side memory access
+! case 1 skipped: Interrupt has no D-side memory access
+! case 1 skipped: JMP @Rm is Bespoke (dedicated guard)
+! case 1 skipped: JSR @Rm is Bespoke (dedicated guard)
+! case 1 skipped: LDC Rm, ASIDR has no D-side memory access
+! case 1 skipped: LDC Rm, PTEH has no D-side memory access
+! case 1 skipped: LDC Rm, PTEL has no D-side memory access
+! case 1 skipped: LDC Rm, Rn_BANK has no D-side memory access
+! case 1 skipped: LDC Rm, SPC has no D-side memory access
+! case 1 skipped: LDC Rm, SR has no D-side memory access
+! case 1 skipped: LDC Rm, SSR has no D-side memory access
+! case 1 skipped: LDC Rm, VBR has no D-side memory access
+! case 1 skipped: LDC, Rm, GBR has no D-side memory access
+! case 1 skipped: LDC.L @Rm+, GBR: control-register memory load in a delay slot not yet modelled by DSideDSlot
+! case 1 skipped: LDC.L @Rm+, SR: control-register memory load in a delay slot not yet modelled by DSideDSlot
+! case 1 skipped: LDC.L @Rm+, VBR: control-register memory load in a delay slot not yet modelled by DSideDSlot
+! case 1 skipped: LDS Rm, CP0_COM has no D-side memory access
+! case 1 skipped: LDS Rm, CPI_COM has no D-side memory access
+! case 1 skipped: LDS Rm, MACH has no D-side memory access
+! case 1 skipped: LDS Rm, MACL has no D-side memory access
+! case 1 skipped: LDS Rm, PR has no D-side memory access
+! case 1 skipped: LDS.L @Rm+, MACH: control-register memory load in a delay slot not yet modelled by DSideDSlot
+! case 1 skipped: LDS.L @Rm+, MACL: control-register memory load in a delay slot not yet modelled by DSideDSlot
+! case 1 skipped: LDS.L @Rm+, PR: control-register memory load in a delay slot not yet modelled by DSideDSlot
+! case 1 skipped: LDTLB is Bespoke (dedicated guard)
+! case 1 skipped: LDTLB.RN is Bespoke (dedicated guard)
+! case 1 skipped: LDTLB.RN Rm has no D-side memory access
+! case 1 skipped: MAC.L @Rm+, @Rn+: MAC dual-pointer in a delay slot not yet modelled by DSideDSlot (the General @Rm+/@-Rn forms already exercise the delay-slot restart + base-restore path)
+! case 1 skipped: MAC.W @Rm+, @Rn+: MAC dual-pointer in a delay slot not yet modelled by DSideDSlot (the General @Rm+/@-Rn forms already exercise the delay-slot restart + base-restore path)
+! case 1 skipped: MOV #imm, Rn has no D-side memory access
+! case 1 skipped: MOV Rm, Rn has no D-side memory access
+! case 1 skipped: MOV.B @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 1 skipped: MOV.B @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 2 skipped: MOV.B @Rm+, Rn: Defect 7: a D-side fault in a branch delay slot restarts at the delay-slot instruction instead of the branch when the faulting access launches in a slot after slot 0 (multi-slot memory forms -- locked RMW and post-increment @Rm+ -- shadow ma_dslot past deassertion at access-launch); re-enable when fixed
+! case 3 skipped: MOV.B R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 4 skipped: MOV.B Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 6 skipped: MOV.L @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 6 skipped: MOV.L @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 6 skipped: MOV.L @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
+! case 7 skipped: MOV.L @Rm+, Rn: Defect 7: a D-side fault in a branch delay slot restarts at the delay-slot instruction instead of the branch when the faulting access launches in a slot after slot 0 (multi-slot memory forms -- locked RMW and post-increment @Rm+ -- shadow ma_dslot past deassertion at access-launch); re-enable when fixed
+! case 8 skipped: MOV.L R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 8 skipped: MOV.L Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 11 skipped: MOV.W @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 11 skipped: MOV.W @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 11 skipped: MOV.W @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
+! case 12 skipped: MOV.W @Rm+, Rn: Defect 7: a D-side fault in a branch delay slot restarts at the delay-slot instruction instead of the branch when the faulting access launches in a slot after slot 0 (multi-slot memory forms -- locked RMW and post-increment @Rm+ -- shadow ma_dslot past deassertion at access-launch); re-enable when fixed
+! case 13 skipped: MOV.W R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 14 skipped: MOV.W Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 16 skipped: MOVA @(disp, PC), R0 has no D-side memory access
+! case 16 skipped: MOVT Rn has no D-side memory access
+! case 16 skipped: MUL.L Rm, Rn has no D-side memory access
+! case 16 skipped: MULS.W Rm, Rn has no D-side memory access
+! case 16 skipped: MULU.W Rm, Rn has no D-side memory access
+! case 16 skipped: NEG Rm, Rn has no D-side memory access
+! case 16 skipped: NEGC Rm, Rn has no D-side memory access
+! case 16 skipped: NOP has no D-side memory access
+! case 16 skipped: NOT Rm, Rn has no D-side memory access
+! case 16 skipped: OR #imm, R0 has no D-side memory access
+! case 16 skipped: OR Rm, Rn has no D-side memory access
+! case 16 skipped: OR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 16 skipped: ROTCL Rn has no D-side memory access
+! case 16 skipped: ROTCR Rn has no D-side memory access
+! case 16 skipped: ROTL Rn has no D-side memory access
+! case 16 skipped: ROTR Rn has no D-side memory access
+! case 16 skipped: RTE is Bespoke (dedicated guard)
+! case 16 skipped: RTS is Bespoke (dedicated guard)
+! case 16 skipped: Reset CPU: control-register memory store in a delay slot not yet modelled by DSideDSlot
+! case 16 skipped: SETT has no D-side memory access
+! case 16 skipped: SHAD Rm, Rn has no D-side memory access
+! case 16 skipped: SHAL Rn has no D-side memory access
+! case 16 skipped: SHAR Rn has no D-side memory access
+! case 16 skipped: SHLD Rm, Rn has no D-side memory access
+! case 16 skipped: SHLL Rn has no D-side memory access
+! case 16 skipped: SHLL16 Rn has no D-side memory access
+! case 16 skipped: SHLL2 Rn has no D-side memory access
+! case 16 skipped: SHLL8 Rn has no D-side memory access
+! case 16 skipped: SHLR Rn has no D-side memory access
+! case 16 skipped: SHLR16 Rn has no D-side memory access
+! case 16 skipped: SHLR2 Rn has no D-side memory access
+! case 16 skipped: SHLR8 Rn has no D-side memory access
+! case 16 skipped: SLEEP is Bespoke (dedicated guard)
+! case 16 skipped: STC ASIDR, Rn has no D-side memory access
+! case 16 skipped: STC EXPEVT, Rn has no D-side memory access
+! case 16 skipped: STC GBR, Rn has no D-side memory access
+! case 16 skipped: STC INTEVT, Rn has no D-side memory access
+! case 16 skipped: STC PTEH, Rn has no D-side memory access
+! case 16 skipped: STC PTEL, Rn has no D-side memory access
+! case 16 skipped: STC Rm_BANK, Rn has no D-side memory access
+! case 16 skipped: STC SPC, Rn has no D-side memory access
+! case 16 skipped: STC SR, Rn has no D-side memory access
+! case 16 skipped: STC SSR, Rn has no D-side memory access
+! case 16 skipped: STC TRA, Rn has no D-side memory access
+! case 16 skipped: STC TSBPTR, Rn has no D-side memory access
+! case 16 skipped: STC VBR, Rn has no D-side memory access
+! case 19 skipped: STS CP0_COM, Rn has no D-side memory access
+! case 19 skipped: STS CPI_COM, Rn has no D-side memory access
+! case 19 skipped: STS MACH, Rn has no D-side memory access
+! case 19 skipped: STS MACL, Rn has no D-side memory access
+! case 19 skipped: STS PR, Rn has no D-side memory access
+! case 22 skipped: SUB Rm, Rn has no D-side memory access
+! case 22 skipped: SUBC Rm, Rn has no D-side memory access
+! case 22 skipped: SUBV Rm, Rn has no D-side memory access
+! case 22 skipped: SWAP.B Rm, Rn has no D-side memory access
+! case 22 skipped: SWAP.W Rm, Rn has no D-side memory access
+! case 22 skipped: Slot Illegal has no D-side memory access
+! case 23 skipped: TLB DMISS R has no D-side memory access
+! case 23 skipped: TLB DMISS W has no D-side memory access
+! case 23 skipped: TLB DPROT R has no D-side memory access
+! case 23 skipped: TLB DPROT W has no D-side memory access
+! case 23 skipped: TLB IMISS has no D-side memory access
+! case 23 skipped: TLB IPROT has no D-side memory access
+! case 23 skipped: TRAPA #imm has no D-side memory access
+! case 23 skipped: TST #imm, R0 has no D-side memory access
+! case 23 skipped: TST Rm, Rn has no D-side memory access
+! case 23 skipped: TST.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 23 skipped: XOR #imm, R0 has no D-side memory access
+! case 23 skipped: XOR Rm, Rn has no D-side memory access
+! case 23 skipped: XOR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 23 skipped: XTRACT Rm, Rn has no D-side memory access
 #include "m8_runtime.inc"
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
  .text
         .balign 4
-_m8_case_1:                       ! CAS.L Rm, Rn, @R0  (General, D-side in delay slot)
+_m8_case_1:                       ! MOV.B @(disp, Rm), R0  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c1_seedva, r0
@@ -187,9 +191,9 @@ _m8_case_1:                       ! CAS.L Rm, Rn, @R0  (General, D-side in delay
         jsr     @r3
         nop
         mov.l   c1_va, r0
-        mov.l   c1_pay, r8
+        mov     #0, r8
         bra     c1_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x2803                ! DELAY SLOT: instruction under test
+        .word   0x8400                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -198,9 +202,7 @@ _m8_case_1:                       ! CAS.L Rm, Rn, @R0  (General, D-side in delay
 c1_Da:
         mov.l   c1_snapa, r2
         mov.l   r0, @r2
-        mov.l   c1_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm TLB; no fault) ----
         mov.l   c1_seedva, r0
         mov.l   c1_seed, r1
@@ -209,15 +211,13 @@ c1_Da:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c1_va, r0
-        mov.l   c1_pay, r8
+        mov     #0, r8
         bra     c1_Db
-        .word   0x2803
+        .word   0x8400
 c1_Db:
         mov.l   c1_snapb, r2
         mov.l   r0, @r2
-        mov.l   c1_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c1_id, r5
@@ -241,7 +241,7 @@ c1_flush:  .long 0x80000000 + _m8_flush
 c1_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_2:                       ! MOV.B @(disp, Rm), R0  (General, D-side in delay slot)
+_m8_case_2:                       ! MOV.B @Rm, Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c2_seedva, r0
@@ -256,7 +256,7 @@ _m8_case_2:                       ! MOV.B @(disp, Rm), R0  (General, D-side in d
         mov.l   c2_va, r0
         mov     #0, r8
         bra     c2_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x8400                ! DELAY SLOT: instruction under test
+        .word   0x6800                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -276,7 +276,7 @@ c2_Da:
         mov.l   c2_va, r0
         mov     #0, r8
         bra     c2_Db
-        .word   0x8400
+        .word   0x6800
 c2_Db:
         mov.l   c2_snapb, r2
         mov.l   r0, @r2
@@ -304,7 +304,7 @@ c2_flush:  .long 0x80000000 + _m8_flush
 c2_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_3:                       ! MOV.B @Rm+, Rn  (General, D-side in delay slot)
+_m8_case_3:                       ! MOV.B R0, @(disp, Rn)  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c3_seedva, r0
@@ -317,9 +317,9 @@ _m8_case_3:                       ! MOV.B @Rm+, Rn  (General, D-side in delay sl
         jsr     @r3
         nop
         mov.l   c3_va, r0
-        mov     #0, r8
+        mov.l   c3_pay, r8
         bra     c3_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x6804                ! DELAY SLOT: instruction under test
+        .word   0x8000                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -328,7 +328,9 @@ _m8_case_3:                       ! MOV.B @Rm+, Rn  (General, D-side in delay sl
 c3_Da:
         mov.l   c3_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c3_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm TLB; no fault) ----
         mov.l   c3_seedva, r0
         mov.l   c3_seed, r1
@@ -337,13 +339,15 @@ c3_Da:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c3_va, r0
-        mov     #0, r8
+        mov.l   c3_pay, r8
         bra     c3_Db
-        .word   0x6804
+        .word   0x8000
 c3_Db:
         mov.l   c3_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c3_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c3_id, r5
@@ -367,7 +371,7 @@ c3_flush:  .long 0x80000000 + _m8_flush
 c3_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_4:                       ! MOV.B @Rm, Rn  (General, D-side in delay slot)
+_m8_case_4:                       ! MOV.B Rm, @Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c4_seedva, r0
@@ -380,9 +384,9 @@ _m8_case_4:                       ! MOV.B @Rm, Rn  (General, D-side in delay slo
         jsr     @r3
         nop
         mov.l   c4_va, r0
-        mov     #0, r8
+        mov.l   c4_pay, r8
         bra     c4_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x6800                ! DELAY SLOT: instruction under test
+        .word   0x2080                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -391,7 +395,9 @@ _m8_case_4:                       ! MOV.B @Rm, Rn  (General, D-side in delay slo
 c4_Da:
         mov.l   c4_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c4_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm TLB; no fault) ----
         mov.l   c4_seedva, r0
         mov.l   c4_seed, r1
@@ -400,13 +406,15 @@ c4_Da:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c4_va, r0
-        mov     #0, r8
+        mov.l   c4_pay, r8
         bra     c4_Db
-        .word   0x6800
+        .word   0x2080
 c4_Db:
         mov.l   c4_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c4_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c4_id, r5
@@ -430,7 +438,7 @@ c4_flush:  .long 0x80000000 + _m8_flush
 c4_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_5:                       ! MOV.B R0, @(disp, Rn)  (General, D-side in delay slot)
+_m8_case_5:                       ! MOV.B Rm,@-Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c5_seedva, r0
@@ -445,7 +453,7 @@ _m8_case_5:                       ! MOV.B R0, @(disp, Rn)  (General, D-side in d
         mov.l   c5_va, r0
         mov.l   c5_pay, r8
         bra     c5_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x8000                ! DELAY SLOT: instruction under test
+        .word   0x2084                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -467,7 +475,7 @@ c5_Da:
         mov.l   c5_va, r0
         mov.l   c5_pay, r8
         bra     c5_Db
-        .word   0x8000
+        .word   0x2084
 c5_Db:
         mov.l   c5_snapb, r2
         mov.l   r0, @r2
@@ -484,9 +492,9 @@ c5_Db:
         rts
         nop
         .align 2
-c5_va:     .long 0x00100000
+c5_va:     .long 0x00100008
 c5_seedva: .long 0x00100000
-c5_probe:  .long 0x00100000
+c5_probe:  .long 0x00100004
 c5_seed:   .long 0xA11C0001
 c5_pay:    .long 0x57013333
 c5_snapa:  .long SNAP_A
@@ -497,7 +505,7 @@ c5_flush:  .long 0x80000000 + _m8_flush
 c5_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_6:                       ! MOV.B Rm, @Rn  (General, D-side in delay slot)
+_m8_case_6:                       ! MOV.L @(disp, Rm), Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c6_seedva, r0
@@ -510,9 +518,9 @@ _m8_case_6:                       ! MOV.B Rm, @Rn  (General, D-side in delay slo
         jsr     @r3
         nop
         mov.l   c6_va, r0
-        mov.l   c6_pay, r8
+        mov     #0, r8
         bra     c6_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x2080                ! DELAY SLOT: instruction under test
+        .word   0x5800                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -521,9 +529,7 @@ _m8_case_6:                       ! MOV.B Rm, @Rn  (General, D-side in delay slo
 c6_Da:
         mov.l   c6_snapa, r2
         mov.l   r0, @r2
-        mov.l   c6_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm TLB; no fault) ----
         mov.l   c6_seedva, r0
         mov.l   c6_seed, r1
@@ -532,15 +538,13 @@ c6_Da:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c6_va, r0
-        mov.l   c6_pay, r8
+        mov     #0, r8
         bra     c6_Db
-        .word   0x2080
+        .word   0x5800
 c6_Db:
         mov.l   c6_snapb, r2
         mov.l   r0, @r2
-        mov.l   c6_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c6_id, r5
@@ -564,7 +568,7 @@ c6_flush:  .long 0x80000000 + _m8_flush
 c6_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_7:                       ! MOV.B Rm,@-Rn  (General, D-side in delay slot)
+_m8_case_7:                       ! MOV.L @Rm, Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c7_seedva, r0
@@ -577,9 +581,9 @@ _m8_case_7:                       ! MOV.B Rm,@-Rn  (General, D-side in delay slo
         jsr     @r3
         nop
         mov.l   c7_va, r0
-        mov.l   c7_pay, r8
+        mov     #0, r8
         bra     c7_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x2084                ! DELAY SLOT: instruction under test
+        .word   0x6802                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -588,9 +592,7 @@ _m8_case_7:                       ! MOV.B Rm,@-Rn  (General, D-side in delay slo
 c7_Da:
         mov.l   c7_snapa, r2
         mov.l   r0, @r2
-        mov.l   c7_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm TLB; no fault) ----
         mov.l   c7_seedva, r0
         mov.l   c7_seed, r1
@@ -599,15 +601,13 @@ c7_Da:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c7_va, r0
-        mov.l   c7_pay, r8
+        mov     #0, r8
         bra     c7_Db
-        .word   0x2084
+        .word   0x6802
 c7_Db:
         mov.l   c7_snapb, r2
         mov.l   r0, @r2
-        mov.l   c7_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c7_id, r5
@@ -618,9 +618,9 @@ c7_Db:
         rts
         nop
         .align 2
-c7_va:     .long 0x00100008
+c7_va:     .long 0x00100000
 c7_seedva: .long 0x00100000
-c7_probe:  .long 0x00100004
+c7_probe:  .long 0x00100000
 c7_seed:   .long 0xA11C0001
 c7_pay:    .long 0x57013333
 c7_snapa:  .long SNAP_A
@@ -631,7 +631,7 @@ c7_flush:  .long 0x80000000 + _m8_flush
 c7_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_8:                       ! MOV.L @(disp, Rm), Rn  (General, D-side in delay slot)
+_m8_case_8:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c8_seedva, r0
@@ -644,9 +644,9 @@ _m8_case_8:                       ! MOV.L @(disp, Rm), Rn  (General, D-side in d
         jsr     @r3
         nop
         mov.l   c8_va, r0
-        mov     #0, r8
+        mov.l   c8_pay, r8
         bra     c8_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x5800                ! DELAY SLOT: instruction under test
+        .word   0x1080                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -655,7 +655,9 @@ _m8_case_8:                       ! MOV.L @(disp, Rm), Rn  (General, D-side in d
 c8_Da:
         mov.l   c8_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c8_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm TLB; no fault) ----
         mov.l   c8_seedva, r0
         mov.l   c8_seed, r1
@@ -664,13 +666,15 @@ c8_Da:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c8_va, r0
-        mov     #0, r8
+        mov.l   c8_pay, r8
         bra     c8_Db
-        .word   0x5800
+        .word   0x1080
 c8_Db:
         mov.l   c8_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c8_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c8_id, r5
@@ -694,7 +698,7 @@ c8_flush:  .long 0x80000000 + _m8_flush
 c8_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_9:                       ! MOV.L @Rm+, Rn  (General, D-side in delay slot)
+_m8_case_9:                       ! MOV.L Rm, @Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c9_seedva, r0
@@ -707,9 +711,9 @@ _m8_case_9:                       ! MOV.L @Rm+, Rn  (General, D-side in delay sl
         jsr     @r3
         nop
         mov.l   c9_va, r0
-        mov     #0, r8
+        mov.l   c9_pay, r8
         bra     c9_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x6806                ! DELAY SLOT: instruction under test
+        .word   0x2082                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -718,7 +722,9 @@ _m8_case_9:                       ! MOV.L @Rm+, Rn  (General, D-side in delay sl
 c9_Da:
         mov.l   c9_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c9_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm TLB; no fault) ----
         mov.l   c9_seedva, r0
         mov.l   c9_seed, r1
@@ -727,13 +733,15 @@ c9_Da:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c9_va, r0
-        mov     #0, r8
+        mov.l   c9_pay, r8
         bra     c9_Db
-        .word   0x6806
+        .word   0x2082
 c9_Db:
         mov.l   c9_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c9_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c9_id, r5
@@ -757,7 +765,7 @@ c9_flush:  .long 0x80000000 + _m8_flush
 c9_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_10:                       ! MOV.L @Rm, Rn  (General, D-side in delay slot)
+_m8_case_10:                       ! MOV.L Rm,@-Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c10_seedva, r0
@@ -770,9 +778,9 @@ _m8_case_10:                       ! MOV.L @Rm, Rn  (General, D-side in delay sl
         jsr     @r3
         nop
         mov.l   c10_va, r0
-        mov     #0, r8
+        mov.l   c10_pay, r8
         bra     c10_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x6802                ! DELAY SLOT: instruction under test
+        .word   0x2086                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -781,7 +789,9 @@ _m8_case_10:                       ! MOV.L @Rm, Rn  (General, D-side in delay sl
 c10_Da:
         mov.l   c10_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c10_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm TLB; no fault) ----
         mov.l   c10_seedva, r0
         mov.l   c10_seed, r1
@@ -790,13 +800,15 @@ c10_Da:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c10_va, r0
-        mov     #0, r8
+        mov.l   c10_pay, r8
         bra     c10_Db
-        .word   0x6802
+        .word   0x2086
 c10_Db:
         mov.l   c10_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c10_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c10_id, r5
@@ -807,9 +819,9 @@ c10_Db:
         rts
         nop
         .align 2
-c10_va:     .long 0x00100000
+c10_va:     .long 0x00100008
 c10_seedva: .long 0x00100000
-c10_probe:  .long 0x00100000
+c10_probe:  .long 0x00100004
 c10_seed:   .long 0xA11C0001
 c10_pay:    .long 0x57013333
 c10_snapa:  .long SNAP_A
@@ -820,7 +832,7 @@ c10_flush:  .long 0x80000000 + _m8_flush
 c10_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_11:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side in delay slot)
+_m8_case_11:                       ! MOV.W @(disp, Rm), R0  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c11_seedva, r0
@@ -833,9 +845,9 @@ _m8_case_11:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side in 
         jsr     @r3
         nop
         mov.l   c11_va, r0
-        mov.l   c11_pay, r8
+        mov     #0, r8
         bra     c11_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x1080                ! DELAY SLOT: instruction under test
+        .word   0x8500                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -844,9 +856,7 @@ _m8_case_11:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side in 
 c11_Da:
         mov.l   c11_snapa, r2
         mov.l   r0, @r2
-        mov.l   c11_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm TLB; no fault) ----
         mov.l   c11_seedva, r0
         mov.l   c11_seed, r1
@@ -855,15 +865,13 @@ c11_Da:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c11_va, r0
-        mov.l   c11_pay, r8
+        mov     #0, r8
         bra     c11_Db
-        .word   0x1080
+        .word   0x8500
 c11_Db:
         mov.l   c11_snapb, r2
         mov.l   r0, @r2
-        mov.l   c11_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c11_id, r5
@@ -887,7 +895,7 @@ c11_flush:  .long 0x80000000 + _m8_flush
 c11_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_12:                       ! MOV.L Rm, @Rn  (General, D-side in delay slot)
+_m8_case_12:                       ! MOV.W @Rm, Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c12_seedva, r0
@@ -900,9 +908,9 @@ _m8_case_12:                       ! MOV.L Rm, @Rn  (General, D-side in delay sl
         jsr     @r3
         nop
         mov.l   c12_va, r0
-        mov.l   c12_pay, r8
+        mov     #0, r8
         bra     c12_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x2082                ! DELAY SLOT: instruction under test
+        .word   0x6801                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -911,9 +919,7 @@ _m8_case_12:                       ! MOV.L Rm, @Rn  (General, D-side in delay sl
 c12_Da:
         mov.l   c12_snapa, r2
         mov.l   r0, @r2
-        mov.l   c12_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm TLB; no fault) ----
         mov.l   c12_seedva, r0
         mov.l   c12_seed, r1
@@ -922,15 +928,13 @@ c12_Da:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c12_va, r0
-        mov.l   c12_pay, r8
+        mov     #0, r8
         bra     c12_Db
-        .word   0x2082
+        .word   0x6801
 c12_Db:
         mov.l   c12_snapb, r2
         mov.l   r0, @r2
-        mov.l   c12_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c12_id, r5
@@ -954,7 +958,7 @@ c12_flush:  .long 0x80000000 + _m8_flush
 c12_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_13:                       ! MOV.L Rm,@-Rn  (General, D-side in delay slot)
+_m8_case_13:                       ! MOV.W R0, @(disp, Rn)  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c13_seedva, r0
@@ -969,7 +973,7 @@ _m8_case_13:                       ! MOV.L Rm,@-Rn  (General, D-side in delay sl
         mov.l   c13_va, r0
         mov.l   c13_pay, r8
         bra     c13_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x2086                ! DELAY SLOT: instruction under test
+        .word   0x8100                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -991,7 +995,7 @@ c13_Da:
         mov.l   c13_va, r0
         mov.l   c13_pay, r8
         bra     c13_Db
-        .word   0x2086
+        .word   0x8100
 c13_Db:
         mov.l   c13_snapb, r2
         mov.l   r0, @r2
@@ -1008,9 +1012,9 @@ c13_Db:
         rts
         nop
         .align 2
-c13_va:     .long 0x00100008
+c13_va:     .long 0x00100000
 c13_seedva: .long 0x00100000
-c13_probe:  .long 0x00100004
+c13_probe:  .long 0x00100000
 c13_seed:   .long 0xA11C0001
 c13_pay:    .long 0x57013333
 c13_snapa:  .long SNAP_A
@@ -1021,7 +1025,7 @@ c13_flush:  .long 0x80000000 + _m8_flush
 c13_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_14:                       ! MOV.W @(disp, Rm), R0  (General, D-side in delay slot)
+_m8_case_14:                       ! MOV.W Rm, @Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c14_seedva, r0
@@ -1034,9 +1038,9 @@ _m8_case_14:                       ! MOV.W @(disp, Rm), R0  (General, D-side in 
         jsr     @r3
         nop
         mov.l   c14_va, r0
-        mov     #0, r8
+        mov.l   c14_pay, r8
         bra     c14_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x8500                ! DELAY SLOT: instruction under test
+        .word   0x2081                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -1045,7 +1049,9 @@ _m8_case_14:                       ! MOV.W @(disp, Rm), R0  (General, D-side in 
 c14_Da:
         mov.l   c14_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c14_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm TLB; no fault) ----
         mov.l   c14_seedva, r0
         mov.l   c14_seed, r1
@@ -1054,13 +1060,15 @@ c14_Da:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c14_va, r0
-        mov     #0, r8
+        mov.l   c14_pay, r8
         bra     c14_Db
-        .word   0x8500
+        .word   0x2081
 c14_Db:
         mov.l   c14_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c14_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c14_id, r5
@@ -1084,7 +1092,7 @@ c14_flush:  .long 0x80000000 + _m8_flush
 c14_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_15:                       ! MOV.W @Rm+, Rn  (General, D-side in delay slot)
+_m8_case_15:                       ! MOV.W Rm,@-Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c15_seedva, r0
@@ -1097,9 +1105,9 @@ _m8_case_15:                       ! MOV.W @Rm+, Rn  (General, D-side in delay s
         jsr     @r3
         nop
         mov.l   c15_va, r0
-        mov     #0, r8
+        mov.l   c15_pay, r8
         bra     c15_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x6805                ! DELAY SLOT: instruction under test
+        .word   0x2085                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -1108,7 +1116,9 @@ _m8_case_15:                       ! MOV.W @Rm+, Rn  (General, D-side in delay s
 c15_Da:
         mov.l   c15_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c15_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm TLB; no fault) ----
         mov.l   c15_seedva, r0
         mov.l   c15_seed, r1
@@ -1117,13 +1127,15 @@ c15_Da:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c15_va, r0
-        mov     #0, r8
+        mov.l   c15_pay, r8
         bra     c15_Db
-        .word   0x6805
+        .word   0x2085
 c15_Db:
         mov.l   c15_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c15_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c15_id, r5
@@ -1134,9 +1146,9 @@ c15_Db:
         rts
         nop
         .align 2
-c15_va:     .long 0x00100000
+c15_va:     .long 0x00100008
 c15_seedva: .long 0x00100000
-c15_probe:  .long 0x00100000
+c15_probe:  .long 0x00100004
 c15_seed:   .long 0xA11C0001
 c15_pay:    .long 0x57013333
 c15_snapa:  .long SNAP_A
@@ -1147,7 +1159,7 @@ c15_flush:  .long 0x80000000 + _m8_flush
 c15_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_16:                       ! MOV.W @Rm, Rn  (General, D-side in delay slot)
+_m8_case_16:                       ! STC.L GBR, @-Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c16_seedva, r0
@@ -1160,9 +1172,9 @@ _m8_case_16:                       ! MOV.W @Rm, Rn  (General, D-side in delay sl
         jsr     @r3
         nop
         mov.l   c16_va, r0
-        mov     #0, r8
+        mov.l   c16_pay, r8
         bra     c16_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x6801                ! DELAY SLOT: instruction under test
+        .word   0x4013                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -1171,7 +1183,9 @@ _m8_case_16:                       ! MOV.W @Rm, Rn  (General, D-side in delay sl
 c16_Da:
         mov.l   c16_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c16_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm TLB; no fault) ----
         mov.l   c16_seedva, r0
         mov.l   c16_seed, r1
@@ -1180,13 +1194,15 @@ c16_Da:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   c16_va, r0
-        mov     #0, r8
+        mov.l   c16_pay, r8
         bra     c16_Db
-        .word   0x6801
+        .word   0x4013
 c16_Db:
         mov.l   c16_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   c16_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c16_id, r5
@@ -1197,9 +1213,9 @@ c16_Db:
         rts
         nop
         .align 2
-c16_va:     .long 0x00100000
+c16_va:     .long 0x00100008
 c16_seedva: .long 0x00100000
-c16_probe:  .long 0x00100000
+c16_probe:  .long 0x00100004
 c16_seed:   .long 0xA11C0001
 c16_pay:    .long 0x57013333
 c16_snapa:  .long SNAP_A
@@ -1210,7 +1226,7 @@ c16_flush:  .long 0x80000000 + _m8_flush
 c16_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_17:                       ! MOV.W R0, @(disp, Rn)  (General, D-side in delay slot)
+_m8_case_17:                       ! STC.L SR, @-Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c17_seedva, r0
@@ -1225,7 +1241,7 @@ _m8_case_17:                       ! MOV.W R0, @(disp, Rn)  (General, D-side in 
         mov.l   c17_va, r0
         mov.l   c17_pay, r8
         bra     c17_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x8100                ! DELAY SLOT: instruction under test
+        .word   0x4003                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -1247,7 +1263,7 @@ c17_Da:
         mov.l   c17_va, r0
         mov.l   c17_pay, r8
         bra     c17_Db
-        .word   0x8100
+        .word   0x4003
 c17_Db:
         mov.l   c17_snapb, r2
         mov.l   r0, @r2
@@ -1264,9 +1280,9 @@ c17_Db:
         rts
         nop
         .align 2
-c17_va:     .long 0x00100000
+c17_va:     .long 0x00100008
 c17_seedva: .long 0x00100000
-c17_probe:  .long 0x00100000
+c17_probe:  .long 0x00100004
 c17_seed:   .long 0xA11C0001
 c17_pay:    .long 0x57013333
 c17_snapa:  .long SNAP_A
@@ -1277,7 +1293,7 @@ c17_flush:  .long 0x80000000 + _m8_flush
 c17_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_18:                       ! MOV.W Rm, @Rn  (General, D-side in delay slot)
+_m8_case_18:                       ! STC.L VBR, @-Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c18_seedva, r0
@@ -1292,7 +1308,7 @@ _m8_case_18:                       ! MOV.W Rm, @Rn  (General, D-side in delay sl
         mov.l   c18_va, r0
         mov.l   c18_pay, r8
         bra     c18_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x2081                ! DELAY SLOT: instruction under test
+        .word   0x4023                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -1314,7 +1330,7 @@ c18_Da:
         mov.l   c18_va, r0
         mov.l   c18_pay, r8
         bra     c18_Db
-        .word   0x2081
+        .word   0x4023
 c18_Db:
         mov.l   c18_snapb, r2
         mov.l   r0, @r2
@@ -1331,9 +1347,9 @@ c18_Db:
         rts
         nop
         .align 2
-c18_va:     .long 0x00100000
+c18_va:     .long 0x00100008
 c18_seedva: .long 0x00100000
-c18_probe:  .long 0x00100000
+c18_probe:  .long 0x00100004
 c18_seed:   .long 0xA11C0001
 c18_pay:    .long 0x57013333
 c18_snapa:  .long SNAP_A
@@ -1344,7 +1360,7 @@ c18_flush:  .long 0x80000000 + _m8_flush
 c18_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_19:                       ! MOV.W Rm,@-Rn  (General, D-side in delay slot)
+_m8_case_19:                       ! STS.L MACH, @-Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c19_seedva, r0
@@ -1359,7 +1375,7 @@ _m8_case_19:                       ! MOV.W Rm,@-Rn  (General, D-side in delay sl
         mov.l   c19_va, r0
         mov.l   c19_pay, r8
         bra     c19_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x2085                ! DELAY SLOT: instruction under test
+        .word   0x4002                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -1381,7 +1397,7 @@ c19_Da:
         mov.l   c19_va, r0
         mov.l   c19_pay, r8
         bra     c19_Db
-        .word   0x2085
+        .word   0x4002
 c19_Db:
         mov.l   c19_snapb, r2
         mov.l   r0, @r2
@@ -1411,7 +1427,7 @@ c19_flush:  .long 0x80000000 + _m8_flush
 c19_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_20:                       ! STC.L GBR, @-Rn  (General, D-side in delay slot)
+_m8_case_20:                       ! STS.L MACL, @-Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c20_seedva, r0
@@ -1426,7 +1442,7 @@ _m8_case_20:                       ! STC.L GBR, @-Rn  (General, D-side in delay 
         mov.l   c20_va, r0
         mov.l   c20_pay, r8
         bra     c20_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4013                ! DELAY SLOT: instruction under test
+        .word   0x4012                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -1448,7 +1464,7 @@ c20_Da:
         mov.l   c20_va, r0
         mov.l   c20_pay, r8
         bra     c20_Db
-        .word   0x4013
+        .word   0x4012
 c20_Db:
         mov.l   c20_snapb, r2
         mov.l   r0, @r2
@@ -1478,7 +1494,7 @@ c20_flush:  .long 0x80000000 + _m8_flush
 c20_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_21:                       ! STC.L SR, @-Rn  (General, D-side in delay slot)
+_m8_case_21:                       ! STS.L PR, @-Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c21_seedva, r0
@@ -1493,7 +1509,7 @@ _m8_case_21:                       ! STC.L SR, @-Rn  (General, D-side in delay s
         mov.l   c21_va, r0
         mov.l   c21_pay, r8
         bra     c21_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4003                ! DELAY SLOT: instruction under test
+        .word   0x4022                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -1515,7 +1531,7 @@ c21_Da:
         mov.l   c21_va, r0
         mov.l   c21_pay, r8
         bra     c21_Db
-        .word   0x4003
+        .word   0x4022
 c21_Db:
         mov.l   c21_snapb, r2
         mov.l   r0, @r2
@@ -1545,7 +1561,7 @@ c21_flush:  .long 0x80000000 + _m8_flush
 c21_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_22:                       ! STC.L VBR, @-Rn  (General, D-side in delay slot)
+_m8_case_22:                       ! TAS.B @Rn  (General, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c22_seedva, r0
@@ -1560,7 +1576,7 @@ _m8_case_22:                       ! STC.L VBR, @-Rn  (General, D-side in delay 
         mov.l   c22_va, r0
         mov.l   c22_pay, r8
         bra     c22_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4023                ! DELAY SLOT: instruction under test
+        .word   0x401B                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached if the restart re-executed the
         ! delay-slot instruction sequentially instead of re-issuing it via the
         ! branch above (wrong restart PC). Poisons r0 so the snapshot below
@@ -1582,7 +1598,7 @@ c22_Da:
         mov.l   c22_va, r0
         mov.l   c22_pay, r8
         bra     c22_Db
-        .word   0x4023
+        .word   0x401B
 c22_Db:
         mov.l   c22_snapb, r2
         mov.l   r0, @r2
@@ -1599,9 +1615,9 @@ c22_Db:
         rts
         nop
         .align 2
-c22_va:     .long 0x00100008
+c22_va:     .long 0x00100000
 c22_seedva: .long 0x00100000
-c22_probe:  .long 0x00100004
+c22_probe:  .long 0x00100000
 c22_seed:   .long 0xA11C0001
 c22_pay:    .long 0x57013333
 c22_snapa:  .long SNAP_A
@@ -1610,274 +1626,6 @@ c22_id:     .long 22
 c22_cmp:    .long 0x80000000 + _m8_cmp
 c22_flush:  .long 0x80000000 + _m8_flush
 c22_poison: .long 0xBADC0DE1
-
-        .balign 4
-_m8_case_23:                       ! STS.L MACH, @-Rn  (General, D-side in delay slot)
-        sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c23_seedva, r0
-        mov.l   c23_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c23_flush, r3
-        jsr     @r3
-        nop
-        mov.l   c23_va, r0
-        mov.l   c23_pay, r8
-        bra     c23_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4002                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c23_poison, r0
-c23_Da:
-        mov.l   c23_snapa, r2
-        mov.l   r0, @r2
-        mov.l   c23_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c23_seedva, r0
-        mov.l   c23_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c23_va, r0
-        mov.l   c23_pay, r8
-        bra     c23_Db
-        .word   0x4002
-c23_Db:
-        mov.l   c23_snapb, r2
-        mov.l   r0, @r2
-        mov.l   c23_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- compare ----
-        mov     #8, r4
-        mov.l   c23_id, r5
-        mov.l   c23_cmp, r3
-        jsr     @r3
-        nop
-        lds.l   @r15+, pr
-        rts
-        nop
-        .align 2
-c23_va:     .long 0x00100008
-c23_seedva: .long 0x00100000
-c23_probe:  .long 0x00100004
-c23_seed:   .long 0xA11C0001
-c23_pay:    .long 0x57013333
-c23_snapa:  .long SNAP_A
-c23_snapb:  .long SNAP_B
-c23_id:     .long 23
-c23_cmp:    .long 0x80000000 + _m8_cmp
-c23_flush:  .long 0x80000000 + _m8_flush
-c23_poison: .long 0xBADC0DE1
-
-        .balign 4
-_m8_case_24:                       ! STS.L MACL, @-Rn  (General, D-side in delay slot)
-        sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c24_seedva, r0
-        mov.l   c24_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c24_flush, r3
-        jsr     @r3
-        nop
-        mov.l   c24_va, r0
-        mov.l   c24_pay, r8
-        bra     c24_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4012                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c24_poison, r0
-c24_Da:
-        mov.l   c24_snapa, r2
-        mov.l   r0, @r2
-        mov.l   c24_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c24_seedva, r0
-        mov.l   c24_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c24_va, r0
-        mov.l   c24_pay, r8
-        bra     c24_Db
-        .word   0x4012
-c24_Db:
-        mov.l   c24_snapb, r2
-        mov.l   r0, @r2
-        mov.l   c24_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- compare ----
-        mov     #8, r4
-        mov.l   c24_id, r5
-        mov.l   c24_cmp, r3
-        jsr     @r3
-        nop
-        lds.l   @r15+, pr
-        rts
-        nop
-        .align 2
-c24_va:     .long 0x00100008
-c24_seedva: .long 0x00100000
-c24_probe:  .long 0x00100004
-c24_seed:   .long 0xA11C0001
-c24_pay:    .long 0x57013333
-c24_snapa:  .long SNAP_A
-c24_snapb:  .long SNAP_B
-c24_id:     .long 24
-c24_cmp:    .long 0x80000000 + _m8_cmp
-c24_flush:  .long 0x80000000 + _m8_flush
-c24_poison: .long 0xBADC0DE1
-
-        .balign 4
-_m8_case_25:                       ! STS.L PR, @-Rn  (General, D-side in delay slot)
-        sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c25_seedva, r0
-        mov.l   c25_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c25_flush, r3
-        jsr     @r3
-        nop
-        mov.l   c25_va, r0
-        mov.l   c25_pay, r8
-        bra     c25_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4022                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c25_poison, r0
-c25_Da:
-        mov.l   c25_snapa, r2
-        mov.l   r0, @r2
-        mov.l   c25_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c25_seedva, r0
-        mov.l   c25_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c25_va, r0
-        mov.l   c25_pay, r8
-        bra     c25_Db
-        .word   0x4022
-c25_Db:
-        mov.l   c25_snapb, r2
-        mov.l   r0, @r2
-        mov.l   c25_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- compare ----
-        mov     #8, r4
-        mov.l   c25_id, r5
-        mov.l   c25_cmp, r3
-        jsr     @r3
-        nop
-        lds.l   @r15+, pr
-        rts
-        nop
-        .align 2
-c25_va:     .long 0x00100008
-c25_seedva: .long 0x00100000
-c25_probe:  .long 0x00100004
-c25_seed:   .long 0xA11C0001
-c25_pay:    .long 0x57013333
-c25_snapa:  .long SNAP_A
-c25_snapb:  .long SNAP_B
-c25_id:     .long 25
-c25_cmp:    .long 0x80000000 + _m8_cmp
-c25_flush:  .long 0x80000000 + _m8_flush
-c25_poison: .long 0xBADC0DE1
-
-        .balign 4
-_m8_case_26:                       ! TAS.B @Rn  (General, D-side in delay slot)
-        sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c26_seedva, r0
-        mov.l   c26_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c26_flush, r3
-        jsr     @r3
-        nop
-        mov.l   c26_va, r0
-        mov.l   c26_pay, r8
-        bra     c26_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x401B                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c26_poison, r0
-c26_Da:
-        mov.l   c26_snapa, r2
-        mov.l   r0, @r2
-        mov.l   c26_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c26_seedva, r0
-        mov.l   c26_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c26_va, r0
-        mov.l   c26_pay, r8
-        bra     c26_Db
-        .word   0x401B
-c26_Db:
-        mov.l   c26_snapb, r2
-        mov.l   r0, @r2
-        mov.l   c26_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-        ! ---- compare ----
-        mov     #8, r4
-        mov.l   c26_id, r5
-        mov.l   c26_cmp, r3
-        jsr     @r3
-        nop
-        lds.l   @r15+, pr
-        rts
-        nop
-        .align 2
-c26_va:     .long 0x00100000
-c26_seedva: .long 0x00100000
-c26_probe:  .long 0x00100000
-c26_seed:   .long 0xA11C0001
-c26_pay:    .long 0x57013333
-c26_snapa:  .long SNAP_A
-c26_snapb:  .long SNAP_B
-c26_id:     .long 26
-c26_cmp:    .long 0x80000000 + _m8_cmp
-c26_flush:  .long 0x80000000 + _m8_flush
-c26_poison: .long 0xBADC0DE1
 
 ENTRY(_m8_run_all)
         sts.l   pr, @-r15
@@ -1892,7 +1640,7 @@ ENTRY(_m8_run_all)
         rts
         nop
         .align 2
-m8_count:  .long 26
+m8_count:  .long 22
 m8_tab_p:  .long 0x80000000 + m8_tab
 m8_tab:
         .long   0x80000000 + _m8_case_1
@@ -1917,8 +1665,4 @@ m8_tab:
         .long   0x80000000 + _m8_case_20
         .long   0x80000000 + _m8_case_21
         .long   0x80000000 + _m8_case_22
-        .long   0x80000000 + _m8_case_23
-        .long   0x80000000 + _m8_case_24
-        .long   0x80000000 + _m8_case_25
-        .long   0x80000000 + _m8_case_26
 #endif

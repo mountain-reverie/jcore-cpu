@@ -1046,7 +1046,7 @@ func emitDSideDSlot(c Class, id int) (string, string, error) {
 			"", errSkip
 	}
 	if strings.HasPrefix(c.Instr.Name, "MAC.") {
-		return fmt.Sprintf("! case %d skipped: %s: MAC dual-pointer in a delay slot not yet modelled by DSideDSlot (the General @Rm+/@-Rn forms already exercise the delay-slot restart + base-restore path)\n", id, c.Instr.Name),
+		return fmt.Sprintf("! case %d skipped: %s: Defect 7: a D-side fault in a branch delay slot restarts at the delay-slot instruction instead of the branch when the faulting access launches in a slot after slot 0; MAC.L/MAC.W @Rm+,@Rn+ fault on the SECOND operand's access (access_slots=[0,1]), so this form is blocked until Defect 7 is fixed\n", id, c.Instr.Name),
 			"", errSkip
 	}
 	if reason, bad := unmodelledBase(c.Instr.Name); bad {
@@ -1054,8 +1054,7 @@ func emitDSideDSlot(c Class, id int) (string, string, error) {
 			"", errSkip
 	}
 	if strings.HasPrefix(c.Instr.Name, "LDC.L") || strings.HasPrefix(c.Instr.Name, "LDS.L") {
-		return fmt.Sprintf("! case %d skipped: %s: control-register memory load in a delay slot not yet modelled by DSideDSlot\n", id, c.Instr.Name),
-			"", errSkip
+		return emitCtrlLoadDSlot(c, id)
 	}
 	if c.Bucket == PrivMem && c.DestCtrl != "" {
 		return fmt.Sprintf("! case %d skipped: %s: control-register memory store in a delay slot not yet modelled by DSideDSlot\n", id, c.Instr.Name),
@@ -1168,15 +1167,80 @@ func axisName(a Axis) string {
 // ---------------------------------------------------------------------------
 
 var (
-	tmplGeneralD = template.Must(template.New("genD").Parse(generalDText))
-	tmplPrivMemD = template.Must(template.New("privD").Parse(privMemDText))
-	tmplMacD     = template.Must(template.New("macD").Parse(macDText))
-	tmplIFetch   = template.Must(template.New("ifetch").Parse(iFetchText))
-	tmplIFetchDSlot = template.Must(template.New("ifetchdslot").Parse(iFetchDSlotText))
+	tmplGeneralD     = template.Must(template.New("genD").Parse(generalDText))
+	tmplPrivMemD     = template.Must(template.New("privD").Parse(privMemDText))
+	tmplMacD         = template.Must(template.New("macD").Parse(macDText))
+	tmplIFetch       = template.Must(template.New("ifetch").Parse(iFetchText))
+	tmplIFetchDSlot  = template.Must(template.New("ifetchdslot").Parse(iFetchDSlotText))
 	tmplGeneralDSlot = template.Must(template.New("genDSlot").Parse(generalDSlotText))
 
 	tmplModePreservingD = template.Must(template.New("modePreservingD").Parse(modePreservingDText))
+
+	tmplPrivMemDSlot        = template.Must(template.New("privDSlot").Parse(privMemDSlotText))
+	tmplModePreservingDSlot = template.Must(template.New("modePreservingDSlot").Parse(modePreservingDSlotText))
 )
+
+// emitCtrlLoadDSlot emits a control-register post-increment load (LDC.L/
+// LDS.L @Rm+,ctrl) with the instruction planted in a branch delay slot --
+// the DSlot counterpart of emitCtrlLoadD. Mirrors emitCtrlLoadD's
+// exception-critical/mode-preserving split (SR routes through
+// emitModePreservingCtrlLoadDSlot; VBR has no ctrlStore mode-preserving
+// payload defined and is skipped honestly here just as on the D-side axis).
+func emitCtrlLoadDSlot(c Class, id int) (string, string, error) {
+	reg := ctrlLoadDest(c.Instr.Name)
+	if exceptionCritical[reg] {
+		if st, ok := ctrlStore[reg]; ok {
+			return emitModePreservingCtrlLoadDSlot(c, id, st)
+		}
+		return fmt.Sprintf("! case %d skipped: %s: mode-unsafe (SR/VBR govern execution/vectoring) and no STC available for a mode-preserving payload\n",
+				id, c.Instr.Name),
+			"", errSkip
+	}
+	ca := ctrlFor(reg)
+	if !ca.ok {
+		return fmt.Sprintf("! case %d skipped: %s: control reg %q not representable for snapshot/restore\n",
+				id, c.Instr.Name, reg),
+			"", errSkip
+	}
+	word, err := encodeWord(c)
+	if err != nil {
+		return "", "", err
+	}
+	d := caseData{
+		ID:       id,
+		Word:     fmt.Sprintf("0x%04X", word),
+		Name:     c.Instr.Name,
+		CtrlSave: fmt.Sprintf(ca.store, "r1"),
+		CtrlLoad: fmt.Sprintf(ca.load, "r1"),
+	}
+	return render(tmplPrivMemDSlot, d)
+}
+
+// emitModePreservingCtrlLoadDSlot emits LDC.L @Rm+,SR with the instruction
+// planted in a branch delay slot -- the DSlot counterpart of
+// emitModePreservingCtrlLoadD. The @Rm+ payload is seeded to the CURRENT
+// control-register value, so the load is a machine-state no-op (including
+// RB/MD for SR: payload==current means no bank switch actually occurs)
+// while the base auto-modify (Rm:=Rm+4) is still exercised under a
+// delay-slot restart.
+func emitModePreservingCtrlLoadDSlot(c Class, id int, store string) (string, string, error) {
+	word, err := encodeWord(c)
+	if err != nil {
+		return "", "", err
+	}
+	d := modePreservingData{
+		ID:        id,
+		Word:      fmt.Sprintf("0x%04X", word),
+		Name:      c.Instr.Name,
+		CtrlStore: fmt.Sprintf(store, "r1"),
+	}
+	var b strings.Builder
+	if err := tmplModePreservingDSlot.Execute(&b, d); err != nil {
+		return "", "", err
+	}
+	dispatch := fmt.Sprintf("        .long   0x80000000 + _m8_case_%d\n", id)
+	return b.String(), dispatch, nil
+}
 
 // Mode-preserving PrivMem D-side: LDC.L @Rm+,{SR,VBR}. The payload at @Rm+ is the
 // CURRENT control-register value (STC -> r1 -> backing word), so the load is a
@@ -1443,6 +1507,142 @@ c{{.ID}}_snapb:  .long SNAP_B
 c{{.ID}}_id:     .long {{.ID}}
 c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
 c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
+`
+
+// PrivMem DSlot: privMemDText with the instruction under test planted in the
+// delay slot of a branch (same [bra L ; instr] / poison-trap / _Da/_Db shape
+// as generalDSlotText), for control-register memory LOADS whose destination
+// is benign-init'able (GBR/PR/MACH/MACL). Snapshot {base GPR, ctrl value}
+// still catches a lost/duplicated auto-modify AND a lost/duplicated ctrl
+// write, now under a delay-slot restart.
+const privMemDSlotText = `        .balign 4
+_m8_case_{{.ID}}:                       ! {{.Name}}  (PrivMem, D-side in delay slot)
+        sts.l   pr, @-r15
+        mov     #0, r1
+        {{.CtrlLoad}}            ! benign-init ctrl (never read 'U' on save)
+        {{.CtrlSave}}            ! save baseline ctrl -> r1
+        mov.l   c{{.ID}}_ctlsv, r2
+        mov.l   r1, @r2
+        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
+        mov.l   c{{.ID}}_seedva, r0
+        mov.l   c{{.ID}}_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   c{{.ID}}_flush, r3
+        jsr     @r3
+        nop
+        mov.l   c{{.ID}}_va, r0
+        mov     #0, r1
+        {{.CtrlLoad}}            ! benign ctrl = 0
+        bra     c{{.ID}}_Da             ! delayed branch; delay slot faults DMISS
+        .word   {{.Word}}                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached on a wrong restart PC ----
+        mov.l   c{{.ID}}_poison, r0
+c{{.ID}}_Da:
+        {{.CtrlSave}}            ! read resulting ctrl
+        mov.l   c{{.ID}}_snapa, r2
+        mov.l   r0, @r2
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm TLB; no fault) ----
+        mov.l   c{{.ID}}_seedva, r0
+        mov.l   c{{.ID}}_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   c{{.ID}}_va, r0
+        mov     #0, r1
+        {{.CtrlLoad}}
+        bra     c{{.ID}}_Db
+        .word   {{.Word}}
+c{{.ID}}_Db:
+        {{.CtrlSave}}
+        mov.l   c{{.ID}}_snapb, r2
+        mov.l   r0, @r2
+        mov.l   r1, @(4,r2)
+        ! ---- restore original ctrl + compare ----
+        mov.l   c{{.ID}}_ctlsv, r2
+        mov.l   @r2, r1
+        {{.CtrlLoad}}
+        mov     #8, r4
+        mov.l   c{{.ID}}_id, r5
+        mov.l   c{{.ID}}_cmp, r3
+        jsr     @r3
+        nop
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+c{{.ID}}_va:     .long 0x00100000
+c{{.ID}}_seedva: .long 0x00100000
+c{{.ID}}_seed:   .long 0xA11C0001
+c{{.ID}}_ctlsv:  .long 0x80003200
+c{{.ID}}_snapa:  .long SNAP_A
+c{{.ID}}_snapb:  .long SNAP_B
+c{{.ID}}_id:     .long {{.ID}}
+c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
+c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
+c{{.ID}}_poison: .long 0xBADC0DE1
+`
+
+// Mode-preserving PrivMem DSlot: modePreservingDText with the instruction
+// under test planted in the delay slot, for LDC.L @Rm+,SR (VBR is not
+// emitted on this axis today -- see emitCtrlLoadDSlot). The @Rm+ payload is
+// seeded to the CURRENT SR value (via stc), so the load changes no machine
+// state (RB/MD included -- payload==current means no bank switch actually
+// happens) while the base auto-modify is still exercised under a delay-slot
+// restart.
+const modePreservingDSlotText = `        .balign 4
+_m8_case_{{.ID}}:                       ! {{.Name}}  (PrivMem mode-preserving, D-side in delay slot)
+        sts.l   pr, @-r15
+        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
+        mov.l   c{{.ID}}_va, r0
+        {{.CtrlStore}}            ! r1 = current ctrl (mode-preserving payload)
+        mov.l   r1, @r0                  ! seed payload = current ctrl (warms TLB)
+        mov.l   c{{.ID}}_flush, r3
+        jsr     @r3
+        nop
+        mov.l   c{{.ID}}_va, r0
+        bra     c{{.ID}}_Da             ! delayed branch; delay slot faults DMISS
+        .word   {{.Word}}                ! DELAY SLOT: instruction under test (payload==ctrl => no-op)
+        ! ---- buggy-landing trap: only reached on a wrong restart PC ----
+        mov.l   c{{.ID}}_poison, r0
+c{{.ID}}_Da:
+        {{.CtrlStore}}            ! read resulting ctrl
+        mov.l   c{{.ID}}_snapa, r2
+        mov.l   r0, @r2                  ! base auto-modify (Rm+4)
+        mov.l   r1, @(4,r2)              ! ctrl value (unchanged)
+        ! ---- control leg (warm TLB; no fault) ----
+        mov.l   c{{.ID}}_va, r0
+        {{.CtrlStore}}            ! same payload
+        mov.l   r1, @r0                  ! re-seed (re-warms TLB; do NOT flush)
+        mov.l   c{{.ID}}_va, r0
+        bra     c{{.ID}}_Db
+        .word   {{.Word}}
+c{{.ID}}_Db:
+        {{.CtrlStore}}
+        mov.l   c{{.ID}}_snapb, r2
+        mov.l   r0, @r2
+        mov.l   r1, @(4,r2)
+        ! ---- compare ----
+        mov     #8, r4
+        mov.l   c{{.ID}}_id, r5
+        mov.l   c{{.ID}}_cmp, r3
+        jsr     @r3
+        nop
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+c{{.ID}}_va:     .long 0x00100000
+c{{.ID}}_snapa:  .long SNAP_A
+c{{.ID}}_snapb:  .long SNAP_B
+c{{.ID}}_id:     .long {{.ID}}
+c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
+c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
+c{{.ID}}_poison: .long 0xBADC0DE1
 `
 
 // MAC dual-base D-side: seed+snapshot BOTH bases (r0=Rm page A, r8=Rn page B,

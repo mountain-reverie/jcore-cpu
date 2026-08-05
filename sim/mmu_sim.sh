@@ -224,6 +224,10 @@ else
   run_guard m8_ifetch_0 "" 12ms 240
   run_guard m8_ifetch_1 "" 12ms 240
   run_guard m8_ifetch_2 "" 12ms 240
+  # Genuine TLB MULTI_HIT reachability + the 30af728 restart-shadow guard
+  # (I-side MULTI_HIT must not arm the D-side restore; D-side MULTI_HIT
+  # still must). Measured completion ~3.95us (m8_pass.vcd); 100us margin.
+  run_guard m8_multihit_ifetch "" 100us
 fi
 
 if [ "$fail" = 0 ]; then echo "==> all guards PASSED"; else echo "==> FAILURES above" >&2; exit 1; fi

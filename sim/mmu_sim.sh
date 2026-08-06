@@ -271,17 +271,46 @@ else
   #   reg_wr_w_g <= reg.wr_w    (w-port squash disabled)  -> still 1007
   #   drop `and tlb_squash_r = '0'' from the mem-issue gate -> still 1007
   # so the write is NOT being lost at either grace-gated port or the issue gate.
-  # A fourth probe was refuted since: with the g_squash_ifetch age term (the
-  # commit that retired wb_grace/z_grace) squash_ifetch_r is measured '1' across
-  # the WHOLE failing window, so all three squash gates are exempt and the load
-  # STILL produces no register write -- no w-port, no z-port, no restore_fire.
-  # The value is therefore not being lost in the datapath at all. Remaining
-  # suspect: decode's exception dispatch replacing the in-flight op with the
-  # exception system_op, i.e. an instruction-granularity discard, which is why
-  # every port-level probe misses it. NOTE the VCD already dumps reg_wr_w_g /
-  # num_w_r / reg_wr_z_g / num_z_r / gpf_zwd / restore_fire / squash_ifetch_r --
-  # an earlier note here wrongly said the wrapper needed extending. Parked so the suite stays readable, NOT
-  # because the failure is dismissed. Re-enable when resolved.
+  # ---- ROOT CAUSE FOUND 2026-08-06 (fix NOT yet landed) ----------------
+  # Two TLB faults are detected before EITHER is dispatched, and decode and the
+  # datapath disagree about which one the exception describes.
+  #
+  #   decode   (decode_core.vhm texc_req_reg): latches the FIRST fault
+  #            (`elsif tlb_exc_en='1' and texc_req='0'') and HOLDS it until
+  #            texc_ack, i.e. until the exception is actually dispatched. A
+  #            second fault arriving meanwhile is IGNORED.
+  #   datapath (datapath.vhm tlb_exc_captured): clears the moment
+  #            tlb_exc_pend='0', so a second fault RE-CAPTURES. LAST wins.
+  #
+  # tlb_exc_en and tlb_exc_pend are the SAME signal (cpu.vhd:632/634, both
+  # <= exc_en), so both blocks see identical pulses -- only the HOLD differs.
+  # decode therefore dispatches fault #1's kind while the datapath supplies
+  # fault #2's restart PC (and TEA / PTEH / MMUFSR).
+  #
+  # Measured (29us MMU_VCD of this guard, case 8 Case A cold leg):
+  #   26360ns  FAULT fault_va=0x00101000 ifetch=1 -> tlb_exc_pc := 0x00101000
+  #   26380ns  FAULT fault_va=0x00103000 ifetch=1 -> tlb_exc_pc := 0x00103000
+  #   26400ns  EX delay-slot load @0x101000  (executes exactly once)
+  #   26460ns  handler entered ONCE, SPC = 0x00103000
+  # So the restart resumes at the branch TARGET instead of the branch, the
+  # delay slot is never re-executed, and its load result never reaches r0 --
+  # which is exactly the measured SNAP_A = 0x00102000 (base, un-loaded).
+  # Note the load itself does NOT fault here; expevt stays 0x040 (IMISS)
+  # throughout and both faults are I-side.
+  #
+  # FIX DIRECTION: the datapath's capture must belong to the fault decode
+  # dispatches, i.e. be released by decode's texc_ack -- which is currently NOT
+  # routed to the datapath (decode_core-internal). Wiring it out is the work.
+  #
+  # REFUTED, do not repeat: replacing the release condition with handler entry
+  #   if MMU_ARCH and this.sr.rb = '1' then this.tlb_exc_captured := '0';
+  # turns case 1 RED (Result=1001) and does so even with CAS.L skipped, so it is
+  # not CAS-specific. "Keep the FIRST episode" is therefore just as wrong as
+  # "keep the last": within a single dispatched fault there can be several
+  # tlb_exc_pend episodes, and a later one can carry the correct VA -- see the
+  # existing first-cycle-capture comment in datapath.vhm about the I-fetch
+  # stream advancing a word while an IMISS persists. Only texc_ack marks the
+  # boundary that actually matters.
   # run_guard m8_dsdslot_0 "" 200us
   # mmudspcprobe_late: ACTIVE since Defect 7 was fixed (decode/decode_core.vhm,
   # g_dslot -- see the writeup above). Built from mmudspcprobe.S (which pins the

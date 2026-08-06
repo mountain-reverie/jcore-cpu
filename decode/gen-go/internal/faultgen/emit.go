@@ -159,25 +159,6 @@ func encodeWord(c Class) (uint16, error) {
 	return word, nil
 }
 
-// lateAccess reports whether the instruction's D-side memory access (the
-// slot carrying ma_op=READ/WRITE) launches in a slot AFTER slot 0. This is
-// the Defect 7 discriminator: ma_dslot is shadowed at the access-launch
-// point, so if the pipeline's delay-slot flag has already deasserted by the
-// time a later slot launches its access, the restart takes the normal
-// (non-delay-slot) arm and lands on the faulting instruction itself instead
-// of the branch. Slot-0-access forms launch before delay_slot can drop and
-// are unaffected; multi-slot forms whose access is not in slot 0 (locked
-// RMW forms, and post-increment @Rm+ loads/stores, which spend slot 0
-// computing/writing the incremented base before the access slot) are.
-func lateAccess(c Class) bool {
-	for i, sl := range c.Instr.Slots {
-		if sl["ma_op"] == "WRITE" || sl["ma_op"] == "READ" {
-			return i != 0
-		}
-	}
-	return false
-}
-
 // dispScale returns the displacement scale (1/2/4) of the memory-accessing
 // slot, read from its alu_y field ("U"=*1, "U*2", "U*4").
 func dispScale(c Class) int {
@@ -1075,10 +1056,6 @@ func emitDSideDSlot(c Class, id int) (string, string, error) {
 		return fmt.Sprintf("! case %d skipped: %s has no D-side memory access\n", id, c.Instr.Name),
 			"", errSkip
 	}
-	if strings.HasPrefix(c.Instr.Name, "MAC.") {
-		return fmt.Sprintf("! case %d skipped: %s: Defect 7: a D-side fault in a branch delay slot restarts at the delay-slot instruction instead of the branch when the faulting access launches in a slot after slot 0; MAC.L/MAC.W @Rm+,@Rn+ fault on the SECOND operand's access (access_slots=[0,1]), so this form is blocked until Defect 7 is fixed\n", id, c.Instr.Name),
-			"", errSkip
-	}
 	if reason, bad := unmodelledBase(c.Instr.Name); bad {
 		return fmt.Sprintf("! case %d skipped: %s: %s\n", id, c.Instr.Name, reason),
 			"", errSkip
@@ -1090,12 +1067,24 @@ func emitDSideDSlot(c Class, id int) (string, string, error) {
 		return fmt.Sprintf("! case %d skipped: %s: control-register memory store in a delay slot not yet modelled by DSideDSlot\n", id, c.Instr.Name),
 			"", errSkip
 	}
-	if strings.HasPrefix(c.Instr.Name, "CAS.") && regBase != 0 {
-		return fmt.Sprintf("! case %d skipped: %s: implicit-R0 pointer requires regBase==r0 (currently r%d)\n", id, c.Instr.Name, regBase),
+	if strings.HasPrefix(c.Instr.Name, "CAS.") {
+		// NOT Defect 7 (fixed; decode/decode_core.vhm g_dslot). Emitting CAS.L
+		// here was tried after that fix and made this axis HANG the bus at
+		// case 1 ("Rd did not see ACK for data sram" from ~9.2us) instead of
+		// reaching its existing parked failure, destroying the axis's
+		// diagnosability for no gain -- it is parked either way. The
+		// single-fault delay-slot restart for CAS.L IS covered, and proven
+		// non-vacuous (RED 0x00010101 pre-fix, GREEN after), by
+		// sim/tests/mmudspcprobe_latec.S. What is NOT covered, and is a real
+		// open finding, is CAS.L under this axis's MAXIMAL three-fault Case A
+		// shape: a locked RMW whose read faults while two more faults follow
+		// appears not to release the bus lock. Re-enable when that is
+		// diagnosed -- see the m8_dsdslot_0 park comment in sim/mmu_sim.sh.
+		return fmt.Sprintf("! case %d skipped: %s: locked RMW hangs the bus in this axis's maximal three-fault shape (NOT Defect 7, which is fixed); single-fault coverage is mmudspcprobe_latec.S\n", id, c.Instr.Name),
 			"", errSkip
 	}
-	if lateAccess(c) {
-		return fmt.Sprintf("! case %d skipped: %s: Defect 7: a D-side fault in a branch delay slot restarts at the delay-slot instruction instead of the branch when the faulting access launches in a slot after slot 0 (multi-slot memory forms -- locked RMW and post-increment @Rm+ -- shadow ma_dslot past deassertion at access-launch); re-enable when fixed\n", id, c.Instr.Name),
+	if strings.HasPrefix(c.Instr.Name, "CAS.") && regBase != 0 {
+		return fmt.Sprintf("! case %d skipped: %s: implicit-R0 pointer requires regBase==r0 (currently r%d)\n", id, c.Instr.Name, regBase),
 			"", errSkip
 	}
 	word, err := encodeWord(c)

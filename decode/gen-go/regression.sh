@@ -7,8 +7,9 @@
 #   2. Regenerate decode/*.vhd via `make -C decode generate`.
 #   3. Build the simulator (sim/cpu_ctb) and run it for 180us.
 #      Verify the LED write sequence matches the expected baseline (exactly 20).
-#   4. Run the same LED sequence check with the ROM decoder (cpu_decode_rom).
-#      core/cpu_config.vhd is patched temporarily; a trap ensures restoration.
+#   4. Run the same LED sequence check with the ROM decoder (cpu_decode_rom),
+#      built via CONFIG_DECODE_ROM=1 (selects cpu_sim_rom, see
+#      core/cpu_config_sim.vhd + sim/Makefile) -- no source mutation.
 #   5. Run the unit TAP testbenches (`make -C tests check`).
 #   6. Build sim/tests/*.img (requires sh2-elf-gcc) and run each through
 #      cpu_ctb; assert "Test Passed" appears in output.  Skipped if
@@ -54,19 +55,9 @@ fi
 # cleanup() is idempotent: it checks before acting.
 # ---------------------------------------------------------------------------
 _CLEANUP_LED_LOG=""         # mktemp file from Step 3
-_CLEANUP_CPU_CONFIG_BAK=""  # mktemp backup of core/cpu_config.vhd
-_CLEANUP_CPU_CONFIG=""      # path to live cpu_config.vhd (for restore)
 _CLEANUP_SYNTH_WORK=""      # mktemp -d work dir from Step 7
 
 cleanup() {
-    # Restore cpu_config.vhd if we patched it.
-    if [ -n "$_CLEANUP_CPU_CONFIG_BAK" ] && [ -f "$_CLEANUP_CPU_CONFIG_BAK" ]; then
-        if [ -n "$_CLEANUP_CPU_CONFIG" ]; then
-            cp "$_CLEANUP_CPU_CONFIG_BAK" "$_CLEANUP_CPU_CONFIG"
-        fi
-        rm -f "$_CLEANUP_CPU_CONFIG_BAK"
-        _CLEANUP_CPU_CONFIG_BAK=""
-    fi
     # Remove temporary LED log.
     if [ -n "$_CLEANUP_LED_LOG" ] && [ -f "$_CLEANUP_LED_LOG" ]; then
         rm -f "$_CLEANUP_LED_LOG"
@@ -124,7 +115,7 @@ make -C "$REPO_ROOT/decode" generate ROM_WIDTH="$ROM_WIDTH"
 
 echo "==> Step 3: build + run cpu_ctb for 180us [direct decoder]"
 cd "$REPO_ROOT/sim"
-rm -f work-obj93.cf cpu_ctb
+rm -f work-obj93.cf cpu_ctb cpu_tb.vhh
 # Build only the GHDL work database and cpu_ctb binary; the testrom/main.elf
 # target in 'all' may fail if sh2-elf-gcc is installed but testrom/main.c has
 # missing declarations — ram.img is not needed for the ctb simulator tests.
@@ -137,33 +128,23 @@ timeout 90 ./cpu_ctb --stop-time=180us 2>&1 | grep "^LED:" > "$LED_LOG" || true
 check_led_log "$LED_LOG" "direct"
 
 echo "==> Step 4: run cpu_ctb for 180us [ROM decoder]"
-CPU_CONFIG="$REPO_ROOT/core/cpu_config.vhd"
-_CLEANUP_CPU_CONFIG_BAK="$(mktemp)"
-_CLEANUP_CPU_CONFIG="$CPU_CONFIG"
-CPU_CONFIG_BAK="$_CLEANUP_CPU_CONFIG_BAK"
-
-cp "$CPU_CONFIG" "$CPU_CONFIG_BAK"
-
-# Patch cpu_sim configuration to use cpu_decode_rom instead of cpu_decode_direct.
-# The sed range limits the substitution to inside the cpu_sim configuration block
-# so the two FPGA configurations are left untouched.
-sed -i \
-    '/^configuration cpu_sim of cpu/,/^end configuration/{
-        s/use configuration work\.cpu_decode_direct;/use configuration work.cpu_decode_rom;/
-    }' \
-    "$CPU_CONFIG"
+# CONFIG_DECODE_ROM=1 selects cpu_sim_rom (u_decode bound to cpu_decode_rom
+# instead of cpu_decode_direct, see core/cpu_config_sim.vhd + sim/Makefile).
+# No source mutation needed -- the ROM-decoder build is a first-class sim
+# configuration, not a temporary patch to core/cpu_config.vhd.
 
 rom_ok=1
 rom_skip=0
 
-# Rebuild with patched config and run. If elaboration fails (e.g., the ROM
-# decoder depends on a falling-edge clock not present in the test bench), we
-# document the failure and skip rather than aborting the whole regression.
+# Rebuild with CONFIG_DECODE_ROM=1 and run. If elaboration fails (e.g., the
+# ROM decoder depends on a falling-edge clock not present in the test
+# bench), we document the failure and skip rather than aborting the whole
+# regression.
 cd "$REPO_ROOT/sim"
-rm -f work-obj93.cf cpu_ctb
-if ! make TOOLS_DIR="$TOOLS_DIR" cpu_ctb work-obj93.cf >/dev/null 2>&1; then
+rm -f work-obj93.cf cpu_ctb cpu_tb.vhh
+if ! make TOOLS_DIR="$TOOLS_DIR" CONFIG_DECODE_ROM=1 cpu_ctb work-obj93.cf >/dev/null 2>&1; then
     echo "    SKIP: ROM decoder failed to elaborate — build error (see below):" >&2
-    make TOOLS_DIR="$TOOLS_DIR" cpu_ctb work-obj93.cf 2>&1 | tail -20 >&2 || true
+    make TOOLS_DIR="$TOOLS_DIR" CONFIG_DECODE_ROM=1 cpu_ctb work-obj93.cf 2>&1 | tail -20 >&2 || true
     rom_ok=0
     rom_skip=1
 fi
@@ -177,9 +158,6 @@ if [ $rom_skip -eq 0 ]; then
     rm -f "$LED_LOG_ROM"
 fi
 
-# Restore config before proceeding (trap will also fire, but be explicit).
-cleanup
-
 if [ $rom_skip -eq 1 ]; then
     echo "    NOTE: ROM decoder simulation skipped — elaboration failed."
     echo "          This means the ROM decoder is not wired for the test bench."
@@ -188,10 +166,10 @@ elif [ $rom_ok -eq 0 ]; then
     exit 1
 fi
 
-# Rebuild with the restored (direct) config so step 5 TAP tests use the
-# standard configuration.
+# Rebuild with the default (CONFIG_DECODE_ROM=0, direct decoder) config so
+# step 5 TAP tests use the standard configuration.
 cd "$REPO_ROOT/sim"
-rm -f work-obj93.cf cpu_ctb
+rm -f work-obj93.cf cpu_ctb cpu_tb.vhh
 make TOOLS_DIR="$TOOLS_DIR" cpu_ctb work-obj93.cf >/dev/null
 
 echo "==> Step 5: unit TAP testbenches"

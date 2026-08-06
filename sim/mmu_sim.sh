@@ -314,7 +314,37 @@ else
   #   m8_idslot_0-2 (the I-side delay-slot sweep) are rotted orphans: nothing
   #   has ever tested this path.
   #
-  # PER-STAGE RESTART METADATA -- first cut ATTEMPTED, hangs. Recorded so the
+  # HANG ROOT-CAUSED AND FIXED (2026-08-06). The per-stage first cut hung; the
+  # cause was mis-ATTRIBUTION of the IF-stage delay-slot bit, not the design:
+  #   While a branch sits in ID, TWO fetches are issued in the same delay_jump
+  #   window -- the delay slot (SEQUENTIAL) and the branch TARGET (REDIRECTED).
+  #   Tagging both meant the TARGET's fault restarted at target-2. Measured: the
+  #   harness enters a case via `jmp @r5' whose target IS the branch at
+  #   0x00100FFE; that fetch faulted, restarted at 0x00100FFC -- not an
+  #   instruction boundary -- ran garbage, and reset-looped every ~4.8us
+  #   (0x100FFC -> 0x80000330 -> 0x00000118 -> kmain -> repeat).
+  #   FIX: qualify with the fetch's own addr_sel (sequential vs redirected).
+  #   `delay_jump and not instr.addr_sel' removes the hang and restores a clean
+  #   failure. KEEP THIS QUALIFIER in any future attempt.
+  #
+  # WHAT IS STILL WRONG, now measured precisely. Capture-at-ISSUE is TOO EARLY:
+  #   19250ns EX 0x00101000 (delay slot)  dslot=0 delay_jump=1  exc_pc=0x00101000
+  #   19490ns EX 0x00101000  <- restart landed ON the delay slot, branch NOT re-run
+  #   19510ns EX 0x00101002  <- POISON  => SNAP_A = 0xFFFFFFFF
+  # delay_jump is '1' while the delay slot is in EX but was '0' when its fetch
+  # was ISSUED -- the fetch unit runs ahead of the branch's decode. So the bit
+  # cannot be latched at issue.
+  #
+  # A retroactive tag was tried -- clear if_dslot at issue, then set it when
+  # delay_jump rises on the still-outstanding sequential fetch (this.inst_o.en='1'
+  # and this.inst_o.jp='0'). It compiles and does NOT hang, but never fires:
+  # exc_pc is still 0x00101000 at the delay-slot fetch capture, so the
+  # delay_jump-high window and "that fetch still outstanding" do not overlap.
+  # MEASURE THAT OVERLAP FIRST (inst_o.en / jp / delay_jump around the delay-slot
+  # fetch) before a third attribution scheme -- that is the one fact this whole
+  # line of attack keeps turning on.
+  #
+  # ---- earlier: PER-STAGE RESTART METADATA -- first cut ATTEMPTED, hangs. Recorded so the
   # next attempt starts from the design and the failure, not from scratch.
   #
   # THE DESIGN (this part is sound and worth keeping). Every fault's restart is

@@ -285,7 +285,7 @@ k_mixedval:.long 0x80002D24           ! mixed-leg translated-load result
 p_after:   .long 0x80000000 + _after_ifetch
 p_after2:  .long 0x80000000 + _after_ifetch2
 p_after3:  .long 0x80000000 + _after_ifetch3
-k_wcnt:    .long 0x80002D00
+k_wcnt:    .long 0x80010D00   ! must match WALKER_CALLS in tlbwalk.c
 k_hcnt:    .long 0x80002D04
 k_vbr:     .long 0x80000000 + _vbase
 k_tsbbr_a: .long 0xFF000014

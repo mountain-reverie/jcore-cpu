@@ -8,7 +8,7 @@
 
 typedef unsigned long u32;
 
-#define WALKER_CALLS  (*(volatile u32 *)0x80002D00)
+#define WALKER_CALLS  (*(volatile u32 *)0x80010D00)
 
 #define _PAGE_VALID   0x1UL        /* PTEL bit0 (V) and PGD present bit */
 #define PTE_TAB_MASK  (~0xFUL)     /* PGD entry low nibble = flags      */

@@ -218,20 +218,22 @@ else
 # The generator's Defect 7 skips are gone too (emit.go: the lateAccess() helper
 # and the MAC-specific skip), so m8_dsdslot_0 now emits the @Rm+ loads inline
 # and its case numbering is UNCHANGED (the parked failure is still 1007).
-# Two forms stay skipped there for reasons that are NOT Defect 7:
-#   MAC.{L,W}  pre-existing: "dual memory-pointer instruction -- only one base
-#              register is seeded". Never was a Defect 7 skip in substance.
-#   CAS.L      NEW FINDING, worth picking up with the 1007 work: emitting it
-#              after the fix makes this axis HANG the bus at case 1 ("Rd did not
-#              see ACK for data sram" from ~9.2us) instead of reaching 1007,
-#              i.e. a locked RMW whose read faults inside the MAXIMAL
-#              three-fault Case A shape appears not to release the bus lock. A
-#              SINGLE-fault delay-slot CAS.L restart is fine -- that is
-#              mmudspcprobe_latec, RED pre-fix and GREEN after. Re-skipped so
-#              this parked axis keeps a nameable Result instead of a hang.
-# Both are covered for the single-fault restart-PC property by the per-form
-# guards above; what is missing is only their behaviour under three-fault
-# stacking.
+# CAS.L IS NOW EMITTED (case 1) AND PASSES. An earlier revision of this file
+# claimed it "hangs the bus in the maximal three-fault shape -- a locked RMW
+# whose read faults appears not to release the bus lock". THAT WAS WRONG, and
+# the retraction is worth reading because the symptom was so misleading: the
+# real cause was that the IMAGE had outgrown the harness's fixed scratch block.
+# kmain's own page-table setup was writing over the image (PGD[0] at 0x2000 onto
+# case 23's literal pool, the PTEs at 0x2800 onto case 29's), and adding one more
+# case pushed _edata past the 64-long TSB zero-fill at 0x2C00, which erased
+# _m8_run_all itself -- so the dispatch jsr ran into zeros and the CPU
+# reset-looped every ~4.8us. db_lock was '0' the entire time; there was never a
+# lock involved. The block now lives at 0x00010000 and sim/tests/Makefile fails
+# the build if an m8 image reaches it.
+#
+# MAC.{L,W} remain skipped on this axis for a SEPARATE, pre-existing reason
+# ("dual memory-pointer instruction -- only one base register is seeded"), never
+# a Defect 7 skip in substance; mmudspcprobe_latem{,w} cover them.
 #
 # m8_dsdslot_0 remains PARKED below on its own separate failure -- see the park
 # comment there, which is NOT Defect 7. Per the same-shaped emitIFetchDSlot
@@ -244,13 +246,16 @@ else
 # reason why.
   run_guard m8_smoke
   run_guard m8_dside    "" 200us
-  # m8_dsdslot_0: PARKED on Case A Result=1007 (case 7 = MOV.B @(disp,Rm),R0 --
+  # m8_dsdslot_0: PARKED on Case A Result=1008 (case 8 = MOV.B @(disp,Rm),R0 --
   # a plain SLOT-0 access, and NOT Defect 7, which is now fixed anyway).
   # NARROWED 2026-08-06, still unfixed. It is NOT a harness construction bug and
   # NOT a wrong restart PC. Evidence:
   #   * SNAP_A (cold, 3-fault leg) = 0x00102000 -- the UN-loaded base; SNAP_B
   #     (warm) = 0xFFFFFFA1 -- the correct sign-extended load. Not 0xFFFFFFFF,
   #     so the poison trap never fired.
+  #   (SNAP values and the trace below were measured when this case was still
+  #   numbered 7 and the scratch block was at 0x2000; the mechanism is unchanged
+  #   but the timestamps shift.)
   #   * if_dr trace across the case shows control flow is correct at all three
   #     faults: [4B2B 8400] -> fault -> restart on the BRANCH -> [4B2B 8400] ->
   #     4C2B (target) -> fault -> restart on the TARGET -> 4C2B -> capture.
@@ -266,9 +271,16 @@ else
   #   reg_wr_w_g <= reg.wr_w    (w-port squash disabled)  -> still 1007
   #   drop `and tlb_squash_r = '0'' from the mem-issue gate -> still 1007
   # so the write is NOT being lost at either grace-gated port or the issue gate.
-  # NEXT STEP IS EVIDENCE, NOT ANOTHER PROBE: the VCD wrapper only exposes
-  # top-level signals, so add reg.wr_w / num_w_r / cpu_data_mux / m_dr to it and
-  # watch the 19160-19260 ns window. Parked so the suite stays readable, NOT
+  # A fourth probe was refuted since: with the g_squash_ifetch age term (the
+  # commit that retired wb_grace/z_grace) squash_ifetch_r is measured '1' across
+  # the WHOLE failing window, so all three squash gates are exempt and the load
+  # STILL produces no register write -- no w-port, no z-port, no restore_fire.
+  # The value is therefore not being lost in the datapath at all. Remaining
+  # suspect: decode's exception dispatch replacing the in-flight op with the
+  # exception system_op, i.e. an instruction-granularity discard, which is why
+  # every port-level probe misses it. NOTE the VCD already dumps reg_wr_w_g /
+  # num_w_r / reg_wr_z_g / num_z_r / gpf_zwd / restore_fire / squash_ifetch_r --
+  # an earlier note here wrongly said the wrapper needed extending. Parked so the suite stays readable, NOT
   # because the failure is dismissed. Re-enable when resolved.
   # run_guard m8_dsdslot_0 "" 200us
   # mmudspcprobe_late: ACTIVE since Defect 7 was fixed (decode/decode_core.vhm,

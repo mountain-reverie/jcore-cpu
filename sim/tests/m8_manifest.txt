@@ -382,38 +382,39 @@
 #   XOR.B #imm, @(R0, GBR) XOR.B #imm, @(R0, GBR) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 
 ## D-side-delay-slot axis (m8_dsdslot_N.S)
-1    LDC.L @Rm+, GBR      PrivMem
-2    LDC.L @Rm+, SR       PrivMem
-3    LDC.L @Rm+, VBR      PrivMem
-4    LDS.L @Rm+, MACH     General
-5    LDS.L @Rm+, MACL     General
-6    LDS.L @Rm+, PR       PrivMem
-7    MOV.B @(disp, Rm), R0 General
-8    MOV.B @Rm+, Rn       General
-9    MOV.B @Rm, Rn        General
-10   MOV.B R0, @(disp, Rn) General
-11   MOV.B Rm, @Rn        General
-12   MOV.B Rm,@-Rn        General
-13   MOV.L @(disp, Rm), Rn General
-14   MOV.L @Rm+, Rn       General
-15   MOV.L @Rm, Rn        General
-16   MOV.L Rm, @(disp, Rn) General
-17   MOV.L Rm, @Rn        General
-18   MOV.L Rm,@-Rn        General
-19   MOV.W @(disp, Rm), R0 General
-20   MOV.W @Rm+, Rn       General
-21   MOV.W @Rm, Rn        General
-22   MOV.W R0, @(disp, Rn) General
-23   MOV.W Rm, @Rn        General
-24   MOV.W Rm,@-Rn        General
-25   STC.L GBR, @-Rn      General
-26   STC.L SR, @-Rn       PrivMem
-27   STC.L VBR, @-Rn      PrivMem
-28   STS.L MACH, @-Rn     General
-29   STS.L MACL, @-Rn     General
-30   STS.L PR, @-Rn       General
-31   TAS.B @Rn            General
-# 31 emitted; skipped:
+1    CAS.L Rm, Rn, @R0    General
+2    LDC.L @Rm+, GBR      PrivMem
+3    LDC.L @Rm+, SR       PrivMem
+4    LDC.L @Rm+, VBR      PrivMem
+5    LDS.L @Rm+, MACH     General
+6    LDS.L @Rm+, MACL     General
+7    LDS.L @Rm+, PR       PrivMem
+8    MOV.B @(disp, Rm), R0 General
+9    MOV.B @Rm+, Rn       General
+10   MOV.B @Rm, Rn        General
+11   MOV.B R0, @(disp, Rn) General
+12   MOV.B Rm, @Rn        General
+13   MOV.B Rm,@-Rn        General
+14   MOV.L @(disp, Rm), Rn General
+15   MOV.L @Rm+, Rn       General
+16   MOV.L @Rm, Rn        General
+17   MOV.L Rm, @(disp, Rn) General
+18   MOV.L Rm, @Rn        General
+19   MOV.L Rm,@-Rn        General
+20   MOV.W @(disp, Rm), R0 General
+21   MOV.W @Rm+, Rn       General
+22   MOV.W @Rm, Rn        General
+23   MOV.W R0, @(disp, Rn) General
+24   MOV.W Rm, @Rn        General
+25   MOV.W Rm,@-Rn        General
+26   STC.L GBR, @-Rn      General
+27   STC.L SR, @-Rn       PrivMem
+28   STC.L VBR, @-Rn      PrivMem
+29   STS.L MACH, @-Rn     General
+30   STS.L MACL, @-Rn     General
+31   STS.L PR, @-Rn       General
+32   TAS.B @Rn            General
+# 32 emitted; skipped:
 #   ADD #imm, Rn         ADD #imm, Rn has no D-side memory access
 #   ADD Rm, Rn           ADD Rm, Rn has no D-side memory access
 #   ADDC Rm, Rn          ADDC Rm, Rn has no D-side memory access
@@ -431,7 +432,6 @@
 #   BT /S label          BT /S label is Bespoke (dedicated guard)
 #   BT label             BT label is Bespoke (dedicated guard)
 #   Break                Break has no D-side memory access
-#   CAS.L Rm, Rn, @R0    CAS.L Rm, Rn, @R0: locked RMW hangs the bus in this axis's maximal three-fault shape (NOT Defect 7, which is fixed); single-fault coverage is mmudspcprobe_latec.S
 #   CLDS CP0_Rm, CP0_COM CLDS CP0_Rm, CP0_COM has no D-side memory access
 #   CLDS CPI_Rm, CPI_COM CLDS CPI_Rm, CPI_COM has no D-side memory access
 #   CLRMAC               CLRMAC has no D-side memory access

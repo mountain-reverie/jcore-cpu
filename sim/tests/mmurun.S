@@ -163,7 +163,7 @@ v_seedA:   .long 0xA5A50001
 v_seedC:   .long 0xA5A50003
 sv_B:      .long 0x5B5B0002
 sv_D:      .long 0x5B5B0004
-k_wcnt:    .long 0x80002D00
+k_wcnt:    .long 0x80010D00   ! must match WALKER_CALLS in tlbwalk.c
 k_hcnt:    .long 0x80002D04
 k_vbr:     .long 0x80000000 + _vbase
 k_tsbbr_a: .long 0xFF000014

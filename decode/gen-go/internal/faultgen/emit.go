@@ -1067,22 +1067,6 @@ func emitDSideDSlot(c Class, id int) (string, string, error) {
 		return fmt.Sprintf("! case %d skipped: %s: control-register memory store in a delay slot not yet modelled by DSideDSlot\n", id, c.Instr.Name),
 			"", errSkip
 	}
-	if strings.HasPrefix(c.Instr.Name, "CAS.") {
-		// NOT Defect 7 (fixed; decode/decode_core.vhm g_dslot). Emitting CAS.L
-		// here was tried after that fix and made this axis HANG the bus at
-		// case 1 ("Rd did not see ACK for data sram" from ~9.2us) instead of
-		// reaching its existing parked failure, destroying the axis's
-		// diagnosability for no gain -- it is parked either way. The
-		// single-fault delay-slot restart for CAS.L IS covered, and proven
-		// non-vacuous (RED 0x00010101 pre-fix, GREEN after), by
-		// sim/tests/mmudspcprobe_latec.S. What is NOT covered, and is a real
-		// open finding, is CAS.L under this axis's MAXIMAL three-fault Case A
-		// shape: a locked RMW whose read faults while two more faults follow
-		// appears not to release the bus lock. Re-enable when that is
-		// diagnosed -- see the m8_dsdslot_0 park comment in sim/mmu_sim.sh.
-		return fmt.Sprintf("! case %d skipped: %s: locked RMW hangs the bus in this axis's maximal three-fault shape (NOT Defect 7, which is fixed); single-fault coverage is mmudspcprobe_latec.S\n", id, c.Instr.Name),
-			"", errSkip
-	}
 	if strings.HasPrefix(c.Instr.Name, "CAS.") && regBase != 0 {
 		return fmt.Sprintf("! case %d skipped: %s: implicit-R0 pointer requires regBase==r0 (currently r%d)\n", id, c.Instr.Name, regBase),
 			"", errSkip

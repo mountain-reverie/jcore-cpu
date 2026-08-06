@@ -2,6 +2,7 @@ CC = sh2-elf-gcc
 LD = sh2-elf-ld
 AR = sh2-elf-ar
 OBJCOPY = sh2-elf-objcopy
+NM = sh2-elf-nm
 RANLIB = sh2-elf-ranlib
 LIBGCC = `sh2-elf-gcc -print-file-name=libgcc.a`
 # CPU_VARIANT selects the same variant as ../Makefile / variants.toml.
@@ -247,6 +248,16 @@ m8_dsdslot_0.elf: m8_dsdslot_0.o tlbwalk.o
 	$(LD) $(LDFLAGS) $^ $(LIBGCC) -o $@
 
 %.img: %.elf
+	$(OBJCOPY) -v -S -O binary --srec-forceS3 $< $@
+
+# The M8 harness keeps its page tables, TSB, stack and snapshot buffers in a
+# FIXED block at 0x00010000 (see m8_runtime.inc). An image that reaches it gets
+# its own code overwritten by kmain's page-table setup -- silently, and with a
+# symptom (CPU reset loop / bus ACK timeout) that looks nothing like the cause.
+# That happened for real once; fail the build instead.
+M8_SCRATCH_BASE = 0x10000
+m8_%.img: m8_%.elf
+	@end=$$($(NM) -n $< | awk '/ _edata/{print $$1}'); 	 if [ $$((0x$$end)) -ge $$(($(M8_SCRATCH_BASE))) ]; then 	   echo "ERROR: $< _edata=0x$$end reaches the M8 scratch block at $(M8_SCRATCH_BASE)." >&2; 	   echo "       Split the axis into more images, or move the block up." >&2; 	   exit 1; 	 fi
 	$(OBJCOPY) -v -S -O binary --srec-forceS3 $< $@
 
 clean:

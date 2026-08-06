@@ -25,253 +25,382 @@
 ! case 1 skipped: BT /S label is Bespoke (dedicated guard)
 ! case 1 skipped: BT label is Bespoke (dedicated guard)
 ! case 1 skipped: Break has no D-side memory access
-! case 1 skipped: CAS.L Rm, Rn, @R0: locked RMW hangs the bus in this axis's maximal three-fault shape (NOT Defect 7, which is fixed); single-fault coverage is mmudspcprobe_latec.S
-! case 1 skipped: CLDS CP0_Rm, CP0_COM has no D-side memory access
-! case 1 skipped: CLDS CPI_Rm, CPI_COM has no D-side memory access
-! case 1 skipped: CLRMAC has no D-side memory access
-! case 1 skipped: CLRT has no D-side memory access
-! case 1 skipped: CMP /EQ #imm, R0 has no D-side memory access
-! case 1 skipped: CMP /EQ Rm, Rn has no D-side memory access
-! case 1 skipped: CMP /GE Rm, Rn has no D-side memory access
-! case 1 skipped: CMP /GT Rm, Rn has no D-side memory access
-! case 1 skipped: CMP /HI Rm, Rn has no D-side memory access
-! case 1 skipped: CMP /HS Rm, Rn has no D-side memory access
-! case 1 skipped: CMP /STR Rm, Rn has no D-side memory access
-! case 1 skipped: CMP/EQ ASIDR, Rn has no D-side memory access
-! case 1 skipped: CMP/EQ PTEH, Rn has no D-side memory access
-! case 1 skipped: CMP/PL Rn has no D-side memory access
-! case 1 skipped: CMP/PZ Rn has no D-side memory access
-! case 1 skipped: CSTS CP0_COM, CP0_Rn has no D-side memory access
-! case 1 skipped: CSTS CPI_COM, CPI_Rn has no D-side memory access
-! case 1 skipped: DIV0S Rm, Rn has no D-side memory access
-! case 1 skipped: DIV0U has no D-side memory access
-! case 1 skipped: DIV1 Rm, Rn has no D-side memory access
-! case 1 skipped: DMULS.L Rm, Rn has no D-side memory access
-! case 1 skipped: DMULU.L Rm, Rn has no D-side memory access
-! case 1 skipped: DT Rn has no D-side memory access
-! case 1 skipped: EXTS.B Rm, Rn has no D-side memory access
-! case 1 skipped: EXTS.W Rm, Rn has no D-side memory access
-! case 1 skipped: EXTU.B Rm, Rn has no D-side memory access
-! case 1 skipped: EXTU.W Rm, Rn has no D-side memory access
-! case 1 skipped: Error has no D-side memory access
-! case 1 skipped: General Illegal has no D-side memory access
-! case 1 skipped: Interrupt has no D-side memory access
-! case 1 skipped: JMP @Rm is Bespoke (dedicated guard)
-! case 1 skipped: JSR @Rm is Bespoke (dedicated guard)
-! case 1 skipped: LDC Rm, ASIDR has no D-side memory access
-! case 1 skipped: LDC Rm, PTEH has no D-side memory access
-! case 1 skipped: LDC Rm, PTEL has no D-side memory access
-! case 1 skipped: LDC Rm, Rn_BANK has no D-side memory access
-! case 1 skipped: LDC Rm, SPC has no D-side memory access
-! case 1 skipped: LDC Rm, SR has no D-side memory access
-! case 1 skipped: LDC Rm, SSR has no D-side memory access
-! case 1 skipped: LDC Rm, VBR has no D-side memory access
-! case 1 skipped: LDC, Rm, GBR has no D-side memory access
-! case 4 skipped: LDS Rm, CP0_COM has no D-side memory access
-! case 4 skipped: LDS Rm, CPI_COM has no D-side memory access
-! case 4 skipped: LDS Rm, MACH has no D-side memory access
-! case 4 skipped: LDS Rm, MACL has no D-side memory access
-! case 4 skipped: LDS Rm, PR has no D-side memory access
-! case 7 skipped: LDTLB is Bespoke (dedicated guard)
-! case 7 skipped: LDTLB.RN is Bespoke (dedicated guard)
-! case 7 skipped: LDTLB.RN Rm has no D-side memory access
-! case 7 skipped: MAC.L @Rm+, @Rn+: effective address not modelled: dual memory-pointer instruction (only one base register is seeded)
-! case 7 skipped: MAC.W @Rm+, @Rn+: effective address not modelled: dual memory-pointer instruction (only one base register is seeded)
-! case 7 skipped: MOV #imm, Rn has no D-side memory access
-! case 7 skipped: MOV Rm, Rn has no D-side memory access
-! case 7 skipped: MOV.B @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 7 skipped: MOV.B @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 10 skipped: MOV.B R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 11 skipped: MOV.B Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 13 skipped: MOV.L @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 13 skipped: MOV.L @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 13 skipped: MOV.L @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
-! case 16 skipped: MOV.L R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 16 skipped: MOV.L Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 19 skipped: MOV.W @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 19 skipped: MOV.W @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 19 skipped: MOV.W @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
-! case 22 skipped: MOV.W R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 23 skipped: MOV.W Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 25 skipped: MOVA @(disp, PC), R0 has no D-side memory access
-! case 25 skipped: MOVT Rn has no D-side memory access
-! case 25 skipped: MUL.L Rm, Rn has no D-side memory access
-! case 25 skipped: MULS.W Rm, Rn has no D-side memory access
-! case 25 skipped: MULU.W Rm, Rn has no D-side memory access
-! case 25 skipped: NEG Rm, Rn has no D-side memory access
-! case 25 skipped: NEGC Rm, Rn has no D-side memory access
-! case 25 skipped: NOP has no D-side memory access
-! case 25 skipped: NOT Rm, Rn has no D-side memory access
-! case 25 skipped: OR #imm, R0 has no D-side memory access
-! case 25 skipped: OR Rm, Rn has no D-side memory access
-! case 25 skipped: OR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 25 skipped: ROTCL Rn has no D-side memory access
-! case 25 skipped: ROTCR Rn has no D-side memory access
-! case 25 skipped: ROTL Rn has no D-side memory access
-! case 25 skipped: ROTR Rn has no D-side memory access
-! case 25 skipped: RTE is Bespoke (dedicated guard)
-! case 25 skipped: RTS is Bespoke (dedicated guard)
-! case 25 skipped: Reset CPU: control-register memory store in a delay slot not yet modelled by DSideDSlot
-! case 25 skipped: SETT has no D-side memory access
-! case 25 skipped: SHAD Rm, Rn has no D-side memory access
-! case 25 skipped: SHAL Rn has no D-side memory access
-! case 25 skipped: SHAR Rn has no D-side memory access
-! case 25 skipped: SHLD Rm, Rn has no D-side memory access
-! case 25 skipped: SHLL Rn has no D-side memory access
-! case 25 skipped: SHLL16 Rn has no D-side memory access
-! case 25 skipped: SHLL2 Rn has no D-side memory access
-! case 25 skipped: SHLL8 Rn has no D-side memory access
-! case 25 skipped: SHLR Rn has no D-side memory access
-! case 25 skipped: SHLR16 Rn has no D-side memory access
-! case 25 skipped: SHLR2 Rn has no D-side memory access
-! case 25 skipped: SHLR8 Rn has no D-side memory access
-! case 25 skipped: SLEEP is Bespoke (dedicated guard)
-! case 25 skipped: STC ASIDR, Rn has no D-side memory access
-! case 25 skipped: STC EXPEVT, Rn has no D-side memory access
-! case 25 skipped: STC GBR, Rn has no D-side memory access
-! case 25 skipped: STC INTEVT, Rn has no D-side memory access
-! case 25 skipped: STC PTEH, Rn has no D-side memory access
-! case 25 skipped: STC PTEL, Rn has no D-side memory access
-! case 25 skipped: STC Rm_BANK, Rn has no D-side memory access
-! case 25 skipped: STC SPC, Rn has no D-side memory access
-! case 25 skipped: STC SR, Rn has no D-side memory access
-! case 25 skipped: STC SSR, Rn has no D-side memory access
-! case 25 skipped: STC TRA, Rn has no D-side memory access
-! case 25 skipped: STC TSBPTR, Rn has no D-side memory access
-! case 25 skipped: STC VBR, Rn has no D-side memory access
-! case 28 skipped: STS CP0_COM, Rn has no D-side memory access
-! case 28 skipped: STS CPI_COM, Rn has no D-side memory access
-! case 28 skipped: STS MACH, Rn has no D-side memory access
-! case 28 skipped: STS MACL, Rn has no D-side memory access
-! case 28 skipped: STS PR, Rn has no D-side memory access
-! case 31 skipped: SUB Rm, Rn has no D-side memory access
-! case 31 skipped: SUBC Rm, Rn has no D-side memory access
-! case 31 skipped: SUBV Rm, Rn has no D-side memory access
-! case 31 skipped: SWAP.B Rm, Rn has no D-side memory access
-! case 31 skipped: SWAP.W Rm, Rn has no D-side memory access
-! case 31 skipped: Slot Illegal has no D-side memory access
-! case 32 skipped: TLB DMISS R has no D-side memory access
-! case 32 skipped: TLB DMISS W has no D-side memory access
-! case 32 skipped: TLB DPROT R has no D-side memory access
-! case 32 skipped: TLB DPROT W has no D-side memory access
-! case 32 skipped: TLB IMISS has no D-side memory access
-! case 32 skipped: TLB IPROT has no D-side memory access
-! case 32 skipped: TRAPA #imm has no D-side memory access
-! case 32 skipped: TST #imm, R0 has no D-side memory access
-! case 32 skipped: TST Rm, Rn has no D-side memory access
-! case 32 skipped: TST.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 32 skipped: XOR #imm, R0 has no D-side memory access
-! case 32 skipped: XOR Rm, Rn has no D-side memory access
-! case 32 skipped: XOR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 32 skipped: XTRACT Rm, Rn has no D-side memory access
+! case 2 skipped: CLDS CP0_Rm, CP0_COM has no D-side memory access
+! case 2 skipped: CLDS CPI_Rm, CPI_COM has no D-side memory access
+! case 2 skipped: CLRMAC has no D-side memory access
+! case 2 skipped: CLRT has no D-side memory access
+! case 2 skipped: CMP /EQ #imm, R0 has no D-side memory access
+! case 2 skipped: CMP /EQ Rm, Rn has no D-side memory access
+! case 2 skipped: CMP /GE Rm, Rn has no D-side memory access
+! case 2 skipped: CMP /GT Rm, Rn has no D-side memory access
+! case 2 skipped: CMP /HI Rm, Rn has no D-side memory access
+! case 2 skipped: CMP /HS Rm, Rn has no D-side memory access
+! case 2 skipped: CMP /STR Rm, Rn has no D-side memory access
+! case 2 skipped: CMP/EQ ASIDR, Rn has no D-side memory access
+! case 2 skipped: CMP/EQ PTEH, Rn has no D-side memory access
+! case 2 skipped: CMP/PL Rn has no D-side memory access
+! case 2 skipped: CMP/PZ Rn has no D-side memory access
+! case 2 skipped: CSTS CP0_COM, CP0_Rn has no D-side memory access
+! case 2 skipped: CSTS CPI_COM, CPI_Rn has no D-side memory access
+! case 2 skipped: DIV0S Rm, Rn has no D-side memory access
+! case 2 skipped: DIV0U has no D-side memory access
+! case 2 skipped: DIV1 Rm, Rn has no D-side memory access
+! case 2 skipped: DMULS.L Rm, Rn has no D-side memory access
+! case 2 skipped: DMULU.L Rm, Rn has no D-side memory access
+! case 2 skipped: DT Rn has no D-side memory access
+! case 2 skipped: EXTS.B Rm, Rn has no D-side memory access
+! case 2 skipped: EXTS.W Rm, Rn has no D-side memory access
+! case 2 skipped: EXTU.B Rm, Rn has no D-side memory access
+! case 2 skipped: EXTU.W Rm, Rn has no D-side memory access
+! case 2 skipped: Error has no D-side memory access
+! case 2 skipped: General Illegal has no D-side memory access
+! case 2 skipped: Interrupt has no D-side memory access
+! case 2 skipped: JMP @Rm is Bespoke (dedicated guard)
+! case 2 skipped: JSR @Rm is Bespoke (dedicated guard)
+! case 2 skipped: LDC Rm, ASIDR has no D-side memory access
+! case 2 skipped: LDC Rm, PTEH has no D-side memory access
+! case 2 skipped: LDC Rm, PTEL has no D-side memory access
+! case 2 skipped: LDC Rm, Rn_BANK has no D-side memory access
+! case 2 skipped: LDC Rm, SPC has no D-side memory access
+! case 2 skipped: LDC Rm, SR has no D-side memory access
+! case 2 skipped: LDC Rm, SSR has no D-side memory access
+! case 2 skipped: LDC Rm, VBR has no D-side memory access
+! case 2 skipped: LDC, Rm, GBR has no D-side memory access
+! case 5 skipped: LDS Rm, CP0_COM has no D-side memory access
+! case 5 skipped: LDS Rm, CPI_COM has no D-side memory access
+! case 5 skipped: LDS Rm, MACH has no D-side memory access
+! case 5 skipped: LDS Rm, MACL has no D-side memory access
+! case 5 skipped: LDS Rm, PR has no D-side memory access
+! case 8 skipped: LDTLB is Bespoke (dedicated guard)
+! case 8 skipped: LDTLB.RN is Bespoke (dedicated guard)
+! case 8 skipped: LDTLB.RN Rm has no D-side memory access
+! case 8 skipped: MAC.L @Rm+, @Rn+: effective address not modelled: dual memory-pointer instruction (only one base register is seeded)
+! case 8 skipped: MAC.W @Rm+, @Rn+: effective address not modelled: dual memory-pointer instruction (only one base register is seeded)
+! case 8 skipped: MOV #imm, Rn has no D-side memory access
+! case 8 skipped: MOV Rm, Rn has no D-side memory access
+! case 8 skipped: MOV.B @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 8 skipped: MOV.B @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 11 skipped: MOV.B R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 12 skipped: MOV.B Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 14 skipped: MOV.L @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 14 skipped: MOV.L @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 14 skipped: MOV.L @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
+! case 17 skipped: MOV.L R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 17 skipped: MOV.L Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 20 skipped: MOV.W @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 20 skipped: MOV.W @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 20 skipped: MOV.W @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
+! case 23 skipped: MOV.W R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! case 24 skipped: MOV.W Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 26 skipped: MOVA @(disp, PC), R0 has no D-side memory access
+! case 26 skipped: MOVT Rn has no D-side memory access
+! case 26 skipped: MUL.L Rm, Rn has no D-side memory access
+! case 26 skipped: MULS.W Rm, Rn has no D-side memory access
+! case 26 skipped: MULU.W Rm, Rn has no D-side memory access
+! case 26 skipped: NEG Rm, Rn has no D-side memory access
+! case 26 skipped: NEGC Rm, Rn has no D-side memory access
+! case 26 skipped: NOP has no D-side memory access
+! case 26 skipped: NOT Rm, Rn has no D-side memory access
+! case 26 skipped: OR #imm, R0 has no D-side memory access
+! case 26 skipped: OR Rm, Rn has no D-side memory access
+! case 26 skipped: OR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 26 skipped: ROTCL Rn has no D-side memory access
+! case 26 skipped: ROTCR Rn has no D-side memory access
+! case 26 skipped: ROTL Rn has no D-side memory access
+! case 26 skipped: ROTR Rn has no D-side memory access
+! case 26 skipped: RTE is Bespoke (dedicated guard)
+! case 26 skipped: RTS is Bespoke (dedicated guard)
+! case 26 skipped: Reset CPU: control-register memory store in a delay slot not yet modelled by DSideDSlot
+! case 26 skipped: SETT has no D-side memory access
+! case 26 skipped: SHAD Rm, Rn has no D-side memory access
+! case 26 skipped: SHAL Rn has no D-side memory access
+! case 26 skipped: SHAR Rn has no D-side memory access
+! case 26 skipped: SHLD Rm, Rn has no D-side memory access
+! case 26 skipped: SHLL Rn has no D-side memory access
+! case 26 skipped: SHLL16 Rn has no D-side memory access
+! case 26 skipped: SHLL2 Rn has no D-side memory access
+! case 26 skipped: SHLL8 Rn has no D-side memory access
+! case 26 skipped: SHLR Rn has no D-side memory access
+! case 26 skipped: SHLR16 Rn has no D-side memory access
+! case 26 skipped: SHLR2 Rn has no D-side memory access
+! case 26 skipped: SHLR8 Rn has no D-side memory access
+! case 26 skipped: SLEEP is Bespoke (dedicated guard)
+! case 26 skipped: STC ASIDR, Rn has no D-side memory access
+! case 26 skipped: STC EXPEVT, Rn has no D-side memory access
+! case 26 skipped: STC GBR, Rn has no D-side memory access
+! case 26 skipped: STC INTEVT, Rn has no D-side memory access
+! case 26 skipped: STC PTEH, Rn has no D-side memory access
+! case 26 skipped: STC PTEL, Rn has no D-side memory access
+! case 26 skipped: STC Rm_BANK, Rn has no D-side memory access
+! case 26 skipped: STC SPC, Rn has no D-side memory access
+! case 26 skipped: STC SR, Rn has no D-side memory access
+! case 26 skipped: STC SSR, Rn has no D-side memory access
+! case 26 skipped: STC TRA, Rn has no D-side memory access
+! case 26 skipped: STC TSBPTR, Rn has no D-side memory access
+! case 26 skipped: STC VBR, Rn has no D-side memory access
+! case 29 skipped: STS CP0_COM, Rn has no D-side memory access
+! case 29 skipped: STS CPI_COM, Rn has no D-side memory access
+! case 29 skipped: STS MACH, Rn has no D-side memory access
+! case 29 skipped: STS MACL, Rn has no D-side memory access
+! case 29 skipped: STS PR, Rn has no D-side memory access
+! case 32 skipped: SUB Rm, Rn has no D-side memory access
+! case 32 skipped: SUBC Rm, Rn has no D-side memory access
+! case 32 skipped: SUBV Rm, Rn has no D-side memory access
+! case 32 skipped: SWAP.B Rm, Rn has no D-side memory access
+! case 32 skipped: SWAP.W Rm, Rn has no D-side memory access
+! case 32 skipped: Slot Illegal has no D-side memory access
+! case 33 skipped: TLB DMISS R has no D-side memory access
+! case 33 skipped: TLB DMISS W has no D-side memory access
+! case 33 skipped: TLB DPROT R has no D-side memory access
+! case 33 skipped: TLB DPROT W has no D-side memory access
+! case 33 skipped: TLB IMISS has no D-side memory access
+! case 33 skipped: TLB IPROT has no D-side memory access
+! case 33 skipped: TRAPA #imm has no D-side memory access
+! case 33 skipped: TST #imm, R0 has no D-side memory access
+! case 33 skipped: TST Rm, Rn has no D-side memory access
+! case 33 skipped: TST.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 33 skipped: XOR #imm, R0 has no D-side memory access
+! case 33 skipped: XOR Rm, Rn has no D-side memory access
+! case 33 skipped: XOR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! case 33 skipped: XTRACT Rm, Rn has no D-side memory access
 #include "m8_runtime.inc"
 
 #if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
  .text
         .balign 4
-_m8_case_1:                       ! LDC.L @Rm+, GBR  (PrivMem, D-side in delay slot)
+_m8_case_1:                       ! CAS.L Rm, Rn, @R0  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
-        mov     #0, r1
-        ldc     r1, gbr            ! benign-init ctrl (never read 'U' on save)
-        stc     gbr, r1            ! save baseline ctrl -> r1
-        mov.l   c1_ctlsv, r2
-        mov.l   r1, @r2
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c1_seedva, r0
-        mov.l   c1_seed, r1
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA1_brva, r5
+        mov.w   cA1_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA1_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA1_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA1_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA1_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA1_dva, r5
+        mov.w   cA1_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA1_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA1_cva, r0
+        mov.l   cA1_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c1_flush, r3
+        mov.l   cA1_flush, r3
         jsr     @r3
         nop
-        mov.l   c1_va, r0
-        mov     #0, r1
-        ldc     r1, gbr            ! benign ctrl = 0
-        bra     c1_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4017                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached on a wrong restart PC ----
-        mov.l   c1_poison, r0
-c1_Da:
-        stc     gbr, r1            ! read resulting ctrl
-        mov.l   c1_snapa, r2
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
+        mov.l   cA1_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA1_base, r0
+        mov.l   cA1_pay, r8
+        mov.l   cA1_dva, r11
+        mov.l   cA1_reta, r12
+        mov.l   cA1_brva, r5
+        jmp     @r5
+        nop
+cA1_reta_l:
+        mov.l   cA1_snapa, r2
         mov.l   r0, @r2
+        mov.l   cA1_probe, r3
+        mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c1_seedva, r0
-        mov.l   c1_seed, r1
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA1_cva, r0
+        mov.l   cA1_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   c1_va, r0
-        mov     #0, r1
-        ldc     r1, gbr
-        bra     c1_Db
-        .word   0x4017
-c1_Db:
-        stc     gbr, r1
-        mov.l   c1_snapb, r2
+        mov.l   cA1_base, r0
+        mov.l   cA1_pay, r8
+        mov.l   cA1_dva, r11
+        mov.l   cA1_retb, r12
+        mov.l   cA1_brva, r5
+        jmp     @r5
+        nop
+cA1_retb_l:
+        mov.l   cA1_snapb, r2
         mov.l   r0, @r2
+        mov.l   cA1_probe, r3
+        mov.l   @r3, r1
         mov.l   r1, @(4,r2)
-        ! ---- restore original ctrl + compare ----
-        mov.l   c1_ctlsv, r2
-        mov.l   @r2, r1
-        ldc     r1, gbr
         mov     #8, r4
-        mov.l   c1_id, r5
-        mov.l   c1_cmp, r3
+        mov.l   cA1_id, r5
+        mov.l   cA1_cmp, r3
         jsr     @r3
         nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB1_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA1_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB1_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA1_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA1_cva, r0
+        mov.l   cA1_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA1_base, r0
+        mov.l   cA1_pay, r8
+        mov.l   cA1_dva, r11
+        mov.l   cB1_reta, r12
+        mov.l   cA1_brva, r5
+        jmp     @r5
+        nop
+cB1_reta_l:
+        mov.l   cB1_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA1_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA1_cva, r0
+        mov.l   cA1_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA1_base, r0
+        mov.l   cA1_pay, r8
+        mov.l   cA1_dva, r11
+        mov.l   cB1_retb, r12
+        mov.l   cA1_brva, r5
+        jmp     @r5
+        nop
+cB1_retb_l:
+        mov.l   cB1_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA1_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB1_id, r5
+        mov.l   cB1_cmp, r3
+        jsr     @r3
+        nop
+
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-c1_va:     .long 0x00100000
-c1_seedva: .long 0x00100000
-c1_seed:   .long 0xA11C0001
-c1_ctlsv:  .long 0x80003200
-c1_snapa:  .long SNAP_A
-c1_snapb:  .long SNAP_B
-c1_id:     .long 1
-c1_cmp:    .long 0x80000000 + _m8_cmp
-c1_flush:  .long 0x80000000 + _m8_flush
-c1_poison: .long 0xBADC0DE1
+cA1_brva:      .long 0x00100FFE
+cA1_dva:       .long 0x00103000
+cA1_cva:       .long 0x00102000
+cA1_base:      .long 0x00102000
+cA1_probe:     .long 0x00102000
+cA1_seed:      .long 0xA11C0002
+cA1_pay:       .long 0x57014444
+cA1_braw:      .word 0x4B2B            ! jmp @r11
+cA1_instrw:    .word 0x2803
+cA1_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA1_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA1_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA1_nopw:      .word 0x0009
+        .align 2
+cA1_reta:      .long 0x80000000 + cA1_reta_l
+cA1_retb:      .long 0x80000000 + cA1_retb_l
+cA1_snapa:     .long SNAP_A
+cA1_snapb:     .long SNAP_B
+cA1_id:        .long 1001
+cA1_cmp:       .long 0x80000000 + _m8_cmp
+cA1_flush:     .long 0x80000000 + _m8_flush
+cB1_flush:     .long 0x80000000 + _m8_flush
+cB1_dsva:      .long 0x00101000
+cB1_reta:      .long 0x80000000 + cB1_reta_l
+cB1_retb:      .long 0x80000000 + cB1_retb_l
+cB1_snapa:     .long SNAP_A
+cB1_snapb:     .long SNAP_B
+cB1_id:        .long 2001
+cB1_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_2:                       ! LDC.L @Rm+, SR  (PrivMem mode-preserving, D-side in delay slot)
+_m8_case_2:                       ! LDC.L @Rm+, GBR  (PrivMem, D-side in delay slot)
         sts.l   pr, @-r15
+        mov     #0, r1
+        ldc     r1, gbr            ! benign-init ctrl (never read 'U' on save)
+        stc     gbr, r1            ! save baseline ctrl -> r1
+        mov.l   c2_ctlsv, r2
+        mov.l   r1, @r2
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c2_va, r0
-        stc     sr, r1            ! r1 = current ctrl (mode-preserving payload)
-        mov.l   r1, @r0                  ! seed payload = current ctrl (warms TLB)
+        mov.l   c2_seedva, r0
+        mov.l   c2_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
         mov.l   c2_flush, r3
         jsr     @r3
         nop
         mov.l   c2_va, r0
+        mov     #0, r1
+        ldc     r1, gbr            ! benign ctrl = 0
         bra     c2_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4007                ! DELAY SLOT: instruction under test (payload==ctrl => no-op)
+        .word   0x4017                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached on a wrong restart PC ----
         mov.l   c2_poison, r0
 c2_Da:
-        stc     sr, r1            ! read resulting ctrl
+        stc     gbr, r1            ! read resulting ctrl
         mov.l   c2_snapa, r2
-        mov.l   r0, @r2                  ! base auto-modify (Rm+4)
-        mov.l   r1, @(4,r2)              ! ctrl value (unchanged)
+        mov.l   r0, @r2
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm TLB; no fault) ----
+        mov.l   c2_seedva, r0
+        mov.l   c2_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
         mov.l   c2_va, r0
-        stc     sr, r1            ! same payload
-        mov.l   r1, @r0                  ! re-seed (re-warms TLB; do NOT flush)
-        mov.l   c2_va, r0
+        mov     #0, r1
+        ldc     r1, gbr
         bra     c2_Db
-        .word   0x4007
+        .word   0x4017
 c2_Db:
-        stc     sr, r1
+        stc     gbr, r1
         mov.l   c2_snapb, r2
         mov.l   r0, @r2
         mov.l   r1, @(4,r2)
-        ! ---- compare ----
+        ! ---- restore original ctrl + compare ----
+        mov.l   c2_ctlsv, r2
+        mov.l   @r2, r1
+        ldc     r1, gbr
         mov     #8, r4
         mov.l   c2_id, r5
         mov.l   c2_cmp, r3
@@ -282,6 +411,9 @@ c2_Db:
         nop
         .align 2
 c2_va:     .long 0x00100000
+c2_seedva: .long 0x00100000
+c2_seed:   .long 0xA11C0001
+c2_ctlsv:  .long 0x80003200
 c2_snapa:  .long SNAP_A
 c2_snapb:  .long SNAP_B
 c2_id:     .long 2
@@ -290,34 +422,34 @@ c2_flush:  .long 0x80000000 + _m8_flush
 c2_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_3:                       ! LDC.L @Rm+, VBR  (PrivMem mode-preserving, D-side in delay slot)
+_m8_case_3:                       ! LDC.L @Rm+, SR  (PrivMem mode-preserving, D-side in delay slot)
         sts.l   pr, @-r15
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
         mov.l   c3_va, r0
-        stc     vbr, r1            ! r1 = current ctrl (mode-preserving payload)
+        stc     sr, r1            ! r1 = current ctrl (mode-preserving payload)
         mov.l   r1, @r0                  ! seed payload = current ctrl (warms TLB)
         mov.l   c3_flush, r3
         jsr     @r3
         nop
         mov.l   c3_va, r0
         bra     c3_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4027                ! DELAY SLOT: instruction under test (payload==ctrl => no-op)
+        .word   0x4007                ! DELAY SLOT: instruction under test (payload==ctrl => no-op)
         ! ---- buggy-landing trap: only reached on a wrong restart PC ----
         mov.l   c3_poison, r0
 c3_Da:
-        stc     vbr, r1            ! read resulting ctrl
+        stc     sr, r1            ! read resulting ctrl
         mov.l   c3_snapa, r2
         mov.l   r0, @r2                  ! base auto-modify (Rm+4)
         mov.l   r1, @(4,r2)              ! ctrl value (unchanged)
         ! ---- control leg (warm TLB; no fault) ----
         mov.l   c3_va, r0
-        stc     vbr, r1            ! same payload
+        stc     sr, r1            ! same payload
         mov.l   r1, @r0                  ! re-seed (re-warms TLB; do NOT flush)
         mov.l   c3_va, r0
         bra     c3_Db
-        .word   0x4027
+        .word   0x4007
 c3_Db:
-        stc     vbr, r1
+        stc     sr, r1
         mov.l   c3_snapb, r2
         mov.l   r0, @r2
         mov.l   r1, @(4,r2)
@@ -340,56 +472,38 @@ c3_flush:  .long 0x80000000 + _m8_flush
 c3_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_4:                       ! LDS.L @Rm+, MACH  (PrivMem, D-side in delay slot)
+_m8_case_4:                       ! LDC.L @Rm+, VBR  (PrivMem mode-preserving, D-side in delay slot)
         sts.l   pr, @-r15
-        mov     #0, r1
-        lds     r1, mach            ! benign-init ctrl (never read 'U' on save)
-        sts     mach, r1            ! save baseline ctrl -> r1
-        mov.l   c4_ctlsv, r2
-        mov.l   r1, @r2
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c4_seedva, r0
-        mov.l   c4_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
+        mov.l   c4_va, r0
+        stc     vbr, r1            ! r1 = current ctrl (mode-preserving payload)
+        mov.l   r1, @r0                  ! seed payload = current ctrl (warms TLB)
         mov.l   c4_flush, r3
         jsr     @r3
         nop
         mov.l   c4_va, r0
-        mov     #0, r1
-        lds     r1, mach            ! benign ctrl = 0
         bra     c4_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4006                ! DELAY SLOT: instruction under test
+        .word   0x4027                ! DELAY SLOT: instruction under test (payload==ctrl => no-op)
         ! ---- buggy-landing trap: only reached on a wrong restart PC ----
         mov.l   c4_poison, r0
 c4_Da:
-        sts     mach, r1            ! read resulting ctrl
+        stc     vbr, r1            ! read resulting ctrl
         mov.l   c4_snapa, r2
-        mov.l   r0, @r2
-        mov.l   r1, @(4,r2)
+        mov.l   r0, @r2                  ! base auto-modify (Rm+4)
+        mov.l   r1, @(4,r2)              ! ctrl value (unchanged)
         ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c4_seedva, r0
-        mov.l   c4_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
         mov.l   c4_va, r0
-        mov     #0, r1
-        lds     r1, mach
+        stc     vbr, r1            ! same payload
+        mov.l   r1, @r0                  ! re-seed (re-warms TLB; do NOT flush)
+        mov.l   c4_va, r0
         bra     c4_Db
-        .word   0x4006
+        .word   0x4027
 c4_Db:
-        sts     mach, r1
+        stc     vbr, r1
         mov.l   c4_snapb, r2
         mov.l   r0, @r2
         mov.l   r1, @(4,r2)
-        ! ---- restore original ctrl + compare ----
-        mov.l   c4_ctlsv, r2
-        mov.l   @r2, r1
-        lds     r1, mach
+        ! ---- compare ----
         mov     #8, r4
         mov.l   c4_id, r5
         mov.l   c4_cmp, r3
@@ -400,9 +514,6 @@ c4_Db:
         nop
         .align 2
 c4_va:     .long 0x00100000
-c4_seedva: .long 0x00100000
-c4_seed:   .long 0xA11C0001
-c4_ctlsv:  .long 0x80003200
 c4_snapa:  .long SNAP_A
 c4_snapb:  .long SNAP_B
 c4_id:     .long 4
@@ -411,11 +522,11 @@ c4_flush:  .long 0x80000000 + _m8_flush
 c4_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_5:                       ! LDS.L @Rm+, MACL  (PrivMem, D-side in delay slot)
+_m8_case_5:                       ! LDS.L @Rm+, MACH  (PrivMem, D-side in delay slot)
         sts.l   pr, @-r15
         mov     #0, r1
-        lds     r1, macl            ! benign-init ctrl (never read 'U' on save)
-        sts     macl, r1            ! save baseline ctrl -> r1
+        lds     r1, mach            ! benign-init ctrl (never read 'U' on save)
+        sts     mach, r1            ! save baseline ctrl -> r1
         mov.l   c5_ctlsv, r2
         mov.l   r1, @r2
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
@@ -430,13 +541,13 @@ _m8_case_5:                       ! LDS.L @Rm+, MACL  (PrivMem, D-side in delay 
         nop
         mov.l   c5_va, r0
         mov     #0, r1
-        lds     r1, macl            ! benign ctrl = 0
+        lds     r1, mach            ! benign ctrl = 0
         bra     c5_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4016                ! DELAY SLOT: instruction under test
+        .word   0x4006                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached on a wrong restart PC ----
         mov.l   c5_poison, r0
 c5_Da:
-        sts     macl, r1            ! read resulting ctrl
+        sts     mach, r1            ! read resulting ctrl
         mov.l   c5_snapa, r2
         mov.l   r0, @r2
         mov.l   r1, @(4,r2)
@@ -449,18 +560,18 @@ c5_Da:
         mov.l   r1, @(12,r0)
         mov.l   c5_va, r0
         mov     #0, r1
-        lds     r1, macl
+        lds     r1, mach
         bra     c5_Db
-        .word   0x4016
+        .word   0x4006
 c5_Db:
-        sts     macl, r1
+        sts     mach, r1
         mov.l   c5_snapb, r2
         mov.l   r0, @r2
         mov.l   r1, @(4,r2)
         ! ---- restore original ctrl + compare ----
         mov.l   c5_ctlsv, r2
         mov.l   @r2, r1
-        lds     r1, macl
+        lds     r1, mach
         mov     #8, r4
         mov.l   c5_id, r5
         mov.l   c5_cmp, r3
@@ -482,11 +593,11 @@ c5_flush:  .long 0x80000000 + _m8_flush
 c5_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_6:                       ! LDS.L @Rm+, PR  (PrivMem, D-side in delay slot)
+_m8_case_6:                       ! LDS.L @Rm+, MACL  (PrivMem, D-side in delay slot)
         sts.l   pr, @-r15
         mov     #0, r1
-        lds     r1, pr            ! benign-init ctrl (never read 'U' on save)
-        sts     pr, r1            ! save baseline ctrl -> r1
+        lds     r1, macl            ! benign-init ctrl (never read 'U' on save)
+        sts     macl, r1            ! save baseline ctrl -> r1
         mov.l   c6_ctlsv, r2
         mov.l   r1, @r2
         ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
@@ -501,13 +612,13 @@ _m8_case_6:                       ! LDS.L @Rm+, PR  (PrivMem, D-side in delay sl
         nop
         mov.l   c6_va, r0
         mov     #0, r1
-        lds     r1, pr            ! benign ctrl = 0
+        lds     r1, macl            ! benign ctrl = 0
         bra     c6_Da             ! delayed branch; delay slot faults DMISS
-        .word   0x4026                ! DELAY SLOT: instruction under test
+        .word   0x4016                ! DELAY SLOT: instruction under test
         ! ---- buggy-landing trap: only reached on a wrong restart PC ----
         mov.l   c6_poison, r0
 c6_Da:
-        sts     pr, r1            ! read resulting ctrl
+        sts     macl, r1            ! read resulting ctrl
         mov.l   c6_snapa, r2
         mov.l   r0, @r2
         mov.l   r1, @(4,r2)
@@ -520,18 +631,18 @@ c6_Da:
         mov.l   r1, @(12,r0)
         mov.l   c6_va, r0
         mov     #0, r1
-        lds     r1, pr
+        lds     r1, macl
         bra     c6_Db
-        .word   0x4026
+        .word   0x4016
 c6_Db:
-        sts     pr, r1
+        sts     macl, r1
         mov.l   c6_snapb, r2
         mov.l   r0, @r2
         mov.l   r1, @(4,r2)
         ! ---- restore original ctrl + compare ----
         mov.l   c6_ctlsv, r2
         mov.l   @r2, r1
-        lds     r1, pr
+        lds     r1, macl
         mov     #8, r4
         mov.l   c6_id, r5
         mov.l   c6_cmp, r3
@@ -553,182 +664,78 @@ c6_flush:  .long 0x80000000 + _m8_flush
 c6_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_7:                       ! MOV.B @(disp, Rm), R0  (General, D-side delay-slot maximal + target-only)
+_m8_case_7:                       ! LDS.L @Rm+, PR  (PrivMem, D-side in delay slot)
         sts.l   pr, @-r15
-        ! ---- plant translated code (once; both cases below reuse it) ----
-        !   0x00100FFE (page A tail): jmp @r11
-        !   0x00101000 (page B head, delay slot): instr under test
-        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
-        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
-        mov.l   cA7_brva, r5
-        mov.w   cA7_braw, r6
-        mov.w   r6, @r5
-        add     #2, r5
-        mov.w   cA7_instrw, r6
-        mov.w   r6, @r5
-        add     #2, r5
-        mov.w   cA7_poisonw, r6
-        mov.w   r6, @r5
-        add     #2, r5
-        mov.w   cA7_pjmpw, r6
-        mov.w   r6, @r5
-        add     #2, r5
-        mov.w   cA7_nopw, r6
-        mov.w   r6, @r5
-        mov.l   cA7_dva, r5
-        mov.w   cA7_djmpw, r6
-        mov.w   r6, @r5
-        add     #2, r5
-        mov.w   cA7_nopw, r6
-        mov.w   r6, @r5
-
-        ! ================= Case A: maximal (3 sequential faults) =================
-        ! ---- faulting leg (cold TLB) ----
-        mov.l   cA7_cva, r0
-        mov.l   cA7_seed, r1
+        mov     #0, r1
+        lds     r1, pr            ! benign-init ctrl (never read 'U' on save)
+        sts     pr, r1            ! save baseline ctrl -> r1
+        mov.l   c7_ctlsv, r2
+        mov.l   r1, @r2
+        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
+        mov.l   c7_seedva, r0
+        mov.l   c7_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   cA7_flush, r3
+        mov.l   c7_flush, r3
         jsr     @r3
         nop
-        ! ---- second flush: the seed STORES above (to page C, the delay-slot
-        ! instruction's own data page) can themselves DMISS_W and re-install
-        ! page C's TLB entry via the fault handler's fast TSB path -- that
-        ! happens AFTER the first flush above, so page C can still be resident
-        ! at branch time and the intended second (D-side DMISS) fault of the
-        ! three never fires. Re-flush here, after seeding is done and nothing
-        ! else touches memory before the branch, so the TLB is genuinely empty
-        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
-        ! unconditionally) when the branch is taken.
-        mov.l   cA7_flush, r3
-        jsr     @r3
-        nop
-        mov.l   cA7_base, r0
-        mov     #0, r8
-        mov.l   cA7_dva, r11
-        mov.l   cA7_reta, r12
-        mov.l   cA7_brva, r5
-        jmp     @r5
-        nop
-cA7_reta_l:
-        mov.l   cA7_snapa, r2
+        mov.l   c7_va, r0
+        mov     #0, r1
+        lds     r1, pr            ! benign ctrl = 0
+        bra     c7_Da             ! delayed branch; delay slot faults DMISS
+        .word   0x4026                ! DELAY SLOT: instruction under test
+        ! ---- buggy-landing trap: only reached on a wrong restart PC ----
+        mov.l   c7_poison, r0
+c7_Da:
+        sts     pr, r1            ! read resulting ctrl
+        mov.l   c7_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
-        ! ---- control leg (warm: A/B/C/D already resident) ----
-        mov.l   cA7_cva, r0
-        mov.l   cA7_seed, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm TLB; no fault) ----
+        mov.l   c7_seedva, r0
+        mov.l   c7_seed, r1
         mov.l   r1, @r0
         mov.l   r1, @(4,r0)
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
-        mov.l   cA7_base, r0
-        mov     #0, r8
-        mov.l   cA7_dva, r11
-        mov.l   cA7_retb, r12
-        mov.l   cA7_brva, r5
-        jmp     @r5
-        nop
-cA7_retb_l:
-        mov.l   cA7_snapb, r2
+        mov.l   c7_va, r0
+        mov     #0, r1
+        lds     r1, pr
+        bra     c7_Db
+        .word   0x4026
+c7_Db:
+        sts     pr, r1
+        mov.l   c7_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   r1, @(4,r2)
+        ! ---- restore original ctrl + compare ----
+        mov.l   c7_ctlsv, r2
+        mov.l   @r2, r1
+        lds     r1, pr
         mov     #8, r4
-        mov.l   cA7_id, r5
-        mov.l   cA7_cmp, r3
+        mov.l   c7_id, r5
+        mov.l   c7_cmp, r3
         jsr     @r3
         nop
-
-        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
-        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
-        !      the jmp TARGET (page D) faults. ----
-        mov.l   cB7_flush, r3
-        jsr     @r3
-        nop
-        mov.l   cA7_brva, r1
-        mov.l   @r1, r2
-        mov.l   cB7_dsva, r1
-        mov.l   @r1, r2
-        mov.l   cA7_cva, r1
-        mov.l   @r1, r2
-        mov.l   cA7_cva, r0
-        mov.l   cA7_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   cA7_base, r0
-        mov     #0, r8
-        mov.l   cA7_dva, r11
-        mov.l   cB7_reta, r12
-        mov.l   cA7_brva, r5
-        jmp     @r5
-        nop
-cB7_reta_l:
-        mov.l   cB7_snapa, r2
-        mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
-        ! ---- control leg (warm; D already resident from Case A above) ----
-        mov.l   cA7_cva, r0
-        mov.l   cA7_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   cA7_base, r0
-        mov     #0, r8
-        mov.l   cA7_dva, r11
-        mov.l   cB7_retb, r12
-        mov.l   cA7_brva, r5
-        jmp     @r5
-        nop
-cB7_retb_l:
-        mov.l   cB7_snapb, r2
-        mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
-        mov     #8, r4
-        mov.l   cB7_id, r5
-        mov.l   cB7_cmp, r3
-        jsr     @r3
-        nop
-
         lds.l   @r15+, pr
         rts
         nop
         .align 2
-cA7_brva:      .long 0x00100FFE
-cA7_dva:       .long 0x00103000
-cA7_cva:       .long 0x00102000
-cA7_base:      .long 0x00102000
-cA7_probe:     .long 0x00102000
-cA7_seed:      .long 0xA11C0002
-cA7_pay:       .long 0x57014444
-cA7_braw:      .word 0x4B2B            ! jmp @r11
-cA7_instrw:    .word 0x8400
-cA7_poisonw:   .word 0xE0FF            ! mov #-1,r0
-cA7_pjmpw:     .word 0x4C2B            ! jmp @r12
-cA7_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
-cA7_nopw:      .word 0x0009
-        .align 2
-cA7_reta:      .long 0x80000000 + cA7_reta_l
-cA7_retb:      .long 0x80000000 + cA7_retb_l
-cA7_snapa:     .long SNAP_A
-cA7_snapb:     .long SNAP_B
-cA7_id:        .long 1007
-cA7_cmp:       .long 0x80000000 + _m8_cmp
-cA7_flush:     .long 0x80000000 + _m8_flush
-cB7_flush:     .long 0x80000000 + _m8_flush
-cB7_dsva:      .long 0x00101000
-cB7_reta:      .long 0x80000000 + cB7_reta_l
-cB7_retb:      .long 0x80000000 + cB7_retb_l
-cB7_snapa:     .long SNAP_A
-cB7_snapb:     .long SNAP_B
-cB7_id:        .long 2007
-cB7_cmp:       .long 0x80000000 + _m8_cmp
+c7_va:     .long 0x00100000
+c7_seedva: .long 0x00100000
+c7_seed:   .long 0xA11C0001
+c7_ctlsv:  .long 0x80003200
+c7_snapa:  .long SNAP_A
+c7_snapb:  .long SNAP_B
+c7_id:     .long 7
+c7_cmp:    .long 0x80000000 + _m8_cmp
+c7_flush:  .long 0x80000000 + _m8_flush
+c7_poison: .long 0xBADC0DE1
 
         .balign 4
-_m8_case_8:                       ! MOV.B @Rm+, Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_8:                       ! MOV.B @(disp, Rm), R0  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -880,7 +887,7 @@ cA8_probe:     .long 0x00102000
 cA8_seed:      .long 0xA11C0002
 cA8_pay:       .long 0x57014444
 cA8_braw:      .word 0x4B2B            ! jmp @r11
-cA8_instrw:    .word 0x6804
+cA8_instrw:    .word 0x8400
 cA8_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA8_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA8_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -903,7 +910,7 @@ cB8_id:        .long 2008
 cB8_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_9:                       ! MOV.B @Rm, Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_9:                       ! MOV.B @Rm+, Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -1055,7 +1062,7 @@ cA9_probe:     .long 0x00102000
 cA9_seed:      .long 0xA11C0002
 cA9_pay:       .long 0x57014444
 cA9_braw:      .word 0x4B2B            ! jmp @r11
-cA9_instrw:    .word 0x6800
+cA9_instrw:    .word 0x6804
 cA9_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA9_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA9_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -1078,7 +1085,7 @@ cB9_id:        .long 2009
 cB9_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_10:                       ! MOV.B R0, @(disp, Rn)  (General, D-side delay-slot maximal + target-only)
+_m8_case_10:                       ! MOV.B @Rm, Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -1131,7 +1138,7 @@ _m8_case_10:                       ! MOV.B R0, @(disp, Rn)  (General, D-side del
         jsr     @r3
         nop
         mov.l   cA10_base, r0
-        mov.l   cA10_pay, r8
+        mov     #0, r8
         mov.l   cA10_dva, r11
         mov.l   cA10_reta, r12
         mov.l   cA10_brva, r5
@@ -1140,9 +1147,7 @@ _m8_case_10:                       ! MOV.B R0, @(disp, Rn)  (General, D-side del
 cA10_reta_l:
         mov.l   cA10_snapa, r2
         mov.l   r0, @r2
-        mov.l   cA10_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm: A/B/C/D already resident) ----
         mov.l   cA10_cva, r0
         mov.l   cA10_seed, r1
@@ -1151,7 +1156,7 @@ cA10_reta_l:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   cA10_base, r0
-        mov.l   cA10_pay, r8
+        mov     #0, r8
         mov.l   cA10_dva, r11
         mov.l   cA10_retb, r12
         mov.l   cA10_brva, r5
@@ -1160,9 +1165,7 @@ cA10_reta_l:
 cA10_retb_l:
         mov.l   cA10_snapb, r2
         mov.l   r0, @r2
-        mov.l   cA10_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cA10_id, r5
         mov.l   cA10_cmp, r3
@@ -1188,7 +1191,7 @@ cA10_retb_l:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   cA10_base, r0
-        mov.l   cA10_pay, r8
+        mov     #0, r8
         mov.l   cA10_dva, r11
         mov.l   cB10_reta, r12
         mov.l   cA10_brva, r5
@@ -1197,9 +1200,7 @@ cA10_retb_l:
 cB10_reta_l:
         mov.l   cB10_snapa, r2
         mov.l   r0, @r2
-        mov.l   cA10_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm; D already resident from Case A above) ----
         mov.l   cA10_cva, r0
         mov.l   cA10_seed, r1
@@ -1208,7 +1209,7 @@ cB10_reta_l:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   cA10_base, r0
-        mov.l   cA10_pay, r8
+        mov     #0, r8
         mov.l   cA10_dva, r11
         mov.l   cB10_retb, r12
         mov.l   cA10_brva, r5
@@ -1217,9 +1218,7 @@ cB10_reta_l:
 cB10_retb_l:
         mov.l   cB10_snapb, r2
         mov.l   r0, @r2
-        mov.l   cA10_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cB10_id, r5
         mov.l   cB10_cmp, r3
@@ -1238,7 +1237,7 @@ cA10_probe:     .long 0x00102000
 cA10_seed:      .long 0xA11C0002
 cA10_pay:       .long 0x57014444
 cA10_braw:      .word 0x4B2B            ! jmp @r11
-cA10_instrw:    .word 0x8000
+cA10_instrw:    .word 0x6800
 cA10_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA10_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA10_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -1261,7 +1260,7 @@ cB10_id:        .long 2010
 cB10_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_11:                       ! MOV.B Rm, @Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_11:                       ! MOV.B R0, @(disp, Rn)  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -1421,7 +1420,7 @@ cA11_probe:     .long 0x00102000
 cA11_seed:      .long 0xA11C0002
 cA11_pay:       .long 0x57014444
 cA11_braw:      .word 0x4B2B            ! jmp @r11
-cA11_instrw:    .word 0x2080
+cA11_instrw:    .word 0x8000
 cA11_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA11_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA11_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -1444,7 +1443,7 @@ cB11_id:        .long 2011
 cB11_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_12:                       ! MOV.B Rm,@-Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_12:                       ! MOV.B Rm, @Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -1599,12 +1598,12 @@ cB12_retb_l:
 cA12_brva:      .long 0x00100FFE
 cA12_dva:       .long 0x00103000
 cA12_cva:       .long 0x00102000
-cA12_base:      .long 0x00102008
-cA12_probe:     .long 0x00102004
+cA12_base:      .long 0x00102000
+cA12_probe:     .long 0x00102000
 cA12_seed:      .long 0xA11C0002
 cA12_pay:       .long 0x57014444
 cA12_braw:      .word 0x4B2B            ! jmp @r11
-cA12_instrw:    .word 0x2084
+cA12_instrw:    .word 0x2080
 cA12_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA12_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA12_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -1627,7 +1626,7 @@ cB12_id:        .long 2012
 cB12_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_13:                       ! MOV.L @(disp, Rm), Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_13:                       ! MOV.B Rm,@-Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -1680,7 +1679,7 @@ _m8_case_13:                       ! MOV.L @(disp, Rm), Rn  (General, D-side del
         jsr     @r3
         nop
         mov.l   cA13_base, r0
-        mov     #0, r8
+        mov.l   cA13_pay, r8
         mov.l   cA13_dva, r11
         mov.l   cA13_reta, r12
         mov.l   cA13_brva, r5
@@ -1689,7 +1688,9 @@ _m8_case_13:                       ! MOV.L @(disp, Rm), Rn  (General, D-side del
 cA13_reta_l:
         mov.l   cA13_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   cA13_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm: A/B/C/D already resident) ----
         mov.l   cA13_cva, r0
         mov.l   cA13_seed, r1
@@ -1698,7 +1699,7 @@ cA13_reta_l:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   cA13_base, r0
-        mov     #0, r8
+        mov.l   cA13_pay, r8
         mov.l   cA13_dva, r11
         mov.l   cA13_retb, r12
         mov.l   cA13_brva, r5
@@ -1707,7 +1708,9 @@ cA13_reta_l:
 cA13_retb_l:
         mov.l   cA13_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   cA13_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cA13_id, r5
         mov.l   cA13_cmp, r3
@@ -1733,7 +1736,7 @@ cA13_retb_l:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   cA13_base, r0
-        mov     #0, r8
+        mov.l   cA13_pay, r8
         mov.l   cA13_dva, r11
         mov.l   cB13_reta, r12
         mov.l   cA13_brva, r5
@@ -1742,7 +1745,9 @@ cA13_retb_l:
 cB13_reta_l:
         mov.l   cB13_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   cA13_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm; D already resident from Case A above) ----
         mov.l   cA13_cva, r0
         mov.l   cA13_seed, r1
@@ -1751,7 +1756,7 @@ cB13_reta_l:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   cA13_base, r0
-        mov     #0, r8
+        mov.l   cA13_pay, r8
         mov.l   cA13_dva, r11
         mov.l   cB13_retb, r12
         mov.l   cA13_brva, r5
@@ -1760,7 +1765,9 @@ cB13_reta_l:
 cB13_retb_l:
         mov.l   cB13_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   cA13_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cB13_id, r5
         mov.l   cB13_cmp, r3
@@ -1774,12 +1781,12 @@ cB13_retb_l:
 cA13_brva:      .long 0x00100FFE
 cA13_dva:       .long 0x00103000
 cA13_cva:       .long 0x00102000
-cA13_base:      .long 0x00102000
-cA13_probe:     .long 0x00102000
+cA13_base:      .long 0x00102008
+cA13_probe:     .long 0x00102004
 cA13_seed:      .long 0xA11C0002
 cA13_pay:       .long 0x57014444
 cA13_braw:      .word 0x4B2B            ! jmp @r11
-cA13_instrw:    .word 0x5800
+cA13_instrw:    .word 0x2084
 cA13_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA13_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA13_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -1802,7 +1809,7 @@ cB13_id:        .long 2013
 cB13_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_14:                       ! MOV.L @Rm+, Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_14:                       ! MOV.L @(disp, Rm), Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -1954,7 +1961,7 @@ cA14_probe:     .long 0x00102000
 cA14_seed:      .long 0xA11C0002
 cA14_pay:       .long 0x57014444
 cA14_braw:      .word 0x4B2B            ! jmp @r11
-cA14_instrw:    .word 0x6806
+cA14_instrw:    .word 0x5800
 cA14_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA14_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA14_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -1977,7 +1984,7 @@ cB14_id:        .long 2014
 cB14_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_15:                       ! MOV.L @Rm, Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_15:                       ! MOV.L @Rm+, Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -2129,7 +2136,7 @@ cA15_probe:     .long 0x00102000
 cA15_seed:      .long 0xA11C0002
 cA15_pay:       .long 0x57014444
 cA15_braw:      .word 0x4B2B            ! jmp @r11
-cA15_instrw:    .word 0x6802
+cA15_instrw:    .word 0x6806
 cA15_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA15_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA15_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -2152,7 +2159,7 @@ cB15_id:        .long 2015
 cB15_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_16:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side delay-slot maximal + target-only)
+_m8_case_16:                       ! MOV.L @Rm, Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -2205,7 +2212,7 @@ _m8_case_16:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side del
         jsr     @r3
         nop
         mov.l   cA16_base, r0
-        mov.l   cA16_pay, r8
+        mov     #0, r8
         mov.l   cA16_dva, r11
         mov.l   cA16_reta, r12
         mov.l   cA16_brva, r5
@@ -2214,9 +2221,7 @@ _m8_case_16:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side del
 cA16_reta_l:
         mov.l   cA16_snapa, r2
         mov.l   r0, @r2
-        mov.l   cA16_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm: A/B/C/D already resident) ----
         mov.l   cA16_cva, r0
         mov.l   cA16_seed, r1
@@ -2225,7 +2230,7 @@ cA16_reta_l:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   cA16_base, r0
-        mov.l   cA16_pay, r8
+        mov     #0, r8
         mov.l   cA16_dva, r11
         mov.l   cA16_retb, r12
         mov.l   cA16_brva, r5
@@ -2234,9 +2239,7 @@ cA16_reta_l:
 cA16_retb_l:
         mov.l   cA16_snapb, r2
         mov.l   r0, @r2
-        mov.l   cA16_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cA16_id, r5
         mov.l   cA16_cmp, r3
@@ -2262,7 +2265,7 @@ cA16_retb_l:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   cA16_base, r0
-        mov.l   cA16_pay, r8
+        mov     #0, r8
         mov.l   cA16_dva, r11
         mov.l   cB16_reta, r12
         mov.l   cA16_brva, r5
@@ -2271,9 +2274,7 @@ cA16_retb_l:
 cB16_reta_l:
         mov.l   cB16_snapa, r2
         mov.l   r0, @r2
-        mov.l   cA16_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm; D already resident from Case A above) ----
         mov.l   cA16_cva, r0
         mov.l   cA16_seed, r1
@@ -2282,7 +2283,7 @@ cB16_reta_l:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   cA16_base, r0
-        mov.l   cA16_pay, r8
+        mov     #0, r8
         mov.l   cA16_dva, r11
         mov.l   cB16_retb, r12
         mov.l   cA16_brva, r5
@@ -2291,9 +2292,7 @@ cB16_reta_l:
 cB16_retb_l:
         mov.l   cB16_snapb, r2
         mov.l   r0, @r2
-        mov.l   cA16_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cB16_id, r5
         mov.l   cB16_cmp, r3
@@ -2312,7 +2311,7 @@ cA16_probe:     .long 0x00102000
 cA16_seed:      .long 0xA11C0002
 cA16_pay:       .long 0x57014444
 cA16_braw:      .word 0x4B2B            ! jmp @r11
-cA16_instrw:    .word 0x1080
+cA16_instrw:    .word 0x6802
 cA16_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA16_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA16_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -2335,7 +2334,7 @@ cB16_id:        .long 2016
 cB16_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_17:                       ! MOV.L Rm, @Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_17:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -2495,7 +2494,7 @@ cA17_probe:     .long 0x00102000
 cA17_seed:      .long 0xA11C0002
 cA17_pay:       .long 0x57014444
 cA17_braw:      .word 0x4B2B            ! jmp @r11
-cA17_instrw:    .word 0x2082
+cA17_instrw:    .word 0x1080
 cA17_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA17_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA17_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -2518,7 +2517,7 @@ cB17_id:        .long 2017
 cB17_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_18:                       ! MOV.L Rm,@-Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_18:                       ! MOV.L Rm, @Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -2673,12 +2672,12 @@ cB18_retb_l:
 cA18_brva:      .long 0x00100FFE
 cA18_dva:       .long 0x00103000
 cA18_cva:       .long 0x00102000
-cA18_base:      .long 0x00102008
-cA18_probe:     .long 0x00102004
+cA18_base:      .long 0x00102000
+cA18_probe:     .long 0x00102000
 cA18_seed:      .long 0xA11C0002
 cA18_pay:       .long 0x57014444
 cA18_braw:      .word 0x4B2B            ! jmp @r11
-cA18_instrw:    .word 0x2086
+cA18_instrw:    .word 0x2082
 cA18_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA18_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA18_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -2701,7 +2700,7 @@ cB18_id:        .long 2018
 cB18_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_19:                       ! MOV.W @(disp, Rm), R0  (General, D-side delay-slot maximal + target-only)
+_m8_case_19:                       ! MOV.L Rm,@-Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -2754,7 +2753,7 @@ _m8_case_19:                       ! MOV.W @(disp, Rm), R0  (General, D-side del
         jsr     @r3
         nop
         mov.l   cA19_base, r0
-        mov     #0, r8
+        mov.l   cA19_pay, r8
         mov.l   cA19_dva, r11
         mov.l   cA19_reta, r12
         mov.l   cA19_brva, r5
@@ -2763,7 +2762,9 @@ _m8_case_19:                       ! MOV.W @(disp, Rm), R0  (General, D-side del
 cA19_reta_l:
         mov.l   cA19_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   cA19_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm: A/B/C/D already resident) ----
         mov.l   cA19_cva, r0
         mov.l   cA19_seed, r1
@@ -2772,7 +2773,7 @@ cA19_reta_l:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   cA19_base, r0
-        mov     #0, r8
+        mov.l   cA19_pay, r8
         mov.l   cA19_dva, r11
         mov.l   cA19_retb, r12
         mov.l   cA19_brva, r5
@@ -2781,7 +2782,9 @@ cA19_reta_l:
 cA19_retb_l:
         mov.l   cA19_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   cA19_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cA19_id, r5
         mov.l   cA19_cmp, r3
@@ -2807,7 +2810,7 @@ cA19_retb_l:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   cA19_base, r0
-        mov     #0, r8
+        mov.l   cA19_pay, r8
         mov.l   cA19_dva, r11
         mov.l   cB19_reta, r12
         mov.l   cA19_brva, r5
@@ -2816,7 +2819,9 @@ cA19_retb_l:
 cB19_reta_l:
         mov.l   cB19_snapa, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   cA19_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         ! ---- control leg (warm; D already resident from Case A above) ----
         mov.l   cA19_cva, r0
         mov.l   cA19_seed, r1
@@ -2825,7 +2830,7 @@ cB19_reta_l:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   cA19_base, r0
-        mov     #0, r8
+        mov.l   cA19_pay, r8
         mov.l   cA19_dva, r11
         mov.l   cB19_retb, r12
         mov.l   cA19_brva, r5
@@ -2834,7 +2839,9 @@ cB19_reta_l:
 cB19_retb_l:
         mov.l   cB19_snapb, r2
         mov.l   r0, @r2
-        mov.l   r8, @(4,r2)
+        mov.l   cA19_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cB19_id, r5
         mov.l   cB19_cmp, r3
@@ -2848,12 +2855,12 @@ cB19_retb_l:
 cA19_brva:      .long 0x00100FFE
 cA19_dva:       .long 0x00103000
 cA19_cva:       .long 0x00102000
-cA19_base:      .long 0x00102000
-cA19_probe:     .long 0x00102000
+cA19_base:      .long 0x00102008
+cA19_probe:     .long 0x00102004
 cA19_seed:      .long 0xA11C0002
 cA19_pay:       .long 0x57014444
 cA19_braw:      .word 0x4B2B            ! jmp @r11
-cA19_instrw:    .word 0x8500
+cA19_instrw:    .word 0x2086
 cA19_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA19_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA19_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -2876,7 +2883,7 @@ cB19_id:        .long 2019
 cB19_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_20:                       ! MOV.W @Rm+, Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_20:                       ! MOV.W @(disp, Rm), R0  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -3028,7 +3035,7 @@ cA20_probe:     .long 0x00102000
 cA20_seed:      .long 0xA11C0002
 cA20_pay:       .long 0x57014444
 cA20_braw:      .word 0x4B2B            ! jmp @r11
-cA20_instrw:    .word 0x6805
+cA20_instrw:    .word 0x8500
 cA20_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA20_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA20_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -3051,7 +3058,7 @@ cB20_id:        .long 2020
 cB20_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_21:                       ! MOV.W @Rm, Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_21:                       ! MOV.W @Rm+, Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -3203,7 +3210,7 @@ cA21_probe:     .long 0x00102000
 cA21_seed:      .long 0xA11C0002
 cA21_pay:       .long 0x57014444
 cA21_braw:      .word 0x4B2B            ! jmp @r11
-cA21_instrw:    .word 0x6801
+cA21_instrw:    .word 0x6805
 cA21_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA21_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA21_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -3226,7 +3233,7 @@ cB21_id:        .long 2021
 cB21_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_22:                       ! MOV.W R0, @(disp, Rn)  (General, D-side delay-slot maximal + target-only)
+_m8_case_22:                       ! MOV.W @Rm, Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -3279,7 +3286,7 @@ _m8_case_22:                       ! MOV.W R0, @(disp, Rn)  (General, D-side del
         jsr     @r3
         nop
         mov.l   cA22_base, r0
-        mov.l   cA22_pay, r8
+        mov     #0, r8
         mov.l   cA22_dva, r11
         mov.l   cA22_reta, r12
         mov.l   cA22_brva, r5
@@ -3288,9 +3295,7 @@ _m8_case_22:                       ! MOV.W R0, @(disp, Rn)  (General, D-side del
 cA22_reta_l:
         mov.l   cA22_snapa, r2
         mov.l   r0, @r2
-        mov.l   cA22_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm: A/B/C/D already resident) ----
         mov.l   cA22_cva, r0
         mov.l   cA22_seed, r1
@@ -3299,7 +3304,7 @@ cA22_reta_l:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   cA22_base, r0
-        mov.l   cA22_pay, r8
+        mov     #0, r8
         mov.l   cA22_dva, r11
         mov.l   cA22_retb, r12
         mov.l   cA22_brva, r5
@@ -3308,9 +3313,7 @@ cA22_reta_l:
 cA22_retb_l:
         mov.l   cA22_snapb, r2
         mov.l   r0, @r2
-        mov.l   cA22_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cA22_id, r5
         mov.l   cA22_cmp, r3
@@ -3336,7 +3339,7 @@ cA22_retb_l:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   cA22_base, r0
-        mov.l   cA22_pay, r8
+        mov     #0, r8
         mov.l   cA22_dva, r11
         mov.l   cB22_reta, r12
         mov.l   cA22_brva, r5
@@ -3345,9 +3348,7 @@ cA22_retb_l:
 cB22_reta_l:
         mov.l   cB22_snapa, r2
         mov.l   r0, @r2
-        mov.l   cA22_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         ! ---- control leg (warm; D already resident from Case A above) ----
         mov.l   cA22_cva, r0
         mov.l   cA22_seed, r1
@@ -3356,7 +3357,7 @@ cB22_reta_l:
         mov.l   r1, @(8,r0)
         mov.l   r1, @(12,r0)
         mov.l   cA22_base, r0
-        mov.l   cA22_pay, r8
+        mov     #0, r8
         mov.l   cA22_dva, r11
         mov.l   cB22_retb, r12
         mov.l   cA22_brva, r5
@@ -3365,9 +3366,7 @@ cB22_reta_l:
 cB22_retb_l:
         mov.l   cB22_snapb, r2
         mov.l   r0, @r2
-        mov.l   cA22_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
+        mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cB22_id, r5
         mov.l   cB22_cmp, r3
@@ -3386,7 +3385,7 @@ cA22_probe:     .long 0x00102000
 cA22_seed:      .long 0xA11C0002
 cA22_pay:       .long 0x57014444
 cA22_braw:      .word 0x4B2B            ! jmp @r11
-cA22_instrw:    .word 0x8100
+cA22_instrw:    .word 0x6801
 cA22_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA22_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA22_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -3409,7 +3408,7 @@ cB22_id:        .long 2022
 cB22_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_23:                       ! MOV.W Rm, @Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_23:                       ! MOV.W R0, @(disp, Rn)  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -3569,7 +3568,7 @@ cA23_probe:     .long 0x00102000
 cA23_seed:      .long 0xA11C0002
 cA23_pay:       .long 0x57014444
 cA23_braw:      .word 0x4B2B            ! jmp @r11
-cA23_instrw:    .word 0x2081
+cA23_instrw:    .word 0x8100
 cA23_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA23_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA23_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -3592,7 +3591,7 @@ cB23_id:        .long 2023
 cB23_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_24:                       ! MOV.W Rm,@-Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_24:                       ! MOV.W Rm, @Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -3747,12 +3746,12 @@ cB24_retb_l:
 cA24_brva:      .long 0x00100FFE
 cA24_dva:       .long 0x00103000
 cA24_cva:       .long 0x00102000
-cA24_base:      .long 0x00102008
-cA24_probe:     .long 0x00102004
+cA24_base:      .long 0x00102000
+cA24_probe:     .long 0x00102000
 cA24_seed:      .long 0xA11C0002
 cA24_pay:       .long 0x57014444
 cA24_braw:      .word 0x4B2B            ! jmp @r11
-cA24_instrw:    .word 0x2085
+cA24_instrw:    .word 0x2081
 cA24_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA24_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA24_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -3775,7 +3774,7 @@ cB24_id:        .long 2024
 cB24_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_25:                       ! STC.L GBR, @-Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_25:                       ! MOV.W Rm,@-Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -3935,7 +3934,7 @@ cA25_probe:     .long 0x00102004
 cA25_seed:      .long 0xA11C0002
 cA25_pay:       .long 0x57014444
 cA25_braw:      .word 0x4B2B            ! jmp @r11
-cA25_instrw:    .word 0x4013
+cA25_instrw:    .word 0x2085
 cA25_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA25_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA25_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -3958,7 +3957,7 @@ cB25_id:        .long 2025
 cB25_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_26:                       ! STC.L SR, @-Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_26:                       ! STC.L GBR, @-Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -4118,7 +4117,7 @@ cA26_probe:     .long 0x00102004
 cA26_seed:      .long 0xA11C0002
 cA26_pay:       .long 0x57014444
 cA26_braw:      .word 0x4B2B            ! jmp @r11
-cA26_instrw:    .word 0x4003
+cA26_instrw:    .word 0x4013
 cA26_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA26_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA26_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -4141,7 +4140,7 @@ cB26_id:        .long 2026
 cB26_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_27:                       ! STC.L VBR, @-Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_27:                       ! STC.L SR, @-Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -4301,7 +4300,7 @@ cA27_probe:     .long 0x00102004
 cA27_seed:      .long 0xA11C0002
 cA27_pay:       .long 0x57014444
 cA27_braw:      .word 0x4B2B            ! jmp @r11
-cA27_instrw:    .word 0x4023
+cA27_instrw:    .word 0x4003
 cA27_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA27_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA27_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -4324,7 +4323,7 @@ cB27_id:        .long 2027
 cB27_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_28:                       ! STS.L MACH, @-Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_28:                       ! STC.L VBR, @-Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -4484,7 +4483,7 @@ cA28_probe:     .long 0x00102004
 cA28_seed:      .long 0xA11C0002
 cA28_pay:       .long 0x57014444
 cA28_braw:      .word 0x4B2B            ! jmp @r11
-cA28_instrw:    .word 0x4002
+cA28_instrw:    .word 0x4023
 cA28_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA28_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA28_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -4507,7 +4506,7 @@ cB28_id:        .long 2028
 cB28_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_29:                       ! STS.L MACL, @-Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_29:                       ! STS.L MACH, @-Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -4667,7 +4666,7 @@ cA29_probe:     .long 0x00102004
 cA29_seed:      .long 0xA11C0002
 cA29_pay:       .long 0x57014444
 cA29_braw:      .word 0x4B2B            ! jmp @r11
-cA29_instrw:    .word 0x4012
+cA29_instrw:    .word 0x4002
 cA29_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA29_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA29_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -4690,7 +4689,7 @@ cB29_id:        .long 2029
 cB29_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_30:                       ! STS.L PR, @-Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_30:                       ! STS.L MACL, @-Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -4850,7 +4849,7 @@ cA30_probe:     .long 0x00102004
 cA30_seed:      .long 0xA11C0002
 cA30_pay:       .long 0x57014444
 cA30_braw:      .word 0x4B2B            ! jmp @r11
-cA30_instrw:    .word 0x4022
+cA30_instrw:    .word 0x4012
 cA30_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA30_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA30_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -4873,7 +4872,7 @@ cB30_id:        .long 2030
 cB30_cmp:       .long 0x80000000 + _m8_cmp
 
         .balign 4
-_m8_case_31:                       ! TAS.B @Rn  (General, D-side delay-slot maximal + target-only)
+_m8_case_31:                       ! STS.L PR, @-Rn  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
         ! ---- plant translated code (once; both cases below reuse it) ----
         !   0x00100FFE (page A tail): jmp @r11
@@ -5028,12 +5027,12 @@ cB31_retb_l:
 cA31_brva:      .long 0x00100FFE
 cA31_dva:       .long 0x00103000
 cA31_cva:       .long 0x00102000
-cA31_base:      .long 0x00102000
-cA31_probe:     .long 0x00102000
+cA31_base:      .long 0x00102008
+cA31_probe:     .long 0x00102004
 cA31_seed:      .long 0xA11C0002
 cA31_pay:       .long 0x57014444
 cA31_braw:      .word 0x4B2B            ! jmp @r11
-cA31_instrw:    .word 0x401B
+cA31_instrw:    .word 0x4022
 cA31_poisonw:   .word 0xE0FF            ! mov #-1,r0
 cA31_pjmpw:     .word 0x4C2B            ! jmp @r12
 cA31_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
@@ -5055,6 +5054,189 @@ cB31_snapb:     .long SNAP_B
 cB31_id:        .long 2031
 cB31_cmp:       .long 0x80000000 + _m8_cmp
 
+        .balign 4
+_m8_case_32:                       ! TAS.B @Rn  (General, D-side delay-slot maximal + target-only)
+        sts.l   pr, @-r15
+        ! ---- plant translated code (once; both cases below reuse it) ----
+        !   0x00100FFE (page A tail): jmp @r11
+        !   0x00101000 (page B head, delay slot): instr under test
+        !   0x00101002 (page B): poison trap (mov #-1,r0 ; jmp @r12 ; nop)
+        !   0x00103000 (page D head): jmp @r12 ; nop  (bounce back to P1)
+        mov.l   cA32_brva, r5
+        mov.w   cA32_braw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA32_instrw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA32_poisonw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA32_pjmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA32_nopw, r6
+        mov.w   r6, @r5
+        mov.l   cA32_dva, r5
+        mov.w   cA32_djmpw, r6
+        mov.w   r6, @r5
+        add     #2, r5
+        mov.w   cA32_nopw, r6
+        mov.w   r6, @r5
+
+        ! ================= Case A: maximal (3 sequential faults) =================
+        ! ---- faulting leg (cold TLB) ----
+        mov.l   cA32_cva, r0
+        mov.l   cA32_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA32_flush, r3
+        jsr     @r3
+        nop
+        ! ---- second flush: the seed STORES above (to page C, the delay-slot
+        ! instruction's own data page) can themselves DMISS_W and re-install
+        ! page C's TLB entry via the fault handler's fast TSB path -- that
+        ! happens AFTER the first flush above, so page C can still be resident
+        ! at branch time and the intended second (D-side DMISS) fault of the
+        ! three never fires. Re-flush here, after seeding is done and nothing
+        ! else touches memory before the branch, so the TLB is genuinely empty
+        ! (core/tlb.vhd: MMUCR.TI clears ALL entries' valid+used in one cycle,
+        ! unconditionally) when the branch is taken.
+        mov.l   cA32_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA32_base, r0
+        mov.l   cA32_pay, r8
+        mov.l   cA32_dva, r11
+        mov.l   cA32_reta, r12
+        mov.l   cA32_brva, r5
+        jmp     @r5
+        nop
+cA32_reta_l:
+        mov.l   cA32_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA32_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm: A/B/C/D already resident) ----
+        mov.l   cA32_cva, r0
+        mov.l   cA32_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA32_base, r0
+        mov.l   cA32_pay, r8
+        mov.l   cA32_dva, r11
+        mov.l   cA32_retb, r12
+        mov.l   cA32_brva, r5
+        jmp     @r5
+        nop
+cA32_retb_l:
+        mov.l   cA32_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA32_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cA32_id, r5
+        mov.l   cA32_cmp, r3
+        jsr     @r3
+        nop
+
+        ! ============= Case B: target-IMISS only (Defect 6 shape) ================
+        ! ---- faulting leg: pre-warm A/B/C so the delay slot is CLEAN; only
+        !      the jmp TARGET (page D) faults. ----
+        mov.l   cB32_flush, r3
+        jsr     @r3
+        nop
+        mov.l   cA32_brva, r1
+        mov.l   @r1, r2
+        mov.l   cB32_dsva, r1
+        mov.l   @r1, r2
+        mov.l   cA32_cva, r1
+        mov.l   @r1, r2
+        mov.l   cA32_cva, r0
+        mov.l   cA32_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA32_base, r0
+        mov.l   cA32_pay, r8
+        mov.l   cA32_dva, r11
+        mov.l   cB32_reta, r12
+        mov.l   cA32_brva, r5
+        jmp     @r5
+        nop
+cB32_reta_l:
+        mov.l   cB32_snapa, r2
+        mov.l   r0, @r2
+        mov.l   cA32_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        ! ---- control leg (warm; D already resident from Case A above) ----
+        mov.l   cA32_cva, r0
+        mov.l   cA32_seed, r1
+        mov.l   r1, @r0
+        mov.l   r1, @(4,r0)
+        mov.l   r1, @(8,r0)
+        mov.l   r1, @(12,r0)
+        mov.l   cA32_base, r0
+        mov.l   cA32_pay, r8
+        mov.l   cA32_dva, r11
+        mov.l   cB32_retb, r12
+        mov.l   cA32_brva, r5
+        jmp     @r5
+        nop
+cB32_retb_l:
+        mov.l   cB32_snapb, r2
+        mov.l   r0, @r2
+        mov.l   cA32_probe, r3
+        mov.l   @r3, r1
+        mov.l   r1, @(4,r2)
+        mov     #8, r4
+        mov.l   cB32_id, r5
+        mov.l   cB32_cmp, r3
+        jsr     @r3
+        nop
+
+        lds.l   @r15+, pr
+        rts
+        nop
+        .align 2
+cA32_brva:      .long 0x00100FFE
+cA32_dva:       .long 0x00103000
+cA32_cva:       .long 0x00102000
+cA32_base:      .long 0x00102000
+cA32_probe:     .long 0x00102000
+cA32_seed:      .long 0xA11C0002
+cA32_pay:       .long 0x57014444
+cA32_braw:      .word 0x4B2B            ! jmp @r11
+cA32_instrw:    .word 0x401B
+cA32_poisonw:   .word 0xE0FF            ! mov #-1,r0
+cA32_pjmpw:     .word 0x4C2B            ! jmp @r12
+cA32_djmpw:     .word 0x4C2B            ! jmp @r12 (page D stub)
+cA32_nopw:      .word 0x0009
+        .align 2
+cA32_reta:      .long 0x80000000 + cA32_reta_l
+cA32_retb:      .long 0x80000000 + cA32_retb_l
+cA32_snapa:     .long SNAP_A
+cA32_snapb:     .long SNAP_B
+cA32_id:        .long 1032
+cA32_cmp:       .long 0x80000000 + _m8_cmp
+cA32_flush:     .long 0x80000000 + _m8_flush
+cB32_flush:     .long 0x80000000 + _m8_flush
+cB32_dsva:      .long 0x00101000
+cB32_reta:      .long 0x80000000 + cB32_reta_l
+cB32_retb:      .long 0x80000000 + cB32_retb_l
+cB32_snapa:     .long SNAP_A
+cB32_snapb:     .long SNAP_B
+cB32_id:        .long 2032
+cB32_cmp:       .long 0x80000000 + _m8_cmp
+
 ENTRY(_m8_run_all)
         sts.l   pr, @-r15
         mov.l   m8_tab_p, r14
@@ -5068,7 +5250,7 @@ ENTRY(_m8_run_all)
         rts
         nop
         .align 2
-m8_count:  .long 31
+m8_count:  .long 32
 m8_tab_p:  .long 0x80000000 + m8_tab
 m8_tab:
         .long   0x80000000 + _m8_case_1
@@ -5102,4 +5284,5 @@ m8_tab:
         .long   0x80000000 + _m8_case_29
         .long   0x80000000 + _m8_case_30
         .long   0x80000000 + _m8_case_31
+        .long   0x80000000 + _m8_case_32
 #endif

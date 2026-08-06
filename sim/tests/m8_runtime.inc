@@ -35,14 +35,28 @@
 ! Fixed workload page: VA 0x00100000 (page index 0x100), identity PTE
 ! 0x001000F1 (V/R/W/X + flags; bits[11:8]=0 → pm=0), so VA==PA and stores/loads are simple.
 !
+! Scratch / fixed addresses.  THE WHOLE BLOCK LIVES AT 0x00010000, ABOVE ANY
+! IMAGE, AND MUST STAY THERE.  It used to sit at 0x00002000, which the images
+! outgrew: m8_dsdslot_0 links to _edata=0x2bb4, so kmain's OWN page-table setup
+! was writing PGD[0] over case 23's literal pool (0x2000) and the four PTEs over
+! case 29's (0x2800-0x280F), and the 64-long TSB zero-fill at 0x2C00 was 76 bytes
+! from erasing _m8_run_all itself -- which is exactly what happened the moment
+! one more case (CAS.L) pushed _edata to 0x2d10: the dispatcher was zeroed, the
+! jsr ran into zeros, and the CPU reset-looped every ~4.8us.  That looked
+! convincingly like a locked-RMW bus hang and is not a CPU defect at all.
+! sim/tests/Makefile now FAILS the build if an m8 image reaches 0x10000, so this
+! cannot come back silently.  Keep the block 256-byte aligned: TSBPTR is
+! (TSBBR and not 0xF) OR (index << 4), an OR rather than an add, so a
+! non-256-aligned TSB base would alias its own entries.
+!
 ! Scratch / fixed addresses:
-!   SNAP_A           0x80003000   (P1, untranslated)
-!   SNAP_B           0x80003100   (P1, untranslated)
-!   ctlsv            0x80003200   (PrivMem D-side control-reg baseline save slot)
-!   PGD              0x80002000 -> PTE table base 0x80002400 (PGD[0]=0x80002401)
-!   PTE for 0x00100  0x80002800   (= pte_tab[0x100])  value 0x001000F1
-!   TSB (16 entries) 0x80002C00
-!   stack            0x80002F00
+!   SNAP_A           0x80011000   (P1, untranslated)
+!   SNAP_B           0x80011100   (P1, untranslated)
+!   ctlsv            0x80011200   (PrivMem D-side control-reg baseline save slot)
+!   PGD              0x80010000 -> PTE table base 0x80010400 (PGD[0]=0x80010401)
+!   PTE for 0x00100  0x80010800   (= pte_tab[0x100])  value 0x001000F1
+!   TSB (16 entries) 0x80010C00
+!   stack            0x80010F00
 !   MMUCR            0xFF000010  (flush: |TI keep AT -> write 0x5)
 !   TSBBR/TSBCFG     0xFF000014 / 0xFF000018
 !
@@ -55,8 +69,8 @@
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
 
-#define SNAP_A 0x80003000
-#define SNAP_B 0x80003100
+#define SNAP_A 0x80011000
+#define SNAP_B 0x80011100
 
         .section .vect
         .long start
@@ -78,12 +92,12 @@ ENTRY(start)
 #if CONFIG_PRIV_ARCH
         ! Relocate SP into P1 and jump to the P1 alias of kmain so ALL code,
         ! stack, and structure accesses are untranslated from here on.
-        mov.l   p_sp,   r15            ! r15 = 0x80002F00
+        mov.l   p_sp,   r15            ! r15 = 0x80010F00
         mov.l   p_kmain, r0            ! r0  = 0x80000000 + kmain
         jmp     @r0
         nop
         .align 2
-p_sp:    .long 0x80002F00
+p_sp:    .long 0x80010F00
 p_kmain: .long 0x80000000 + kmain
 
 kmain:
@@ -111,8 +125,8 @@ kmain:
         .word   0x407E                 ! LDC r0, ASIDR
 
         ! ---- Build PGD[0] -> PTE table (P1 ptr, present). ----
-        mov.l   k_pgd,  r0             ! 0x80002000
-        mov.l   k_pgd0, r1             ! 0x80002401
+        mov.l   k_pgd,  r0             ! 0x80010000
+        mov.l   k_pgd0, r1             ! 0x80010401
         mov.l   r1, @r0
 
         ! ---- Build the PTEs (PTEL image: backing PA | 0x0F1). Four adjacent
@@ -159,20 +173,20 @@ kmain:
 
         .align 2
 p_rbclear: .long 0xDFFFFFFF
-k_pgd:     .long 0x80002000
-k_pgd0:    .long 0x80002401
-k_pteA:    .long 0x80002800
+k_pgd:     .long 0x80010000
+k_pgd0:    .long 0x80010401
+k_pteA:    .long 0x80010800
 v_pteA:    .long 0x001000D1    ! identity PTE: PA(==VA) | flags 0x0D1 (U cleared: kernel code, SMEP)
-k_pteB:    .long 0x80002804    ! pte_tab[0x101] (= 0x80002400 + 0x101*4)
+k_pteB:    .long 0x80010804    ! pte_tab[0x101] (= 0x80010400 + 0x101*4)
 v_pteB:    .long 0x001010D1    ! identity PTE for VA 0x00101000, U cleared: kernel code, SMEP
-k_pteC:    .long 0x80002808    ! pte_tab[0x102] (= 0x80002400 + 0x102*4)
+k_pteC:    .long 0x80010808    ! pte_tab[0x102] (= 0x80010400 + 0x102*4)
 v_pteC:    .long 0x001020D1    ! identity PTE for VA 0x00102000 (DSideDSlot data page C)
-k_pteD:    .long 0x8000280C    ! pte_tab[0x103] (= 0x80002400 + 0x103*4)
+k_pteD:    .long 0x8001080C    ! pte_tab[0x103] (= 0x80010400 + 0x103*4)
 v_pteD:    .long 0x001030D1    ! identity PTE for VA 0x00103000 (DSideDSlot target page D)
-k_tsb:     .long 0x80002C00
+k_tsb:     .long 0x80010C00
 k_vbr:     .long 0x80000000 + _vbase
 k_tsbbr_a: .long 0xFF000014
-v_tsbbr:   .long 0x80002C04
+v_tsbbr:   .long 0x80010C04
 k_tsbcfg_a:.long 0xFF000018
 v_tsbcfg:  .long 0x00000061
 k_mmucr:   .long 0xFF000010
@@ -296,7 +310,7 @@ _h_realfault:
         nop
 
         .align 2
-H_pgd:    .long 0x80002000
+H_pgd:    .long 0x80010000
 H_walk:   .long 0x80000000 + ___jcore_tlb_walk  ! P1 alias: walker runs untranslated
 H_mmucr:  .long 0xFF000010
 H_result: .long TEST_RESULT_ADDRESS

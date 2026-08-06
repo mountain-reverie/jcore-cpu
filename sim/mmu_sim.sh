@@ -302,6 +302,28 @@ else
   # dispatches, i.e. be released by decode's texc_ack -- which is currently NOT
   # routed to the datapath (decode_core-internal). Wiring it out is the work.
   #
+  # CORRECTION 2026-08-06: three earlier entries below claimed a variant failed
+  # "with CAS.L skipped too, so not CAS-specific". THAT ISOLATION WAS BROKEN --
+  # the temporary skip was inserted into emitDSide (there are two `CAS.' guards
+  # in emit.go and a first-match edit hits the D-side axis, not this one), so
+  # CAS.L was never actually skipped and case 1 stayed CAS.L. Re-run with the
+  # skip correctly placed in emitDSideDSlot, ALL THREE variants give the same
+  # corrected picture:
+  #     * they REGRESS CAS.L (case 1, Result=1001) -- a real regression, and
+  #       CAS-specific after all, not a general breakage of the first case;
+  #     * with CAS.L skipped they leave the target case UNFIXED, still
+  #       Result=1007 at 20860ns (case 7 once CAS.L is out of the numbering).
+  # So none of them touches the actual defect, and each additionally breaks the
+  # locked RMW. Do not re-derive "it breaks case 1 generally" from the older
+  # wording below -- that conclusion came from the broken isolation.
+  #
+  # A fourth variant was tried and refuted the same way: stall the instruction
+  # FETCH while a fault is outstanding (datapath, gate the "start new instruction
+  # request" issue on tlb_squash_r='0', the same window the memory-issue gate
+  # uses) -- i.e. suppress the younger FETCH rather than its fault, which is what
+  # the untranslated-address finding said was needed. Same outcome: CAS.L
+  # regresses to 1001, and with CAS.L skipped the target case is still 1007.
+  #
   # BOTH "hold the capture until dispatch" variants are now REFUTED, which is
   # the useful result: the fix is NOT in the capture-release logic.
   #   (a) release on handler entry (this.sr.rb = '1')  -> case 1 RED (1001),

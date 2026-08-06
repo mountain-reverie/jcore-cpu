@@ -314,7 +314,33 @@ else
   #   m8_idslot_0-2 (the I-side delay-slot sweep) are rotted orphans: nothing
   #   has ever tested this path.
   #
-  # FIX = A + B together. B needs a fetch-aligned delay-slot indicator routed to
+  # A+B ATTEMPTED AND MEASURED (2026-08-06). Both landed, wired and compiling
+  # (decode delay_jump_o via model/pkg.go + decode.vhd.tmpl, a datapath
+  # delay_jump input -- NOTE also datapath_pkg.vhd's COMPONENT decl, which is
+  # easy to miss and gives "no declaration for delay_jump" in cpu.vhd -- plus
+  # the exc_pending_r latch). Target case STILL Result=1007, SNAP_A = 0xFFFFFFFF
+  # (poison), i.e. B did not take effect. Two things the waveform then showed:
+  #
+  #   1. delay_jump ARRIVES TOO LATE FOR THE CAPTURE. At the delay-slot fetch
+  #      capture the VCD shows delay_jump=1 at that timestamp, yet the captured
+  #      value is tlb_exc_pc = 0x00101000, not 0x00100FFE -- so at the clock edge
+  #      the arm sampled '0' and delay_jump only rose later in the same
+  #      timestamp. It is not merely EX-vs-fetch misalignment: the fetch-aligned
+  #      flag is not stable at fault-capture time either. A usable predicate has
+  #      to be registered ahead of the capture, not consumed combinationally.
+  #
+  #   2. A THIRD manifestation, not previously seen. The D-side DMISS in the same
+  #      sequence captures tlb_exc_pc = 0x00101004 (fault_va=0x00102000) -- the
+  #      NORMAL arm, ex_if_pc+4 -- meaning ma_dslot read '0' for the delay-slot
+  #      load. So the Defect 7 per-instruction delay-slot flag does NOT survive
+  #      this multi-fault sequence, even though mmudspcprobe_late (single fault,
+  #      same page) passes. Whatever perturbs it is a third thing to find.
+  #
+  # So the fix is A + B + (3), and B needs a registered fetch-stage delay-slot
+  # bit rather than a combinational one -- which is exactly the MIPS/US5774709A
+  # shape: carry EPC+BD per PIPELINE STAGE so the faulting stage supplies both.
+  #
+  # ORIGINAL PLAN (superseded): FIX = A + B together. B needs a fetch-aligned delay-slot indicator routed to
   # the datapath (delay_jump is decode-internal today; dslot, the EX-aligned one,
   # is what is currently wired). Note the CAS.L regression seen under A-alone is
   # expected to be B as well, and should be re-checked once B lands.

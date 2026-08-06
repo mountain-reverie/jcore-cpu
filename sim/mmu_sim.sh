@@ -314,7 +314,37 @@ else
   #   m8_idslot_0-2 (the I-side delay-slot sweep) are rotted orphans: nothing
   #   has ever tested this path.
   #
-  # HANG ROOT-CAUSED AND FIXED (2026-08-06). The per-stage first cut hung; the
+  # WHY NO ATTRIBUTION SCHEME CAN WORK -- ROOT CAUSE, measured 2026-08-06.
+  # THE DELAY-SLOT FETCH FAULTS BEFORE ITS BRANCH DECODES. Deduplicated trace of
+  # VA 0x00101000 (case 8 Case A cold leg, CLEAN tree):
+  #     26060ns  FAULT on 0x00101000            delay_jump=0
+  #     26100ns  fetch of 0x00101000 ISSUED     delay_jump=0
+  #     26360ns  FAULT on 0x00101000            delay_jump=0   <- the captured one
+  #     26370ns  fetch of 0x00101000 re-ISSUED  delay_jump=1   <- branch NOW decoded
+  # delay_jump is '0' at EVERY instant the fault is raised, and at the issue of
+  # the fetch that faults. It first rises at 26370, AFTER the fault. So:
+  #   * capture-at-fault  reads 0  (tried -- exc_pc = 0x00101000)
+  #   * capture-at-issue  reads 0  (tried -- same result)
+  #   * retroactive tag   never fires (tried -- the windows do not overlap)
+  # There is NO instant at which the hardware knows the faulting fetch is a delay
+  # slot, because the branch has not been decoded yet. This is not a plumbing or
+  # alignment problem and no fourth attribution scheme will fix it.
+  #
+  # CORRECTED: an earlier note here said "the fetch unit runs ahead of the
+  # branch's decode" and a later one said delay_jump IS high at the delay-slot
+  # fetch issue. BOTH were partly wrong. There are TWO issues of that VA; the one
+  # that faults is the early one (delay_jump=0) and the one with delay_jump=1 is
+  # a later RE-fetch that never faults.
+  #
+  # ARCHITECTURAL CONSEQUENCE. The I-side restart PC cannot be decided at fault
+  # time. The fault must instead be CARRIED WITH THE FETCHED INSTRUCTION and
+  # raised when that instruction reaches the point where its context is known
+  # (its branch decoded) -- classic deferred / fault-on-use exception delivery,
+  # the same "metadata travels with the instruction" principle as US5774709A but
+  # applied to the FAULT, not just to EPC+BD. That is the real shape of the fix
+  # and it is a fetch-unit/pipeline change, not a datapath capture tweak.
+  #
+  # ---- earlier: HANG ROOT-CAUSED AND FIXED (2026-08-06). The per-stage first cut hung; the
   # cause was mis-ATTRIBUTION of the IF-stage delay-slot bit, not the design:
   #   While a branch sits in ID, TWO fetches are issued in the same delay_jump
   #   window -- the delay slot (SEQUENTIAL) and the branch TARGET (REDIRECTED).

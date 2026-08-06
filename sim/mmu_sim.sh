@@ -271,7 +271,56 @@ else
   #   reg_wr_w_g <= reg.wr_w    (w-port squash disabled)  -> still 1007
   #   drop `and tlb_squash_r = '0'' from the mem-issue gate -> still 1007
   # so the write is NOT being lost at either grace-gated port or the issue gate.
-  # ---- ROOT CAUSE FOUND 2026-08-06 (fix NOT yet landed) ----------------
+  # ---- FULL ROOT CAUSE 2026-08-06: TWO STACKED DEFECTS -----------------
+  # This is why every single-cause fix failed: A and B must BOTH be fixed.
+  # Fixing A alone converts the symptom into B's symptom; fixing B alone leaves
+  # A. Measured by re-running each experiment with the isolation CORRECTLY
+  # placed and then reading SNAP_A, which is the step that had been missing.
+  #
+  # DEFECT A -- a YOUNGER fetch fault overrides an OLDER one.
+  #   decode's texc_req keeps the FIRST fault until dispatch; the datapath's
+  #   tlb_exc_captured clears on tlb_exc_pend='0' and re-captures, so the LAST
+  #   wins. The speculative branch-TARGET fetch (0x103000) thus overwrites the
+  #   delay-slot fetch fault (0x101000); the single handler restarts at the
+  #   target and the delay slot is never re-executed -> SNAP_A = 0x00102000
+  #   (base, un-loaded).
+  #   PROVEN FIXABLE: an exc_pending_r latch in cpu.vhd (set on tlb_exc_en,
+  #   released at SR.RB=1) gating both fault branches makes the older fault win,
+  #   and the delay-slot load then DOES commit -- measured W-PORT r0 <=
+  #   0xFFFFFFA1. That intervention works; it just exposes B.
+  #
+  # DEFECT B -- the I-side DELAY-SLOT FETCH fault does not back up to the branch.
+  #   With A fixed, the serviced fault is the delay-slot fetch at 0x101000, and
+  #   its restart PC must be the BRANCH (0x100FFE) so the branch re-issues its
+  #   delay slot. The I-side arm picks that with `if delay_slot = '1' then
+  #   tlb_exc_pc := tlb_fault_va - 2', but delay_slot is EX-ALIGNED and the FETCH
+  #   runs ahead of EX, so at capture time the branch has not reached EX yet.
+  #   Measured at the two captures:
+  #     19160ns tlb_exc_pc := 0x00101000  delay_jump=1  dslot=0   <- dslot FETCH
+  #     20180ns tlb_exc_pc := 0x00103000  delay_jump=0  dslot=1   <- target fetch
+  #   So the arm takes the "normal" branch, restarts ON the delay slot, the load
+  #   re-executes and then falls through past the branch into the poison trap ->
+  #   SNAP_A = 0xFFFFFFFF. That is the measured result with A fixed.
+  #   NOTE the discriminator that works: delay_jump is '1' exactly at the
+  #   delay-slot fetch capture and '0' at the target fetch capture, while dslot
+  #   is the wrong way round for both. delay_jump ("the op in ID is a branch, so
+  #   the next fetch is its delay slot") is fetch-aligned and is the correct
+  #   predicate here; dslot answers a different question ("a delay-slot
+  #   instruction is in EX"), which at 20180ns would wrongly compute
+  #   0x103000-2 = 0x102FFE for the TARGET fetch.
+  #   This is Defect 7 one more time -- delay-slot-ness sampled at the wrong
+  #   pipeline point -- now on the I-fetch path. It is also exactly the arm
+  #   z_grace's old COVERAGE WARNING said was never exercised, and the reason
+  #   m8_idslot_0-2 (the I-side delay-slot sweep) are rotted orphans: nothing
+  #   has ever tested this path.
+  #
+  # FIX = A + B together. B needs a fetch-aligned delay-slot indicator routed to
+  # the datapath (delay_jump is decode-internal today; dslot, the EX-aligned one,
+  # is what is currently wired). Note the CAS.L regression seen under A-alone is
+  # expected to be B as well, and should be re-checked once B lands.
+  #
+  # ---- earlier partial diagnosis (superseded by the above, kept for the
+  #      measurements) ------------------------------------------------------
   # Two TLB faults are detected before EITHER is dispatched, and decode and the
   # datapath disagree about which one the exception describes.
   #

@@ -302,6 +302,27 @@ else
   # dispatches, i.e. be released by decode's texc_ack -- which is currently NOT
   # routed to the datapath (decode_core-internal). Wiring it out is the work.
   #
+  # BOTH "hold the capture until dispatch" variants are now REFUTED, which is
+  # the useful result: the fix is NOT in the capture-release logic.
+  #   (a) release on handler entry (this.sr.rb = '1')  -> case 1 RED (1001),
+  #       with CAS.L skipped too, so not CAS-specific.
+  #   (b) release on decode's texc_ack, properly plumbed out of decode_core
+  #       (model/pkg.go port lists + decode.vhd.tmpl + cpu.vhd + a datapath
+  #       tlb_exc_ack input; wiring verified -- one decode and one datapath
+  #       instance, all three references present) -> the CPU HANGS: 200us with
+  #       no result and no error. Between dispatch and SR.RB=1 faults are still
+  #       enabled, so re-arming that early lets the exception entry's own fetch
+  #       re-capture and clobber the TEA/PTEH the handler is about to read.
+  #
+  # So neither "first wins" nor "last wins" nor "hold until dispatch" is right,
+  # because the capture is not where the ordering decision belongs. The actual
+  # violation is upstream: a YOUNGER fetch fault (the speculative branch TARGET,
+  # 0x103000) is raised while an OLDER one (the delay-slot fetch, 0x101000) is
+  # still pending, and precise-exception semantics require the OLDEST fault to
+  # win. That prioritisation has to happen where the fault is raised -- cpu.vhd's
+  # exc_en / the TLB fault detect -- so that only one fault is ever outstanding.
+  # Then decode and the datapath cannot disagree, whatever their hold windows.
+  #
   # REFUTED, do not repeat: replacing the release condition with handler entry
   #   if MMU_ARCH and this.sr.rb = '1' then this.tlb_exc_captured := '0';
   # turns case 1 RED (Result=1001) and does so even with CAS.L skipped, so it is

@@ -293,6 +293,11 @@ package cpu2j0_components_pack is
     -- A fetch that is squashed before dispatch therefore never raises anything,
     -- which also removes the "younger speculative fetch fault overrides an older
     -- one" defect. See the m8_dsdslot_0 writeup in sim/mmu_sim.sh.
+    -- ATTRIBUTION VERIFIED: the faulting fetch DOES ack (measured: i_va_32
+    -- 0x00100FFE, inst_fault rises at 8980ns, iack at 8984ns), and the bit lands
+    -- with the matching if_pc one delta later. An earlier note here suspected
+    -- mis-attribution to a P1 address; that was a sampling artifact of reading
+    -- if_pc at if_fault's rising edge, before if_pc had settled.
     if_fault_next    : std_logic;
     if_fault         : std_logic;
     tlb_fault_zreg   : std_logic_vector(4 downto 0);

@@ -389,28 +389,31 @@
 5    LDS.L @Rm+, MACL     General
 6    LDS.L @Rm+, PR       PrivMem
 7    MOV.B @(disp, Rm), R0 General
-8    MOV.B @Rm, Rn        General
-9    MOV.B R0, @(disp, Rn) General
-10   MOV.B Rm, @Rn        General
-11   MOV.B Rm,@-Rn        General
-12   MOV.L @(disp, Rm), Rn General
-13   MOV.L @Rm, Rn        General
-14   MOV.L Rm, @(disp, Rn) General
-15   MOV.L Rm, @Rn        General
-16   MOV.L Rm,@-Rn        General
-17   MOV.W @(disp, Rm), R0 General
-18   MOV.W @Rm, Rn        General
-19   MOV.W R0, @(disp, Rn) General
-20   MOV.W Rm, @Rn        General
-21   MOV.W Rm,@-Rn        General
-22   STC.L GBR, @-Rn      General
-23   STC.L SR, @-Rn       PrivMem
-24   STC.L VBR, @-Rn      PrivMem
-25   STS.L MACH, @-Rn     General
-26   STS.L MACL, @-Rn     General
-27   STS.L PR, @-Rn       General
-28   TAS.B @Rn            General
-# 28 emitted; skipped:
+8    MOV.B @Rm+, Rn       General
+9    MOV.B @Rm, Rn        General
+10   MOV.B R0, @(disp, Rn) General
+11   MOV.B Rm, @Rn        General
+12   MOV.B Rm,@-Rn        General
+13   MOV.L @(disp, Rm), Rn General
+14   MOV.L @Rm+, Rn       General
+15   MOV.L @Rm, Rn        General
+16   MOV.L Rm, @(disp, Rn) General
+17   MOV.L Rm, @Rn        General
+18   MOV.L Rm,@-Rn        General
+19   MOV.W @(disp, Rm), R0 General
+20   MOV.W @Rm+, Rn       General
+21   MOV.W @Rm, Rn        General
+22   MOV.W R0, @(disp, Rn) General
+23   MOV.W Rm, @Rn        General
+24   MOV.W Rm,@-Rn        General
+25   STC.L GBR, @-Rn      General
+26   STC.L SR, @-Rn       PrivMem
+27   STC.L VBR, @-Rn      PrivMem
+28   STS.L MACH, @-Rn     General
+29   STS.L MACL, @-Rn     General
+30   STS.L PR, @-Rn       General
+31   TAS.B @Rn            General
+# 31 emitted; skipped:
 #   ADD #imm, Rn         ADD #imm, Rn has no D-side memory access
 #   ADD Rm, Rn           ADD Rm, Rn has no D-side memory access
 #   ADDC Rm, Rn          ADDC Rm, Rn has no D-side memory access
@@ -428,7 +431,7 @@
 #   BT /S label          BT /S label is Bespoke (dedicated guard)
 #   BT label             BT label is Bespoke (dedicated guard)
 #   Break                Break has no D-side memory access
-#   CAS.L Rm, Rn, @R0    CAS.L Rm, Rn, @R0: Defect 7: a D-side fault in a branch delay slot restarts at the delay-slot instruction instead of the branch when the faulting access launches in a slot after slot 0 (multi-slot memory forms -- locked RMW and post-increment @Rm+ -- shadow ma_dslot past deassertion at access-launch); re-enable when fixed
+#   CAS.L Rm, Rn, @R0    CAS.L Rm, Rn, @R0: locked RMW hangs the bus in this axis's maximal three-fault shape (NOT Defect 7, which is fixed); single-fault coverage is mmudspcprobe_latec.S
 #   CLDS CP0_Rm, CP0_COM CLDS CP0_Rm, CP0_COM has no D-side memory access
 #   CLDS CPI_Rm, CPI_COM CLDS CPI_Rm, CPI_COM has no D-side memory access
 #   CLRMAC               CLRMAC has no D-side memory access
@@ -478,25 +481,22 @@
 #   LDTLB                LDTLB is Bespoke (dedicated guard)
 #   LDTLB.RN             LDTLB.RN is Bespoke (dedicated guard)
 #   LDTLB.RN Rm          LDTLB.RN Rm has no D-side memory access
-#   MAC.L @Rm+, @Rn+     MAC.L @Rm+, @Rn+: Defect 7: a D-side fault in a branch delay slot restarts at the delay-slot instruction instead of the branch when the faulting access launches in a slot after slot 0; MAC.L/MAC.W @Rm+,@Rn+ fault on the SECOND operand's access (access_slots=[0,1]), so this form is blocked until Defect 7 is fixed
-#   MAC.W @Rm+, @Rn+     MAC.W @Rm+, @Rn+: Defect 7: a D-side fault in a branch delay slot restarts at the delay-slot instruction instead of the branch when the faulting access launches in a slot after slot 0; MAC.L/MAC.W @Rm+,@Rn+ fault on the SECOND operand's access (access_slots=[0,1]), so this form is blocked until Defect 7 is fixed
+#   MAC.L @Rm+, @Rn+     MAC.L @Rm+, @Rn+: effective address not modelled: dual memory-pointer instruction (only one base register is seeded)
+#   MAC.W @Rm+, @Rn+     MAC.W @Rm+, @Rn+: effective address not modelled: dual memory-pointer instruction (only one base register is seeded)
 #   MOV #imm, Rn         MOV #imm, Rn has no D-side memory access
 #   MOV Rm, Rn           MOV Rm, Rn has no D-side memory access
 #   MOV.B @(R0, Rm), Rn  MOV.B @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
 #   MOV.B @(disp, GBR), R0 MOV.B @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-#   MOV.B @Rm+, Rn       MOV.B @Rm+, Rn: Defect 7: a D-side fault in a branch delay slot restarts at the delay-slot instruction instead of the branch when the faulting access launches in a slot after slot 0 (multi-slot memory forms -- locked RMW and post-increment @Rm+ -- shadow ma_dslot past deassertion at access-launch); re-enable when fixed
 #   MOV.B R0, @(disp, GBR) MOV.B R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
 #   MOV.B Rm, @(R0, Rn)  MOV.B Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
 #   MOV.L @(R0, Rm), Rn  MOV.L @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
 #   MOV.L @(disp, GBR), R0 MOV.L @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
 #   MOV.L @(disp, PC), Rn MOV.L @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
-#   MOV.L @Rm+, Rn       MOV.L @Rm+, Rn: Defect 7: a D-side fault in a branch delay slot restarts at the delay-slot instruction instead of the branch when the faulting access launches in a slot after slot 0 (multi-slot memory forms -- locked RMW and post-increment @Rm+ -- shadow ma_dslot past deassertion at access-launch); re-enable when fixed
 #   MOV.L R0, @(disp, GBR) MOV.L R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
 #   MOV.L Rm, @(R0, Rn)  MOV.L Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
 #   MOV.W @(R0, Rm), Rn  MOV.W @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
 #   MOV.W @(disp, GBR), R0 MOV.W @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
 #   MOV.W @(disp, PC), Rn MOV.W @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
-#   MOV.W @Rm+, Rn       MOV.W @Rm+, Rn: Defect 7: a D-side fault in a branch delay slot restarts at the delay-slot instruction instead of the branch when the faulting access launches in a slot after slot 0 (multi-slot memory forms -- locked RMW and post-increment @Rm+ -- shadow ma_dslot past deassertion at access-launch); re-enable when fixed
 #   MOV.W R0, @(disp, GBR) MOV.W R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
 #   MOV.W Rm, @(R0, Rn)  MOV.W Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
 #   MOVA @(disp, PC), R0 MOVA @(disp, PC), R0 has no D-side memory access

@@ -196,45 +196,99 @@ else
 # Slot-0-access forms (plain @Rm, @-Rn, @(disp,Rm/Rn), register-direct) are
 # unaffected -- confirmed against every one of the 26 spec-classified cases
 # in m8_dsdslot_0 (22 slot-0, all PASS; 4 late-access: CAS.L Rm,Rn,@R0,
-# MOV.B/L/W @Rm+,Rn, all Defect 7). The 4 late-access cases are now emitted
-# by the generator as explicit documented skips citing Defect 7 (see
-# decode/gen-go/internal/faultgen/emit.go's lateAccess + m8_manifest.txt).
-# The remaining 22 slot-0 cases are m8_dsdslot_0, which is PARKED below
-# (Task 4's Case A failure under investigation) -- NOT wired in. Per the
-# same-shaped
-# emitIFetchDSlot convergent-target flaw noted below, m8_idslot_* likely
-# share this same vacuity as a SEPARATE, still-uninvestigated defect, so
-# their bus-ACK-hang failures above may currently be masking it too; not
-# invoked below until diagnosed.
+# MOV.B/L/W @Rm+,Rn, all Defect 7).
 #
-# m8_smoke passes and is wired into the run below. Fixing m8_idslot_* and
-# Defect 7 are their own pieces of work; until then m8_idslot_* stays out,
-# and this comment is the reason why.
+# DEFECT 7 IS FIXED (decode/decode_core.vhm, g_dslot). Root cause: the flag
+# the datapath shadows as ma_dslot was re-sampled from delay_jump on EVERY
+# non-stalled slot, so it was a one-SLOT pulse rather than a per-INSTRUCTION
+# attribute -- a multi-slot delay-slot instruction saw it reload to '0' before
+# its access slot. delay_slot_o now samples delay_jump once per instruction
+# (gated on `dispatch') and HOLDS across every slot, so the arm selection is
+# independent of which slot carries the access. mmudspcprobe_late (the standing
+# reproducer, measured 0x00010101 before / PASS after) is wired into the active
+# list below, and the full 69-guard suite is green.
+#
+# COVERAGE. All five late-access forms are locked by one guard each --
+# mmudspcprobe_late{,b,w,c,m,mw} -- built from a single shared harness where the
+# ONLY difference is the delay-slot instruction. Each was measured RED
+# (Result=65793) on the pre-fix RTL and GREEN after, so none is vacuous. That
+# per-form evidence is deliberate: the fix is structural, but "structural" is an
+# argument and these are measurements.
+#
+# The generator's Defect 7 skips are gone too (emit.go: the lateAccess() helper
+# and the MAC-specific skip), so m8_dsdslot_0 now emits the @Rm+ loads inline
+# and its case numbering is UNCHANGED (the parked failure is still 1007).
+# Two forms stay skipped there for reasons that are NOT Defect 7:
+#   MAC.{L,W}  pre-existing: "dual memory-pointer instruction -- only one base
+#              register is seeded". Never was a Defect 7 skip in substance.
+#   CAS.L      NEW FINDING, worth picking up with the 1007 work: emitting it
+#              after the fix makes this axis HANG the bus at case 1 ("Rd did not
+#              see ACK for data sram" from ~9.2us) instead of reaching 1007,
+#              i.e. a locked RMW whose read faults inside the MAXIMAL
+#              three-fault Case A shape appears not to release the bus lock. A
+#              SINGLE-fault delay-slot CAS.L restart is fine -- that is
+#              mmudspcprobe_latec, RED pre-fix and GREEN after. Re-skipped so
+#              this parked axis keeps a nameable Result instead of a hang.
+# Both are covered for the single-fault restart-PC property by the per-form
+# guards above; what is missing is only their behaviour under three-fault
+# stacking.
+#
+# m8_dsdslot_0 remains PARKED below on its own separate failure -- see the park
+# comment there, which is NOT Defect 7. Per the same-shaped emitIFetchDSlot
+# convergent-target flaw noted below, m8_idslot_* likely share that vacuity as
+# a SEPARATE, still-uninvestigated defect, so their bus-ACK-hang failures above
+# may currently be masking it too; not invoked below until diagnosed.
+#
+# m8_smoke passes and is wired into the run below. Fixing m8_idslot_* is its
+# own piece of work; until then m8_idslot_* stays out, and this comment is the
+# reason why.
   run_guard m8_smoke
   run_guard m8_dside    "" 200us
-  # m8_dsdslot_0: PARKED while Task 4's Case A failure (Result=1007, case 7 =
-  # MOV.B @(disp,Rm),R0 -- a plain SLOT-0 access, NOT one of the documented
-  # Defect 7 exclusions) is under investigation. Unknown whether that is a new
-  # precise-exception defect or a construction bug in the new three-fault
-  # template. Parked so the suite stays readable, NOT because the failure is
-  # dismissed. Re-enable when resolved.
+  # m8_dsdslot_0: PARKED on Case A Result=1007 (case 7 = MOV.B @(disp,Rm),R0 --
+  # a plain SLOT-0 access, and NOT Defect 7, which is now fixed anyway).
+  # NARROWED 2026-08-06, still unfixed. It is NOT a harness construction bug and
+  # NOT a wrong restart PC. Evidence:
+  #   * SNAP_A (cold, 3-fault leg) = 0x00102000 -- the UN-loaded base; SNAP_B
+  #     (warm) = 0xFFFFFFA1 -- the correct sign-extended load. Not 0xFFFFFFFF,
+  #     so the poison trap never fired.
+  #   * if_dr trace across the case shows control flow is correct at all three
+  #     faults: [4B2B 8400] -> fault -> restart on the BRANCH -> [4B2B 8400] ->
+  #     4C2B (target) -> fault -> restart on the TARGET -> 4C2B -> capture.
+  # So the delay-slot load issues, is correctly NOT re-executed, and its result
+  # never reaches r0: a LOST WRITEBACK in the branch-target-IMISS shadow -- the
+  # Defect 6 / z_grace family, on a load result. This is exactly the gap
+  # core/datapath.vhm's g_wb_grace comment documents ("No guard specifically
+  # exercises an I-fetch fault with a genuinely pending w-port writeback whose
+  # delay slot is re-executed"); case 7 IS that guard. Cases 1-6 pass because
+  # they target control registers -- case 7 is the first GPR destination.
+  # Three probes REFUTED (each rebuilt, re-run, reverted):
+  #   z_grace <= tlb_exc_ifetch (drop `not delay_slot')   -> still 1007
+  #   reg_wr_w_g <= reg.wr_w    (w-port squash disabled)  -> still 1007
+  #   drop `and tlb_squash_r = '0'' from the mem-issue gate -> still 1007
+  # so the write is NOT being lost at either grace-gated port or the issue gate.
+  # NEXT STEP IS EVIDENCE, NOT ANOTHER PROBE: the VCD wrapper only exposes
+  # top-level signals, so add reg.wr_w / num_w_r / cpu_data_mux / m_dr to it and
+  # watch the 19160-19260 ns window. Parked so the suite stays readable, NOT
+  # because the failure is dismissed. Re-enable when resolved.
   # run_guard m8_dsdslot_0 "" 200us
-  # mmudspcprobe_late: PARKED. This is a standing reproducer for Defect 7
-  # (D-side TLB fault in a branch delay slot restarts on the delay-slot
-  # instruction instead of the branch, when the faulting ACCESS launches in
-  # a slot after slot 0 -- see the Defect 7 writeup above and
-  # decode/gen-go/internal/faultgen/emit.go's lateAccess()). It is the
-  # single-case analogue of m8_dsdslot_0's 4 late-access exclusions, built
-  # from mmudspcprobe.S (which pins the slot-0 arm to exactness and PASSES)
-  # with the delay-slot instruction swapped for MOV.L @Rm+,Rn (access in
-  # slot 1). It is EXPECTED RED: measured Result=65793 (0x00010101), the
-  # guard's own documented encoding for "restart landed on the delay slot".
-  # Run it directly with:
-  #   sim/mmu_sim.sh -n mmudspcprobe_late cpu_tb 80us
-  # Do not "fix" the guard to make it pass -- move this run_guard line into
-  # the active list (and drop the "expected RED" comment above it) only
-  # once Defect 7 itself is fixed in core/datapath.vhm.
-  # run_guard mmudspcprobe_late cpu_tb 80us
+  # mmudspcprobe_late: ACTIVE since Defect 7 was fixed (decode/decode_core.vhm,
+  # g_dslot -- see the writeup above). Built from mmudspcprobe.S (which pins the
+  # slot-0 arm to exactness) with the delay-slot instruction swapped for
+  # MOV.L @Rm+,Rn, so the faulting access launches in slot 1. That pairing is
+  # the regression lock: mmudspcprobe holds the slot-0 arm, this one holds the
+  # late-access arm, and the only variable between them is which slot carries
+  # the access. Measured 0x00010101 (restart landed on the delay slot) before
+  # the fix, PASS after.
+  run_guard mmudspcprobe_late   cpu_tb 80us
+  # ...and one guard per REMAINING late-access form. The fix is structural, but
+  # "structural" is an argument, not a measurement: each form gets its own file
+  # differing in exactly one instruction. All five were measured RED
+  # (Result=65793 = 0x00010101) on the pre-fix RTL and GREEN after.
+  run_guard mmudspcprobe_lateb  cpu_tb 80us    # MOV.B @Rm+,Rn
+  run_guard mmudspcprobe_latew  cpu_tb 80us    # MOV.W @Rm+,Rn
+  run_guard mmudspcprobe_latec  cpu_tb 80us    # CAS.L Rm,Rn,@R0  (locked RMW)
+  run_guard mmudspcprobe_latem  cpu_tb 80us    # MAC.L @Rm+,@Rn+  (dual pointer)
+  run_guard mmudspcprobe_latemw cpu_tb 80us    # MAC.W @Rm+,@Rn+  (dual pointer)
   run_guard m8_macarith
   run_guard m8_macseq
   run_guard m8_ifetch_0 "" 12ms 240

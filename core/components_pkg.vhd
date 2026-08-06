@@ -300,6 +300,29 @@ package cpu2j0_components_pack is
     -- if_pc at if_fault's rising edge, before if_pc had settled.
     if_fault_next    : std_logic;
     if_fault         : std_logic;
+    -- STEP 2 (NOT DONE) -- what consuming this actually requires. The easy half
+    -- is already handled: decode_core's next_op selection dispatches TLB
+    -- exceptions at an instruction boundary and ALREADY yields the illegal-instr
+    -- arms to TLB_IMISS/IPROT, precisely because "an I-side TLB fault's returned
+    -- word is not a valid instruction". So the faulting word never executes.
+    --
+    -- The hard half is that BOTH the request and the capture are driven at FAULT
+    -- time, and both must move to DISPATCH time:
+    --   * decode_core's texc_req is set from tlb_exc_en when the fault is raised.
+    --     It must instead be raised from this if_fault bit when the instruction
+    --     carrying it reaches the dispatch boundary.
+    --   * the datapath's TEA / PTEH / MMUFSR / tlb_exc_pc capture is gated on
+    --     tlb_exc_pend, i.e. the same fault-time event, and sources the VA from
+    --     the live tlb_fault_va. It must source the VA from THIS instruction's
+    --     if_pc instead. That is the whole point: at dispatch, delay_slot is
+    --     meaningful, so tlb_exc_pc = if_pc - 2 when the faulting instruction is
+    --     a delay slot and if_pc otherwise -- the unified rule, with both fields
+    --     coming from the same record.
+    --   * the fault KIND must ride alongside if_fault (IMISS / IPROT /
+    --     MULTI_HIT). A defensible first cut is to defer IMISS only and leave
+    --     IPROT/MULTI_HIT immediate, documenting the asymmetry.
+    -- cpu.vhd must then stop raising tlb_exc_en for whichever I-side kinds are
+    -- deferred, or the exception fires twice.
     tlb_fault_zreg   : std_logic_vector(4 downto 0);
     tlb_restore_val  : std_logic_vector(31 downto 0);
     tlb_restore_pend : std_logic;

@@ -196,7 +196,62 @@ begin
 
   maskint <= this'register.maskint;
   delay_slot <= this'register.delay_slot;
-  delay_slot_o <= delay_slot when PRIV_ARCH else '0';
+  -- delay_slot_o (the MMU's copy) is NOT this'register.delay_slot. That flag is
+  -- re-sampled from delay_jump on EVERY non-stalled slot, so it is a one-SLOT
+  -- pulse, not a per-INSTRUCTION attribute: a multi-slot delay-slot instruction
+  -- (MOV.{B,W,L} @Rm+,Rn, CAS.L, MAC.{L,W} -- the forms that spend slot0 on the
+  -- base writeback / first operand and launch the faulting access in a LATER
+  -- slot) has already seen it reload to delay_jump='0' by the time the datapath
+  -- shadows it at the access-launch point. The D-side TLB-fault restart then
+  -- took the "normal" arm (tlb_exc_pc := ex_if_pc + 4) and landed ON the delay
+  -- slot instead of backing up to the branch -- sim/tests/mmudspcprobe_late.S
+  -- measured 0x00010101, its own encoding for exactly that. SH-2/SH-4 permit
+  -- every one of these forms in a delay slot (the slot-illegal set is branches,
+  -- TRAPA and PC-relative only -- see check_illegal_delay_slot), so this was a
+  -- conformance bug, not an unsupported case.
+  --
+  -- The fix is the one already proven for the sibling field: ex_if_pc had the
+  -- SAME defect (the ma_if_pc access-launch shadow held faulting_PC-2 for a
+  -- plain load but faulting_PC for an @Rn+ load -- "no constant bias can correct
+  -- both", core/datapath.vhm) and was fixed by carrying the value per
+  -- instruction instead of sampling it at access time. Same idea here: gate the
+  -- update on `dispatch' -- the retire marker of the op in ID, the very signal
+  -- the line below uses to advance instr_seq_zero -- so delay_jump is sampled
+  -- ONCE per instruction, when the branch retires, and HELD across every slot of
+  -- the multi-slot instruction that follows. Pipeline depth is unchanged: this
+  -- register replaces this'register.delay_slot in the path rather than extending
+  -- it, so decode.vhd's delay_slot_r still lands EX-aligned.
+  --
+  -- NOT gated on g_if_pc's instruction-boundary condition (id_stall='0' and
+  -- instr_seq_zero='1'), which was tried first and is measurably WRONG here:
+  -- instr_seq_zero is still '1' entering the second slot of the op after a
+  -- single-slot branch, so the flag reloaded delay_jump='0' mid-instruction and
+  -- the guard failed bit-identically to the unfixed core. That enable is loose
+  -- for if_pc only because re-latching if_pc mid-op happens to re-capture the
+  -- same PC; delay_jump has no such immunity.
+  --
+  -- Kept SEPARATE from this'register.delay_slot rather than re-gating it: that
+  -- flag also drives the interrupt-mask and illegal-delay-slot arms below, on
+  -- J1/J2 as well, and those are outside this fix's scope. In a generate so the
+  -- flop is simply absent on non-MMU builds (same reason as g_if_pc).
+  g_dslot : if PRIV_ARCH generate
+    signal dslot_op : std_logic;
+  begin
+    dslot_reg : process(clk, rst)
+    begin
+      if rst = '1' then
+        dslot_op <= '0';
+      elsif clk = '1' and clk'event then
+        if slot = '1' and next_id_stall_a = '0' and dispatch = '1' then
+          dslot_op <= delay_jump;
+        end if;
+      end if;
+    end process;
+    delay_slot_o <= dslot_op;
+  end generate g_dslot;
+  g_dslot_off : if not PRIV_ARCH generate
+    delay_slot_o <= '0';
+  end generate g_dslot_off;
   -- if_pc pipeline: PRIV_ARCH ONLY. Wrapped in a generate so the flops are simply
   -- absent on non-MMU (j1/j2) -- a plain `if PRIV_ARCH then` inside the clocked
   -- process leaves if_pc_r1 assigned only in reset when PRIV_ARCH=false, which

@@ -314,6 +314,25 @@ else
   #       enabled, so re-arming that early lets the exception entry's own fetch
   #       re-capture and clobber the TEA/PTEH the handler is about to read.
   #
+  #   (c) suppress the YOUNGER fault at the RAISE point: an exc_pending_r latch
+  #       in cpu.vhd (set on tlb_exc_en, released at SR.RB=1) gating both the
+  #       i_at_translated and d_at_translated branches, so at most one fault is
+  #       ever outstanding -> case 1 RED (1001), and again with CAS.L skipped,
+  #       so not CAS-specific. ROOT CAUSE OF THAT REGRESSION, and it is the
+  #       useful part: on a TLB miss NEITHER branch of the instruction address
+  #       mux applies (cpu.vhd, g_inst_p1_fold: the P1 fold, else
+  #       i_at_translated and tlb_i_hit='1'), so inst_o.a passes through
+  #       UNTRANSLATED -- the raw VA is used as the physical address. That is
+  #       normally harmless because the fault redirects the pipeline before the
+  #       fetched word matters. Suppress only the FAULT and the fetch still
+  #       completes, against an untranslated address, and the garbage it returns
+  #       is executed.
+  #
+  # So suppressing the younger fault is NOT enough: the younger FETCH itself has
+  # to be stalled/not issued while an older fault is outstanding. That is a
+  # fetch-unit change (gating sig_inst_o.en / driving if_stall), not a change to
+  # the fault-raise condition, and it is the next thing to try.
+  #
   # So neither "first wins" nor "last wins" nor "hold until dispatch" is right,
   # because the capture is not where the ordering decision belongs. The actual
   # violation is upstream: a YOUNGER fetch fault (the speculative branch TARGET,

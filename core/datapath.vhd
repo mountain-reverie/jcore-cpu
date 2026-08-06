@@ -99,6 +99,12 @@ entity datapath is
        -- faulting fetch VA) with a delay-slot bias, instead of the D-side
        -- ma_pc shadow. '0' -> D-side capture (existing).
        tlb_exc_is_i : in std_logic := '0';
+       -- '1' while the OUTSTANDING instruction fetch has a translation fault.
+       -- Sampled at inst_i.ack into the per-instruction status vector (if_fault_next);
+       -- see if_fault in components_pkg.vhd. '0' on non-MMU builds.
+       inst_fault : in std_logic := '0';
+       -- Deferred I-fetch fault of the instruction now presented to decode.
+       if_fault_o : out std_logic;
        -- '1' iff this fault's VA is an instruction-fetch VA, for EVERY
        -- exc_kind that can raise it (IMISS/IPROT/MULTI_HIT) -- broader
        -- than tlb_exc_is_i, which is deliberately narrowed to IMISS/
@@ -1146,7 +1152,7 @@ end generate;
  with mac.sel1 select macin1 <= xbus when SEL_XBUS, zbus_mac when SEL_ZBUS, wbus when others;
  with mac.sel2 select macin2 <= ybus when SEL_YBUS, zbus_mac when SEL_ZBUS, wbus when others;
  ibit <= sr.int_mask;
- datapath : process(this_r,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, squash_arm, tlb_fault_va, tlb_exc_expevt, tlb_exc_fsr, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, tlb_exc_is_i, tlb_exc_ifetch, ex_if_pc)
+ datapath : process(this_r,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, squash_arm, tlb_fault_va, tlb_exc_expevt, tlb_exc_fsr, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, inst_fault, tlb_exc_is_i, tlb_exc_ifetch, ex_if_pc)
    variable this : datapath_reg_t;
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
@@ -1427,6 +1433,11 @@ end generate;
             -- SR changes while if_dr_next sits waiting to be transferred.
             this.illegal_delay_slot_next := check_illegal_delay_slot(inst_i.d);
             this.illegal_instr_next := check_illegal_instruction(inst_i.d);
+            -- Record (do not raise) an I-fetch translation fault, in lockstep with
+            -- if_dr_next / if_pc_next. See if_fault in components_pkg.vhd.
+            if MMU_ARCH then
+              this.if_fault_next := inst_fault;
+            end if;
             -- Capture this fetch's VA with the instruction word. inst_o.a is the
             -- requested VA[31:1] (the MMU VA->PA fold is in cpu.vhd) and is still
             -- valid here (NULLed just below). Taken before any branch redirect, so
@@ -1502,6 +1513,9 @@ end generate;
               -- written; just transfer it alongside if_dr here.
               this.illegal_delay_slot := this.illegal_delay_slot_next;
               this.illegal_instr := this.illegal_instr_next;
+              if MMU_ARCH then
+                this.if_fault := this.if_fault_next;
+              end if;
               if PRIV_ARCH then
                 this.illegal_instr := this.illegal_instr or
                   (privileged(this.if_dr) and not this.sr.md);
@@ -1873,6 +1887,7 @@ end generate;
         if_pc <= this_r.if_pc when PRIV_ARCH else (others => '0');
         illegal_delay_slot <= this_r.illegal_delay_slot;
         illegal_instr <= this_r.illegal_instr;
+        if_fault_o <= this_r.if_fault when MMU_ARCH else '0';
         cop_o.rna <= copreg(7 downto 4);
         cop_o.rnb <= copreg(3 downto 0);
         cop_o.op <= "11101" when coproc.coproc_cmd = LDS else

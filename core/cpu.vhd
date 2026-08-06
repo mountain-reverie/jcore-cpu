@@ -107,6 +107,12 @@ architecture stru of cpu is
   signal tlb_exc_en   : std_logic;
   signal tlb_exc_kind : tlb_exc_kind_t;
   signal tlb_exc_pend : std_logic;
+  -- '1' while the outstanding instruction fetch has a translation fault. Feeds
+  -- the datapath's per-instruction status vector (if_fault). Step 1 of deferred
+  -- I-fetch fault delivery: RECORDED only -- tlb_exc_en still raises immediately,
+  -- so behaviour is unchanged until the consumer lands.
+  signal inst_fault   : std_logic;
+  signal dp_if_fault  : std_logic;
   signal tlb_fault_va : std_logic_vector(31 downto 0);
   -- D-store-on-bus is itself faulting (drives the external demote-to-read).
   signal d_store_faulting : std_logic;
@@ -379,6 +385,8 @@ begin
       sr_o               => dp_sr,
       tlb_squash_o       => dp_tlb_squash,
       tlb_exc_pend       => tlb_exc_pend,
+      inst_fault         => inst_fault,
+      if_fault_o         => dp_if_fault,
       tlb_fault_va       => tlb_fault_va,
       tlb_exc_expevt     => tlb_exc_expevt,
       tlb_exc_fsr        => tlb_exc_fsr,
@@ -628,6 +636,9 @@ begin
         end if;
       end if;
 
+      -- Same I-side condition the branch above uses, exported for the datapath
+      -- to RECORD with the fetched instruction (deferred delivery, step 1).
+      inst_fault   <= v_ifetch;
       tlb_exc_en   <= exc_en;
       tlb_exc_kind <= exc_kind;
       tlb_exc_pend <= exc_en;

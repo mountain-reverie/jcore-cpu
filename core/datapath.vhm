@@ -186,6 +186,10 @@ signal manip_sel : std_logic_vector(31 downto 0);
 	-- consumed by BOTH the tlb_squash arming in the process and g_wb_grace.
 	-- Constant '0' off MMU_ARCH so J1/J2 prune it. See its assignment below.
 	signal squash_arm : std_logic;
+	-- Registered "the fault that armed the CURRENT squash window was an
+	-- INSTRUCTION-FETCH fault" (J4+MMU_ARCH; constant '0' off MMU_ARCH so J1/J2
+	-- prune it, exactly like squash_arm). See the AGE RULE above reg_wr_w_g.
+	signal squash_ifetch_r : std_logic;
 	signal ybus_override : bus_val_t;
 	signal slot_o : std_logic;
 	-- Precise auto-increment restore (J4). mem_autoupd marks the current
@@ -775,25 +779,19 @@ end generate;
 	-- stretched (slot_o = '0') the pipeline is frozen, so reg.wr_w/num_w_r are
 	-- held and the bit correctly persists.
 	--
-	-- FAULT-SIDE ASYMMETRY WITH z_grace (g_restore2, below). z_grace carries
-	-- an explicit `tlb_exc_ifetch and not delay_slot' discriminator with a
-	-- long derivation (see that generate's comment). wb_grace carries NO
-	-- fault-side term at all -- it is `reg.wr_w and not slot_o' -- and the
-	-- "WHY ONE BIT IS ENOUGH" argument above is a purely D-side argument
-	-- (only one memory transaction can be outstanding) that does not by
-	-- itself establish anything about an I-fetch fault, where no memory
-	-- transaction is involved at all. This is believed benign, REASONING
-	-- ONLY, not tested: the w-port only ever carries load RESULT data, and
-	-- if an I-side fault's squash window admits a stray extra w-port commit
-	-- from a re-executed delay-slot instruction, that instruction re-executes
-	-- and re-presents the SAME result to the SAME register -- an idempotent
-	-- rewrite, not a corruption, unlike the z-port case z_grace exists to
-	-- fix (which can drop a writeback entirely, or admit one from the wrong
-	-- register). No guard specifically exercises an I-fetch fault with a
-	-- genuinely pending w-port writeback whose delay slot is re-executed, so
-	-- this paragraph documents the gap rather than closing it -- matching
-	-- the honesty of z_grace's own COVERAGE WARNING above. Do not read a
-	-- green suite as evidence this asymmetry is safe.
+	-- AGE RULE. The squash window discards the work of instructions the restart
+	-- WILL RE-EXECUTE. It is a pure time test with no age term, so on its own it
+	-- also discards instructions that are architecturally OLDER than the fault
+	-- and will never re-run -- their writes are then lost forever (Defect 6).
+	-- The exemptions below supply the missing age information. The fault SIDE is
+	-- what decides it, and exactly rather than approximately:
+	--   * D-SIDE fault: the faulting access belongs to an instruction the restart
+	--     re-executes (itself, or the branch when it sits in a delay slot), so
+	--     its writeback and anything younger MUST be suppressed.
+	--   * I-SIDE fault (IMISS/IPROT/MULTI_HIT): the instruction at the faulting
+	--     VA never entered the pipeline, so nothing younger is in flight and
+	--     EVERY write present in the window is older and must commit.
+	-- squash_ifetch_r carries that side; see its declaration near squash_arm.
 	g_wb_grace : if PRIV_ARCH generate
 	  -- Generate-local so J1/J2 elaborate with no trace of it (see the note at
 	  -- the declaration site above for why "tied off at architecture scope" is
@@ -815,7 +813,21 @@ end generate;
 	      end if;
 	    end if;
 	  end process;
-	  reg_wr_w_g <= reg.wr_w and (not this'register.tlb_squash or wb_grace);
+	  -- UNION of two exemptions, not one:
+	  --   wb_grace         D-side. The w-port retires a slot LATE, so on a D-side
+	  --                    fault a writeback OLDER than the faulting access is
+	  --                    still in flight when the window arms. One bit suffices
+	  --                    (only one memory transaction outstanding -- see above).
+	  --                    mmustr2 is the guard for this term.
+	  --   squash_ifetch_r  I-side. The instruction at a faulting FETCH VA never
+	  --                    entered the pipeline, so NOTHING younger is in flight:
+	  --                    every writeback in the window is older and must commit,
+	  --                    not just the one pending at the arming edge. This is
+	  --                    the term wb_grace never had -- the gap its own comment
+	  --                    documented -- and being non-one-shot it also lifts the
+	  --                    old "depth > 1 is uncovered" cap on that side.
+	  reg_wr_w_g <= reg.wr_w and (not this'register.tlb_squash
+	                              or wb_grace or squash_ifetch_r);
 	end generate;
 	g_wb_grace_off : if not PRIV_ARCH generate
 	  reg_wr_w_g <= reg.wr_w;
@@ -904,103 +916,7 @@ end generate;
 	  signal restore2_fire : std_logic;
 	  signal restore2_reg  : std_logic_vector(4 downto 0);
 	  signal restore2_val  : std_logic_vector(31 downto 0);
-	  -- One-shot z-port age exemption for INSTRUCTION-SIDE faults -- the z-port
-	  -- twin of g_wb_grace's wb_grace, and generate-local for the same reason (an
-	  -- architecture-scope or shared-record field perturbs the base J1/J2 techmap
-	  -- even when arch-gated).
-	  --
-	  -- WHY IT IS NEEDED. The squash window's premise ("every instruction that
-	  -- retires across the window issued AFTER the faulting access") holds for
-	  -- D-side faults but is FALSE for an I-side fault taken on a BRANCH TARGET
-	  -- fetch: the branch and its delay-slot instruction both issued BEFORE the
-	  -- faulting fetch, and the delay slot is still in EX when the squash arms.
-	  -- Its z writeback was being dropped while tlb_exc_pc was (correctly) set to
-	  -- the target, so it was never re-executed and the write was lost forever.
-	  -- (mmudrain leg D, at 19890000000 ps: tlb_squash_r=1, tlb_exc_ifetch=1,
-	  -- w_addr_ex=0xc, din_ex=0x6000, we_ex=0 -- the delay slot's `add r11,r12`
-	  -- vanished, the stub pointer stopped advancing, and every later stub
-	  -- `jmp @r12`-ed to itself and ran its `mov.l r13,@-Rn` twice.)
-	  --
-	  -- WHY THE DISCRIMINATOR IS EXACTLY (tlb_exc_ifetch AND NOT delay_slot).
-	  -- Two cases share this machinery and need OPPOSITE handling. This USED
-	  -- to be phrased as "the same predicate the restart-PC arm already
-	  -- uses" (tlb_exc_is_i) -- that was the bug: tlb_exc_is_i is narrowed to
-	  -- IMISS/IPROT for restart-PC selection and is '0' for an I-side
-	  -- MULTI_HIT, which silently fell into the D-side "no grace" case below
-	  -- and reproduced the Defect-6 lost-writeback on that fault kind. The
-	  -- gate now uses tlb_exc_ifetch, which is true for every I-side
-	  -- exc_kind (IMISS/IPROT/MULTI_HIT); tlb_exc_is_i remains reserved for
-	  -- picking the restart-PC derivation only. The case analysis below is
-	  -- otherwise unchanged:
-	  --   * D-side fault (tlb_exc_ifetch='0'), including one taken BY a
-	  --     delay-slot instruction: the restart is at the BRANCH (or at the
-	  --     faulting instruction itself), so the pending write WILL be
-	  --     re-executed and MUST be squashed. No grace. This is case (a).
-	  --   * I-side fault on a DELAY-SLOT fetch (delay_slot='1'): the restart is
-	  --     backed up to the branch (tlb_fault_va - 2), so the branch re-issues
-	  --     and re-executes its delay slot. No grace.
-	  --     COVERAGE WARNING -- this arm of the gate is UNGUARDED, reasoning
-	  --     only. Dropping the term (z_grace <= tlb_exc_ifetch) leaves all 68
-	  --     guards passing, so `not delay_slot' is NOT proven load-bearing; it
-	  --     may well be benign here, since for an I-side delay-slot fetch fault
-	  --     the pending write is plausibly older and not re-executed either.
-	  --     It is kept because it is what the restart-PC arm does and because
-	  --     the equivalence stated below is the property we actually want. The
-	  --     sweep that would settle it is m8_idslot_0-2, which are the rotted
-	  --     orphans named in docs/architecture/tlb.md section 9.5 item 3. Do
-	  --     not read this term as tested, and do not delete it on the strength
-	  --     of a green suite.
-	  --     (The tlb_exc_ifetch half IS proven load-bearing in both directions:
-	  --     forcing z_grace to '0' fails mmudrain leg D, and forcing it to '1'
-	  --     -- i.e. granting grace on the D-side too -- fails leg A. It is
-	  --     further exercised on the I-side MULTI_HIT guard added for this
-	  --     fix, see m8_multihit_ifetch below.)
-	  --   * I-side fault whose restart PC IS the faulting fetch VA
-	  --     (tlb_exc_ifetch='1', delay_slot='0'): nothing younger than the faulting
-	  --     FETCH can be in EX -- the instruction at the faulting VA never
-	  --     entered the pipe -- so the writeback pending when the squash arms is
-	  --     architecturally OLDER and MUST commit. Grace. This is case (b).
-	  -- Equivalently: grace is granted iff the restart PC is NOT backed up, i.e.
-	  -- iff the pending writeback would not be re-executed.
-	  --
-	  -- TIMING. squash_arm rises in cycle N; tlb_squash_r -- and hence the z-port
-	  -- gating -- is first visible in cycle N+1, which is where that older
-	  -- writeback presents (the z-port retires in-slot, so unlike the w-port
-	  -- there is no extra slot of offset). The bit is therefore set on the arming
-	  -- edge and cleared on the next slot boundary, which is that writeback's
-	  -- commit edge; while the slot is stretched (slot_o='0') the pipeline is
-	  -- frozen and the bit correctly persists. One bit suffices for the same
-	  -- reason it does on the w-port: the fault redirect lands a slot late, so at
-	  -- most one pre-fault writeback can still be in flight. (Depth > 1 -- two
-	  -- pending pre-fault writebacks -- is uncovered either way.)
-	  --
-	  -- WHY THERE IS NO `and not slot_o' QUALIFIER, unlike wb_grace. On the
-	  -- w-port that qualifier means "the pending writeback commits on THIS edge,
-	  -- ungated, because tlb_squash is not visible until the next cycle, so no
-	  -- grace is needed". The z-port has no such cycle: the write this bit
-	  -- protects presents in N+1, not in N, so slot_o at the arming edge says
-	  -- nothing about it and the qualifier would merely suppress the grace
-	  -- whenever the fault happened to arm on a slot boundary -- i.e. break the
-	  -- fix. The cost of leaving it out is that if squash_arm coincides with
-	  -- slot_o='1' the bit can stay set across the following slot and admit a
-	  -- second z write. That is benign under the I-side-only gate: on a fetch
-	  -- fault nothing younger than the faulting fetch exists in the pipe, so any
-	  -- write that appears in the window is older and would have to commit
-	  -- anyway. The asymmetry with wb_grace is deliberate, not an oversight.
-	  signal z_grace : std_logic;
 	begin
-	  process(clk, rst)
-	  begin
-	    if rst = '1' then
-	      z_grace <= '0';
-	    elsif clk = '1' and clk'event then
-	      if tlb_squash_r = '0' and squash_arm = '1' then
-	        z_grace <= tlb_exc_ifetch and not delay_slot;
-	      elsif slot_o = '1' then
-	        z_grace <= '0';
-	      end if;
-	    end if;
-	  end process;
 	  -- The three consumers live here rather than at architecture scope so that
 	  -- the restore2_* operands can be generate-local.
 	  gpf_zwd <= this'register.tlb_restore_val when restore_fire = '1'
@@ -1010,7 +926,17 @@ end generate;
 	             else restore2_reg when restore2_fire = '1'
 	             else bank_remap(reg.num_z, sr.md, sr.rb) when PRIV_ARCH
 	             else reg.num_z;
-	  reg_wr_z_g <= (reg.wr_z and (not this'register.tlb_squash or z_grace
+	  -- Same age rule as the w-port, minus the wb_grace term: the z-port retires
+	  -- IN-slot, so its shadow starts immediately and there is no late-retiring
+	  -- older write to rescue -- squash_ifetch_r is the whole rule here. It
+	  -- replaces z_grace (`tlb_exc_ifetch and not delay_slot'); the
+	  -- `not delay_slot' half is dropped because its own COVERAGE WARNING
+	  -- recorded that removing it changed no guard's verdict, and on an I-side
+	  -- delay-slot FETCH fault the branch that does re-run has at most BSR/JSR's
+	  -- PR write, recomputed from the same PC and hence idempotent.
+	  -- The num_z_r "10xxx" term stays: the exception entry's own SPC/SSR saves
+	  -- must commit regardless of fault side.
+	  reg_wr_z_g <= (reg.wr_z and (not this'register.tlb_squash or squash_ifetch_r
 	                               or (num_z_r(4) and not num_z_r(3))))
 	                or restore_fire or restore2_fire;
 	  -- epc_r holds the SETTLED ex_if_pc of the most recent access, so on the
@@ -1628,8 +1554,13 @@ end generate;
 
           if this.slot = '1' then
             -- start new memory transactions
+            -- Age rule (see reg_wr_w_g): block a pending access only when the
+            -- window was armed by a D-SIDE fault. On an I-fetch fault nothing
+            -- younger than the faulting fetch is in flight, so an access pending
+            -- here belongs to an OLDER instruction the restart will not re-run;
+            -- blocking it loses the access outright.
             if (mem.issue = '1' and this.data_o.en = '0'
-                and tlb_squash_r = '0') or
+                and (tlb_squash_r = '0' or squash_ifetch_r = '1')) or
                (coproc.coproc_cmd = LDS) then
               -- start new data request
               case mem.addr_sel is
@@ -1950,6 +1881,26 @@ end generate;
 	--     only suppress an arm, never create a spurious one).
 	squash_arm <= '1' when PRIV_ARCH and tlb_exc_pend = '1' and sr.rb = '0'
 	              else '0';
+	-- Latched on the FIRST arming edge only (tlb_squash_r = '0'), exactly as
+	-- g_wb_grace latches: squash_arm can re-assert while the window is already
+	-- open, and sampling every cycle would let a later fault's side overwrite
+	-- the side of the fault that actually opened this window. No clear needed --
+	-- every consumer qualifies it with tlb_squash.
+	g_squash_ifetch : if MMU_ARCH generate
+	  process(clk, rst)
+	  begin
+	    if rst = '1' then
+	      squash_ifetch_r <= '0';
+	    elsif clk = '1' and clk'event then
+	      if tlb_squash_r = '0' and squash_arm = '1' then
+	        squash_ifetch_r <= tlb_exc_ifetch;
+	      end if;
+	    end if;
+	  end process;
+	end generate;
+	g_squash_ifetch_off : if not MMU_ARCH generate
+	  squash_ifetch_r <= '0';
+	end generate;
 	tlb_squash_o <= tlb_squash_r;
 	mac_s <= this'register.mac_s;
         db_lock <= this'register.data_o_lock;

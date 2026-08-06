@@ -36,6 +36,13 @@ CONFIG_DSP_ALU=0
 # ROM decoder cannot runtime-discriminate two-word SH-2A ext_word ops, so
 # never combine with CONFIG_SH2A_ARCH=1. Default 0 leaves cpu_sim unchanged.
 CONFIG_DECODE_ROM ?= 0
+# J1 sequential-multiplier functional guard: bind cpu_sim_mult_seq (u_mult =
+# mult(seq), the slow iterative multiplier normally only used by cpu_j1)
+# instead of cpu_sim (mult(stru)). Runs the same instruction-level testrom,
+# including the multiply tests, against mult(seq) -- the only functional
+# test of that unit, since cpu_j1 is never otherwise simulated. Default 0
+# leaves cpu_sim unchanged.
+CONFIG_MULT_SEQ ?= 0
 
 GHDL_EXISTS := $(shell sh -c 'which $(GHDL) >/dev/null && echo true')
 IVERILOG_EXISTS := $(shell sh -c 'which $(IVERILOG) >/dev/null && echo true')
@@ -110,12 +117,17 @@ CPU_VHDS += $(addprefix ../../prefetch/,$(PREFETCH_VHDS))
 endif
 
 VHDS := $(CPU_VHDS) bridge_pkg.vhd monitor_pkg.vhd bus_monitor.vhd timeout_cnt.vhd cpu_tb.vhh data_bus_pkg.vhd cpu_pure_tb.vhh cpusim_miniaic2.vhd cpu_cache_tb.vhh
-# J1/iCESugar DSP-ALU prototype (see core/cpu_config.vhd cpu_sim_dsp_alu):
+# J1/iCESugar DSP-ALU prototype (see core/cpu_config_sim.vhd cpu_sim_dsp_alu):
 # core/dsp_arith.vhd is only ever elaborated when CONFIG_DSP_ALU=1 selects
 # that configuration, but must be analyzed unconditionally so the -obj93.cf
 # library contains it. core/sb_mac16_sim.vhd binds SB_MAC16 in simulation
 # (same idiom as core/mult_ice40dsp.vhd).
 VHDS += ../core/dsp_arith.vhd ../core/sb_mac16_sim.vhd
+# core/mult_seq.vhd (see core/cpu_config_sim.vhd cpu_sim_mult_seq): only ever
+# elaborated when CONFIG_MULT_SEQ=1 selects that configuration, but must be
+# analyzed unconditionally so the -obj93.cf library contains it (same idiom
+# as dsp_arith.vhd above).
+VHDS += ../core/mult_seq.vhd
 # core/cpu_config_sim.vhd holds the sim-only cpu_sim/_sh2a/_dsp_alu/_rom
 # configurations selected by CONFIG_* in cpu_tb.vhd. Sim-only: it must NOT
 # be added to build_core.mk (FPGA/ASIC builds never bind these).
@@ -221,7 +233,7 @@ cpu_pure_tb: ram.img
 # Add dependencies to particular vhh files. TODO: how to avoid
 # repeating this rule?
 cpu_tb.vhh: cpu_tb.vhd cpu_signals.h sim/sim_macros.h
-	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_SH2A_ARCH=$(CONFIG_SH2A_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -DCONFIG_DECODE_ROM=$(CONFIG_DECODE_ROM) -I. -I../config -Isim $< -o $@
+	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_SH2A_ARCH=$(CONFIG_SH2A_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -DCONFIG_DECODE_ROM=$(CONFIG_DECODE_ROM) -DCONFIG_MULT_SEQ=$(CONFIG_MULT_SEQ) -I. -I../config -Isim $< -o $@
 
 cpu_cache_tb.vhh: cpu_cache_tb.vhd cpu_signals.h sim/sim_macros.h
 	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -I. -I../config -Isim $< -o $@

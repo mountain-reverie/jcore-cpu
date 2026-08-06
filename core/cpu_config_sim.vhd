@@ -105,3 +105,34 @@ configuration cpu_sim_rom of cpu is
     end for;
   end for;
 end configuration;
+
+-- J1 sequential-multiplier functional guard: identical to cpu_sim EXCEPT
+-- u_mult binds mult(seq) (the slow iterative multiplier core/mult_seq.vhd,
+-- normally only used by cpu_j1) instead of the default mult(stru). This is
+-- the ONLY functional test of mult(seq) -- cpu_j1 itself is never otherwise
+-- simulated (the testrom runs on the comb J2 multiplier), so this variant
+-- exercises the same instruction-level testrom (including the multiply
+-- tests) against the slow iterative multiplier while keeping everything
+-- else (decode, regfile, shifter) identical to cpu_sim. Selected by
+-- sim/cpu_tb.vhd when CONFIG_MULT_SEQ=1.
+configuration cpu_sim_mult_seq of cpu is
+  for stru
+    for u_mult : mult
+      use entity work.mult(seq);
+    end for;
+    for u_decode : decode
+      use configuration work.cpu_decode_direct_mmu;
+    end for;
+    for u_datapath : datapath
+      use entity work.datapath(stru);
+      for stru
+        for u_regfile : register_file
+          use entity work.register_file(two_bank);
+        end for;
+        for u_shifter : shifter
+          use entity work.shifter(comb);
+        end for;
+      end for;
+    end for;
+  end for;
+end configuration;

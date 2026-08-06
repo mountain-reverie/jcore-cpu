@@ -125,7 +125,7 @@ jobs:
           # Step 3: build + run cpu_ctb with direct decoder
           echo "==> Step 3: cpu_ctb 180us [direct decoder]"
           cd sim
-          rm -f work-obj93.cf cpu_ctb
+          rm -f work-obj93.cf cpu_ctb cpu_tb.vhh
           make TOOLS_DIR="$TOOLS_DIR" cpu_ctb work-obj93.cf >/dev/null
           LED_LOG="$(mktemp)"
           timeout 90 ./cpu_ctb --stop-time=180us 2>&1 | grep "^LED:" > "$LED_LOG" || true
@@ -140,21 +140,12 @@ jobs:
           rm -f "$LED_LOG"
           cd ..
 
-          # Step 4: rebuild with ROM decoder and re-run.
+          # Step 4: rebuild with ROM decoder (CONFIG_DECODE_ROM=1 selects
+          # cpu_sim_rom, see core/cpu_config_sim.vhd) and re-run.
           echo "==> Step 4: cpu_ctb 180us [ROM decoder]"
-          CPU_CONFIG="core/cpu_config.vhd"
-          CPU_CONFIG_BAK="$(mktemp)"
-          cp "$CPU_CONFIG" "$CPU_CONFIG_BAK"
-          # Restore on any exit (success, failure, or interruption).
-          trap 'cp "$CPU_CONFIG_BAK" "$CPU_CONFIG"; rm -f "$CPU_CONFIG_BAK"' EXIT
-          sed -i \
-            '/^configuration cpu_sim of cpu/,/^end configuration/{
-              s/use configuration work\.cpu_decode_direct;/use configuration work.cpu_decode_rom;/
-            }' \
-            "$CPU_CONFIG"
           cd sim
-          rm -f work-obj93.cf cpu_ctb
-          if ! make TOOLS_DIR="$TOOLS_DIR" cpu_ctb work-obj93.cf >/dev/null 2>&1; then
+          rm -f work-obj93.cf cpu_ctb cpu_tb.vhh
+          if ! make TOOLS_DIR="$TOOLS_DIR" CONFIG_DECODE_ROM=1 cpu_ctb work-obj93.cf >/dev/null 2>&1; then
             echo "    NOTE: ROM decoder elaboration failed (pre-existing project state)."
             echo "          Skipping ROM run; this mirrors regression.sh behavior."
           else
@@ -169,12 +160,9 @@ jobs:
             rm -f "$LED_LOG_ROM"
           fi
           cd ..
-          # Restore config + rebuild direct for Step 5.
-          cp "$CPU_CONFIG_BAK" "$CPU_CONFIG"
-          rm -f "$CPU_CONFIG_BAK"
-          trap - EXIT
+          # Rebuild direct (default CONFIG_DECODE_ROM=0) for Step 5.
           cd sim
-          rm -f work-obj93.cf cpu_ctb
+          rm -f work-obj93.cf cpu_ctb cpu_tb.vhh
           make TOOLS_DIR="$TOOLS_DIR" cpu_ctb work-obj93.cf >/dev/null
           cd ..
 
@@ -191,22 +179,15 @@ jobs:
           # testrom above runs on the comb J2 multiplier), so this is the only
           # functional guard against this class of J1 regression.
           echo "==> Step 6: cpu_ctb [mult(seq), J1 sequential multiplier]"
-          CPU_CONFIG="core/cpu_config.vhd"
-          CPU_CONFIG_BAK="$(mktemp)"
-          cp "$CPU_CONFIG" "$CPU_CONFIG_BAK"
-          trap 'cp "$CPU_CONFIG_BAK" "$CPU_CONFIG"; rm -f "$CPU_CONFIG_BAK"' EXIT
-          # Bind only cpu_sim's multiplier to mult(seq) (leave the fast comb
-          # shifter / two_bank regfile, so the multiplier is the slow unit).
-          sed -i \
-            '/^configuration cpu_sim of cpu is/,/^end configuration/{
-              s|^  for stru$|  for stru\n    for u_mult : mult use entity work.mult(seq); end for;|
-            }' \
-            "$CPU_CONFIG"
+          # CONFIG_MULT_SEQ=1 selects cpu_sim_mult_seq (u_mult bound to
+          # mult(seq), leaving the fast comb shifter / two_bank regfile
+          # untouched, so the multiplier is the only slow unit); see
+          # core/cpu_config_sim.vhd. mult_seq.vhd is unconditionally in the
+          # sim VHDS list (sim/Makefile), so no separate ghdl -i import step
+          # is needed here.
           cd sim
-          rm -f work-obj93.cf cpu_ctb
-          make TOOLS_DIR="$TOOLS_DIR" cpu_ctb work-obj93.cf >/dev/null
-          # mult_seq.vhd is not in the sim VHDS list; import it for elaboration.
-          ghdl -i --std=93 --work=work ../core/mult_seq.vhd
+          rm -f work-obj93.cf cpu_ctb cpu_tb.vhh
+          make TOOLS_DIR="$TOOLS_DIR" CONFIG_MULT_SEQ=1 cpu_ctb work-obj93.cf >/dev/null
           LED_LOG_J1="$(mktemp)"
           # mult(seq) is ~32 cycles/multiply (the multiply tests run slower), so
           # allow extra sim time; the whole testrom still finishes in seconds.
@@ -231,7 +212,11 @@ jobs:
           echo "    mult(seq): full testrom passed (20 writes, multiply tests 0x41..0x47 incl.)"
           rm -f "$LED_LOG_J1"
           cd ..
-          cp "$CPU_CONFIG_BAK" "$CPU_CONFIG"; rm -f "$CPU_CONFIG_BAK"; trap - EXIT
+          # Rebuild default (CONFIG_MULT_SEQ=0) for Step 7.
+          cd sim
+          rm -f work-obj93.cf cpu_ctb cpu_tb.vhh
+          make TOOLS_DIR="$TOOLS_DIR" cpu_ctb work-obj93.cf >/dev/null
+          cd ..
 
           # Step 7: dual-core cache-coherency guard (the repo's only SMP
           # functional test). cpu_dualcore_tb = two J2 cores with snoop-cross-
@@ -245,7 +230,7 @@ jobs:
           # SH-2 cross-compiler in CI).
           echo "==> Step 7: cpu_dualcore_tb [SMP cache coherency]"
           cd sim
-          rm -f work-obj93.cf cpu_ctb
+          rm -f work-obj93.cf cpu_ctb cpu_tb.vhh
           make TOOLS_DIR="$TOOLS_DIR" cpu_ctb cpu_dualcore_tb work-obj93.cf >/dev/null
           cd ..
           sim/tests/dualcore/run_repro.sh

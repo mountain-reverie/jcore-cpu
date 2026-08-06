@@ -314,7 +314,42 @@ else
   #   m8_idslot_0-2 (the I-side delay-slot sweep) are rotted orphans: nothing
   #   has ever tested this path.
   #
-  # A+B ATTEMPTED AND MEASURED (2026-08-06). Both landed, wired and compiling
+  # PER-STAGE RESTART METADATA -- first cut ATTEMPTED, hangs. Recorded so the
+  # next attempt starts from the design and the failure, not from scratch.
+  #
+  # THE DESIGN (this part is sound and worth keeping). Every fault's restart is
+  # determined by two fields belonging to THE STAGE THAT FAULTED:
+  #     restart_pc = own_pc - (is_dslot ? 2 : 0)
+  #     I-side entry: SPC = tlb_exc_pc     -> tlb_exc_pc = restart_pc
+  #     D-side entry: SPC = tlb_exc_pc - 4 -> tlb_exc_pc = restart_pc + 4
+  # The MA/EX record already exists (ex_if_pc + ma_dslot). The IF record does
+  # NOT: tlb_fault_va supplies the PC but nothing supplies is_dslot for the
+  # outstanding fetch, which is the whole of Defect B.
+  #
+  # WHAT WAS BUILT: a this.if_dslot field in datapath_reg_t (components_pkg.vhd),
+  # latched at the instruction-fetch ISSUE point from decode's delay_jump (routed
+  # via model/pkg.go + decode.vhd.tmpl + cpu.vhd + a datapath port + the
+  # datapath_pkg.vhd COMPONENT decl), and consumed by the I-side arm. Latching at
+  # ISSUE rather than sampling at fault time is the point: the combinational
+  # delay_jump is not stable at the fault-capture edge.
+  #
+  # OUTCOME: HANGS -- 200us, no result, no compile error, with or without the
+  # exc_pending_r latch (A). The hang point was NOT located. What was ruled out:
+  # the I-side arm is structurally intact in the generated VHDL, and the early
+  # captures that look wrong (exc_pc=0x800006D2 for fault_va=0x00100FFE) are
+  # legitimate D-SIDE faults -- the harness PLANTS code by storing to 0x00100FFE,
+  # so a DMISS_W there is expected and correctly takes the D-side arm.
+  #
+  # PRIME SUSPECT, unverified: delay_jump at fetch-ISSUE attributes the bit to the
+  # wrong fetch. The fetch unit runs ahead, so the delay slot may well be fetched
+  # BEFORE the branch reaches ID -- in which case delay_jump is still '0' at that
+  # issue and '1' at some later, unrelated issue. If so the bit has to be
+  # attributed retroactively, when the branch DECODES, to a fetch already in
+  # flight -- which is exactly the FIFO-of-(EPC,BD)-per-stage structure of
+  # US5774709A rather than a single latch. Measure the delay_jump/issue
+  # relationship first; do not re-implement blind.
+  #
+  # ---- earlier: A+B ATTEMPTED AND MEASURED (2026-08-06). Both landed, wired and compiling
   # (decode delay_jump_o via model/pkg.go + decode.vhd.tmpl, a datapath
   # delay_jump input -- NOTE also datapath_pkg.vhd's COMPONENT decl, which is
   # easy to miss and gives "no declaration for delay_jump" in cpu.vhd -- plus

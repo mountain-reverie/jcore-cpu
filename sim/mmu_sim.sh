@@ -599,6 +599,13 @@ else
   run_guard mmudspcprobe_latec  cpu_tb 80us    # CAS.L Rm,Rn,@R0  (locked RMW)
   run_guard mmudspcprobe_latem  cpu_tb 80us    # MAC.L @Rm+,@Rn+  (dual pointer)
   run_guard mmudspcprobe_latemw cpu_tb 80us    # MAC.W @Rm+,@Rn+  (dual pointer)
+  # Task 14: is STC.L GBR,@-Rn restart-safe when planted in a branch delay
+  # slot and its store faults? Modeled on mmudspcprobe_late.S but for a
+  # pre-decrement STORE. Measured GREEN: Rn ends at initial-4 (decrement
+  # applied exactly once) and the stored word matches the GBR sentinel.
+  # Non-vacuity proven by mutating the expected delta to 8 (RED, code
+  # 0x0BADB008) and reverting.
+  run_guard mmustcldslot        cpu_tb 60us
   run_guard m8_macarith
   run_guard m8_macseq
   run_guard m8_ifetch_0 "" 12ms 240

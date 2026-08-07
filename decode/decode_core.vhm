@@ -58,6 +58,26 @@ entity decode_core is
     -- at the branch. decode.vhd re-registers it in step with pipeline_r to align
     -- with the datapath EX control.
     delay_slot_o : out std_logic;
+    -- Deferred I-fetch fault (fault-on-use) recorded with the instruction now in
+    -- if_dr, and its kind ('1' = IPROT, '0' = IMISS). Unlike tlb_exc_en these are
+    -- LEVELS, already aligned to the instruction in ID, so next_op raises
+    -- TLB_IMISS/TLB_IPROT from them directly and needs no hold register: the
+    -- exception belongs to the instruction in ID by construction. See if_fault in
+    -- core/components_pkg.vhd. '0' on non-MMU builds.
+    if_fault      : in  std_logic := '0';
+    if_fault_prot : in  std_logic := '0';
+    -- ID-aligned delay-slot flag (this'register.delay_slot), for the datapath's
+    -- deferred I-fetch fault capture -- which runs while the faulting instruction
+    -- is in ID and therefore cannot use the EX-aligned delay_slot_o.
+    id_delay_slot_o : out std_logic;
+    -- '1' for the ONE slot in which next_op's deferred I-fetch arm is actually
+    -- latched into op -- the dispatch boundary of the faulting instruction. The
+    -- datapath captures TEA/PTEH/MMUFSR/tlb_exc_pc on this, NOT on if_fault's
+    -- rising edge: MEASURED (sim/tests/mmuidslot.S, VA 0x1000), if_fault rises one
+    -- slot BEFORE decode registers delay_slot for the same instruction, so an
+    -- edge-triggered capture reads delay_slot='0' and loses the -2 branch bias.
+    -- At THIS point both are settled (if_fault=1, if_pc=0x1000, delay_slot=1).
+    texc_defer_cap_o : out std_logic;
     -- Per-instruction fetch-PC. if_pc is the datapath's if_dr-stage VA; if_pc_o is
     -- it latched IN LOCKSTEP WITH op (at the instruction boundary), so it HOLDS
     -- across a multi-cycle op exactly as op does. decode.vhd re-registers if_pc_o
@@ -196,6 +216,7 @@ begin
 
   maskint <= this'register.maskint;
   delay_slot <= this'register.delay_slot;
+  id_delay_slot_o <= this'register.delay_slot when MMU_ARCH else '0';
   -- delay_slot_o (the MMU's copy) is NOT this'register.delay_slot. That flag is
   -- re-sampled from delay_jump on EVERY non-stalled slot, so it is a one-SLOT
   -- pulse, not a per-INSTRUCTION attribute: a multi-slot delay-slot instruction
@@ -610,6 +631,12 @@ begin
   -- when the exception is dispatched. texc_ack mirrors the op-latch condition in
   -- the decode_core process (slot, not stalled, at an instruction boundary), so
   -- the request clears exactly when next_op is latched into the registered op.
+  -- Same op-latch condition as texc_ack below, but for the DEFERRED I-side
+  -- request (if_fault), which has no hold register.
+  texc_defer_cap_o <= '1' when PRIV_ARCH and slot = '1' and if_fault = '1'
+                               and this'register.id_stall = '0'
+                               and this'register.instr_seq_zero = '1'
+                      else '0';
   texc_ack <= '1' when PRIV_ARCH and slot = '1' and texc_req = '1'
                        and this'register.id_stall = '0'
                        and this'register.instr_seq_zero = '1'
@@ -622,7 +649,15 @@ begin
     elsif clk = '1' and clk'event then
       if texc_ack = '1' then
         texc_req <= '0';
-      elsif PRIV_ARCH and tlb_exc_en = '1' and texc_req = '0' then
+      -- D-SIDE ONLY. I-fetch faults (IMISS/IPROT) are DEFERRED: they are recorded
+      -- with the fetched instruction and raised from if_fault below, at the
+      -- dispatch boundary of the instruction that carries them. Latching them
+      -- here as well would fire the exception twice, and the held request is
+      -- exactly the mechanism that let a younger speculative fetch's fault
+      -- override an older one. MULTI_HIT keeps the held path (it dispatches
+      -- through General Illegal and needs no restart-PC context).
+      elsif PRIV_ARCH and tlb_exc_en = '1' and texc_req = '0'
+            and tlb_exc_kind /= IMISS and tlb_exc_kind /= IPROT then
         texc_req       <= '1';
         texc_kind_held <= tlb_exc_kind;
       end if;
@@ -672,26 +707,26 @@ begin
       when delay_slot = '1' and (illegal_delay_slot or illegal_instr) = '1'
            -- An I-side TLB fault's returned word is not a valid instruction
            -- (may alias an illegal encoding, e.g. 0x0000); yield to TLB_IMISS/IPROT.
-           and not (PRIV_ARCH and texc_req = '1'
-                    and (texc_kind_held = IMISS or texc_kind_held = IPROT)) else
+           and not (PRIV_ARCH and if_fault = '1') else
     -- General Illegal Instruction
     system_op(GENERAL_ILLEGAL)
       when illegal_instr = '1'
            -- An I-side TLB fault's returned word is not a valid instruction
            -- (may alias an illegal encoding, e.g. 0x0000); yield to TLB_IMISS/IPROT.
-           and not (PRIV_ARCH and texc_req = '1'
-                    and (texc_kind_held = IMISS or texc_kind_held = IPROT)) else
+           and not (PRIV_ARCH and if_fault = '1') else
     -- TLB miss/protection exceptions (PRIV_ARCH). Driven by the held request so
     -- the system op is stable across the memory-access stall until it can be
     -- latched at the next instruction boundary.
+    -- Deferred I-fetch faults: raised from the instruction's OWN recorded fault
+    -- bit, so this arm fires exactly when the faulting instruction reaches ID.
     system_op(TLB_IMISS)
-      when PRIV_ARCH and texc_req = '1' and texc_kind_held = IMISS else
+      when PRIV_ARCH and if_fault = '1' and if_fault_prot = '0' else
     system_op(TLB_DMISS_R)
       when PRIV_ARCH and texc_req = '1' and texc_kind_held = DMISS_R else
     system_op(TLB_DMISS_W)
       when PRIV_ARCH and texc_req = '1' and texc_kind_held = DMISS_W else
     system_op(TLB_IPROT)
-      when PRIV_ARCH and texc_req = '1' and texc_kind_held = IPROT else
+      when PRIV_ARCH and if_fault = '1' and if_fault_prot = '1' else
     system_op(TLB_DPROT_R)
       when PRIV_ARCH and texc_req = '1' and texc_kind_held = DPROT_R else
     system_op(TLB_DPROT_W)

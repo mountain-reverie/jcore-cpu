@@ -300,29 +300,36 @@ package cpu2j0_components_pack is
     -- if_pc at if_fault's rising edge, before if_pc had settled.
     if_fault_next    : std_logic;
     if_fault         : std_logic;
-    -- STEP 2 (NOT DONE) -- what consuming this actually requires. The easy half
-    -- is already handled: decode_core's next_op selection dispatches TLB
-    -- exceptions at an instruction boundary and ALREADY yields the illegal-instr
-    -- arms to TLB_IMISS/IPROT, precisely because "an I-side TLB fault's returned
-    -- word is not a valid instruction". So the faulting word never executes.
-    --
-    -- The hard half is that BOTH the request and the capture are driven at FAULT
-    -- time, and both must move to DISPATCH time:
-    --   * decode_core's texc_req is set from tlb_exc_en when the fault is raised.
-    --     It must instead be raised from this if_fault bit when the instruction
-    --     carrying it reaches the dispatch boundary.
-    --   * the datapath's TEA / PTEH / MMUFSR / tlb_exc_pc capture is gated on
-    --     tlb_exc_pend, i.e. the same fault-time event, and sources the VA from
-    --     the live tlb_fault_va. It must source the VA from THIS instruction's
-    --     if_pc instead. That is the whole point: at dispatch, delay_slot is
-    --     meaningful, so tlb_exc_pc = if_pc - 2 when the faulting instruction is
-    --     a delay slot and if_pc otherwise -- the unified rule, with both fields
-    --     coming from the same record.
-    --   * the fault KIND must ride alongside if_fault (IMISS / IPROT /
-    --     MULTI_HIT). A defensible first cut is to defer IMISS only and leave
-    --     IPROT/MULTI_HIT immediate, documenting the asymmetry.
-    -- cpu.vhd must then stop raising tlb_exc_en for whichever I-side kinds are
-    -- deferred, or the exception fires twice.
+    -- Fault KIND, riding the same two hops: '1' = IPROT, '0' = IMISS. One bit
+    -- covers the deferred set because MULTI_HIT is NOT deferred -- it dispatches
+    -- through General Illegal, whose register model captures SPC/SSR like any
+    -- other illegal-instruction trap, so it needs no restart-PC side channel.
+    if_fault_prot_next : std_logic;
+    if_fault_prot      : std_logic;
+    -- One-shot for the deferred capture (datapath.vhm). if_fault is a LEVEL held
+    -- for as long as the faulting instruction sits in ID, so without this a stall
+    -- would re-capture every cycle; it clears when the instruction leaves ID.
+    if_exc_captured    : std_logic;
+    -- HOW IT IS CONSUMED (step 2, done):
+    --   * decode_core's next_op raises TLB_IMISS / TLB_IPROT directly from
+    --     if_fault (+ if_fault_prot) instead of from the held texc_req, and the
+    --     illegal-instruction arms yield to if_fault. Because if_fault is
+    --     ID-aligned by construction, the exception belongs to the instruction
+    --     in ID -- a younger speculative fetch's fault can no longer override an
+    --     older one (Defect A), and no hold register is needed for the I side.
+    --     texc_req still carries the D side (DMISS/DPROT), where the fault is
+    --     discovered mid-access and must be held to the next boundary.
+    --   * the datapath's deferred capture block writes TEA / PTEH / MMUFSR /
+    --     tlb_exc_pc from THIS instruction's record: VA = if_pc, kind =
+    --     if_fault_prot, is_dslot = decode's ID-aligned delay_slot. That is the
+    --     whole point -- at this moment delay_slot IS meaningful, so
+    --     tlb_exc_pc = if_pc - 2 for a faulting delay slot and if_pc otherwise,
+    --     the unified rule with every field coming from one record.
+    --   * cpu.vhd still asserts tlb_exc_en for I-fetch faults, but ONLY to drive
+    --     the precise-exception squash window (tlb_squash / squash_ifetch_r) and
+    --     the P4/TSB assist; neither delivery path keys off it any more, so the
+    --     exception cannot fire twice. tlb_exc_is_i now gates the IMMEDIATE
+    --     capture OFF rather than selecting an I-side arm within it.
     tlb_fault_zreg   : std_logic_vector(4 downto 0);
     tlb_restore_val  : std_logic_vector(31 downto 0);
     tlb_restore_pend : std_logic;
@@ -371,7 +378,7 @@ package cpu2j0_components_pack is
   -- variant (measured, PR #110 benchmark alert).
   end record datapath_reg_t;
 
-  constant datapath_reset : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, tlb_exc_captured => '0', ma_pc => (others => '0'), tlb_exc_pc => (others => '0'), tlb_exc_sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), tlb_squash => '0', ma_numz => (others => '0'), ma_autoupd => '0', ma_predec => '0', ma_base => (others => '0'), ma_dslot => '0', if_fault_next => '0', if_fault => '0', if_pc_next => (others => '0'), if_pc => (others => '0'), ma_if_pc => (others => '0'), tlb_fault_zreg => (others => '0'), tlb_restore_val => (others => '0'), tlb_restore_pend => '0', mac_s => '0', data_o_size => BYTE, data_o_unsigned => '0', data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot_next => '0', illegal_instr_next => '0', illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
+  constant datapath_reset : datapath_reg_t := (pc => (others => '0'), sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), priv => PRIV_REG_RESET, mmu => MMU_REG_RESET, tlb_exc_captured => '0', ma_pc => (others => '0'), tlb_exc_pc => (others => '0'), tlb_exc_sr => (int_mask => "1111", md => '1', rb => '1', bl => '1', others => '0'), tlb_squash => '0', ma_numz => (others => '0'), ma_autoupd => '0', ma_predec => '0', ma_base => (others => '0'), ma_dslot => '0', if_fault_next => '0', if_fault => '0', if_fault_prot_next => '0', if_fault_prot => '0', if_exc_captured => '0', if_pc_next => (others => '0'), if_pc => (others => '0'), ma_if_pc => (others => '0'), tlb_fault_zreg => (others => '0'), tlb_restore_val => (others => '0'), tlb_restore_pend => '0', mac_s => '0', data_o_size => BYTE, data_o_unsigned => '0', data_o_lock => '0', data_o => NULL_DATA_O, inst_o => NULL_INST_O, pc_inc => (others => '0'), if_dr => (others => '0'), if_dr_next => (others => '0'), illegal_delay_slot_next => '0', illegal_instr_next => '0', illegal_delay_slot => '0', illegal_instr => '0', if_en => '0', m_dr => (others => '0'), m_dr_next => (others => '0'), m_en => '0', slot => '1', enter_debug => (others => '0'), old_debug => '0', stop_pc_inc => '0', debug_state => RUN, debug_o => (ack => '0', d => (others => '0'), rdy => '0'), ybus_override => (others => BUS_VAL_RESET));
 
   subtype regnum_t is std_logic_vector(4 downto 0);
 

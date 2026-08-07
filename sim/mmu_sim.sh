@@ -179,9 +179,17 @@ else
 #
 #   mmubratest    IF: invalid read addr XXXXXXXX -- fetches an undefined
 #                 address; the guard runs off the rails entirely.
-#   m8_idslot_0   Test failed. Result=2
-#   m8_idslot_1   Test failed. Result=2
-#   m8_idslot_2   Test failed. Result=2
+#   m8_idslot_0   Test failed. Result=2   (FIXED + wired in, 2026-08-06)
+#   m8_idslot_1   Test failed. Result=25  (FIXED + wired in, 2026-08-06)
+#   m8_idslot_2   Test failed. Result=49  (FIXED + wired in, 2026-08-06)
+#   (the 2026-08-01 note recorded Result=2 for all three; re-measured at HEAD
+#   immediately before the fix, _1 and _2 report 25 and 49 -- different cases of
+#   the same axis, not different defects.)
+#
+# The three m8_idslot_* Result=2 failures were NOT rot: they were the real
+# I-side delay-slot restart defect (the restart landed on the delay slot instead
+# of backing up to the branch). Deferred I-fetch fault delivery fixes all three
+# and they are now in the run below. mmubratest is untouched and still orphaned.
 #
 # m8_dsdslot_0 (2026-08-04 review round): the axis's branch-target vacuity
 # bug (buggy and correct restart PCs coincided, so it could never fail) was
@@ -236,18 +244,32 @@ else
 # a Defect 7 skip in substance; mmudspcprobe_latem{,w} cover them.
 #
 # m8_dsdslot_0 remains PARKED below on its own separate failure -- see the park
-# comment there, which is NOT Defect 7. Per the same-shaped emitIFetchDSlot
-# convergent-target flaw noted below, m8_idslot_* likely share that vacuity as
-# a SEPARATE, still-uninvestigated defect, so their bus-ACK-hang failures above
-# may currently be masking it too; not invoked below until diagnosed.
+# comment there, which is NOT Defect 7.
 #
-# m8_smoke passes and is wired into the run below. Fixing m8_idslot_* is its
-# own piece of work; until then m8_idslot_* stays out, and this comment is the
-# reason why.
+# m8_smoke and m8_idslot_0-2 are wired into the run below (the latter as of
+# 2026-08-06, see the note above).
   run_guard m8_smoke
   run_guard m8_dside    "" 200us
-  # m8_dsdslot_0: PARKED on Case A Result=1008 (case 8 = MOV.B @(disp,Rm),R0 --
-  # a plain SLOT-0 access, and NOT Defect 7, which is now fixed anyway).
+  # m8_dsdslot_0: STILL PARKED on Case A Result=1008 (case 8 = MOV.B
+  # @(disp,Rm),R0 -- a plain SLOT-0 access, and NOT Defect 7, which is fixed).
+  #
+  # RE-MEASURED 2026-08-06 AFTER deferred I-fetch fault delivery landed (see
+  # if_fault in core/components_pkg.vhd). The "ARCHITECTURAL CONSEQUENCE"
+  # section below is now IMPLEMENTED, and it fixed the I-side restart: all three
+  # m8_idslot_* sweeps went RED (Result=2/25/49) -> GREEN and are wired into the run
+  # above. (mmuidslot was ALREADY green at HEAD -- its file header's "CONFIRMS
+  # the I-side restart is BUGGY" was stale; only the m8_idslot_* sweeps, which
+  # interleave the fault with icache/prefetch traffic, were actually RED.)
+  # This axis did NOT follow, and its symptom CHANGED, so the writeup
+  # below is history, not a live description:
+  #     before: SNAP_A = 0x00102000 (base, load never landed)
+  #     after : SNAP_A = 0x00000000, SNAP_B = 0xFFFFFFA1 (warm leg correct)
+  # 0x00000000 is not one of the three documented SNAP_A values, so this is a
+  # DIFFERENT mechanism from the one diagnosed below and needs its own
+  # investigation. Note also that cases 23 and 29 of this axis had corrupted
+  # literal pools until 725c3ce and have never run correctly.
+  #
+  # ---- HISTORY BELOW (the diagnosis that produced the deferred-delivery fix).
   # NARROWED 2026-08-06, still unfixed. It is NOT a harness construction bug and
   # NOT a wrong restart PC. Evidence:
   #   * SNAP_A (cold, 3-fault leg) = 0x00102000 -- the UN-loaded base; SNAP_B
@@ -336,13 +358,18 @@ else
   # that faults is the early one (delay_jump=0) and the one with delay_jump=1 is
   # a later RE-fetch that never faults.
   #
-  # ARCHITECTURAL CONSEQUENCE. The I-side restart PC cannot be decided at fault
-  # time. The fault must instead be CARRIED WITH THE FETCHED INSTRUCTION and
-  # raised when that instruction reaches the point where its context is known
-  # (its branch decoded) -- classic deferred / fault-on-use exception delivery,
-  # the same "metadata travels with the instruction" principle as US5774709A but
-  # applied to the FAULT, not just to EPC+BD. That is the real shape of the fix
-  # and it is a fetch-unit/pipeline change, not a datapath capture tweak.
+  # ARCHITECTURAL CONSEQUENCE -- IMPLEMENTED 2026-08-06. The I-side restart PC
+  # cannot be decided at fault time. The fault must instead be CARRIED WITH THE
+  # FETCHED INSTRUCTION and raised when that instruction reaches the point where
+  # its context is known (its branch decoded) -- classic deferred / fault-on-use
+  # exception delivery, the same "metadata travels with the instruction"
+  # principle as US5774709A but applied to the FAULT, not just to EPC+BD.
+  # This is now the RTL: core/components_pkg.vhd (if_fault / if_fault_prot ride
+  # the instruction), core/datapath.vhm (deferred capture from if_pc), and
+  # decode/decode_core.vhm (next_op raises TLB_IMISS/IPROT from if_fault, and
+  # texc_defer_cap_o marks the dispatch boundary at which the capture fires --
+  # if_fault's own rising edge is ONE SLOT TOO EARLY, decode has not registered
+  # delay_slot yet, measured on sim/tests/mmuidslot.S).
   #
   # ---- earlier: HANG ROOT-CAUSED AND FIXED (2026-08-06). The per-stage first cut hung; the
   # cause was mis-ATTRIBUTION of the IF-stage delay-slot bit, not the design:
@@ -567,6 +594,16 @@ else
   run_guard m8_ifetch_0 "" 12ms 240
   run_guard m8_ifetch_1 "" 12ms 240
   run_guard m8_ifetch_2 "" 12ms 240
+  # m8_idslot_0-2: the I-side delay-slot sweep. UNPARKED 2026-08-06 -- these are
+  # the regression lock for deferred I-fetch fault delivery. All three failed
+  # (Result=2/25/49 -- restart landed on the delay slot, not the branch) on every earlier
+  # tree and pass only now that the I-side restart PC is derived at DISPATCH from
+  # the faulting instruction's own if_pc record; see if_fault in
+  # core/components_pkg.vhd. Each was measured RED immediately before the fix, so
+  # none can pass vacuously.
+  run_guard m8_idslot_0 "" 200us
+  run_guard m8_idslot_1 "" 200us
+  run_guard m8_idslot_2 "" 200us
   # Genuine TLB MULTI_HIT reachability + the 30af728 restart-shadow guard
   # (I-side MULTI_HIT must not arm the D-side restore; D-side MULTI_HIT
   # still must). Measured completion ~3.95us (m8_pass.vcd); 100us margin.

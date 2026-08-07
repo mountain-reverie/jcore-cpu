@@ -230,6 +230,10 @@ package decode_pack is
             slp : out std_logic;
             sr : out sr_ctrl_t;
             delay_slot : out std_logic;
+            if_fault : in std_logic;
+            if_fault_prot : in std_logic;
+            id_delay_slot : out std_logic;
+            texc_defer_cap : out std_logic;
             if_pc : in std_logic_vector(31 downto 0);
             ex_if_pc : out std_logic_vector(31 downto 0)
         );
@@ -271,6 +275,10 @@ package decode_pack is
             op : out operation_t;
             op_addr_next : out std_logic_vector(7 downto 0);
             delay_slot_o : out std_logic;
+            if_fault : in std_logic;
+            if_fault_prot : in std_logic;
+            id_delay_slot_o : out std_logic;
+            texc_defer_cap_o : out std_logic;
             if_pc : in std_logic_vector(31 downto 0);
             if_pc_o : out std_logic_vector(31 downto 0)
         );

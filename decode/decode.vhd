@@ -46,6 +46,10 @@ entity decode is
         slp : out std_logic;
         sr : out sr_ctrl_t;
         delay_slot : out std_logic;
+        if_fault : in std_logic;
+        if_fault_prot : in std_logic;
+        id_delay_slot : out std_logic;
+        texc_defer_cap : out std_logic;
         if_pc : in std_logic_vector(31 downto 0);
         ex_if_pc : out std_logic_vector(31 downto 0)
     );
@@ -123,6 +127,10 @@ begin
             op => op,
             op_addr_next => op_addr_next,
             delay_slot_o => delay_slot_c,
+            if_fault => if_fault,
+            if_fault_prot => if_fault_prot,
+            id_delay_slot_o => id_delay_slot,
+            texc_defer_cap_o => texc_defer_cap,
             if_pc => if_pc,
             if_pc_o => if_pc_c
         );

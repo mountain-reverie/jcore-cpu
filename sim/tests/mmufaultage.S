@@ -1,25 +1,36 @@
-! mmufaultage.S -- RED guard for TLB fault AGE ORDERING: when a D-side fault and
-! a deferred I-fetch fault are pending at the SAME decode dispatch boundary, the
-! OLDER (D-side) one must be delivered first.
+! mmufaultage.S -- GREEN guard locking the precise-exception SQUASH of a
+! faulting load when a D-side fault is raised inside the window opened by an
+! I-side fault. The RTL under test is core/datapath.vhm's g_squash_ifetch:
 !
-! WHY THIS SHAPE. Since deferred I-fetch fault delivery landed, an I-fetch fault
-! is raised from if_fault when the instruction carrying it reaches ID, while a
-! D-side fault is raised from the held texc_req for an instruction already in EX.
-! EX is older than ID, so the D-side fault is ALWAYS the older of the two. But
-! decode_core's next_op checks the TLB_IMISS/TLB_IPROT arms ABOVE the D-side
-! arms, and texc_ack clears texc_req at the dispatch boundary WITHOUT checking
-! which system op was actually latched. So when both are pending at one boundary:
-!   * the younger IMISS is dispatched, and
-!   * the older D-side request is silently DISCARDED -- never delivered, and its
-!     instruction is never retried, because the IMISS restart PC is the YOUNGER
-!     instruction's PC.
-! The faulting load's destination therefore keeps its pre-load value with no
-! exception ever reported: silent wrong data, not a crash.
+!     elsif squash_arm = '1' and tlb_exc_ifetch = '0' then
+!       squash_ifetch_r <= '0';
 !
-! The datapath mirrors the same race: the immediate (D-side) capture and the
-! deferred (I-side) capture both write tlb_exc_pc / TEA / PTEH / MMUFSR / TSBPTR,
-! with no coordination, so whichever writes last owns the record for an exception
-! only one of them corresponds to.
+! (committed as 0280b7e). This clear ensures a faulting load's writeback is
+! suppressed when the squash fires, so its base register survives intact and
+! a later retry can produce the correct value.
+!
+! MUTATION EVIDENCE (measured, not theoretical): removing that `elsif` clear
+! from g_squash_ifetch turns this guard RED with Result=4 -- the PRIMARY
+! check (r5 == 0xFFFFFFA1) fails. Without the squash, the faulting load
+! wrongly commits once before its fault is serviced; since the load's base
+! and destination are the same register (see below), that wrong commit
+! destroys the value any retry needs, and no subsequent retry can recover
+! it. With the squash intact (current RTL), this guard PASSES.
+!
+! WHAT THIS GUARD DOES NOT SHOW. An earlier version of this file framed the
+! scenario around TLB fault AGE ORDERING -- the claim that when a D-side
+! fault (older, EX) and a deferred I-side fault (younger, ID) are pending at
+! the same dispatch boundary, delivering the younger one first is a
+! user-visible defect. That framing has been retired: MEASURED on this exact
+! non-idempotent scenario, mis-ordered/co-mingled fault delivery is BENIGN --
+! the squash fix (above) makes the outcome correct regardless of which
+! exception's record is serviced or delivered first, because the base
+! register is never destroyed by a wrong commit in the first place. This
+! guard therefore locks the squash fix, not an ordering guarantee. Any
+! wording below describing an "ordering defect" is retained only as
+! historical narrative of how this test scenario was constructed and
+! debugged -- it is not a claim this guard currently substantiates or
+! depends on.
 !
 ! HOW THIS FORCES THE COINCIDENCE. The faulting load is planted at the LAST
 ! halfword of a mapped code page (VA 0x0FFE) with its DATA page unmapped, so:
@@ -52,8 +63,8 @@
 !   Page 1 (0x1000-0x1FFF): UNMAPPED -- the fetch after the load.
 !   Page 2 (0x2000-0x2FFF): UNMAPPED -- the load's data page, holds the seed.
 !
-! STATUS: KNOWN-RED. Deliberately NOT wired into sim/mmu_sim.sh's run -- it is
-! the reproduction for an OPEN defect, parked the same way m8_dsdslot_0 was.
+! STATUS: GREEN. Wired into sim/mmu_sim.sh alongside the other single-fault
+! MMU guards; it locks the squash fix described above, not an ordering claim.
 !
 ! WHY FAULT-KIND ORDER CANNOT BE OBSERVED VIA VECTOR OFFSET IN THIS CORE.
 ! CONFIRMED in decode/gen-go/spec/sh4/exceptions.toml (lines 415, 459, 499,
@@ -70,55 +81,44 @@
 ! We do NOT attempt to reimplement kind discrimination by reading EXPEVT
 ! here: a prior investigation measured `STC EXPEVT` returning 0 in this
 ! configuration for reasons that are not understood, and chasing that is out
-! of scope for this guard. Instead this guard proves ordering INDIRECTLY:
+! of scope for this guard. Instead this guard proves correctness INDIRECTLY:
 !
 !   r5 (a copy of r0 taken at 0x1000, before the jmp back) == 0xFFFFFFA1 is
-!   the real proof of correct fault-age ordering. Because the load's base and
+!   the proof that the squash fix worked. Because the load's base and
 !   destination are the SAME register (see above), this can only be true if
 !   the load committed EXACTLY ONCE, against the correctly-installed page 2,
-!   after both faults were serviced in the correct order. If the older
-!   D-side (DMISS_R) fault is dropped in favor of the younger deferred IMISS
-!   -- the defect under test -- or if it is delivered with the wrong TEA/PTEH
-!   record, the load either never retries or retries against a corrupted
-!   base, and r5 will NOT be 0xFFFFFFA1. Unlike the retired idempotent shape,
-!   there is no path by which a mis-ordered or dropped fault self-repairs.
+!   after both faults were serviced. If the squash fix were absent or broken,
+!   the load could wrongly commit before its fault is serviced, destroying
+!   the base register a retry needs, and r5 would NOT be 0xFFFFFFA1. Unlike
+!   the retired idempotent shape, there is no path by which a wrongly-
+!   committed first execution self-repairs.
 !
-! CORRECTION: an earlier version of this guard's check (1) compared
+! HISTORICAL NOTE (investigative narrative, not a current claim about this
+! guard): an earlier version of this guard's check (1) compared
 ! `_log_first` (a kind byte assumed to come from separate per-kind vector
 ! stubs) against DMISS_R, and reported Result=3. That result was NOT evidence
 ! of anything -- it was an artifact of the broken three-stub scheme described
-! above, which could never observe DMISS_R at all. The actual mis-ordering
-! defect was proven independently, on the waveform: the CPU enters the IMISS
-! vector at VBR+0x400 at t=630ns carrying the D-SIDE fault record
-! (tlb_exc_pc=0x1002, TEA=0x2000) -- i.e. the younger I-side fault is
-! dispatched first and clobbers/consumes the older D-side one's delivery slot.
-! See "WHAT THE WAVEFORM SHOWS" below for the full trace.
+! above, which could never observe DMISS_R at all. During debugging, the
+! waveform showed mis-ordered/co-mingled fault delivery (the CPU entering the
+! IMISS vector at VBR+0x400 carrying the D-side fault record). That mis-
+! ordering was part of how this scenario was investigated, but it is NOT what
+! this guard locks or claims as a defect -- see the header CORRECTION above:
+! with the squash fix in place, this scenario passes regardless of delivery
+! order, because the base register is never destroyed by a wrong commit.
 !
-! WHAT THE WAVEFORM SHOWS, and why the obvious fix does not work. Adding
-! `texc_req = '0'` to decode_core's I-side arms and to texc_defer_cap_o -- "let a
-! held D-side request win, it is older" -- was tried and measured INSUFFICIENT.
-! The deferred I-side fault is dispatched a full cycle BEFORE the older load even
-! reaches EX, so there is no D-side request to yield to yet:
-!     t=530  ID = 0x6542 (the load @0x0FFE)   EX = 0x0238   IMISS recorded
-!     t=540  ID = 0x462B (jmp @r6 @0x1000)    EX = 0x023A   IMISS DISPATCHED
-!     t=550  ---                              EX = 0x0FFE   load faults DMISS_R
-!     t=570  tlb_exc_pc overwritten 0x1000 -> 0x1002 by the D-side capture
-!     t=630  CPU enters the IMISS vector (VBR+0x400) carrying the D-SIDE record
-!            (tlb_exc_pc=0x1002, TEA=0x2000) -> installs the wrong page and
-!            returns PAST the load; page 1 is still unmapped, so it thrashes.
-! The real problem is that a deferred I-fetch fault is delivered at the ID
-! dispatch boundary, but ID runs AHEAD of EX: older instructions are still in
-! flight and can still fault. Any fix has to hold the I-side delivery until no
-! older instruction can still raise an exception -- which is a pipeline-ordering
-! change, not a gating tweak.
+! FOR HISTORICAL REFERENCE ONLY (not a live claim): at one point during
+! debugging, adding `texc_req = '0'` to decode_core's I-side arms was tried as
+! a targeted "let the older D-side request win" fix and measured insufficient
+! on its own, before the actual fix -- the datapath squash clear in
+! g_squash_ifetch -- was identified. That squash clear is what this guard now
+! locks; see the header for the mutation evidence.
 !
 ! PASS requires both:
 !   * r5 == 0xFFFFFFA1 after the dust settles            (fail 4) -- PRIMARY:
 !     the non-idempotent load committed exactly once, against the correctly
-!     installed page, in the correctly-ordered restart. This is the real
-!     proof of correct fault-age ordering (see above); unlike the retired
-!     idempotent shape, a mis-ordered or dropped fault cannot self-repair
-!     into this value.
+!     installed page. This is the proof that the squash fix (g_squash_ifetch,
+!     see header) is intact; unlike the retired idempotent shape, a wrongly
+!     committed first execution cannot self-repair into this value.
 !   * _log_count /= 0                                    (fail 5) -- ANTI-
 !     VACUITY: at least one fault was actually taken, so the PRIMARY check
 !     is not trivially satisfied by the code never faulting at all. This

@@ -138,6 +138,9 @@
 ! case 26 skipped: STC TRA, Rn has no D-side memory access
 ! case 26 skipped: STC TSBPTR, Rn has no D-side memory access
 ! case 26 skipped: STC VBR, Rn has no D-side memory access
+! case 26 skipped-for-enumeration: STC.L GBR, @-Rn (emitted, excluded from _m8_run_all)
+! case 27 skipped-for-enumeration: STC.L SR, @-Rn (emitted, excluded from _m8_run_all)
+! case 28 skipped-for-enumeration: STC.L VBR, @-Rn (emitted, excluded from _m8_run_all)
 ! case 29 skipped: STS CP0_COM, Rn has no D-side memory access
 ! case 29 skipped: STS CPI_COM, Rn has no D-side memory access
 ! case 29 skipped: STS MACH, Rn has no D-side memory access
@@ -5250,7 +5253,7 @@ ENTRY(_m8_run_all)
         rts
         nop
         .align 2
-m8_count:  .long 32
+m8_count:  .long 29
 m8_tab_p:  .long 0x80000000 + m8_tab
 m8_tab:
         .long   0x80000000 + _m8_case_1
@@ -5278,9 +5281,6 @@ m8_tab:
         .long   0x80000000 + _m8_case_23
         .long   0x80000000 + _m8_case_24
         .long   0x80000000 + _m8_case_25
-        .long   0x80000000 + _m8_case_26
-        .long   0x80000000 + _m8_case_27
-        .long   0x80000000 + _m8_case_28
         .long   0x80000000 + _m8_case_29
         .long   0x80000000 + _m8_case_30
         .long   0x80000000 + _m8_case_31

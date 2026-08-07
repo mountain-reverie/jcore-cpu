@@ -1937,9 +1937,33 @@ end generate;
                else '0';
  -- Latched on the FIRST arming edge only (tlb_squash_r = '0'), exactly as
  -- g_wb_grace latches: squash_arm can re-assert while the window is already
- -- open, and sampling every cycle would let a later fault's side overwrite
- -- the side of the fault that actually opened this window. No clear needed --
- -- every consumer qualifies it with tlb_squash.
+ -- open, and sampling every cycle would let a later I-side fault's VA overwrite
+ -- the side of the fault that actually opened this window.
+ --
+ -- ONE EXCEPTION, and it is not symmetric: a D-SIDE fault raised while an
+ -- I-side-opened window is still held CLEARS the flag. The I-side premise --
+ -- "the instruction at the faulting FETCH VA never entered the pipeline, so
+ -- every writeback in the window is older and must commit" -- is FALSIFIED the
+ -- moment a D-side access faults, because that access's OWN writeback is in the
+ -- window and must be squashed. Without this clear the I-side exemption masks
+ -- the D-side squash entirely and the faulting load commits.
+ --
+ -- MEASURED (m8_dsdslot_0 case 8 = MOV.B @(disp,Rm),R0, Case A cold leg, the
+ -- axis's long-standing park):
+ -- 9300ns IMISS on the delay-slot fetch -> window arms, squash_ifetch_r=1
+ -- 9640ns DMISS_R on the delay slot's own load (VA 0x00102000)
+ -- 9660ns W-PORT r0 <= 0xFFFFFFA1 <- NOT squashed: the faulting load
+ -- committed inside the I-side window
+ -- 10050ns W-PORT r0 <= 0x00000000 <- the restart re-issues the delay
+ -- slot, but MOV.B @(disp,R0),R0 is
+ -- NOT IDEMPOTENT (its base IS its
+ -- destination), so the second run
+ -- addresses @0xFFFFFFA1 and reads 0
+ -- giving SNAP_A = 0x00000000 vs SNAP_B = 0xFFFFFFA1. With the clear, the
+ -- faulting load is squashed, the restart re-runs it with its base intact, and
+ -- the case passes. Non-idempotent forms like this one are exactly why a
+ -- precise squash is not optional here: a wrongly-committed first execution
+ -- cannot be repaired by re-execution.
  g_squash_ifetch : if MMU_ARCH generate
    process(clk, rst)
    begin
@@ -1948,6 +1972,8 @@ end generate;
      elsif clk = '1' and clk'event then
        if tlb_squash_r = '0' and squash_arm = '1' then
          squash_ifetch_r <= tlb_exc_ifetch;
+       elsif squash_arm = '1' and tlb_exc_ifetch = '0' then
+         squash_ifetch_r <= '0';
        end if;
      end if;
    end process;

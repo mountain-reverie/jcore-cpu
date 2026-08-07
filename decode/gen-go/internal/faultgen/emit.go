@@ -997,6 +997,16 @@ func EmitIFetchDSlotImages(classes []Class) ([]string, error) {
 // m8gen can treat every axis uniformly) but it always has exactly one
 // element.
 func EmitDSideDSlotImages(classes []Class) ([]string, error) {
+	return EmitDSideDSlotImagesSkip(classes, nil)
+}
+
+// EmitDSideDSlotImagesSkip is EmitDSideDSlotImages with a set of emitted case
+// IDs excluded from the _m8_run_all dispatch, exactly as EmitImageSkip does for
+// the D-side axis: the case is still emitted (so every later ID is unchanged and
+// a co-sim Result=<ID> still decodes against the one manifest) but is never
+// called, so the image runs PAST a known failure to exercise the rest. A
+// nil/empty skip is byte-identical to EmitDSideDSlotImages.
+func EmitDSideDSlotImagesSkip(classes []Class, skip map[int]bool) ([]string, error) {
 	var blocks, dispatch, manifest strings.Builder
 	n := 0
 	dcount := 0
@@ -1011,9 +1021,13 @@ func EmitDSideDSlotImages(classes []Class) ([]string, error) {
 			return nil, err
 		}
 		n++
-		dcount++
 		blocks.WriteString(block)
 		blocks.WriteString("\n")
+		if skip[id] {
+			fmt.Fprintf(&manifest, "! case %d skipped-for-enumeration: %s (emitted, excluded from _m8_run_all)\n", id, c.Instr.Name)
+			continue
+		}
+		dcount++
 		dispatch.WriteString(disp)
 	}
 

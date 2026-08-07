@@ -250,24 +250,26 @@ else
 # 2026-08-06, see the note above).
   run_guard m8_smoke
   run_guard m8_dside    "" 200us
-  # m8_dsdslot_0: STILL PARKED on Case A Result=1008 (case 8 = MOV.B
-  # @(disp,Rm),R0 -- a plain SLOT-0 access, and NOT Defect 7, which is fixed).
+  # m8_dsdslot_0: UNPARKED 2026-08-06. 29 of its 32 cases run; STC.L GBR/SR/VBR,
+  # @-Rn (26/27/28) are excluded from _m8_run_all via m8gen's dsdslotSkip -- they
+  # hang the bus instead of reporting, MEASURED pre-existing (they hang
+  # identically on 46b3cc2, before deferred I-fetch fault delivery), and the same
+  # @-Rn addressing in MOV.W Rm,@-Rn (case 25) passes, so it is the
+  # control-register store form. That is the axis's remaining open item.
   #
-  # RE-MEASURED 2026-08-06 AFTER deferred I-fetch fault delivery landed (see
-  # if_fault in core/components_pkg.vhd). The "ARCHITECTURAL CONSEQUENCE"
-  # section below is now IMPLEMENTED, and it fixed the I-side restart: all three
-  # m8_idslot_* sweeps went RED (Result=2/25/49) -> GREEN and are wired into the run
-  # above. (mmuidslot was ALREADY green at HEAD -- its file header's "CONFIRMS
-  # the I-side restart is BUGGY" was stale; only the m8_idslot_* sweeps, which
-  # interleave the fault with icache/prefetch traffic, were actually RED.)
-  # This axis did NOT follow, and its symptom CHANGED, so the writeup
-  # below is history, not a live description:
-  #     before: SNAP_A = 0x00102000 (base, load never landed)
-  #     after : SNAP_A = 0x00000000, SNAP_B = 0xFFFFFFA1 (warm leg correct)
-  # 0x00000000 is not one of the three documented SNAP_A values, so this is a
-  # DIFFERENT mechanism from the one diagnosed below and needs its own
-  # investigation. Note also that cases 23 and 29 of this axis had corrupted
-  # literal pools until 725c3ce and have never run correctly.
+  # THE ORIGINAL PARK (Case A Result=1008, case 8 = MOV.B @(disp,Rm),R0) IS FIXED.
+  # It needed BOTH halves and neither alone was enough:
+  #   1. deferred I-fetch fault delivery (if_fault, core/components_pkg.vhd), so
+  #      the delay-slot fetch fault restarts at the BRANCH; and
+  #   2. clearing squash_ifetch_r when a D-side fault is raised inside a window an
+  #      I-side fault opened (core/datapath.vhm, g_squash_ifetch). Without it the
+  #      I-side "everything in this window is older, commit it all" exemption
+  #      masked the D-side squash, so the faulting load COMMITTED r0=0xFFFFFFA1 at
+  #      9660ns; the restart then re-ran MOV.B @(disp,R0),R0, whose base IS its
+  #      destination, addressing @0xFFFFFFA1 and reading 0 -> SNAP_A=0x00000000.
+  # Mutation-proven: removing (2) alone puts this guard straight back to
+  # Result=1008 at 28180ns. Non-idempotent forms like case 8 are why a precise
+  # squash cannot be traded for "just re-execute it".
   #
   # ---- HISTORY BELOW (the diagnosis that produced the deferred-delivery fix).
   # NARROWED 2026-08-06, still unfixed. It is NOT a harness construction bug and
@@ -570,7 +572,7 @@ else
   # existing first-cycle-capture comment in datapath.vhm about the I-fetch
   # stream advancing a word while an IMISS persists. Only texc_ack marks the
   # boundary that actually matters.
-  # run_guard m8_dsdslot_0 "" 200us
+  run_guard m8_dsdslot_0 "" 600us
   # mmudspcprobe_late: ACTIVE since Defect 7 was fixed (decode/decode_core.vhm,
   # g_dslot -- see the writeup above). Built from mmudspcprobe.S (which pins the
   # slot-0 arm to exactness) with the delay-slot instruction swapped for

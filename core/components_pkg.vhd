@@ -280,7 +280,7 @@ package cpu2j0_components_pack is
     --   ma_dslot='1': ex_if_pc is the delay slot (= branch PC + 2), so
     --                 tlb_exc_pc = ex_if_pc + 2 -> SPC = branch PC.
     ma_dslot         : std_logic;
-    -- DEFERRED I-FETCH FAULT (J4+MMU_ARCH). An instruction-fetch TLB fault is
+    -- DEFERRED I-FETCH FAULT (J4+PRIV_ARCH). An instruction-fetch TLB fault is
     -- NOT raised when the fetch faults -- at that moment the pipeline cannot know
     -- the fetch's context (measured: a delay-slot fetch faults BEFORE its branch
     -- decodes, so delay_jump/delay_slot are still '0' and the restart PC cannot

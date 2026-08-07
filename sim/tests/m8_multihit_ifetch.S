@@ -153,7 +153,7 @@ _sim_instr_end: .long 0
         ! in PAGE_SZ steps.
         .balign 0x1000
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH && CONFIG_PRIV_ARCH
 
         ! ---- Ensure RB=0 (bank 0). ----
         stc     sr, r0
@@ -566,4 +566,4 @@ _g_resume:      .long   0
 ! body run translated).
 ENTRY(_code_end)
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH && CONFIG_PRIV_ARCH

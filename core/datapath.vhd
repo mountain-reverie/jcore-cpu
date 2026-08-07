@@ -199,19 +199,19 @@ signal manip_sel : std_logic_vector(31 downto 0);
  -- NOTE -- the one-shot program-order ("age") grace bit for the w-port
  -- squash (wb_grace) is declared INSIDE g_wb_grace, not here. A signal
  -- declared at architecture scope and merely tied off under
- -- "if not MMU_ARCH generate" still EXISTS on J1/J2: yosys carries it
+ -- "if not PRIV_ARCH generate" still EXISTS on J1/J2: yosys carries it
  -- through flatten as a dangling zero-cell wire, which perturbs abc9's
  -- technology mapping (measured: non-monotonic +/-464 LUT4 swings on J1
  -- with the flop count constant). Keeping it generate-local means the
  -- base variants elaborate with no trace of it at all. Its consumer
  -- reg_wr_w_g is assigned in the two generate branches for the same
  -- reason. Same precedent as the SH2A_ARCH g_push locals.
- -- Shared "the squash arms on this clock edge" predicate (J4+MMU_ARCH),
+ -- Shared "the squash arms on this clock edge" predicate (J4+PRIV_ARCH),
  -- consumed by BOTH the tlb_squash arming in the process and g_wb_grace.
- -- Constant '0' off MMU_ARCH so J1/J2 prune it. See its assignment below.
+ -- Constant '0' off PRIV_ARCH so J1/J2 prune it. See its assignment below.
  signal squash_arm : std_logic;
  -- Registered "the fault that armed the CURRENT squash window was an
- -- INSTRUCTION-FETCH fault" (J4+MMU_ARCH; constant '0' off MMU_ARCH so J1/J2
+ -- INSTRUCTION-FETCH fault" (J4+PRIV_ARCH; constant '0' off PRIV_ARCH so J1/J2
  -- prune it, exactly like squash_arm). See the AGE RULE above reg_wr_w_g.
  signal squash_ifetch_r : std_logic;
  signal ybus_override : bus_val_t;
@@ -225,7 +225,7 @@ signal manip_sel : std_logic_vector(31 downto 0);
  signal mem_autoinc1 : std_logic;
  signal mem_predec : std_logic;
  signal restore_fire : std_logic;
- -- SECOND base-restore entry (J4+MMU_ARCH), for the DUAL-base form
+ -- SECOND base-restore entry (J4+PRIV_ARCH), for the DUAL-base form
  -- MAC.L/W @Rm+,@Rn+. That instruction reads two post-increment operands in
  -- successive EX slots; on a fault at the SECOND read the FIRST read's base
  -- bump has already committed, so the single entry above (which restores the
@@ -236,7 +236,7 @@ signal manip_sel : std_logic_vector(31 downto 0);
  -- NOT new fields in the shared datapath_reg_t "this" record: widening that
  -- record perturbs the base J1/J2 techmap even for arch-gated fields, and so
  -- does an architecture-scope declaration that is merely tied off under
- -- "if not MMU_ARCH generate" -- 38 dangling zero-cell wire bits survive
+ -- "if not PRIV_ARCH generate" -- 38 dangling zero-cell wire bits survive
  -- flatten and steer abc9 (see the wb_grace note above). Their three
  -- consumers (gpf_zwd, num_z_r, reg_wr_z_g) are therefore assigned in the
  -- g_restore2 / g_restore2_off branches too.
@@ -249,12 +249,12 @@ signal manip_sel : std_logic_vector(31 downto 0);
  -- mid-evaluation VARIABLE, which is not the registered value -- the ack
  -- clears it in the same evaluation that launches the next access, so
  -- back-to-back accesses show no 0->1 edge on the registered bit at all.
- -- Assigned only under MMU_ARCH, so J1/J2 see a constant '0'.
+ -- Assigned only under PRIV_ARCH, so J1/J2 see a constant '0'.
  signal ma_launch : std_logic;
  -- Registered tlb_squash, made readable INSIDE the process (this_r is
  -- only usable in the concurrent assignments below). Used to suppress new
  -- memory transactions issued in the fault shadow, symmetrically with the
- -- reg_wr_z_g / reg_wr_w_g writeback gating. Tied '0' off MMU_ARCH so J1/J2
+ -- reg_wr_z_g / reg_wr_w_g writeback gating. Tied '0' off PRIV_ARCH so J1/J2
  -- prune it away entirely.
  signal tlb_squash_r : std_logic;
  -- SH2A_ARCH only: signature classification for the restart-safe MOVML.L
@@ -911,7 +911,7 @@ end generate;
  -- measured constant (0x80000b58) across MAC.W's two operand slots, its fault
  -- and its restart, and distinct for every neighbouring instruction. That is
  -- why it, and not any slot-terminality signal, is the discriminator here.
- g_restore2 : if MMU_ARCH generate
+ g_restore2 : if PRIV_ARCH generate
    -- "the previous access was issued by the same instruction as this one".
    -- Broken out so it is directly observable in a waveform.
    signal same_insn : std_logic;
@@ -1045,7 +1045,7 @@ end generate;
      end if;
    end process;
  end generate;
- g_restore2_off : if not MMU_ARCH generate
+ g_restore2_off : if not PRIV_ARCH generate
    gpf_zwd <= pc when pc_ctrl.wrpr = '1' else zbus;
    num_z_r <= bank_remap(reg.num_z, sr.md, sr.rb) when PRIV_ARCH
                  else reg.num_z;
@@ -1380,7 +1380,7 @@ end generate;
           -- if_exc_captured makes it a one-shot across a stretched dispatch slot
           -- (if_fault_cap is re-evaluated every cycle of it), and re-arms when the
           -- slot ends.
-          if MMU_ARCH and if_fault_cap = '1' and this.if_exc_captured = '0' then
+          if PRIV_ARCH and if_fault_cap = '1' and this.if_exc_captured = '0' then
             v_ifsr := (others => '0');
             if this.if_fault_prot = '1' then
               -- IPROT: KIND=4, PROT=1, ITLB=1, WRITE=0
@@ -1421,7 +1421,7 @@ end generate;
             -- meaningless for an instruction-fetch fault. Same rationale as the
             -- tlb_exc_ifetch gate in the immediate block.
           end if;
-          if MMU_ARCH and if_fault_cap = '0' then
+          if PRIV_ARCH and if_fault_cap = '0' then
             this.if_exc_captured := '0';
           end if;
           -- Precise-exception squash window. Arm on the first fault cycle; hold
@@ -1511,7 +1511,7 @@ end generate;
             this.illegal_instr_next := check_illegal_instruction(inst_i.d);
             -- Record (do not raise) an I-fetch translation fault, in lockstep with
             -- if_dr_next / if_pc_next. See if_fault in components_pkg.vhd.
-            if MMU_ARCH then
+            if PRIV_ARCH then
               this.if_fault_next := inst_fault;
               this.if_fault_prot_next := inst_fault_prot;
             end if;
@@ -1590,7 +1590,7 @@ end generate;
               -- written; just transfer it alongside if_dr here.
               this.illegal_delay_slot := this.illegal_delay_slot_next;
               this.illegal_instr := this.illegal_instr_next;
-              if MMU_ARCH then
+              if PRIV_ARCH then
                 this.if_fault := this.if_fault_next;
                 this.if_fault_prot := this.if_fault_prot_next;
               end if;
@@ -1964,7 +1964,7 @@ end generate;
  -- the case passes. Non-idempotent forms like this one are exactly why a
  -- precise squash is not optional here: a wrongly-committed first execution
  -- cannot be repaired by re-execution.
- g_squash_ifetch : if MMU_ARCH generate
+ g_squash_ifetch : if PRIV_ARCH generate
    process(clk, rst)
    begin
      if rst = '1' then
@@ -1978,7 +1978,7 @@ end generate;
      end if;
    end process;
  end generate;
- g_squash_ifetch_off : if not MMU_ARCH generate
+ g_squash_ifetch_off : if not PRIV_ARCH generate
    squash_ifetch_r <= '0';
  end generate;
  tlb_squash_o <= tlb_squash_r;
@@ -1991,8 +1991,8 @@ end generate;
         if_pc <= this_r.if_pc when PRIV_ARCH else (others => '0');
         illegal_delay_slot <= this_r.illegal_delay_slot;
         illegal_instr <= this_r.illegal_instr;
-        if_fault_o <= this_r.if_fault when MMU_ARCH else '0';
-        if_fault_prot_o <= this_r.if_fault_prot when MMU_ARCH else '0';
+        if_fault_o <= this_r.if_fault when PRIV_ARCH else '0';
+        if_fault_prot_o <= this_r.if_fault_prot when PRIV_ARCH else '0';
         cop_o.rna <= copreg(7 downto 4);
         cop_o.rnb <= copreg(3 downto 0);
         cop_o.op <= "11101" when coproc.coproc_cmd = LDS else

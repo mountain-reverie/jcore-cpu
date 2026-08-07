@@ -72,7 +72,7 @@ _sim_instr_end:	.long 0
 	.balign PAGE_SZ
 
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH && CONFIG_PRIV_ARCH
 
 	! ---- Ensure RB=0 (bank 0). ----
 	stc	sr, r0
@@ -224,7 +224,7 @@ ENTRY(_fail)
 p_test_result:	.long TEST_RESULT_ADDRESS
 p_test_result_pass: .long TEST_PASS_MAGIC
 
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH && CONFIG_PRIV_ARCH
 
 	! ---- VA-driven TLB-fault handler at VBR+0x400 ----
 	.balign 4

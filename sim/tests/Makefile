@@ -112,6 +112,7 @@ mmufault.elf: mmufault.o
 mmufsr.elf: mmufsr.o
 mmudslot.elf: mmudslot.o
 mmuidslot.elf: mmuidslot.o
+mmufaultage.elf: mmufaultage.o
 mmubratest.elf: mmubratest.o
 mmurte.elf: mmurte.o
 mmustore.elf: mmustore.o

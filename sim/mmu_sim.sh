@@ -75,7 +75,8 @@ run_guard() {  # <name> <sim_top-or-default> [stop-time] [wall-timeout-s]
     echo "  PASS  $t${top:+ [$top]}"
   else
     echo "  FAIL  $t${top:+ [$top]}"
-    echo "$out" | grep -iE 'result|fail|invalid' | tail -3
+    # MMU_TAIL=<n> widens this for debugging; 3 keeps normal output readable.
+    echo "$out" | grep -iE 'result|fail|invalid' | tail -${MMU_TAIL:-3}
     fail=1
   fi
 }
@@ -185,6 +186,15 @@ else
 #   (the 2026-08-01 note recorded Result=2 for all three; re-measured at HEAD
 #   immediately before the fix, _1 and _2 report 25 and 49 -- different cases of
 #   the same axis, not different defects.)
+#
+# mmufaultage (added 2026-08-06) is a KNOWN-RED guard, deliberately not invoked
+# below, for a defect that deferred I-fetch fault delivery exposed: when a D-side
+# fault and a deferred I-fetch fault are both in play, the younger I-side one is
+# dispatched at the ID boundary -- BEFORE the older instruction has even reached
+# EX -- and the two capture sites then race on tlb_exc_pc/TEA/PTEH, so the
+# dispatched exception reads the other fault's record. Measured Result=3; the
+# waveform and the refuted `texc_req = '0'` gating fix are written up in the
+# guard's own header. Wire it into the run when it goes green.
 #
 # The three m8_idslot_* Result=2 failures were NOT rot: they were the real
 # I-side delay-slot restart defect (the restart landed on the delay slot instead

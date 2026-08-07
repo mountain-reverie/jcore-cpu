@@ -50,6 +50,26 @@ func TestIsSharedJ4Augment(t *testing.T) {
 	}
 }
 
+// TestJCoreAugmentFlag locks the distinction between "which SH mask does a NEW
+// delta line get" (GASMask) and "which J-core flag gets OR'd into an EXISTING
+// upstream line" (JCoreAugmentFlag). Conflating them is what made gas reject
+// shad/shld under --isa=sh-j2: the augmentation was hardcoded to arch_j4_up.
+func TestJCoreAugmentFlag(t *testing.T) {
+	// shad/shld: SH2A+SH3+SH4+SH4A upstream, implemented on the J-core base.
+	shadLike := Set{SH2A: true, SH3: true, SH4: true, SH4A: true, J1: true, J2: true, J4: true}
+	if got := shadLike.JCoreAugmentFlag(); got != "arch_j2_up" {
+		t.Errorf("shad/shld-like set must augment with arch_j2_up, got %s", got)
+	}
+	// GASMask is SH-first and must NOT be used as the augmentation flag.
+	if shadLike.GASMask() == shadLike.JCoreAugmentFlag() {
+		t.Error("GASMask and JCoreAugmentFlag must not coincide for shad/shld")
+	}
+	// J4-only privileged reg-reg forms keep arch_j4_up.
+	if got := (Set{SH3: true, SH4: true, SH4A: true, J4: true}).JCoreAugmentFlag(); got != "arch_j4_up" {
+		t.Errorf("J4-only shared form must augment with arch_j4_up, got %s", got)
+	}
+}
+
 // TestJ1NeverJ2Only self-checks the invariant GASMask's J1 comment relies on:
 // no insns.json instruction is J1 but not J2. If this ever regresses, folding
 // J1 into arch_j2_up would silently misclassify a J1-only instruction.

@@ -37,6 +37,24 @@ func (s Set) IsSharedJ4Augment() bool {
 	return s.J4 && s.anySH() && !s.SH1 && !s.SH2
 }
 
+// JCoreAugmentFlag returns the J-core arch flag to OR into an EXISTING upstream
+// sh_table line (see IsSharedJ4Augment). This is deliberately NOT GASMask():
+// that one is SH-first and answers "what mask does a NEW delta line get?",
+// returning e.g. arch_sh3_up for shad/shld. Here the upstream line already
+// carries its SH mask; what is missing is the J-core tag, and which one depends
+// only on the J-core side.
+//
+// An instruction implemented on the J-core BASE (J1/J2) must get arch_j2_up
+// (== arch_j2 | arch_j4_up), otherwise gas keeps rejecting it under
+// --isa=sh-j2 even though the core implements it — which is exactly how
+// shad/shld came to be assembled as raw .word workarounds.
+func (s Set) JCoreAugmentFlag() string {
+	if s.J2 || s.J1 {
+		return "arch_j2_up"
+	}
+	return "arch_j4_up"
+}
+
 // GASMask returns the upstream-style arch mask for the lowest-numbered SH that
 // has the instruction (SH "_up" inclusive masks). J-core-only uses a placeholder.
 func (s Set) GASMask() string {

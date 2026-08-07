@@ -62,6 +62,8 @@ jcore-cpu/
 │   ├── startup/             # Startup code, linker scripts (sh32.x)
 │   ├── main.c               # Test ROM main
 │   └── tests/               # SH-2 instruction test objects
+├── tools/                  # Repo tooling (NOT the external TOOLS_DIR makefiles)
+│   └── insns2asm/          # Go generator: docs/insns.json -> binutils gas / LLVM defs
 └── tests/                  # VHDL component unit testbenches
     ├── arith_tap.vhd        # Arithmetic unit tests
     ├── logic_tap.vhd        # Logic operation tests
@@ -152,6 +154,39 @@ End-to-end regression (generator unit tests + simulator + TAP testbenches):
 ```bash
 decode/gen-go/regression.sh
 ```
+
+### Regenerating Toolchain (assembler/LLVM) Definitions
+
+**Never hand-edit binutils `opcodes/sh-opc.h` to teach the assembler about a
+J-core instruction.** That table is generated from `docs/insns.json` by
+`tools/insns2asm` (a second Go generator, separate from `decode/gen-go`):
+
+```bash
+cd tools/insns2asm
+go run ./cmd/insns2asm -in ../../docs/insns.json -emit check   # round-trip oracle
+go run ./cmd/insns2asm -in ../../docs/insns.json -emit gas     # J-core-only delta lines
+go run ./cmd/insns2asm -in ../../docs/insns.json -emit gas-augment \
+    -shopc <binutils>/opcodes/sh-opc.h                         # patch shared SH/J lines in place
+go run ./cmd/insns2asm -in ../../docs/insns.json -emit llvm    # LLVM .td encodings
+```
+
+- `gas` emits NEW `sh_table` lines for instructions that exist only on J-core.
+- `gas-augment` handles instructions that already have an upstream line shared
+  with an SH variant, ORing the J-core arch flag into that line's existing mask.
+  It is idempotent and errors rather than silently drifting.
+- Arch-flag choice lives in `tools/insns2asm/internal/arch/arch.go`. Note the
+  deliberate split: `GASMask()` is SH-first and answers "what mask does a NEW
+  line get"; `JCoreAugmentFlag()` answers "which J-core flag gets OR'd into an
+  EXISTING line" (`arch_j2_up` for base J1/J2 instructions, `arch_j4_up` for
+  J4-only ones). Conflating the two is what once made gas reject `shad`/`shld`
+  under `--isa=sh-j2`.
+
+The assembler is selected with gas's `--isa=sh-j2` / `--isa=sh-j4` (NOT `-m2`,
+which is a gcc flag). `testrom/Makefile` passes `-Wa,--isa=sh-j2`.
+
+If an instruction is added to `decode/gen-go/spec/`, it must also be added to
+`docs/insns.json` — that file feeds both the GitHub Pages instruction explorer
+and `tools/insns2asm`.
 
 ## VHDL Configurations
 

@@ -209,10 +209,13 @@ type Augmentation struct {
 }
 
 // Augmentations returns, for every instruction that already exists upstream
-// on an SH variant but is ALSO implemented on J4 (arch.Set.IsSharedJ4Augment),
+// on an SH variant but is ALSO implemented on J-core (arch.Set.IsSharedJ4Augment),
 // the arch-mask augmentation to apply to its existing sh-opc.h line. Unlike
 // EmitDelta these are NOT new lines: the instruction already has an upstream
-// sh_table entry, which needs arch_j4_up OR'd into its existing mask.
+// sh_table entry, which needs a J-core arch flag OR'd into its existing mask.
+//
+// The flag comes from arch.Set.JCoreAugmentFlag: arch_j2_up for instructions
+// the J-core base implements (shad/shld), arch_j4_up for J4-only ones.
 func Augmentations(insns []ir.Insn) ([]Augmentation, error) {
 	var out []Augmentation
 	for _, in := range insns {
@@ -226,7 +229,7 @@ func Augmentations(insns []ir.Insn) ([]Augmentation, error) {
 		out = append(out, Augmentation{
 			Mnemonic: strings.ToLower(in.Mnemonic),
 			Nibbles:  nib,
-			Flag:     "arch_j4_up",
+			Flag:     in.Arch.JCoreAugmentFlag(),
 		})
 	}
 	sort.SliceStable(out, func(i, j int) bool {

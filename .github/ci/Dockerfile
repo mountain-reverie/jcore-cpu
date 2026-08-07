@@ -38,10 +38,12 @@ ARG GHDL_YOSYS_PLUGIN_COMMIT=07a30ed
 # bump: `git ls-remote https://github.com/mountain-reverie/binutils-gdb jcore`
 # and update both the SHA and the comment below.
 ARG BINUTILS_JCORE_REPO=https://github.com/mountain-reverie/binutils-gdb.git
-# jcore branch head as of 2026-07-31 -- the merge commit of PR #1
-# (https://github.com/mountain-reverie/binutils-gdb/pull/1), which added
-# stc expevt/intevt/tra,Rn on top of the existing J4 mnemonics.
-ARG BINUTILS_JCORE_COMMIT=cf1e4755e9ced3c2a1a06559808566253f486f07
+# jcore branch head as of 2026-08-07 -- "sh: J2 implements shad/shld, add
+# arch_j2_up to those opcodes", which makes --isa=sh-j2 accept the dynamic
+# shifts shad/shld (needed by testrom/tests/testshift.s; J2 really does
+# implement them, see sim/tests/shldshadguard.S). Previous pin was cf1e4755
+# (stc expevt/intevt/tra,Rn on top of the existing J4 mnemonics).
+ARG BINUTILS_JCORE_COMMIT=37855db1538bb2837828c35bd182b2d1230fff4c
 ARG SH2_GCC_VERSION=14.2.0
 ARG GO_VERSION=1.26.2
 # OpenSTA is not packaged for Ubuntu; built from source below. OpenSTA requires

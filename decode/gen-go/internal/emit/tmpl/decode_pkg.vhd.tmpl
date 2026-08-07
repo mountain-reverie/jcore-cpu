@@ -17,13 +17,6 @@ package decode_pack is
 {{- end }}{{- end }}
 {{- range $ci, $comp := .Package.Components }}
     component {{ $comp.Name }}
-{{- if gt (len $comp.Generics) 0 }}
-        generic (
-{{- range $i, $g := $comp.Generics }}
-            {{ $g.Name }} : {{ $g.Type }}{{ if lt $i (lastIdx $comp.Generics) }};{{ end }}
-{{- end }}
-        );
-{{- end }}
         port (
 {{- range $i, $p := $comp.Ports }}
             {{ $p.Name }} : {{ $p.Direction }} {{ $p.Type }}{{ if lt $i (lastIdx $comp.Ports) }};{{ end }}

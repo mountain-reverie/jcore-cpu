@@ -102,6 +102,7 @@ banktest.elf: banktest.o
 exctest.elf: exctest.o
 excguard.elf: excguard.o
 trapatest.elf: trapatest.o
+shldshadguard.elf: shldshadguard.o
 rteredir.elf: rteredir.o
 pm3vec.elf: pm3vec.o
 pm3guard.elf: pm3guard.o

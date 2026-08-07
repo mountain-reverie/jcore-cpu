@@ -266,9 +266,6 @@ begin
   -- pragma translate_on
 
   u_decode : component decode
-    generic map (
-      MMU_ARCH => mmu_arch
-    )
     port map (
       clk                => clk,
       rst                => rst,

@@ -407,9 +407,9 @@
 23   MOV.W R0, @(disp, Rn) General
 24   MOV.W Rm, @Rn        General
 25   MOV.W Rm,@-Rn        General
-26   STC.L GBR, @-Rn      General
-27   STC.L SR, @-Rn       PrivMem
-28   STC.L VBR, @-Rn      PrivMem
+26   STC.L GBR, @-Rn      General    skipped-for-enumeration: 26
+27   STC.L SR, @-Rn       PrivMem    skipped-for-enumeration: 27
+28   STC.L VBR, @-Rn      PrivMem    skipped-for-enumeration: 28
 29   STS.L MACH, @-Rn     General
 30   STS.L MACL, @-Rn     General
 31   STS.L PR, @-Rn       General

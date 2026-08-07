@@ -111,6 +111,7 @@ else
            mmustale mmuasid mmuglobal mmumultihit mmudblflt mmunest_trapa mmunest_slotill mmunest mmuremap mmucmpcsr mmurun mmuirun mmuainc mmuainc2 mmusmep j4_illegal_trap; do
     run_guard "$t"
   done
+  run_guard mmufaultage "" 60us
   # mmudrain gets an explicit stop-time for MARGIN, not because 80us is too
   # short. Measured: the guard completes at 31.62us (final timestamp of a
   # MMU_VCD dump, which ends at the "Test Passed" exit; leg D itself runs
@@ -187,14 +188,11 @@ else
 #   immediately before the fix, _1 and _2 report 25 and 49 -- different cases of
 #   the same axis, not different defects.)
 #
-# mmufaultage (added 2026-08-06) is a KNOWN-RED guard, deliberately not invoked
-# below, for a defect that deferred I-fetch fault delivery exposed: when a D-side
-# fault and a deferred I-fetch fault are both in play, the younger I-side one is
-# dispatched at the ID boundary -- BEFORE the older instruction has even reached
-# EX -- and the two capture sites then race on tlb_exc_pc/TEA/PTEH, so the
-# dispatched exception reads the other fault's record. Measured Result=3; the
-# waveform and the refuted `texc_req = '0'` gating fix are written up in the
-# guard's own header. Wire it into the run when it goes green.
+# mmufaultage (added 2026-08-06, wired into the run below) locks the
+# precise-exception squash fix in core/datapath.vhm's g_squash_ifetch
+# (commit 0280b7e) using a non-idempotent faulting load. See the guard's own
+# header for the mutation evidence and for why it does not demonstrate an
+# exception-ordering defect (mis-ordered delivery was measured benign here).
 #
 # The three m8_idslot_* Result=2 failures were NOT rot: they were the real
 # I-side delay-slot restart defect (the restart landed on the delay slot instead

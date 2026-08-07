@@ -1077,8 +1077,28 @@ func emitDSideDSlot(c Class, id int) (string, string, error) {
 	if strings.HasPrefix(c.Instr.Name, "LDC.L") || strings.HasPrefix(c.Instr.Name, "LDS.L") {
 		return emitCtrlLoadDSlot(c, id)
 	}
+	// This guard only ever fires for control-register-WRITE stores (DestCtrl
+	// != ""), of which none currently exist in the PrivMem/Write bucket -- see
+	// classify.go:46 (DestCtrl is the reg WRITTEN, "" if writes only GPRs/mem)
+	// and the identical dead-guard note on the sibling D-side axis at line 409
+	// above. It is left in place (rather than removed) as defensive scaffolding
+	// for a future control-register-WRITE-to-memory form; do not assume it
+	// covers STC.L below -- STC.L READS a control register and WRITES memory,
+	// so DestCtrl=="" and this guard never sees it.
 	if c.Bucket == PrivMem && c.DestCtrl != "" {
 		return fmt.Sprintf("! case %d skipped: %s: control-register memory store in a delay slot not yet modelled by DSideDSlot\n", id, c.Instr.Name),
+			"", errSkip
+	}
+	// STC.L ctrl,@-Rn (GBR/SR/VBR) sources a control register and stores it to
+	// memory, so DestCtrl=="" (classify.go:46) and the PrivMem/DestCtrl!=""
+	// guard above cannot catch it. The generic GPR-store delay-slot template
+	// this falls through to does not model the control-register-as-store-datum
+	// form and the emitted case hangs (unbounded re-fault on the cold TLB
+	// page). Skip explicitly here, matching the MAC.{L,W}/CAS. precedent on
+	// this axis. Scoped to STC.L only -- STS.L MACH/MACL/PR,@-Rn (cases
+	// 29-31) pass on this axis today and must keep running.
+	if strings.HasPrefix(c.Instr.Name, "STC.L") {
+		return fmt.Sprintf("! case %d skipped: %s: control-register-sourced memory store in a delay slot not yet modelled by DSideDSlot (DestCtrl is empty for STC.L -- it reads a control reg and writes memory -- so the PrivMem/DestCtrl guard above cannot catch it; the generic GPR-store template hangs on this form)\n", id, c.Instr.Name),
 			"", errSkip
 	}
 	if strings.HasPrefix(c.Instr.Name, "CAS.") && regBase != 0 {

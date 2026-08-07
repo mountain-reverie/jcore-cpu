@@ -153,7 +153,7 @@ _sim_instr_end: .long 0
         ! in PAGE_SZ steps.
         .balign 0x1000
 ENTRY(start)
-#if CONFIG_PRIV_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH
 
         ! ---- Ensure RB=0 (bank 0). ----
         stc     sr, r0
@@ -475,6 +475,16 @@ p_after_3:      .long   after_3
 _scratch_word:  .long   0xCAFEF00D
                 .long   0               ! post-increment landing pad, never read
 
+! _done/_fail and their literal pool sit OUTSIDE the CONFIG_PRIV_ARCH guard,
+! matching m8_runtime.inc. The .vect table above references both symbols
+! unconditionally, so guarding them breaks the base-J2 link with
+! "undefined reference to _done/_fail" -- which fails `make all` and takes
+! regression.sh Step 6 down with it before a single test runs.
+! With them out here, a base build falls through from `start` straight into
+! _done and the image reports PASS trivially; the real MULTI_HIT work only
+! exists on the J4/PRIV overlay, where sim/mmu_sim.sh runs it as a guard.
+#endif  ! CONFIG_PRIV_ARCH
+
 ENTRY(_done)
         mov.l   p_test_result, r0
         mov.l   p_test_result_pass, r9
@@ -494,6 +504,8 @@ ENTRY(_fail)
         .align  2
 p_test_result:      .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long TEST_PASS_MAGIC
+
+#if CONFIG_PRIV_ARCH
 
         ! ================================================================
         ! Single MULTI_HIT handler at VBR+0x100 (General Illegal). MULTI_HIT
@@ -566,4 +578,4 @@ _g_resume:      .long   0
 ! body run translated).
 ENTRY(_code_end)
 
-#endif  ! CONFIG_PRIV_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH

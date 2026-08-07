@@ -173,6 +173,15 @@ rm -f work-obj93.cf cpu_ctb cpu_tb.vhh
 make TOOLS_DIR="$TOOLS_DIR" cpu_ctb work-obj93.cf >/dev/null
 
 echo "==> Step 5: unit TAP testbenches"
+# Purge tests/ first. Step 5 analyses .vhd files that v2p regenerates from
+# .vhm, but GHDL's work-obj93.cf caches the PREVIOUSLY analysed units and is
+# not invalidated by the .vhd being rewritten. A stale library therefore
+# silently links an old entity against the current testbench: observed as
+# mult_tap failing 7/7 with the multiplier returning all-zeroes on a tree
+# whose committed sources are green (both mountain/master and this branch
+# pass 726/726 from a clean checkout). Without this clean, Step 5's verdict
+# depends on leftover state rather than on the code under test.
+make -C "$REPO_ROOT/tests" clean TOOLS_DIR="$TOOLS_DIR" >/dev/null
 make -C "$REPO_ROOT/tests" check TOOLS_DIR="$TOOLS_DIR"
 
 echo "==> Step 6: SH-2 simulator tests (interrupts / RTE)"

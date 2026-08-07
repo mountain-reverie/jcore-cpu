@@ -1,5 +1,6 @@
 library ieee;
   use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
   use work.cpu2j0_pack.all;
   use work.decode_pack.all;
   use work.cpu2j0_components_pack.all;
@@ -34,6 +35,23 @@ package datapath_pack is
   function seg_decode (
     va : std_logic_vector(31 downto 0)
   ) return segment_t;
+
+  -- TSB pointer assist (hardware-spec §2.8): address of the TSB slot for the
+  -- faulting VPN, latched into TSBPTR on every fault. Factored out of
+  -- datapath.vhm because there are now TWO capture sites -- the immediate
+  -- (D-side / MULTI_HIT) one and the deferred I-fetch one, which sources the VA
+  -- from the faulting instruction's own if_pc instead of the live tlb_fault_va.
+  --   vpn    = va[31:12]                       (4 KB page number)
+  --   hash   = HASH_MODE=1 ? vpn xor (vpn >> HASH_SHIFT) : vpn
+  --   mask   = (1 << TSB_SIZE_LOG) - 1
+  --   TSBPTR = (TSBBR and not 0xF) or ((hash and mask) << 4)
+  -- TSBBR[N+3:4] are reserved-0 so clearing the low nibble and ORing the
+  -- 16-byte-scaled index suffices (no variable base mask needed).
+  function tsb_ptr (
+    va     : std_logic_vector(31 downto 0);
+    tsbcfg : std_logic_vector(31 downto 0);
+    tsbbr  : std_logic_vector(31 downto 0)
+  ) return std_logic_vector;
 
   component datapath is
     generic (
@@ -99,7 +117,11 @@ package datapath_pack is
       delay_slot         : in    std_logic := '0';
       tlb_exc_is_i       : in    std_logic := '0';
       inst_fault         : in    std_logic := '0';
+      inst_fault_prot    : in    std_logic := '0';
       if_fault_o         : out   std_logic;
+      if_fault_prot_o    : out   std_logic;
+      id_delay_slot      : in    std_logic := '0';
+      if_fault_cap       : in    std_logic := '0';
       tlb_exc_ifetch     : in    std_logic := '0';
       if_pc              : out   std_logic_vector(31 downto 0);
       ex_if_pc           : in    std_logic_vector(31 downto 0) := (others => '0')
@@ -128,5 +150,30 @@ package body datapath_pack is
     end if;
 
   end function seg_decode;
+
+  function tsb_ptr (
+    va     : std_logic_vector(31 downto 0);
+    tsbcfg : std_logic_vector(31 downto 0);
+    tsbbr  : std_logic_vector(31 downto 0)
+  ) return std_logic_vector is
+    variable v_vpn   : unsigned(31 downto 0);
+    variable v_hash  : unsigned(31 downto 0);
+    variable v_mask  : unsigned(31 downto 0);
+    variable v_idx   : unsigned(31 downto 0);
+    variable v_shift : integer range 0 to 31;
+    variable v_size  : integer range 0 to 31;
+  begin
+    v_vpn   := x"000" & unsigned(va(31 downto 12));
+    v_shift := to_integer(unsigned(tsbcfg(7 downto 4)));
+    v_size  := to_integer(unsigned(tsbbr(3 downto 0)));
+    if tsbcfg(3 downto 0) = x"1" then
+      v_hash := v_vpn xor shift_right(v_vpn, v_shift);
+    else
+      v_hash := v_vpn;
+    end if;
+    v_mask := shift_left(to_unsigned(1, 32), v_size) - 1;
+    v_idx  := (v_hash and v_mask);
+    return (tsbbr and x"FFFFFFF0") or std_logic_vector(shift_left(v_idx, 4));
+  end function tsb_ptr;
 
 end package body datapath_pack;

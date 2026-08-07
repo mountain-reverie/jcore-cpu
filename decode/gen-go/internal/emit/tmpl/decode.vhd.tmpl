@@ -90,6 +90,10 @@ begin
             op => op,
             op_addr_next => op_addr_next,
             delay_slot_o => delay_slot_c,
+            if_fault => if_fault,
+            if_fault_prot => if_fault_prot,
+            id_delay_slot_o => id_delay_slot,
+            texc_defer_cap_o => texc_defer_cap,
 {{- if .HasTwoWord }}
             ext_word_o => ext_word_c,
 {{- end }}

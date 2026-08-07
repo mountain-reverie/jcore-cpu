@@ -392,6 +392,19 @@ func newStaticPackage() *Package {
 					{Name: "slp", Direction: "out", Type: "std_logic"},
 					{Name: "sr", Direction: "out", Type: "sr_ctrl_t"},
 					{Name: "delay_slot", Direction: "out", Type: "std_logic"},
+					// Deferred I-fetch fault of the instruction in if_dr, and its
+					// kind ('1' = IPROT). Raised as TLB_IMISS/TLB_IPROT at that
+					// instruction's dispatch boundary; see if_fault in
+					// core/components_pkg.vhd.
+					{Name: "if_fault", Direction: "in", Type: "std_logic"},
+					{Name: "if_fault_prot", Direction: "in", Type: "std_logic"},
+					// ID-aligned delay-slot flag (decode_core's own register), for
+					// the datapath's deferred I-fetch fault capture. Distinct from
+					// delay_slot above, which is EX-aligned.
+					{Name: "id_delay_slot", Direction: "out", Type: "std_logic"},
+					// One-slot capture enable at the faulting instruction's dispatch
+					// boundary; see texc_defer_cap_o in decode_core.vhm.
+					{Name: "texc_defer_cap", Direction: "out", Type: "std_logic"},
 					{Name: "if_pc", Direction: "in", Type: "std_logic_vector(31 downto 0)"},
 					{Name: "ex_if_pc", Direction: "out", Type: "std_logic_vector(31 downto 0)"},
 				},
@@ -434,6 +447,10 @@ func newStaticPackage() *Package {
 					{Name: "op", Direction: "out", Type: "operation_t"},
 					{Name: "op_addr_next", Direction: "out", Type: "std_logic_vector(7 downto 0)"},
 					{Name: "delay_slot_o", Direction: "out", Type: "std_logic"},
+					{Name: "if_fault", Direction: "in", Type: "std_logic"},
+					{Name: "if_fault_prot", Direction: "in", Type: "std_logic"},
+					{Name: "id_delay_slot_o", Direction: "out", Type: "std_logic"},
+					{Name: "texc_defer_cap_o", Direction: "out", Type: "std_logic"},
 					{Name: "if_pc", Direction: "in", Type: "std_logic_vector(31 downto 0)"},
 					{Name: "if_pc_o", Direction: "out", Type: "std_logic_vector(31 downto 0)"},
 				},

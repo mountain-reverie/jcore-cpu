@@ -103,8 +103,29 @@ entity datapath is
        -- Sampled at inst_i.ack into the per-instruction status vector (if_fault_next);
        -- see if_fault in components_pkg.vhd. '0' on non-MMU builds.
        inst_fault : in std_logic := '0';
-       -- Deferred I-fetch fault of the instruction now presented to decode.
+       -- Kind of the outstanding I-fetch fault: '1' = IPROT, '0' = IMISS.
+       -- Recorded alongside inst_fault so the deferred delivery knows which
+       -- exception to raise. MULTI_HIT is NOT deferred (it dispatches through
+       -- General Illegal, which needs no restart-PC side channel), so one bit
+       -- covers the whole deferred set.
+       inst_fault_prot : in std_logic := '0';
+       -- Deferred I-fetch fault of the instruction now presented to decode,
+       -- and its kind. Consumed by decode_core's next_op (raises TLB_IMISS/
+       -- TLB_IPROT at this instruction's dispatch boundary).
        if_fault_o : out std_logic;
+       if_fault_prot_o : out std_logic;
+       -- ID-aligned delay-slot flag of the instruction currently in if_dr,
+       -- returned by decode (this_r.delay_slot). Distinct from
+       -- delay_slot above, which is EX-aligned: the deferred I-fetch fault is
+       -- captured when its instruction is in ID, so it needs the ID copy.
+       -- '0' on non-MMU builds.
+       id_delay_slot : in std_logic := '0';
+       -- One-slot capture enable from decode: the faulting instruction's
+       -- dispatch boundary, i.e. the slot in which decode latches the
+       -- deferred TLB_IMISS/TLB_IPROT op. NOT if_fault's own rising edge --
+       -- MEASURED, that leads decode's delay_slot register by one slot, so
+       -- an edge-triggered capture loses the -2 branch bias. '0' on non-MMU.
+       if_fault_cap : in std_logic := '0';
        -- '1' iff this fault's VA is an instruction-fetch VA, for EVERY
        -- exc_kind that can raise it (IMISS/IPROT/MULTI_HIT) -- broader
        -- than tlb_exc_is_i, which is deliberately narrowed to IMISS/
@@ -433,7 +454,10 @@ begin
  -- the one SPC slot of the D-fault entries (spec/sh4/exceptions.toml), so the
  -- substitution is scoped by the microcode -- no held flag, and every
  -- (possibly stalled, re-evaluated) cycle of that slot sees the same value.
- -- I-fetch faults keep SEL_PC (live PC). tlb_exc_pc is 0 on a non-MMU build
+ -- I-fetch faults (IMISS/IPROT) also read SEL_TLBPC, but with alu_y=0/ADD so
+ -- SPC = TLBPC exactly; their tlb_exc_pc is written by the deferred capture
+ -- block from the faulting instruction's own if_pc record, not at fault time.
+ -- tlb_exc_pc is 0 on a non-MMU build
  -- and SEL_TLBPC never appears there, so J1/J2 are unaffected.
  -- push_ptr_store (SH2A_ARCH only, see the signal declaration above):
  -- substitutes the datapath-internal push_ptr as the store address base
@@ -1152,19 +1176,17 @@ end generate;
  with mac.sel1 select macin1 <= xbus when SEL_XBUS, zbus_mac when SEL_ZBUS, wbus when others;
  with mac.sel2 select macin2 <= ybus when SEL_YBUS, zbus_mac when SEL_ZBUS, wbus when others;
  ibit <= sr.int_mask;
- datapath : process(this_r,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, squash_arm, tlb_fault_va, tlb_exc_expevt, tlb_exc_fsr, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, inst_fault, tlb_exc_is_i, tlb_exc_ifetch, ex_if_pc)
+ datapath : process(this_r,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, squash_arm, tlb_fault_va, tlb_exc_expevt, tlb_exc_fsr, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, inst_fault, inst_fault_prot, id_delay_slot, if_fault_cap, tlb_exc_is_i, tlb_exc_ifetch, ex_if_pc)
    variable this : datapath_reg_t;
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
           variable seg_v : segment_t;
           variable p4_sel_v : p4_sel_t;
-          -- TSB pointer-assist hash (M5): computed on the first fault cycle.
-          variable v_vpn : unsigned(31 downto 0);
-          variable v_hash : unsigned(31 downto 0);
-          variable v_mask : unsigned(31 downto 0);
-          variable v_idx : unsigned(31 downto 0);
-          variable v_shift : integer range 0 to 31;
-          variable v_size : integer range 0 to 31;
+          -- MMUFSR partial word (KIND/PROT/ITLB/WRITE) for the DEFERRED I-fetch
+          -- fault. cpu.vhd's tlb_exc_fsr is a function of the LIVE tlb_exc_kind
+          -- and is long stale by deferred-delivery time, so the two I-side rows
+          -- of that table are re-derived here from the carried kind bit.
+          variable v_ifsr : std_logic_vector(12 downto 0);
           variable next_state : debug_state_t;
           variable slot_inst_en : std_logic;
         begin
@@ -1192,7 +1214,16 @@ end generate;
           -- every cycle would latch the second fetch's VA (e.g. 0x1002) instead
           -- of the faulting instruction's VA (0x1000). The flag clears as soon as
           -- tlb_exc_pend deasserts, re-arming for the next fault.
-          if PRIV_ARCH and tlb_exc_pend = '1' and this.tlb_exc_captured = '0' then
+          -- tlb_exc_is_i = '0': I-fetch faults (IMISS/IPROT) are DEFERRED and are
+          -- captured by the block below, from the faulting instruction's own
+          -- record, at the point it reaches ID. Capturing them here would latch
+          -- whichever fetch VA happened to be live -- for a delay slot that is the
+          -- speculative branch-target fetch, whose younger fault overwrites the
+          -- older one (Defect A). MULTI_HIT on an I-fetch keeps tlb_exc_is_i='0'
+          -- and so stays immediate: it dispatches through General Illegal and needs
+          -- no restart-PC side channel. See if_fault in components_pkg.vhd.
+          if PRIV_ARCH and tlb_exc_pend = '1' and tlb_exc_is_i = '0'
+             and this.tlb_exc_captured = '0' then
             this.mmu.tea := tlb_fault_va;
             -- PTEH captures the 4 KB-granular VPN on a miss: VA[31:12]. 4 KB is
             -- the finest supported page size (PageMask 0); the actual page size
@@ -1230,20 +1261,14 @@ end generate;
             -- every fault (I-fetch faults read SEL_PC, not SEL_TLBPC, so this
             -- value is simply unused for them). See the D-side arm below for the
             -- measured derivation from the live ex_if_pc.
-            -- I-fetch faults (IMISS/IPROT): the D-side ma_pc shadow is stale, but
-            -- tlb_fault_va IS the faulting FETCH VA at this first-fault cycle
-            -- (0x1000 in the delay-slot case). Normal I-fault -> restart = fetch VA
-            -- (re-fetch). Delay-slot I-fault -> the live fetch PC has already been
-            -- redirected to the branch TARGET by exception-entry time, so the old
-            -- SEL_PC (this.pc - 2) landed past the branch; capture branch = fetch
-            -- VA - 2 instead so the branch re-runs and re-issues the delay slot.
-            -- IMISS/IPROT entry reads this via SEL_TLBPC with alu_y=0.
-            if tlb_exc_is_i = '1' then
-              if delay_slot = '1' then
-                this.tlb_exc_pc := std_logic_vector(unsigned(tlb_fault_va) - 2);
-              else
-                this.tlb_exc_pc := tlb_fault_va;
-              end if;
+            -- This block is now D-side only (tlb_exc_is_i='0' above). The old
+            -- I-fetch arm here -- tlb_exc_pc := tlb_fault_va - (delay_slot ? 2 : 0)
+            -- -- could not work and has been removed: MEASURED, delay_slot is '0'
+            -- at every instant an I-fetch fault is raised, because the delay-slot
+            -- fetch faults BEFORE its branch decodes. That is the whole reason for
+            -- deferred delivery; see the block below and if_fault in
+            -- components_pkg.vhd.
+            --
             -- D-side: derive the restart from the instruction's OWN PC via the
             -- LIVE ex_if_pc -- not the run-ahead this.pc shadow (ma_pc) and not
             -- the MA-launch shadow (ma_if_pc), which is now unused here.
@@ -1271,9 +1296,10 @@ end generate;
             -- must be the BRANCH so it re-issues its delay slot, so
             -- tlb_exc_pc = ex_if_pc + 2 -> SPC = branch_PC.
             -- ma_dslot (shadowed at the access slot) still selects the arm; only
-            -- the PC source changes. The I-side arm above is untouched: IMISS/
-            -- IPROT read this via SEL_TLBPC with alu_y=0, carrying no -4 term.
-            elsif this.ma_dslot = '1' then
+            -- the PC source changes. IMISS/IPROT are handled by the deferred
+            -- block below and read this via SEL_TLBPC with alu_y=0, carrying no
+            -- -4 term.
+            if this.ma_dslot = '1' then
               this.tlb_exc_pc := std_logic_vector(unsigned(ex_if_pc) + 2);
             else
               this.tlb_exc_pc := std_logic_vector(unsigned(ex_if_pc) + 4);
@@ -1326,19 +1352,7 @@ end generate;
             -- TSBPTR = (TSBBR and not 0xF) or ((hash and mask) << 4)
             -- TSBBR[N+3:4] are reserved-0 so clearing the low nibble and ORing
             -- the 16-byte-scaled index suffices (no variable base mask needed).
-            v_vpn := x"000" & unsigned(tlb_fault_va(31 downto 12));
-            v_shift := to_integer(unsigned(this.mmu.tsbcfg(7 downto 4)));
-            v_size := to_integer(unsigned(this.mmu.tsbbr(3 downto 0)));
-            if this.mmu.tsbcfg(3 downto 0) = x"1" then
-              v_hash := v_vpn xor shift_right(v_vpn, v_shift);
-            else
-              v_hash := v_vpn;
-            end if;
-            v_mask := shift_left(to_unsigned(1, 32), v_size) - 1;
-            v_idx := (v_hash and v_mask);
-            this.mmu.tsbptr :=
-              (this.mmu.tsbbr and x"FFFFFFF0")
-              or std_logic_vector(shift_left(v_idx, 4));
+            this.mmu.tsbptr := tsb_ptr(tlb_fault_va, this.mmu.tsbcfg, this.mmu.tsbbr);
             -- EXPEVT is NOT written here: the fault cause is latched via a
             -- slot-gated sr="EXPEVT" microcode write in the TLB exception
             -- handler microcode (exceptions.toml), mirroring TRAPA/Error, so
@@ -1347,6 +1361,68 @@ end generate;
           end if;
           if PRIV_ARCH and tlb_exc_pend = '0' then
             this.tlb_exc_captured := '0';
+          end if;
+          -- DEFERRED I-FETCH FAULT CAPTURE (fault-on-use). Fires when the
+          -- instruction carrying a recorded I-fetch fault is the one in if_dr,
+          -- i.e. exactly when decode_core's next_op raises TLB_IMISS/TLB_IPROT
+          -- from the same if_fault bit. Everything comes from ONE record:
+          -- VA = this.if_pc (the faulting fetch's own VA)
+          -- kind = this.if_fault_prot ('1' = IPROT, '0' = IMISS)
+          -- is_dslot = id_delay_slot (decode's ID-aligned flag)
+          -- and the restart is the unified rule
+          -- tlb_exc_pc = if_pc - (is_dslot ? 2 : 0)
+          -- read by the IMISS/IPROT entry via SEL_TLBPC with alu_y=0. The -2
+          -- backs the restart up to the BRANCH so it re-issues its delay slot.
+          -- At THIS point id_delay_slot is meaningful (the branch has decoded);
+          -- at fault time it was not. Read at the TOP of the process, before the
+          -- if_en transfer below rewrites if_fault/if_pc, so this.if_fault,
+          -- this.if_pc and id_delay_slot were all registered on the same edge.
+          -- if_exc_captured makes it a one-shot across a stretched dispatch slot
+          -- (if_fault_cap is re-evaluated every cycle of it), and re-arms when the
+          -- slot ends.
+          if MMU_ARCH and if_fault_cap = '1' and this.if_exc_captured = '0' then
+            v_ifsr := (others => '0');
+            if this.if_fault_prot = '1' then
+              -- IPROT: KIND=4, PROT=1, ITLB=1, WRITE=0
+              v_ifsr(11 downto 8) := x"4";
+              v_ifsr(3) := '1'; -- PROT
+            else
+              -- IMISS: KIND=1, PROT=0, ITLB=1, WRITE=0
+              v_ifsr(11 downto 8) := x"1";
+            end if;
+            v_ifsr(2) := '1'; -- ITLB: always an instruction fetch
+            -- Same assembly as the immediate block above: VALID (bit12) is set
+            -- unconditionally (capture only runs on a real fault) and USER (bit4)
+            -- comes from this.sr.md sampled HERE, before SSR is written.
+            this.mmu.fsr := (others => '0');
+            this.mmu.fsr(12) := '1';
+            this.mmu.fsr(11 downto 5) := v_ifsr(11 downto 5);
+            this.mmu.fsr(4) := not this.sr.md;
+            this.mmu.fsr(3 downto 0) := v_ifsr(3 downto 0);
+            this.mmu.tea := this.if_pc;
+            this.mmu.pteh(31 downto 12) := this.if_pc(31 downto 12);
+            this.mmu.pteh(11 downto 0) := (others => '0');
+            if id_delay_slot = '1' then
+              this.tlb_exc_pc := std_logic_vector(unsigned(this.if_pc) - 2);
+            else
+              this.tlb_exc_pc := this.if_pc;
+            end if;
+            -- tlb_exc_sr is NOT captured: the I-side entries save SSR<-SR (live),
+            -- not SSR<-TLBSR -- only the D-side entries read SEL_TLBSR
+            -- (spec/sh4/exceptions.toml).
+            -- TSB pointer assist, from this instruction's own fetch VA. Without
+            -- it the handler's hot path has no TSBPTR for an I-fetch fault and
+            -- every code-page miss falls through to the slow walker (measured:
+            -- sim/tests/mmuirun.S tsb_hits went 2 -> 0).
+            this.mmu.tsbptr := tsb_ptr(this.if_pc, this.mmu.tsbcfg, this.mmu.tsbbr);
+            this.if_exc_captured := '1';
+            -- The D-side @Rn+/@-Rn base restore is NOT armed: ma_numz/ma_autoupd/
+            -- ma_predec still hold the last memory instruction's state and are
+            -- meaningless for an instruction-fetch fault. Same rationale as the
+            -- tlb_exc_ifetch gate in the immediate block.
+          end if;
+          if MMU_ARCH and if_fault_cap = '0' then
+            this.if_exc_captured := '0';
           end if;
           -- Precise-exception squash window. Arm on the first fault cycle; hold
           -- until the handler is entered (SR.RB=1, this design's "in handler"
@@ -1437,6 +1513,7 @@ end generate;
             -- if_dr_next / if_pc_next. See if_fault in components_pkg.vhd.
             if MMU_ARCH then
               this.if_fault_next := inst_fault;
+              this.if_fault_prot_next := inst_fault_prot;
             end if;
             -- Capture this fetch's VA with the instruction word. inst_o.a is the
             -- requested VA[31:1] (the MMU VA->PA fold is in cpu.vhd) and is still
@@ -1515,6 +1592,7 @@ end generate;
               this.illegal_instr := this.illegal_instr_next;
               if MMU_ARCH then
                 this.if_fault := this.if_fault_next;
+                this.if_fault_prot := this.if_fault_prot_next;
               end if;
               if PRIV_ARCH then
                 this.illegal_instr := this.illegal_instr or
@@ -1888,6 +1966,7 @@ end generate;
         illegal_delay_slot <= this_r.illegal_delay_slot;
         illegal_instr <= this_r.illegal_instr;
         if_fault_o <= this_r.if_fault when MMU_ARCH else '0';
+        if_fault_prot_o <= this_r.if_fault_prot when MMU_ARCH else '0';
         cop_o.rna <= copreg(7 downto 4);
         cop_o.rnb <= copreg(3 downto 0);
         cop_o.op <= "11101" when coproc.coproc_cmd = LDS else

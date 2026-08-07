@@ -108,11 +108,20 @@ architecture stru of cpu is
   signal tlb_exc_kind : tlb_exc_kind_t;
   signal tlb_exc_pend : std_logic;
   -- '1' while the outstanding instruction fetch has a translation fault. Feeds
-  -- the datapath's per-instruction status vector (if_fault). Step 1 of deferred
-  -- I-fetch fault delivery: RECORDED only -- tlb_exc_en still raises immediately,
-  -- so behaviour is unchanged until the consumer lands.
+  -- the datapath's per-instruction status vector (if_fault). Narrowed to
+  -- IMISS/IPROT -- the kinds that are actually deferred.
+  -- inst_fault_prot: kind of that fault ('1' = IPROT, '0' = IMISS), recorded
+  -- alongside it. dp_if_fault/dp_if_fault_prot: the same pair once it has landed
+  -- with the instruction in if_dr -- decode raises TLB_IMISS/TLB_IPROT from them
+  -- at that instruction's dispatch boundary (fault-on-use). dec_id_dslot: decode's
+  -- ID-aligned delay-slot flag, returned to the datapath so its deferred capture
+  -- can apply the -2 restart bias. See if_fault in components_pkg.vhd.
   signal inst_fault   : std_logic;
+  signal inst_fault_prot   : std_logic;
   signal dp_if_fault  : std_logic;
+  signal dp_if_fault_prot  : std_logic;
+  signal dec_id_dslot      : std_logic;
+  signal dec_texc_defer_cap : std_logic;
   signal tlb_fault_va : std_logic_vector(31 downto 0);
   -- D-store-on-bus is itself faulting (drives the external demote-to-read).
   signal d_store_faulting : std_logic;
@@ -289,6 +298,10 @@ begin
       tlb_exc_kind       => tlb_exc_kind,
       if_pc              => dp_if_pc,
       delay_slot         => dslot,
+      if_fault           => dp_if_fault,
+      if_fault_prot      => dp_if_fault_prot,
+      id_delay_slot      => dec_id_dslot,
+      texc_defer_cap     => dec_texc_defer_cap,
       ex_if_pc           => dec_ex_if_pc
     );
 
@@ -386,7 +399,11 @@ begin
       tlb_squash_o       => dp_tlb_squash,
       tlb_exc_pend       => tlb_exc_pend,
       inst_fault         => inst_fault,
+      inst_fault_prot    => inst_fault_prot,
       if_fault_o         => dp_if_fault,
+      if_fault_prot_o    => dp_if_fault_prot,
+      id_delay_slot      => dec_id_dslot,
+      if_fault_cap       => dec_texc_defer_cap,
       tlb_fault_va       => tlb_fault_va,
       tlb_exc_expevt     => tlb_exc_expevt,
       tlb_exc_fsr        => tlb_exc_fsr,
@@ -638,7 +655,23 @@ begin
 
       -- Same I-side condition the branch above uses, exported for the datapath
       -- to RECORD with the fetched instruction (deferred delivery, step 1).
-      inst_fault   <= v_ifetch;
+      -- IMISS/IPROT only -- NOT every I-fetch fault. An I-side MULTI_HIT also
+      -- sets v_ifetch, but it is deliberately NOT deferred: it dispatches through
+      -- General Illegal (see decode_core.vhm), and recording it here would make
+      -- next_op's deferred arm raise TLB_IMISS for it instead. This is the same
+      -- narrowing tlb_exc_is_i applies, for the same reason.
+      if (exc_en = '1' and v_ifetch = '1'
+          and (exc_kind = IMISS or exc_kind = IPROT)) then
+        inst_fault <= '1';
+      else
+        inst_fault <= '0';
+      end if;
+      -- Kind of the recorded I-fetch fault.
+      if (exc_kind = IPROT) then
+        inst_fault_prot <= '1';
+      else
+        inst_fault_prot <= '0';
+      end if;
       tlb_exc_en   <= exc_en;
       tlb_exc_kind <= exc_kind;
       tlb_exc_pend <= exc_en;
@@ -746,6 +779,8 @@ begin
     tlb_exc_fsr    <= (others => '0');
     tlb_fault_va   <= (others => '0');
     tlb_exc_expevt <= (others => '0');
+    inst_fault      <= '0'; -- tie off so J1/J2 datapath sees a constant, not a float
+    inst_fault_prot <= '0';
     tlb_exc_is_i   <= '0'; -- tie off so J1/J2 datapath sees a constant, not a float
     tlb_exc_ifetch <= '0'; -- tie off so J1/J2 datapath sees a constant, not a float
   end generate g_no_mmu;

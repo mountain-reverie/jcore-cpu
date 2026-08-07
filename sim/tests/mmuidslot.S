@@ -1,13 +1,22 @@
 ! mmuidslot.S -- I-side TLB fault (IMISS) in a branch delay slot: does the
-! restart land on the BRANCH or elsewhere? (J4). Companion to
-! mmudslot.S (the data-side case). CONFIRMS the I-side restart is BUGGY.
+! restart land on the BRANCH or elsewhere? (J4 + PRIV_ARCH). Companion to
+! mmudslot.S (the data-side case). A POSITIVE guard: it asserts the restart lands
+! on the branch and the delay slot re-executes. It has passed since BEFORE
+! deferred I-fetch fault delivery landed -- this simple, non-interleaved case
+! happened to read delay_slot='1' at fault time, so the header text below was
+! stale. The m8_idslot_* sweeps are the ones that were actually RED.
 !
-! FINDING (measured 2026-07-06): the delay-slot fetch at VA 0x1000 IMISSes; the
-! handler reads SPC = 0x100A = (branch target 0x100C) - 2, i.e. SPC = live PC-2
-! where the live fetch PC has ALREADY been redirected to the branch TARGET by the
-! time the delay-slot fetch misses. So the restart lands PAST the branch, not on
-! it -- the branch is skipped / delay slot not re-issued, and execution then
-! hangs. Correct behaviour = restart at the branch (0x0FFE), like SLOT_ILLEGAL.
+! HISTORY. Measured 2026-07-06, this guard documented a BUG: the delay-slot fetch
+! at VA 0x1000 IMISSed and the handler read SPC = 0x100A = (branch target
+! 0x100C) - 2, i.e. SPC = live PC-2 where the live fetch PC had ALREADY been
+! redirected to the branch TARGET by the time the delay-slot fetch missed, so the
+! restart landed PAST the branch. Root cause (2026-08-06): the delay-slot fetch
+! faults BEFORE its branch decodes, so NO delay-slot indicator is valid at fault
+! time. Fixed by deferred / fault-on-use delivery -- the fault rides with the
+! fetched instruction and is raised, with its restart PC derived from that
+! instruction's own if_pc, at its dispatch boundary, where delay_slot IS
+! meaningful. See if_fault in core/components_pkg.vhd. Correct behaviour, now
+! asserted: restart at the branch (0x0FFE), like SLOT_ILLEGAL.
 !
 ! HARNESS REQUIREMENTS (learned the hard way):
 !  * MUST run with the J4 overlay decoder active (via sim/mmu_sim.sh, or a manual

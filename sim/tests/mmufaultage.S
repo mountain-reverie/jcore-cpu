@@ -28,6 +28,25 @@
 !     IMISS                                           (younger, in ID).
 ! Both are pending together. Nothing else is in flight.
 !
+! WHY THE LOAD IS NON-IDEMPOTENT (this is what makes the guard OBSERVE the
+! defect instead of surviving it). The load at 0x0FFE is `MOV.B @(0,R0),R0`
+! (encoding 0x8400): its BASE (R0, holding 0x00002000) and its DESTINATION
+! (R0) are the SAME register. An earlier version of this guard used
+! `MOV.L @r4, r5` -- base r4, destination r5, DISJOINT registers -- which is
+! IDEMPOTENT: re-executing it after the wrong page was eventually installed
+! at the wrong address still produced the correct answer, because r4 was
+! never touched by a wrongly-committed first attempt. MEASURED on that
+! shape: the machine delivered IMISS before the older DMISS_R and installed
+! the wrong page from the wrong TEA, yet the load's value still landed
+! correctly -- the scenario was RECOVERABLE and the guard PASSED on
+! known-defective RTL, proving nothing. With base==destination, a
+! wrongly-committed first execution overwrites the very operand ANY retry
+! needs: R0 becomes 0xFFFFFFA1 (the correct sign-extended result) or garbage
+! depending on what got read, and a second execution reads from THAT value
+! instead of 0x00002000. A dropped or mis-ordered fault is therefore
+! PERMANENT and OBSERVABLE in the final register value -- it cannot be
+! papered over by retry.
+!
 ! Layout (absolute VAs via .org in the VMA-0 image, like mmuidslot.S):
 !   Page 0 (0x0000-0x0FFF): identity-mapped code/handlers/literals/log.
 !   Page 1 (0x1000-0x1FFF): UNMAPPED -- the fetch after the load.
@@ -35,7 +54,45 @@
 !
 ! STATUS: KNOWN-RED. Deliberately NOT wired into sim/mmu_sim.sh's run -- it is
 ! the reproduction for an OPEN defect, parked the same way m8_dsdslot_0 was.
-! Measured Result=3 (the first fault delivered was not DMISS_R).
+!
+! WHY FAULT-KIND ORDER CANNOT BE OBSERVED VIA VECTOR OFFSET IN THIS CORE.
+! CONFIRMED in decode/gen-go/spec/sh4/exceptions.toml (lines 415, 459, 499,
+! 539, 580, 620): ALL SIX TLB fault kinds (IMISS, DMISS_R, DMISS_W, IPROT,
+! DPROT_R, DPROT_W) vector to the SAME PC <- VBR+0x400. They are distinguished
+! only by EXPEVT (IMISS=0x040, DMISS_R=0x060, DMISS_W=0x080, IPROT=0x0A0,
+! DPROT_R/W=0x0C0), never by vector offset. A three-stub layout at
+! VBR+0x400/+0x420/+0x440 is simply wrong for this hardware: only the +0x400
+! stub can ever be entered, so a "first kind seen" log fed from separate stubs
+! is always 0x40 and a check comparing it against DMISS_R (0x60) can never
+! pass -- not on correct silicon, not on broken silicon. That check was not a
+! valid instrument and has been removed (see CORRECTION below).
+!
+! We do NOT attempt to reimplement kind discrimination by reading EXPEVT
+! here: a prior investigation measured `STC EXPEVT` returning 0 in this
+! configuration for reasons that are not understood, and chasing that is out
+! of scope for this guard. Instead this guard proves ordering INDIRECTLY:
+!
+!   r5 (a copy of r0 taken at 0x1000, before the jmp back) == 0xFFFFFFA1 is
+!   the real proof of correct fault-age ordering. Because the load's base and
+!   destination are the SAME register (see above), this can only be true if
+!   the load committed EXACTLY ONCE, against the correctly-installed page 2,
+!   after both faults were serviced in the correct order. If the older
+!   D-side (DMISS_R) fault is dropped in favor of the younger deferred IMISS
+!   -- the defect under test -- or if it is delivered with the wrong TEA/PTEH
+!   record, the load either never retries or retries against a corrupted
+!   base, and r5 will NOT be 0xFFFFFFA1. Unlike the retired idempotent shape,
+!   there is no path by which a mis-ordered or dropped fault self-repairs.
+!
+! CORRECTION: an earlier version of this guard's check (1) compared
+! `_log_first` (a kind byte assumed to come from separate per-kind vector
+! stubs) against DMISS_R, and reported Result=3. That result was NOT evidence
+! of anything -- it was an artifact of the broken three-stub scheme described
+! above, which could never observe DMISS_R at all. The actual mis-ordering
+! defect was proven independently, on the waveform: the CPU enters the IMISS
+! vector at VBR+0x400 at t=630ns carrying the D-SIDE fault record
+! (tlb_exc_pc=0x1002, TEA=0x2000) -- i.e. the younger I-side fault is
+! dispatched first and clobbers/consumes the older D-side one's delivery slot.
+! See "WHAT THE WAVEFORM SHOWS" below for the full trace.
 !
 ! WHAT THE WAVEFORM SHOWS, and why the obvious fix does not work. Adding
 ! `texc_req = '0'` to decode_core's I-side arms and to texc_defer_cap_o -- "let a
@@ -55,11 +112,22 @@
 ! older instruction can still raise an exception -- which is a pipeline-ordering
 ! change, not a gating tweak.
 !
-! PASS requires all three:
-!   * the FIRST fault delivered is DMISS_R, not IMISS   (fail 3) -- the age rule
-!   * r5 == seed after the dust settles                 (fail 4) -- the symptom
-!   * exactly 2 faults were taken                       (fail 5) -- no re-fault
-!     storm, and neither fault was silently dropped
+! PASS requires both:
+!   * r5 == 0xFFFFFFA1 after the dust settles            (fail 4) -- PRIMARY:
+!     the non-idempotent load committed exactly once, against the correctly
+!     installed page, in the correctly-ordered restart. This is the real
+!     proof of correct fault-age ordering (see above); unlike the retired
+!     idempotent shape, a mis-ordered or dropped fault cannot self-repair
+!     into this value.
+!   * _log_count /= 0                                    (fail 5) -- ANTI-
+!     VACUITY: at least one fault was actually taken, so the PRIMARY check
+!     is not trivially satisfied by the code never faulting at all. This
+!     deliberately does NOT assert an exact count: the non-idempotent retry
+!     may legitimately change how many faults occur, and pinning an exact
+!     count would risk masking the PRIMARY (value) result.
+! (fail codes 4 and 5 are kept as-is; 3 is retired along with check (1). Codes
+! do not collide with #7 -- fell through without faulting -- or _fail's 0x7F
+! clamp.)
 !
 ! J4 overlay opcodes (the assembler does not know these forms):
 !   LDC r0,PTEH=0x405E  LDC r0,PTEL=0x406E  LDC r0,ASIDR=0x407E
@@ -104,17 +172,15 @@ ENTRY(start)
         nop
         nop
 
-        ! ---- VBR = _vbase. Hardware adds +0x400 IMISS / +0x420 DMISS_R /
-        !      +0x440 DMISS_W, so each kind lands on its own stub and the
-        !      handler knows which fault it is without reading EXPEVT. ----
+        ! ---- VBR = _vbase. All six TLB fault kinds vector to the SAME
+        !      PC <- VBR+0x400 on this core (see header); there is one
+        !      handler and it does not attempt to discriminate kind. ----
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
         ! ---- Zero the fault log BEFORE AT is on (plain P0 stores). ----
-        mov.l   p_log_first, r0
-        mov     #0, r1
-        mov.l   r1, @r0
         mov.l   p_log_count, r0
+        mov     #0, r1
         mov.l   r1, @r0
 
         ! ---- Map page 0 identity, W|X|C (no U: kernel fetch, SMEP). ----
@@ -132,17 +198,22 @@ ENTRY(start)
         mov.l   r1, @r0
 
         ! ---- Set up the faulting load's operands and the page-1 return path.
-        !      r4 = 0x2000 (unmapped data page), r5 = 0xAA sentinel (must be
-        !      REPLACED by the seed), r6 = where page 1 bounces back to. ----
-        mov.l   c_data_va, r4
+        !      r0 = 0x2000 (unmapped data page): the instruction at 0x0FFE is
+        !      MOV.B @(0,R0),R0 -- its BASE and its DESTINATION are the SAME
+        !      register, making it NON-IDEMPOTENT (see header). r5 = 0xAA
+        !      sentinel, overwritten at 0x1000 with a copy of r0 for safekeeping
+        !      before the jmp back to page 0. r6 = where page 1 bounces back to. ----
+        mov.l   c_data_va, r0
         mov     #0xAA, r5
         mov.l   p_check, r6
 
         ! ---- Enter at 0x0FFE via jmp, so 0x0FFE is a branch TARGET (NOT a
         !      delay slot -- the nop below is) and the next sequential fetch
-        !      after it is 0x1000, on the unmapped page. ----
-        mov.l   c_load_va, r0
-        jmp     @r0
+        !      after it is 0x1000, on the unmapped page. Use r1 (not r0) for
+        !      the jump target: r0 must hold 0x00002000 unclobbered when
+        !      0x0FFE executes. ----
+        mov.l   c_load_va, r1
+        jmp     @r1
         nop
 
         ! Unreachable unless nothing faulted at all.
@@ -159,51 +230,42 @@ p_ptel_page0:   .long 0x000000C8        ! PA 0x0000 | W|X|C
 c_data_va:      .long 0x00002000        ! page 2, unmapped -> DMISS_R
 c_load_va:      .long 0x00000FFE        ! last halfword of page 0
 p_check:        .long _check
-p_log_first:    .long _log_first
 p_log_count:    .long _log_count
 p_fail:         .long _fail
 
         ! ================= verification, back on page 0 =================
         .balign 4
 _check:
-        ! (1) AGE RULE: the FIRST fault delivered must be DMISS_R (0x60), not
-        !     IMISS (0x40). If IMISS came first the older D-side request was
-        !     preempted -- and, because texc_ack clears it anyway, dropped.
-        mov.l   k_log_first, r0
-        mov.l   @r0, r2
-        mov     #0x60, r3
-        cmp/eq  r3, r2
-        bt      1f
-        mov     #3, r9
-        mov.l   k_fail, r0
-        jmp     @r0
-        nop
-1:
-        ! (2) THE SYMPTOM: the load must have been retried and landed. If the
-        !     D-side fault was dropped, 0x0FFE never re-executed and r5 is
-        !     still the 0xAA sentinel.
-        mov.l   k_seed_va, r0
-        mov.l   @r0, r2                 ! r2 = seed, read directly (page 2 is
-                                        !      mapped by now)
+        ! (1) PRIMARY: r5 holds the copy of r0 taken at 0x1000, AFTER the
+        !     load at 0x0FFE and its retry (if any). Because the load's base
+        !     and destination are the SAME register (r0), a wrongly-committed
+        !     first execution is NOT repairable by retry: if the mis-ordered
+        !     IMISS/DMISS_R delivery let the load commit against the wrong
+        !     (pre-fault, unmapped) address space, or commit twice, r0 will
+        !     NOT be 0xFFFFFFA1. Only a correctly-ordered single retry against
+        !     the properly-installed page 2 produces 0xFFFFFFA1 (sign-extended
+        !     0xA1 byte). See header for the exact failure signature.
+        mov.l   k_expect, r2            ! r2 = 0xFFFFFFA1
         cmp/eq  r2, r5
-        bt      2f
+        bt      1f
         mov     #4, r9
         mov.l   k_fail, r0
         jmp     @r0
         nop
-2:
-        ! (3) Exactly two faults: DMISS_R then IMISS. More means a re-fault
-        !     storm; fewer means one was swallowed.
+1:
+        ! (2) ANTI-VACUITY: at least one fault was actually taken. Do NOT
+        !     assert an exact count -- the non-idempotent retry may
+        !     legitimately change how many faults occur; a wrong-count
+        !     assertion would mask the value result in (1).
         mov.l   k_log_count, r0
         mov.l   @r0, r2
-        mov     #2, r3
-        cmp/eq  r3, r2
-        bt      3f
+        tst     r2, r2
+        bf      2f
         mov     #5, r9
         mov.l   k_fail, r0
         jmp     @r0
         nop
-3:
+2:
         mov     #0, r9
         mov.l   k_done, r0
         jmp     @r0
@@ -212,9 +274,8 @@ _check:
         .align 2
 k_fail:         .long _fail
 k_done:         .long _done
-k_log_first:    .long _log_first
 k_log_count:    .long _log_count
-k_seed_va:      .long 0x00002000
+k_expect:       .long 0xFFFFFFA1
 
         ! ---- Report epilogue. MUST live in PAGE 0: emitted after .org 0x2100
         !      it would sit in the deliberately-unmapped page 2, so every report
@@ -239,26 +300,18 @@ p_test_result:      .long TEST_RESULT_ADDRESS
 p_test_result_pass: .long TEST_PASS_MAGIC
 
         ! ===================== Exception vectors =====================
-        ! One stub per kind so the handler needs no EXPEVT read. Each records
-        ! its kind, then falls into the common install-the-page-for-TEA body.
+        ! ALL SIX TLB fault kinds vector here -- PC <- VBR+0x400 -- on this
+        ! core (see header); there is no per-kind stub and no attempt to
+        ! discriminate kind (that would require reading EXPEVT, which is
+        ! out of scope -- see header).
         .org 0x0600
 _vbase:
         .space 0x400, 0
 
         .org 0x0A00
-_v_imiss:                               ! _vbase + 0x400
+_v_tlbmiss:                             ! _vbase + 0x400 -- ALL TLB fault kinds
         bra     _h_common
-        mov     #0x40, r1               ! delay slot: kind = IMISS
-
-        .org 0x0A20
-_v_dmiss_r:                             ! _vbase + 0x420
-        bra     _h_common
-        mov     #0x60, r1               ! delay slot: kind = DMISS_R
-
-        .org 0x0A40
-_v_dmiss_w:                             ! _vbase + 0x440
-        bra     _h_common
-        mov     #0x80, r1               ! delay slot: kind = DMISS_W
+        nop
 
         ! ---- Common handler. Entered with SR.RB=1, so r0-r7 here are BANK 1
         !      and the interrupted code's r4/r5/r6 (bank 0) are untouched.
@@ -266,17 +319,11 @@ _v_dmiss_w:                             ! _vbase + 0x440
         !      serves both the I-side (page 1) and D-side (page 2) faults. ----
         .org 0x0A60
 _h_common:
-        ! ---- Log: record the FIRST kind seen, and count every entry. ----
+        ! ---- Log: count every entry. ----
         mov.l   Hlog_count, r0
         mov.l   @r0, r2
         add     #1, r2
         mov.l   r2, @r0
-        mov     #1, r3
-        cmp/eq  r3, r2
-        bf      1f                      ! not the first fault -> leave first alone
-        mov.l   Hlog_first, r0
-        mov.l   r1, @r0
-1:
         ! ---- PTEH = TEA & 0xFFFFF000 (VPN of the faulting page). ----
         mov.l   Htea_addr, r0
         mov.l   @r0, r2                 ! r2 = TEA
@@ -299,28 +346,32 @@ _h_common:
 Htea_addr:      .long 0xFF00000C
 Hvpn_mask:      .long 0xFFFFF000
 Hptel_flags:    .long 0x000000C8
-Hlog_first:     .long _log_first
 Hlog_count:     .long _log_count
 
         ! ---- Fault log, in page 0 (mapped, writable). ----
         .org 0x0E80
-_log_first:     .long 0                 ! EXPEVT-ish kind byte of the FIRST fault
 _log_count:     .long 0                 ! number of handler entries
 
         ! ---- The faulting load: LAST halfword of page 0, so the very next
-        !      sequential fetch is 0x1000 on the unmapped page. ----
+        !      sequential fetch is 0x1000 on the unmapped page. NON-IDEMPOTENT:
+        !      MOV.B @(0,R0),R0 -- base and destination are the SAME register,
+        !      so a wrongly-committed first execution corrupts the operand a
+        !      retry needs (see header). ----
         .org 0x0FFE
-        .word   0x6542                  ! MOV.L @r4, r5   (r4 = 0x2000 -> DMISS_R)
+        .word   0x8400                  ! MOV.B @(0,R0),R0  (r0 = 0x2000 -> DMISS_R)
 
         ! ---- Page 1 (UNMAPPED): reached only after BOTH faults are serviced.
-        !      Bounces straight back to page 0 with r5 intact. ----
+        !      Copy r0 to r5 BEFORE bouncing back, since r0 is needed by the
+        !      harness / _check and MUST be preserved across the jmp. ----
         .org 0x1000
+        mov     r0, r5
         jmp     @r6                     ! r6 = _check
         nop
 
-        ! ---- Page 2 (UNMAPPED): the load's data. ----
+        ! ---- Page 2 (UNMAPPED): the load's data. First byte MUST be 0xA1 so
+        !      a correct load sign-extends to r0 = 0xFFFFFFA1. ----
         .org 0x2000
-        .long   0x5A5AA5A5              ! seed -- r5 must end up holding this
+        .byte   0xA1, 0x00, 0x00, 0x00   ! seed -- r0 must end up holding 0xFFFFFFA1
 
         .org 0x2100
 

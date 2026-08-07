@@ -1048,7 +1048,7 @@ func EmitDSideDSlotImagesSkip(classes []Class, skip map[int]bool) ([]string, err
 		b.WriteString(manifest.String())
 	}
 	b.WriteString(`#include "m8_runtime.inc"` + "\n\n")
-	b.WriteString("#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH\n")
+	b.WriteString("#if CONFIG_PRIV_ARCH\n")
 	b.WriteString(" .text\n")
 	b.WriteString(blocks.String())
 	writeRunAll(&b, dispatch.String(), dcount)

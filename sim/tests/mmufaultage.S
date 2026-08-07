@@ -159,7 +159,7 @@ _sim_instr_end: .long 0
 
         .org 0x0200
 ENTRY(start)
-#if CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#if CONFIG_PRIV_ARCH && CONFIG_PRIV_ARCH
 
         ! ---- Ensure RB=0. REQUIRED: the I-side TLB fault path is gated on
         !      SR.RB='0' (core/cpu.vhd). With RB=1 (reset default) I-fetches
@@ -375,4 +375,4 @@ _log_count:     .long 0                 ! number of handler entries
 
         .org 0x2100
 
-#endif  ! CONFIG_MMU_ARCH && CONFIG_PRIV_ARCH
+#endif  ! CONFIG_PRIV_ARCH && CONFIG_PRIV_ARCH

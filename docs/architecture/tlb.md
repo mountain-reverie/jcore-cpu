@@ -427,7 +427,7 @@ entries).
     all (neither `mem_autoupd` nor `mem_predec` nor `mem_autoinc1`).
   - That is 6 of the 9 nominal Model-B forms (the 3 store + 3 load SH-2A
     variants) silently uncovered. This is **latent, not live**: `SH2A_ARCH`
-    and `MMU_ARCH` are never both set in a shipping configuration today, so
+    and `PRIV_ARCH` are never both set in a shipping configuration today, so
     no current build can exercise it — but the code as written does not
     protect these 6 forms, and the SH-2A + MMU restart-safety gap is already
     tracked in §9.5 item 1 for the multi-access forms; this extends the same

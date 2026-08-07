@@ -135,7 +135,7 @@ architecture arch of decode_core is
   signal texc_kind_held : tlb_exc_kind_t;
   signal texc_ack       : std_logic;
 
-  -- Ordered exception delivery (J4+MMU_ARCH). '1' while an instruction OLDER
+  -- Ordered exception delivery (J4+PRIV_ARCH). '1' while an instruction OLDER
   -- than the one in ID is un-retired, i.e. it can still raise a synchronous
   -- exception. Three terms: one combinational (dispatch cycle), two registered
   -- (history):
@@ -151,7 +151,7 @@ architecture arch of decode_core is
   --                             (the w-port retires a slot late, so an instruction
   --                             whose w-port write has not landed has NOT retired)
   -- This signal lives in decode_core rather than decode because both the pipeline
-  -- state (p, ex_stall) and the configuration-bound MMU_ARCH generic are here. Task
+  -- state (p, ex_stall) and the configuration-bound PRIV_ARCH generic are here. Task
   -- 3 will gate exception delivery using this predicate.
   signal older_unretired : std_logic;
 
@@ -236,7 +236,7 @@ begin
 
   maskint <= this'register.maskint;
   delay_slot <= this'register.delay_slot;
-  id_delay_slot_o <= this'register.delay_slot when MMU_ARCH else '0';
+  id_delay_slot_o <= this'register.delay_slot when PRIV_ARCH else '0';
   -- delay_slot_o (the MMU's copy) is NOT this'register.delay_slot. That flag is
   -- re-sampled from delay_jump on EVERY non-stalled slot, so it is a one-SLOT
   -- pulse, not a per-INSTRUCTION attribute: a multi-slot delay-slot instruction
@@ -326,7 +326,7 @@ begin
   g_if_pc_off : if not PRIV_ARCH generate
     if_pc_o <= (others => '0');
   end generate g_if_pc_off;
-  g_older : if MMU_ARCH generate
+  g_older : if PRIV_ARCH generate
     process(clk, rst)
     begin
       if rst = '1' then
@@ -340,7 +340,7 @@ begin
       end if;
     end process;
   end generate g_older;
-  g_older_off : if not MMU_ARCH generate
+  g_older_off : if not PRIV_ARCH generate
     older_unretired <= '0';
   end generate g_older_off;
   -- ext_word: SH2A_ARCH ONLY. The second (extension) word of a two-word SH-2A

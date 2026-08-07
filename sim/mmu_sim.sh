@@ -572,7 +572,7 @@ else
   # Then decode and the datapath cannot disagree, whatever their hold windows.
   #
   # REFUTED, do not repeat: replacing the release condition with handler entry
-  #   if MMU_ARCH and this.sr.rb = '1' then this.tlb_exc_captured := '0';
+  #   if PRIV_ARCH and this.sr.rb = '1' then this.tlb_exc_captured := '0';
   # turns case 1 RED (Result=1001) and does so even with CAS.L skipped, so it is
   # not CAS-specific. "Keep the FIRST episode" is therefore just as wrong as
   # "keep the last": within a single dispatched fault there can be several

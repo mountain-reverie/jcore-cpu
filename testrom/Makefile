@@ -19,7 +19,13 @@ ECHO = /bin/echo
 LDFLAGS = -T startup/sh32.x -Map main.map
 LIBGCC = $(shell $(CC) -print-libgcc-file-name)
 
-CFLAGS := -m2 -g -Os -Wall
+# Freestanding ROM: no libc is linked (see LDFLAGS/LIBGCC below). GCC 14's
+# loop-idiom recognition (-ftree-loop-distribute-patterns, on by default at
+# -O2/-Os) can rewrite hand-written loops into calls to libc functions such
+# as memcpy/memset/strlen -- notably gdb.c's own strl() gets turned into a
+# call to strlen(), which then fails to link. Disable that idiom conversion;
+# this is the same fix the Linux kernel carries for the same reason.
+CFLAGS := -m2 -g -Os -Wall -fno-tree-loop-distribute-patterns
 
 DDR ?= ddr16
 ifeq ($(DDR), lpddr)

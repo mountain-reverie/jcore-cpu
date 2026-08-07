@@ -199,6 +199,9 @@ package decode_pack is
             wb3_stall : pipeline_wb_stall_t;
         end record;
     component decode
+        generic (
+            MMU_ARCH : boolean
+        );
         port (
             clk : in std_logic;
             enter_debug : in std_logic;

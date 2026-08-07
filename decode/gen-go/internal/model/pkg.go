@@ -76,8 +76,15 @@ type RecordField struct {
 
 // ComponentDecl represents one VHDL component declaration.
 type ComponentDecl struct {
-	Name  string // e.g. "decode"
-	Ports []Port // sorted alphabetically by name within each direction group
+	Name     string     // e.g. "decode"
+	Generics []Generic  // sorted alphabetically by name
+	Ports    []Port     // sorted alphabetically by name within each direction group
+}
+
+// Generic is one generic in a component declaration.
+type Generic struct {
+	Name string // e.g. "MMU_ARCH"
+	Type string // e.g. "boolean"
 }
 
 // Port is one port in a component declaration.
@@ -361,6 +368,9 @@ func newStaticPackage() *Package {
 		Components: []ComponentDecl{
 			{
 				Name: "decode",
+				Generics: []Generic{
+					{Name: "MMU_ARCH", Type: "boolean"},
+				},
 				Ports: []Port{
 					{Name: "clk", Direction: "in", Type: "std_logic"},
 					{Name: "enter_debug", Direction: "in", Type: "std_logic"},

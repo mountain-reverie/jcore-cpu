@@ -279,6 +279,7 @@ package decode_pack is
             if_fault_prot : in std_logic;
             id_delay_slot_o : out std_logic;
             texc_defer_cap_o : out std_logic;
+            older_unretired : in std_logic;
             if_pc : in std_logic_vector(31 downto 0);
             if_pc_o : out std_logic_vector(31 downto 0)
         );

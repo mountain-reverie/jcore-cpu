@@ -24,6 +24,17 @@ architecture arch of decode is
     -- one slot-gated stage, PRIV_ARCH-gated so it prunes on non-MMU). ex_if_pc is
     -- just this signal; the datapath shadows the faulting instruction's OWN PC.
     signal if_pc_c : std_logic_vector(31 downto 0);
+    -- Ordered exception delivery (J4+MMU_ARCH). '1' while an instruction OLDER
+    -- than the one in ID is un-retired, i.e. it can still raise a synchronous
+    -- exception. Two terms, both already carried in pipeline_r:
+    --   ex1_stall.ma_issue  a memory access is dispatched but not fault-resolved
+    --   wb*_stall.wrreg_w   a w-port writeback is still draining (the w-port
+    --                       retires a slot late, so an instruction whose w-port
+    --                       write has not landed has NOT retired)
+    -- Registered, never combinational: its consumer is the next_op mux, which is
+    -- Fmax-critical. See docs/superpowers/specs/2026-08-06-mmu-ordered-exception-
+    -- delivery-design.md.
+    signal older_unretired : std_logic;
 {{- if .HasTwoWord }}
     -- SH-2A two-word extension word, latched inside decode_core and
     -- forwarded to decode_table for the IMM_U_12_2-style immediate mux.
@@ -94,6 +105,7 @@ begin
             if_fault_prot => if_fault_prot,
             id_delay_slot_o => id_delay_slot,
             texc_defer_cap_o => texc_defer_cap,
+            older_unretired => older_unretired,
 {{- if .HasTwoWord }}
             ext_word_o => ext_word_c,
 {{- end }}
@@ -175,6 +187,22 @@ begin
         end if;
     end process;
     delay_slot <= delay_slot_r;
+    -- Compute ordered_unretired unconditionally here; decode_core gates it with
+    -- MMU_ARCH, so on non-MMU builds the synthesis tool optimizes away the logic.
+    -- Combine both combinational (ex_stall) and registered (pipeline_r) terms to
+    -- capture dispatch signals in their dispatch cycle rather than the next.
+    process(clk, rst)
+    begin
+      if rst = '1' then
+        older_unretired <= '0';
+      elsif clk = '1' and clk'event then
+        older_unretired <= ex_stall.ma_issue
+                           or pipeline_r.ex1_stall.ma_issue
+                           or pipeline_r.wb1_stall.wrreg_w
+                           or pipeline_r.wb2_stall.wrreg_w
+                           or pipeline_r.wb3_stall.wrreg_w;
+      end if;
+    end process;
     -- if_pc_c is already EX-aligned: decode_core registers the fetch VA twice
     -- (op-latch + one slot-gated stage) INSIDE decode_core, PRIV_ARCH-gated so the
     -- whole per-instruction-PC chain prunes on non-MMU (j1/j2). Just pass it out.

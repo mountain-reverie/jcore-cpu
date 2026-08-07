@@ -6,6 +6,8 @@ use work.cpu2j0_components_pack.all;
 use work.mult_pkg.all;
 use work.cpu2j0_pack.all;
 entity decode is
+    generic (
+        MMU_ARCH : boolean := false);
     port (
 {{- range $i, $p := .Entity.Ports }}
         {{ $p.Name }} : {{ $p.Direction }} {{ $p.Type }}{{ if lt $i (lastIdx $.Entity.Ports) }};{{ end }}
@@ -26,11 +28,20 @@ architecture arch of decode is
     signal if_pc_c : std_logic_vector(31 downto 0);
     -- Ordered exception delivery (J4+MMU_ARCH). '1' while an instruction OLDER
     -- than the one in ID is un-retired, i.e. it can still raise a synchronous
-    -- exception. Two terms, both already carried in pipeline_r:
-    --   ex1_stall.ma_issue  a memory access is dispatched but not fault-resolved
-    --   wb*_stall.wrreg_w   a w-port writeback is still draining (the w-port
-    --                       retires a slot late, so an instruction whose w-port
-    --                       write has not landed has NOT retired)
+    -- exception. Three terms: one combinational (dispatch cycle), two registered
+    -- (history):
+    --   ex_stall.ma_issue         ID-stage combinational dispatch signal: a memory
+    --                             access that is being dispatched THIS cycle (not
+    --                             yet in pipeline_r). Needed because without it the
+    --                             predicate would assert one cycle LATE (550ns vs
+    --                             540ns in mmufaultage), making Task 3's exception
+    --                             gating a no-op.
+    --   pipeline_r.ex1_stall.ma_issue  EX-stage: a memory access dispatched last
+    --                             cycle but not yet fault-resolved
+    --   pipeline_r.wb*_stall.wrreg_w   WB1/2/3-stage: a w-port writeback still
+    --                             draining (the w-port retires a slot late, so an
+    --                             instruction whose w-port write has not landed has
+    --                             NOT retired)
     -- Registered, never combinational: its consumer is the next_op mux, which is
     -- Fmax-critical. See docs/superpowers/specs/2026-08-06-mmu-ordered-exception-
     -- delivery-design.md.
@@ -187,22 +198,23 @@ begin
         end if;
     end process;
     delay_slot <= delay_slot_r;
-    -- Compute ordered_unretired unconditionally here; decode_core gates it with
-    -- MMU_ARCH, so on non-MMU builds the synthesis tool optimizes away the logic.
-    -- Combine both combinational (ex_stall) and registered (pipeline_r) terms to
-    -- capture dispatch signals in their dispatch cycle rather than the next.
-    process(clk, rst)
-    begin
-      if rst = '1' then
-        older_unretired <= '0';
-      elsif clk = '1' and clk'event then
-        older_unretired <= ex_stall.ma_issue
-                           or pipeline_r.ex1_stall.ma_issue
-                           or pipeline_r.wb1_stall.wrreg_w
-                           or pipeline_r.wb2_stall.wrreg_w
-                           or pipeline_r.wb3_stall.wrreg_w;
-      end if;
-    end process;
+    g_older : if MMU_ARCH generate
+      process(clk, rst)
+      begin
+        if rst = '1' then
+          older_unretired <= '0';
+        elsif clk = '1' and clk'event then
+          older_unretired <= ex_stall.ma_issue
+                             or pipeline_r.ex1_stall.ma_issue
+                             or pipeline_r.wb1_stall.wrreg_w
+                             or pipeline_r.wb2_stall.wrreg_w
+                             or pipeline_r.wb3_stall.wrreg_w;
+        end if;
+      end process;
+    end generate g_older;
+    g_older_off : if not MMU_ARCH generate
+      older_unretired <= '0';
+    end generate g_older_off;
     -- if_pc_c is already EX-aligned: decode_core registers the fetch VA twice
     -- (op-latch + one slot-gated stage) INSIDE decode_core, PRIV_ARCH-gated so the
     -- whole per-instruction-PC chain prunes on non-MMU (j1/j2). Just pass it out.

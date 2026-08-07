@@ -1220,13 +1220,12 @@ func axisName(a Axis) string {
 // ---------------------------------------------------------------------------
 
 var (
-	tmplGeneralD     = template.Must(template.New("genD").Parse(generalDText))
-	tmplPrivMemD     = template.Must(template.New("privD").Parse(privMemDText))
-	tmplMacD         = template.Must(template.New("macD").Parse(macDText))
-	tmplIFetch       = template.Must(template.New("ifetch").Parse(iFetchText))
-	tmplIFetchDSlot  = template.Must(template.New("ifetchdslot").Parse(iFetchDSlotText))
-	tmplGeneralDSlot = template.Must(template.New("genDSlot").Parse(generalDSlotText))
-	tmplDSlotAB      = template.Must(template.New("dslotAB").Parse(dSlotABText))
+	tmplGeneralD    = template.Must(template.New("genD").Parse(generalDText))
+	tmplPrivMemD    = template.Must(template.New("privD").Parse(privMemDText))
+	tmplMacD        = template.Must(template.New("macD").Parse(macDText))
+	tmplIFetch      = template.Must(template.New("ifetch").Parse(iFetchText))
+	tmplIFetchDSlot = template.Must(template.New("ifetchdslot").Parse(iFetchDSlotText))
+	tmplDSlotAB     = template.Must(template.New("dslotAB").Parse(dSlotABText))
 
 	tmplModePreservingD = template.Must(template.New("modePreservingD").Parse(modePreservingDText))
 
@@ -1416,94 +1415,6 @@ c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
 c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
 `
 
-// generalDSlotText is generalDText with the memory instruction planted in the
-// DELAY SLOT of a branch: [bra Lx ; instr] runs straight-line from P1 (so the
-// FETCH never faults), and the delay-slot instruction's DATA access to the cold
-// workload page DMISSes. The restart must land on the branch (bra); when the
-// branch re-runs, the delay-slot instruction re-executes -- its base auto-modify
-// (@Rm+/@-Rn) must be restored so it applies exactly once. Snapshot {base reg,
-// dest/probe} on the faulting leg must equal the warm leg.
-//
-// The faulting leg's branch target is DISTINCT from the delay slot's
-// fall-through address (mirrors sim/tests/mmudslot.S's taken_target/_fail
-// split): a wrong restart PC (re-executing the delay-slot instruction
-// sequentially instead of re-issuing it via the branch) falls into a poison
-// trap that clobbers r0 before merging back into the capture code, so the
-// SNAP_A/SNAP_B compare deterministically diverges instead of the two paths
-// coincidentally converging on an identical PC. The warm/control leg never
-// faults, so its branch is always taken correctly and disp=0 is fine there.
-const generalDSlotText = `        .balign 4
-_m8_case_{{.ID}}:                       ! {{.Name}}  (General, D-side in delay slot)
-        sts.l   pr, @-r15
-        ! ---- faulting leg (cold TLB; delay-slot data access DMISSes) ----
-        mov.l   c{{.ID}}_seedva, r0
-        mov.l   c{{.ID}}_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c{{.ID}}_flush, r3
-        jsr     @r3
-        nop
-        mov.l   c{{.ID}}_va, r0
-{{if .IsWrite}}        mov.l   c{{.ID}}_pay, r8
-{{else}}        mov     #0, r8
-{{end}}        bra     c{{.ID}}_Da             ! delayed branch; delay slot faults DMISS
-        .word   {{.Word}}                ! DELAY SLOT: instruction under test
-        ! ---- buggy-landing trap: only reached if the restart re-executed the
-        ! delay-slot instruction sequentially instead of re-issuing it via the
-        ! branch above (wrong restart PC). Poisons r0 so the snapshot below
-        ! cannot coincidentally match the warm leg.
-        mov.l   c{{.ID}}_poison, r0
-c{{.ID}}_Da:
-        mov.l   c{{.ID}}_snapa, r2
-        mov.l   r0, @r2
-{{if .IsWrite}}        mov.l   c{{.ID}}_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-{{else}}        mov.l   r8, @(4,r2)
-{{end}}        ! ---- control leg (warm TLB; no fault) ----
-        mov.l   c{{.ID}}_seedva, r0
-        mov.l   c{{.ID}}_seed, r1
-        mov.l   r1, @r0
-        mov.l   r1, @(4,r0)
-        mov.l   r1, @(8,r0)
-        mov.l   r1, @(12,r0)
-        mov.l   c{{.ID}}_va, r0
-{{if .IsWrite}}        mov.l   c{{.ID}}_pay, r8
-{{else}}        mov     #0, r8
-{{end}}        bra     c{{.ID}}_Db
-        .word   {{.Word}}
-c{{.ID}}_Db:
-        mov.l   c{{.ID}}_snapb, r2
-        mov.l   r0, @r2
-{{if .IsWrite}}        mov.l   c{{.ID}}_probe, r3
-        mov.l   @r3, r1
-        mov.l   r1, @(4,r2)
-{{else}}        mov.l   r8, @(4,r2)
-{{end}}        ! ---- compare ----
-        mov     #8, r4
-        mov.l   c{{.ID}}_id, r5
-        mov.l   c{{.ID}}_cmp, r3
-        jsr     @r3
-        nop
-        lds.l   @r15+, pr
-        rts
-        nop
-        .align 2
-c{{.ID}}_va:     .long {{.BaseInit}}
-c{{.ID}}_seedva: .long 0x00100000
-c{{.ID}}_probe:  .long {{.Probe}}
-c{{.ID}}_seed:   .long 0xA11C0001
-c{{.ID}}_pay:    .long 0x57013333
-c{{.ID}}_snapa:  .long SNAP_A
-c{{.ID}}_snapb:  .long SNAP_B
-c{{.ID}}_id:     .long {{.ID}}
-c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
-c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
-c{{.ID}}_poison: .long 0xBADC0DE1
-`
-
 // dSlotABText emits ONE case routine that runs TWO precise-exception shapes
 // back to back on the same [bra-via-jmp ; instr] delay-slot pair (D-side MAC
 // multi-position ID precedent: distinct _m8_cmp IDs 1000+ID / 2000+ID name
@@ -1535,15 +1446,15 @@ c{{.ID}}_poison: .long 0xBADC0DE1
 // restart-PC failure mode for both fault 1 and fault 2 -- a `mov #-1,r0`
 // there poisons r0 before falling through to a `jmp @r12` bounce back to the
 // capture code, so SNAP_A/SNAP_B deterministically diverge instead of
-// coincidentally converging (same technique generalDSlotText uses, and the
-// trap this axis's I-fetch-delay-slot sibling still lacks -- see emit.go's
-// package doc / task brief for why that convergent-target shape is vacuous).
+// coincidentally converging. The trap is what this axis's I-fetch-delay-slot
+// sibling still lacks -- see emit.go's package doc / task brief for why that
+// convergent-target shape is vacuous.
 //
 // Each leg's whole sequence re-seeds the data page, sets the base/dest regs,
 // and re-enters via the SAME `jmp @r5` into the branch at 0x00100FFE; the
 // warm (control) leg needs no re-flush since the cold leg already installed
-// every page touched. Snapshot {base reg, dest/probe} (8 bytes), matching
-// generalDSlotText.
+// every page touched. Snapshot {base reg, dest/probe} (8 bytes), the same
+// shape the non-delay-slot D-side templates use.
 const dSlotABText = `        .balign 4
 _m8_case_{{.ID}}:                       ! {{.Name}}  (General, D-side delay-slot maximal + target-only)
         sts.l   pr, @-r15
@@ -1805,8 +1716,8 @@ c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
 `
 
 // PrivMem DSlot: privMemDText with the instruction under test planted in the
-// delay slot of a branch (same [bra L ; instr] / poison-trap / _Da/_Db shape
-// as generalDSlotText), for control-register memory LOADS whose destination
+// delay slot of a branch (the [bra L ; instr] / poison-trap / _Da/_Db shape
+// this axis uses throughout), for control-register memory LOADS whose destination
 // is benign-init'able (GBR/PR/MACH/MACL). Snapshot {base GPR, ctrl value}
 // still catches a lost/duplicated auto-modify AND a lost/duplicated ctrl
 // write, now under a delay-slot restart.

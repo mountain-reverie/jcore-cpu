@@ -25,7 +25,14 @@ LIBGCC = $(shell $(CC) -print-libgcc-file-name)
 # as memcpy/memset/strlen -- notably gdb.c's own strl() gets turned into a
 # call to strlen(), which then fails to link. Disable that idiom conversion;
 # this is the same fix the Linux kernel carries for the same reason.
-CFLAGS := -m2 -g -Os -Wall -fno-tree-loop-distribute-patterns
+#
+# -Wa,--isa=sh-j2: J-core code must be assembled AS J-core. -m2 selects
+# generic SH-2 codegen for gcc, but generic SH-2 genuinely lacks the dynamic
+# shifts shad/shld, which the J2 core does implement (see
+# testrom/tests/testshift.s and sim/tests/shldshadguard.S). The assembler
+# needs to be told the real ISA separately from the codegen model; the same
+# pattern is already used in sim/tests/Makefile (-Wa,--isa=any / --isa=sh2a).
+CFLAGS := -m2 -Wa,--isa=sh-j2 -g -Os -Wall -fno-tree-loop-distribute-patterns
 
 DDR ?= ddr16
 ifeq ($(DDR), lpddr)

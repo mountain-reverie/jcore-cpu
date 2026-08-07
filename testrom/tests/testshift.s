@@ -249,6 +249,16 @@ _testgo:
 ! and compare against 0, using R0=0.        
  mov   #0, r0
 !---- SHLD
+! SHAD/SHLD require the assembler to be told this is a J-core part:
+! testrom/Makefile passes -Wa,--isa=sh-j2. Plain -m2 selects generic SH-2,
+! which genuinely lacks the dynamic shifts, so these two mnemonics would be
+! rejected without that flag. The J2 core does implement them: the original
+! j-core "SH-2 Instruction Set.ods" spreadsheet (upstream/master:decode/gen/)
+! defines SHAD 0100nnnnmmmm1100 and SHLD 0100nnnnmmmm1101, and
+! sim/tests/shldshadguard.S measures the J2 hardware computing them correctly
+! (including the zero-shift edge cases). The assembler side was fixed in
+! mountain-reverie/binutils-gdb (jcore branch): shad/shld now carry
+! arch_j2_up, pinned by BINUTILS_JCORE_COMMIT in .github/ci/Dockerfile.
 .rept 4
  mov.l @r1+, r2 ! initial value A
  mov.l @r1+, r3 ! initial value B

@@ -407,14 +407,11 @@
 23   MOV.W R0, @(disp, Rn) General
 24   MOV.W Rm, @Rn        General
 25   MOV.W Rm,@-Rn        General
-26   STC.L GBR, @-Rn      General    skipped-for-enumeration: 26
-27   STC.L SR, @-Rn       PrivMem    skipped-for-enumeration: 27
-28   STC.L VBR, @-Rn      PrivMem    skipped-for-enumeration: 28
-29   STS.L MACH, @-Rn     General
-30   STS.L MACL, @-Rn     General
-31   STS.L PR, @-Rn       General
-32   TAS.B @Rn            General
-# 32 emitted; skipped:
+26   STS.L MACH, @-Rn     General
+27   STS.L MACL, @-Rn     General
+28   STS.L PR, @-Rn       General
+29   TAS.B @Rn            General
+# 29 emitted; skipped:
 #   ADD #imm, Rn         ADD #imm, Rn has no D-side memory access
 #   ADD Rm, Rn           ADD Rm, Rn has no D-side memory access
 #   ADDC Rm, Rn          ADDC Rm, Rn has no D-side memory access
@@ -545,6 +542,9 @@
 #   STC TRA, Rn          STC TRA, Rn has no D-side memory access
 #   STC TSBPTR, Rn       STC TSBPTR, Rn has no D-side memory access
 #   STC VBR, Rn          STC VBR, Rn has no D-side memory access
+#   STC.L GBR, @-Rn      STC.L GBR, @-Rn: control-register-sourced memory store in a delay slot not yet modelled by DSideDSlot (DestCtrl is empty for STC.L -- it reads a control reg and writes memory -- so the PrivMem/DestCtrl guard above cannot catch it; the generic GPR-store template hangs on this form)
+#   STC.L SR, @-Rn       STC.L SR, @-Rn: control-register-sourced memory store in a delay slot not yet modelled by DSideDSlot (DestCtrl is empty for STC.L -- it reads a control reg and writes memory -- so the PrivMem/DestCtrl guard above cannot catch it; the generic GPR-store template hangs on this form)
+#   STC.L VBR, @-Rn      STC.L VBR, @-Rn: control-register-sourced memory store in a delay slot not yet modelled by DSideDSlot (DestCtrl is empty for STC.L -- it reads a control reg and writes memory -- so the PrivMem/DestCtrl guard above cannot catch it; the generic GPR-store template hangs on this form)
 #   STS CP0_COM, Rn      STS CP0_COM, Rn has no D-side memory access
 #   STS CPI_COM, Rn      STS CPI_COM, Rn has no D-side memory access
 #   STS MACH, Rn         STS MACH, Rn has no D-side memory access

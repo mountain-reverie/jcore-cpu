@@ -23,15 +23,16 @@ import (
 	"github.com/j-core/jcore-cpu/decode/gen-go/internal/spec"
 )
 
-// PARKED cases on the D-side-delay-slot axis: STC.L GBR/SR/VBR, @-Rn hang the
-// bus ("Rd did not see ACK for data sram") instead of reporting. MEASURED
-// pre-existing -- they hang identically on the pre-deferred-I-fetch-fault RTL
-// (46b3cc2) and are unrelated to the squash/restart work; the same @-Rn
-// addressing in MOV.W Rm,@-Rn (case 25) passes, so it is the control-register
-// store form, not the pre-decrement. Excluded from dispatch (not from
-// emission, so every later ID is unchanged) so the axis runs and locks the 29
-// cases that DO work -- including case 8, the axis's original park.
-var dsdslotSkip = map[int]bool{26: true, 27: true, 28: true}
+// D-side-delay-slot dispatch-level skip: emitted case IDs excluded from
+// _m8_run_all (case still emitted, ID stable) when a case is known to fail at
+// RUNTIME for reasons unrelated to the harness's ability to model the form.
+// The STC.L GBR/SR/VBR,@-Rn hang (bus "Rd did not see ACK for data sram")
+// that used to be parked here is now skipped at EMISSION instead: those forms
+// are not modelled by the generic GPR-store delay-slot template (see the
+// STC.L skip in faultgen/emit.go:emitDSideDSlot), so they are no longer
+// emitted at all and every later case ID has shifted down. This map is empty
+// again pending any future RTL-side (not harness-modelling) failure.
+var dsdslotSkip = map[int]bool{}
 
 func main() {
 	specDir := flag.String("spec", "spec", "directory of TOML instruction set files")

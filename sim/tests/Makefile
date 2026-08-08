@@ -95,6 +95,27 @@ mmuhuge.img: mmuhuge.elf
 # ---------------------------------------------------------------------------
 MMU_ENABLE_O := $(LINUX_SRC)/arch/sh/kernel/cpu/jcore/mmu_enable.o
 
+# The linux@jcore objects are built OUT OF TREE by kbuild (the full-regression
+# CI job and sim/linux_sim.sh do it); this Makefile must NEVER compile them.
+# These explicit rules exist to override the `%.o: %.c` / `%.o: %.S` pattern
+# rules, which match their absolute paths perfectly well and would rebuild them
+# with plain CFLAGS -- kernel sources need kbuild's include paths and die on
+# `linux/mm.h: No such file or directory`.
+#
+# This is not hypothetical. Adding .cpu-variant as a prerequisite of those
+# pattern rules made exactly that happen in CI: the kbuild-built objects are
+# OLDER than the stamp written at the start of the run, so make considered them
+# out of date and recompiled them locally. mmulinux/mmuboot/mmuhuge all failed
+# to build while every other guard passed. With no prerequisites here, an object
+# that exists is never out of date, and a missing one gets a diagnostic that
+# names the real problem instead of a confusing header error.
+$(TLBJCORE_O) $(EX_O) $(ENTRY_O) $(MMU_ENABLE_O):
+	@test -f $@ || { \
+	  echo "ERROR: $@ is missing."; \
+	  echo "  It is a linux@jcore kbuild output, not built here."; \
+	  echo "  See sim/linux_sim.sh and the full-regression CI job."; \
+	  exit 1; }
+
 mmuboot.o: mmuboot.S
 	mkdir -p $(J4BIN) && ln -sf $(abspath $(J4GAS)) $(J4BIN)/as
 	$(CC) $(CFLAGS) -D__ASSEMBLY__ -I$(LINUX_SRC)/arch/sh/include -B$(J4BIN) -Wa,--isa=any -c $< -o $@

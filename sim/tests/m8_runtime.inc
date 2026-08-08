@@ -277,8 +277,33 @@ _m8_cmp_fail:
         ! a per-case expected number that nothing currently derives. An exact
         ! count would also catch "faulted, but fewer times than intended" --
         ! e.g. the instruction under test replaced by a nop, which still faults
-        ! on the delay-slot I-fetch and so survives this check. Tightening to
-        ! per-leg golden counts is a separate step.
+        ! on the delay-slot I-fetch and so survives this check.
+        !
+        ! KNOWN GAP, and the design to close it (a 2026-08-08 review raised this;
+        ! it was attempted and backed out, deliberately, see below).
+        ! One counter checked after BOTH legs cannot say WHICH leg faulted, so a
+        ! case whose CONTROL (warm) leg also faults still passes and the oracle
+        ! degenerates to comparing fault-vs-fault -- the same vacuity this counter
+        ! exists to close. The same weakness was found and fixed by hand in
+        ! sim/tests/m8_macseq.S, where a counter checked from case entry was
+        ! satisfied by cold-TLB setup faults alone, so this is live, not theory.
+        !
+        ! The fix that works: add M8_FCNT_A and an _m8_fcntsplit helper called at
+        ! the leg boundary, which parks the faulting leg's count in M8_FCNT_A and
+        ! re-zeros M8_FCNT so the control leg is measured alone. _m8_fcntchk then
+        ! asserts BOTH `M8_FCNT_A >= 1` (the faulting leg did fault) and
+        ! `M8_FCNT == 0` (the control leg did not). _m8_fcntsplit must save and
+        ! restore r0-r2 and take NO registers: the emitted cases carry live state
+        ! across that boundary and the templates disagree about which registers,
+        ! so any clobber contract is unsafe.
+        !
+        ! Why it is not done here: the call has to be emitted into EVERY case, and
+        ! decode/gen-go/internal/faultgen/emit.go has NINE templates carrying a
+        ! _fcntchk literal while only four share the `! ---- control leg (warm
+        ! TLB) ----` marker -- the leg boundary is spelled differently in the
+        ! rest and has to be located per template. A partially-applied version
+        ! fails every m8 case at once (fcntchk would read an M8_FCNT_A that no
+        ! template sets), so it is all-or-nothing and wants its own commit.
         .balign 4
 ENTRY(_m8_fcntchk)
         mov.l   m8_fcnt_p, r0

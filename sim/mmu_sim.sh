@@ -41,6 +41,13 @@ done
 if [ "$BUILD" = 1 ]; then
   echo "== build MMU-on cosim (cpu_ctb + cpu_tb + cpu_cache_tb) =="
   cd sim
+  # This rm and the PRIV_ARCH grep below were WORKAROUNDS for sim/Makefile not
+  # tracking CPU_VARIANT: `make CPU_VARIANT=j4` over a j2 tree used to report
+  # "up to date" and leave a PRIV_ARCH=false build in place. sim/Makefile now
+  # carries a .cpu-variant stamp that every .vhh depends on, so the switch is
+  # handled correctly without either. Both are KEPT as belt-and-braces -- the
+  # grep in particular still catches failure modes the stamp cannot (a partial
+  # build, a hand-edited .vhh) -- but they are no longer load-bearing.
   rm -f work-obj93.cf cpu_tb.vhh cpu_cache_tb.vhh cpu_ctb cpu_cache_tb
   make CPU_VARIANT=j4 \
        cpu_ctb cpu_tb cpu_cache_tb cpu_tb.vhh work-obj93.cf >/dev/null

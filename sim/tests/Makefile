@@ -18,7 +18,19 @@ CONFIG_SH2A_ARCH := $(if $(filter j2a,$(CPU_VARIANT)),1,0)
 CFLAGS = -m2 -g -Os -Wall -Iinclude -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_SH2A_ARCH=$(CONFIG_SH2A_ARCH)
 LDFLAGS = -T sh32.x -Map main.map
 
-all: interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img rteredir.img mmureg.img mmuguard.img mmuxlate.img mmufault.img mmufsr.img mmudslot.img mmurte.img mmustore.img mmuimiss.img mmuimiss_illegal.img mmusr.img mmuicolor.img mmudcbit.img mmuldtlbr.img mmutsb.img mmurun.img mmuidx.img mmustres.img mmustr2.img mmudrain.img mmuimissrest.img mmushadowld.img mmushadowst.img mmurestartpc.img mmupcprobe.img mmudspcprobe.img mmudspcprobe_late.img mmudspcprobe_lateb.img mmudspcprobe_latew.img mmudspcprobe_latec.img mmudspcprobe_latem.img mmudspcprobe_latemw.img mmustcldslot.img mmusmep.img mmuirun.img mmuainc.img mmuainc2.img mmureloc.img mmurelocif.img mmurelocbp.img mmustale.img mmuasid.img mmuglobal.img mmumultihit.img mmudblflt.img mmunest_trapa.img mmunest_slotill.img mmunest.img mmuremap.img mmucmpcsr.img mmupage4k.img mmupagereloc16k.img mmupage16k.img mmupage64k.img mmupage1m.img mmupagemix.img mmupagemix2.img mmupagewalk.img m8_smoke.img m8_dside.img m8_ifetch_0.img m8_ifetch_1.img m8_ifetch_2.img m8_macarith.img m8_macseq.img m8_dsdslot_0.img m8_multihit_ifetch.img
+# BASE_IMGS: images that must build AND pass on the base-J2 cpu_ctb.
+# regression.sh Step 6 iterates THIS list (via `make print-base-imgs`)
+# instead of globbing *.img, so J4-only images left behind in this
+# directory by a previous sim/mmu_sim.sh run can never be swept up and
+# run against a decoder that cannot pass them.
+BASE_IMGS := interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img rteredir.img mmureg.img mmuguard.img mmuxlate.img mmufault.img mmufsr.img mmudslot.img mmurte.img mmustore.img mmuimiss.img mmuimiss_illegal.img mmusr.img mmuicolor.img mmudcbit.img mmuldtlbr.img mmutsb.img mmurun.img mmuidx.img mmustres.img mmustr2.img mmudrain.img mmuimissrest.img mmushadowld.img mmushadowst.img mmurestartpc.img mmupcprobe.img mmudspcprobe.img mmudspcprobe_late.img mmudspcprobe_lateb.img mmudspcprobe_latew.img mmudspcprobe_latec.img mmudspcprobe_latem.img mmudspcprobe_latemw.img mmustcldslot.img mmusmep.img mmuirun.img mmuainc.img mmuainc2.img mmureloc.img mmurelocif.img mmurelocbp.img mmustale.img mmuasid.img mmuglobal.img mmumultihit.img mmudblflt.img mmunest_trapa.img mmunest_slotill.img mmunest.img mmuremap.img mmucmpcsr.img mmupage4k.img mmupagereloc16k.img mmupage16k.img mmupage64k.img mmupage1m.img mmupagemix.img mmupagemix2.img mmupagewalk.img m8_smoke.img m8_dside.img m8_ifetch_0.img m8_ifetch_1.img m8_ifetch_2.img m8_macarith.img m8_macseq.img m8_dsdslot_0.img m8_multihit_ifetch.img
+
+all: $(BASE_IMGS)
+
+# Names (no .img suffix), one per line, for regression.sh Step 6.
+.PHONY: print-base-imgs
+print-base-imgs:
+	@printf '%s\n' $(basename $(BASE_IMGS))
 
 # J4-only guard images. These require the J4/PRIV/MMU overlay decoder built
 # by sim/mmu_sim.sh to pass: the base-J2 cpu_ctb cannot fire illegal-

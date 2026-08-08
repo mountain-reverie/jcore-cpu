@@ -14,14 +14,22 @@ ILLEGAL ?= full
 # output of decode_core.vhm produced by sim/Makefile, not by cpugen.
 # Including it here would let `make clean` delete it without `make
 # generate` being able to restore it.
-GENERATED := \
+# GENERATED_COMMITTED: cpugen outputs that are ALSO committed, so a stale copy
+# can diverge from the spec and still build -- these are what `diff` checks.
+GENERATED_COMMITTED := \
     decode_pkg.vhd \
     decode.vhd \
     decode_body.vhd \
     decode_table_simple.vhd \
     decode_table_direct.vhd \
-    decode_table_rom.vhd \
-    sh2instr.c
+    decode_table_rom.vhd
+
+# sh2instr.c is generated but NOT committed (only its template and the golden
+# fixtures are). It is therefore absent on a clean checkout and cannot drift,
+# so `diff` must not demand it -- doing so made `make diff` fail on any tree
+# that had not already run `make generate`, and pass only because of an
+# untracked leftover. It still belongs in GENERATED so `clean` removes it.
+GENERATED := $(GENERATED_COMMITTED) sh2instr.c
 
 .PHONY: generate generate-j4 generate-j2a m8gen clean diff insns insns-check
 
@@ -85,7 +93,7 @@ diff:
 	tmp=$$(mktemp -d); \
 	go -C $(GEN_DIR) run ./cmd/cpugen -w $(ROM_WIDTH) -o $$tmp >/dev/null; \
 	ok=1; \
-	for f in $(GENERATED); do \
+	for f in $(GENERATED_COMMITTED); do \
 	  if [ ! -f $$f ]; then \
 	    echo "DIFF: $$f is missing from working tree (run 'make generate')"; \
 	    ok=0; \

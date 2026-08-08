@@ -74,6 +74,13 @@ def leaks(netlist_path):
     return total, live
 
 
+# Floor for the sanity check at the end of main(): the non-MMU netlist always
+# retains SOME MMU-named nets (tied off, constant-driven). The exact count
+# drifts with synthesis options, so this is a deliberately loose lower bound --
+# its job is to catch "found nothing at all", not to pin a number.
+MIN_EXPECTED_NETS = 8
+
+
 def main(argv):
     if len(argv) != 2:
         print(__doc__, file=sys.stderr)
@@ -92,6 +99,19 @@ def main(argv):
         print("Check for a signal declared at architecture scope and merely tied")
         print("off under `if not MMU_ARCH generate` -- see core/datapath.vhm's")
         print("wb_grace note for why that is not sufficient.")
+        return 1
+
+    # A netlist with no MMU-named nets at all is not a clean result, it is an
+    # instrument failure: a stale/wrong-variant JSON path, or yosys having
+    # dropped netnames under -flatten/opt_clean. Reporting OK there records the
+    # J1/J2 no-leak guarantee as verified while nothing was inspected.
+    if total < MIN_EXPECTED_NETS:
+        print(f"FAIL: only {total} MMU-named net(s) found in the netlist "
+              f"(expected at least {MIN_EXPECTED_NETS}).")
+        print("This is almost certainly a BROKEN CHECK rather than a clean")
+        print("netlist -- wrong/stale JSON path, wrong variant, or yosys")
+        print("dropped netnames (-flatten / opt_clean). Verify the netlist")
+        print("before treating the absence of leaks as a pass.")
         return 1
 
     print(f"OK: {total} MMU-named net(s) present, all constant-driven (no leak).")

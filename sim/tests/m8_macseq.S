@@ -39,9 +39,31 @@ ENTRY(_m8_run_all)
         ! ---- faulting MAC: precise, acc = A0*B0 = 6 ----
         mov.l   ms_va, r0
         mov.l   ms_vb, r8
+        ! Zero the fault counter HERE, not at entry. Everything above -- the
+        ! setup stores and the PC-relative literal loads that follow the flush --
+        ! also faults on the cold TLB, so a counter checked from entry is
+        ! nonzero no matter what the MACs do. MEASURED: with the check placed
+        ! after entry, deleting the _m8_flush call still left this guard GREEN.
+        ! Clearing immediately before the faulting MAC makes the assertion below
+        ! mean "the MAC sequence itself faulted" and nothing weaker. The store
+        ! is to a P1 address, so it cannot itself fault and perturb the count.
+        mov.l   ms_fcnt_p, r1
+        mov     #0, r2
+        mov.l   r2, @r1
         mac.l   @r0+, @r8+
         ! ---- clean MAC (pages warm now), NO acc clear: acc += A1*B1 = 35 ----
         mac.l   @r0+, @r8+
+        ! ---- ANTI-VACUITY: assert a TLB fault actually fired. Without this the
+        ! pass condition (MACH:MACL == 0:41) is satisfied by two ORDINARY,
+        ! fault-free MAC.L executions, so a regression in the _m8_flush/TI path
+        ! that stopped emptying the TLB would silently demote this guard to a
+        ! plain MAC arithmetic test -- exactly the hole commit 36bf69c closed
+        ! for the nine faultgen-emitted sites, which this hand-written one was
+        ! never given. Called through the P1 alias like every other runtime
+        ! helper here, so it cannot itself fault on a cold TLB. ----
+        mov.l   ms_fcntchk, r3
+        jsr     @r3
+        nop
         ! ---- check acc == 41 (MACH=0, MACL=0x29) ----
         sts     mach, r2
         mov.l   ms_exp_h, r3
@@ -71,5 +93,7 @@ ms_b1:     .long 7
 ms_exp_h:  .long 0x00000000
 ms_exp_l:  .long 0x00000029           ! 6 + 35 = 41
 ms_flush:  .long 0x80000000 + _m8_flush
+ms_fcntchk: .long 0x80000000 + _m8_fcntchk
+ms_fcnt_p:  .long 0x80011300           ! M8_FCNT (see m8_runtime.inc)
 ms_result: .long TEST_RESULT_ADDRESS
 #endif

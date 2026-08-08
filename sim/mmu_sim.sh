@@ -643,6 +643,14 @@ else
   # (I-side MULTI_HIT must not arm the D-side restore; D-side MULTI_HIT
   # still must). Measured completion ~3.95us (m8_pass.vcd); 100us margin.
   run_guard m8_multihit_ifetch "" 100us
+  # Task #12 MEASUREMENT guard: an I-side MULTI_HIT belongs to an instruction
+  # being FETCHED (younger than anything in EX/MA) yet rides the first-come
+  # D-side held path. mmumhorder puts an older D-side DMISS_R in the delay slot
+  # of the branch whose target multi-hits and separates the two possible
+  # defects: Result=2 means the younger MULTI_HIT pre-empted the older fault
+  # (ordering), Result=4 means the older delay-slot load was squashed and never
+  # re-executed (lost instruction). See the file header before touching the RTL.
+  run_guard mmumhorder "" 100us
 fi
 
 if [ "$fail" = 0 ]; then echo "==> all guards PASSED"; else echo "==> FAILURES above" >&2; exit 1; fi

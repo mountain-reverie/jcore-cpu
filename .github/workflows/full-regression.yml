@@ -286,9 +286,9 @@ jobs:
           # store through the new mapping. 300us stop-time for handler latency.
           run_guard mmupagewalk cpu_cache_tb 300us
           # M8 D-side fault-transparency sweep (34 cases; needs 200us to complete).
-          # m8_smoke is the one previously-orphaned guard that passes;
-          # mmubratest and m8_idslot_0..2 are built but invoked by nothing
-          # and currently fail -- see the note in sim/mmu_sim.sh.
+          # (The note that once stood here -- that m8_idslot_0..2 were "built but
+          # invoked by nothing and currently fail" -- was stale: they pass, and
+          # they are invoked below. mmubratest was retired in 26b3d87.)
           run_guard m8_smoke
           run_guard m8_dside "" 200us
           # M8 MAC-arithmetic guard (short, 80us is sufficient).
@@ -305,6 +305,25 @@ jobs:
           run_guard m8_ifetch_0 "" 12ms 240
           run_guard m8_ifetch_1 "" 12ms 240
           run_guard m8_ifetch_2 "" 12ms 240
+
+          # Guards that lock the deferred-I-fetch / TLB-fault-ordering work on
+          # this branch. They were previously run ONLY by sim/mmu_sim.sh, which
+          # keeps its own list -- so the RTL fixes they exist to lock were
+          # unguarded in CI. See CLAUDE.md on that divergence.
+          #   m8_idslot_*      deferred I-fetch fault delivery, 3 sub-images
+          #   m8_dsdslot_0     D-side fault in a branch delay slot (600us)
+          #   m8_multihit_ifetch  genuine I-side TLB MULTI_HIT + restart shadow
+          #   mmumhorder       I-side MULTI_HIT vs an older in-flight D-side access
+          #   mmuidorder       older held D-side fault vs younger deferred I-fetch
+          #                    fault at one dispatch boundary; Result=2 without
+          #                    the decode_core fix
+          run_guard m8_idslot_0 "" 200us
+          run_guard m8_idslot_1 "" 200us
+          run_guard m8_idslot_2 "" 200us
+          run_guard m8_dsdslot_0 "" 600us
+          run_guard m8_multihit_ifetch "" 100us
+          run_guard mmumhorder "" 100us
+          run_guard mmuidorder "" 100us
 
           # SP2: mmulinux links the REAL linux@jcore MMU TLB-miss handler
           # objects (built by kbuild above, via the WIP J4 gas/ld) against a

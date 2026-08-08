@@ -220,6 +220,59 @@ Tests for instruction cache, data cache write/eviction, TAS atomic access, singl
 ### Test Output
 Tests print "Test Passed" on success or "Test failed. Result=N" on failure (where N identifies the failing check).
 
+### MMU / priv-arch guards (`sim/mmu_sim.sh`)
+
+Most MMU and privileged-architecture work is verified here, not by
+`regression.sh`. It builds a `CPU_VARIANT=j4` cosim (the MMU instructions live
+in the J4 overlay decoder) and runs the guard set.
+
+- **`-n` skips the build entirely** — it is not "make decides nothing changed",
+  make is never invoked. Any RTL change measured under `-n` is measured against
+  stale hardware. Rebuild (no `-n`) for every RTL A/B, however small.
+- **CI keeps its OWN guard list, and the two diverge in BOTH directions.**
+  `.github/workflows/full-regression.yml` defines its own `run_guard` and its
+  own sequence; adding a guard to `sim/mmu_sim.sh` does not add it to CI, or the
+  reverse. Measured 2026-08-08: ~34 guards ran locally but not in CI —
+  including `mmudrain`, every `mmudspcprobe*`, `mmurestartpc`, `mmufaultage`,
+  `mmudblflt`, the `mmunest*` set, and the guards locking this branch's own RTL
+  fixes. **When you add a guard, add it to BOTH**, and diff the two lists when
+  you touch either.
+- The three Linux harnesses go the other way: `mmulinux`, `mmuboot` and
+  `mmuhuge` drive the REAL linux@jcore TLB-miss handler and page tables, and are
+  **not referenced by `sim/mmu_sim.sh` at all**. They run only in CI and via
+  `sim/linux_sim.sh`, and both need linux@jcore kbuild objects under
+  `$(LINUX_SRC)` that a normal checkout does not have. A fully green local run
+  says nothing about the real Linux handler; expect CI to be the first thing
+  that exercises it.
+- `run_guard` discards a guard's output on PASS — to see anything from a passing
+  run (an RTL `assert`, a trace), invoke `./cpu_ctb` directly.
+
+### Writing a guard
+
+A guard that passes *without exercising its scenario* is the default failure
+mode in this repo, not an exotic one. Before trusting green:
+
+- **Mutate it and confirm red.** Break the construction and check the guard
+  fails **with its own result code**, not a timeout and not a neighbour's code.
+  Give distinct failure IDs to distinct defects so they cannot be conflated.
+- **A hand-assembled `.word` is an unchecked assertion about the hardware** —
+  the assembler validates nothing. When a guard reports a defect the RTL cannot
+  explain, re-derive every hand-written opcode from its encoding table *before*
+  probing the RTL.
+- To find out whether a scenario is reachable at all, add a temporary
+  `assert ... severity warning` probe to the RTL and sweep every image in
+  `sim/tests/`. Prove the probe itself is live (relax it until it fires) before
+  believing a zero-hit result.
+
+### Tracked generated files
+
+`core/datapath.vhd` is generated from `core/datapath.vhm` by v2p **and
+committed**. Editing the `.vhm` means committing the regenerated `.vhd` too.
+`make verify-generated` (regression.sh Step 1b) compares the *working tree*,
+which every build refreshes — so the local check passes even when the committed
+copy is stale, and only CI compares the commit. `make verify-v2p` now prints a
+NOTE when a tracked `.vhd` is regenerated but uncommitted.
+
 ## GitHub Pages
 
 - `docs/insns/` is deployed to GitHub Pages via `synth-cpu.yml` as an interactive SH instruction reference (jQuery Dynatable).

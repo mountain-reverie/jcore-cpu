@@ -1203,7 +1203,7 @@ end generate;
 
 	ibit <= sr.int_mask;
 
-	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, squash_arm, tlb_fault_va, tlb_exc_expevt, tlb_exc_fsr, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, inst_fault, inst_fault_prot, id_delay_slot, if_fault_cap, tlb_exc_is_i, tlb_exc_ifetch, ex_if_pc)
+	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, squash_arm, tlb_fault_va, tlb_exc_expevt, tlb_exc_fsr, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, inst_fault, inst_fault_prot, id_delay_slot, if_fault_cap, tlb_exc_is_i, tlb_exc_ifetch, ex_if_pc, tlb_squash_r, squash_ifetch_r)
 	  register this when clk='1' and clk'event reset when rst='1';
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);

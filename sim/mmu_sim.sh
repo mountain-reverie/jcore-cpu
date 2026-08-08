@@ -651,6 +651,14 @@ else
   # (ordering), Result=4 means the older delay-slot load was squashed and never
   # re-executed (lost instruction). See the file header before touching the RTL.
   run_guard mmumhorder "" 100us
+  # Ordered delivery of an OLDER held D-side TLB fault against a YOUNGER
+  # deferred I-fetch fault at the same dispatch boundary. Locks the
+  # `event_wins` qualification of texc_ack/texc_defer_cap_o in decode_core:
+  # against the pristine tree this guard reports Result=2, the older page fault
+  # never delivered at all. See the file header -- its check 4 (the older
+  # access actually landing its value) is a SEPARATE, still-OPEN defect and is
+  # deliberately not asserted.
+  run_guard mmuidorder "" 100us
 fi
 
 if [ "$fail" = 0 ]; then echo "==> all guards PASSED"; else echo "==> FAILURES above" >&2; exit 1; fi

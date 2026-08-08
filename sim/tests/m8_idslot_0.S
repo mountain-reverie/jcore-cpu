@@ -206,6 +206,9 @@ c1_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c1_id, r5
+        mov.l   c1_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c1_cmp, r3
         jsr     @r3
         nop
@@ -229,6 +232,7 @@ c1_snapa:  .long SNAP_A
 c1_snapb:  .long SNAP_B
 c1_id:     .long 1
 c1_cmp:    .long 0x80000000 + _m8_cmp
+c1_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c1_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -310,6 +314,9 @@ c2_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c2_id, r5
+        mov.l   c2_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c2_cmp, r3
         jsr     @r3
         nop
@@ -333,6 +340,7 @@ c2_snapa:  .long SNAP_A
 c2_snapb:  .long SNAP_B
 c2_id:     .long 2
 c2_cmp:    .long 0x80000000 + _m8_cmp
+c2_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c2_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -414,6 +422,9 @@ c3_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c3_id, r5
+        mov.l   c3_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c3_cmp, r3
         jsr     @r3
         nop
@@ -437,6 +448,7 @@ c3_snapa:  .long SNAP_A
 c3_snapb:  .long SNAP_B
 c3_id:     .long 3
 c3_cmp:    .long 0x80000000 + _m8_cmp
+c3_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c3_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -518,6 +530,9 @@ c4_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c4_id, r5
+        mov.l   c4_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c4_cmp, r3
         jsr     @r3
         nop
@@ -541,6 +556,7 @@ c4_snapa:  .long SNAP_A
 c4_snapb:  .long SNAP_B
 c4_id:     .long 4
 c4_cmp:    .long 0x80000000 + _m8_cmp
+c4_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c4_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -622,6 +638,9 @@ c5_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c5_id, r5
+        mov.l   c5_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c5_cmp, r3
         jsr     @r3
         nop
@@ -645,6 +664,7 @@ c5_snapa:  .long SNAP_A
 c5_snapb:  .long SNAP_B
 c5_id:     .long 5
 c5_cmp:    .long 0x80000000 + _m8_cmp
+c5_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c5_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -726,6 +746,9 @@ c6_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c6_id, r5
+        mov.l   c6_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c6_cmp, r3
         jsr     @r3
         nop
@@ -749,6 +772,7 @@ c6_snapa:  .long SNAP_A
 c6_snapb:  .long SNAP_B
 c6_id:     .long 6
 c6_cmp:    .long 0x80000000 + _m8_cmp
+c6_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c6_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -830,6 +854,9 @@ c7_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c7_id, r5
+        mov.l   c7_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c7_cmp, r3
         jsr     @r3
         nop
@@ -853,6 +880,7 @@ c7_snapa:  .long SNAP_A
 c7_snapb:  .long SNAP_B
 c7_id:     .long 7
 c7_cmp:    .long 0x80000000 + _m8_cmp
+c7_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c7_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -934,6 +962,9 @@ c8_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c8_id, r5
+        mov.l   c8_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c8_cmp, r3
         jsr     @r3
         nop
@@ -957,6 +988,7 @@ c8_snapa:  .long SNAP_A
 c8_snapb:  .long SNAP_B
 c8_id:     .long 8
 c8_cmp:    .long 0x80000000 + _m8_cmp
+c8_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c8_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1038,6 +1070,9 @@ c9_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c9_id, r5
+        mov.l   c9_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c9_cmp, r3
         jsr     @r3
         nop
@@ -1061,6 +1096,7 @@ c9_snapa:  .long SNAP_A
 c9_snapb:  .long SNAP_B
 c9_id:     .long 9
 c9_cmp:    .long 0x80000000 + _m8_cmp
+c9_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c9_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1142,6 +1178,9 @@ c10_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c10_id, r5
+        mov.l   c10_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c10_cmp, r3
         jsr     @r3
         nop
@@ -1165,6 +1204,7 @@ c10_snapa:  .long SNAP_A
 c10_snapb:  .long SNAP_B
 c10_id:     .long 10
 c10_cmp:    .long 0x80000000 + _m8_cmp
+c10_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c10_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1246,6 +1286,9 @@ c11_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c11_id, r5
+        mov.l   c11_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c11_cmp, r3
         jsr     @r3
         nop
@@ -1269,6 +1312,7 @@ c11_snapa:  .long SNAP_A
 c11_snapb:  .long SNAP_B
 c11_id:     .long 11
 c11_cmp:    .long 0x80000000 + _m8_cmp
+c11_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c11_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1350,6 +1394,9 @@ c12_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c12_id, r5
+        mov.l   c12_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c12_cmp, r3
         jsr     @r3
         nop
@@ -1373,6 +1420,7 @@ c12_snapa:  .long SNAP_A
 c12_snapb:  .long SNAP_B
 c12_id:     .long 12
 c12_cmp:    .long 0x80000000 + _m8_cmp
+c12_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c12_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1454,6 +1502,9 @@ c13_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c13_id, r5
+        mov.l   c13_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c13_cmp, r3
         jsr     @r3
         nop
@@ -1477,6 +1528,7 @@ c13_snapa:  .long SNAP_A
 c13_snapb:  .long SNAP_B
 c13_id:     .long 13
 c13_cmp:    .long 0x80000000 + _m8_cmp
+c13_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c13_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1558,6 +1610,9 @@ c14_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c14_id, r5
+        mov.l   c14_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c14_cmp, r3
         jsr     @r3
         nop
@@ -1581,6 +1636,7 @@ c14_snapa:  .long SNAP_A
 c14_snapb:  .long SNAP_B
 c14_id:     .long 14
 c14_cmp:    .long 0x80000000 + _m8_cmp
+c14_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c14_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1662,6 +1718,9 @@ c15_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c15_id, r5
+        mov.l   c15_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c15_cmp, r3
         jsr     @r3
         nop
@@ -1685,6 +1744,7 @@ c15_snapa:  .long SNAP_A
 c15_snapb:  .long SNAP_B
 c15_id:     .long 15
 c15_cmp:    .long 0x80000000 + _m8_cmp
+c15_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c15_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1766,6 +1826,9 @@ c16_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c16_id, r5
+        mov.l   c16_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c16_cmp, r3
         jsr     @r3
         nop
@@ -1789,6 +1852,7 @@ c16_snapa:  .long SNAP_A
 c16_snapb:  .long SNAP_B
 c16_id:     .long 16
 c16_cmp:    .long 0x80000000 + _m8_cmp
+c16_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c16_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1870,6 +1934,9 @@ c17_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c17_id, r5
+        mov.l   c17_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c17_cmp, r3
         jsr     @r3
         nop
@@ -1893,6 +1960,7 @@ c17_snapa:  .long SNAP_A
 c17_snapb:  .long SNAP_B
 c17_id:     .long 17
 c17_cmp:    .long 0x80000000 + _m8_cmp
+c17_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c17_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1974,6 +2042,9 @@ c18_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c18_id, r5
+        mov.l   c18_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c18_cmp, r3
         jsr     @r3
         nop
@@ -1997,6 +2068,7 @@ c18_snapa:  .long SNAP_A
 c18_snapb:  .long SNAP_B
 c18_id:     .long 18
 c18_cmp:    .long 0x80000000 + _m8_cmp
+c18_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c18_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -2078,6 +2150,9 @@ c19_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c19_id, r5
+        mov.l   c19_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c19_cmp, r3
         jsr     @r3
         nop
@@ -2101,6 +2176,7 @@ c19_snapa:  .long SNAP_A
 c19_snapb:  .long SNAP_B
 c19_id:     .long 19
 c19_cmp:    .long 0x80000000 + _m8_cmp
+c19_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c19_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -2182,6 +2258,9 @@ c20_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c20_id, r5
+        mov.l   c20_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c20_cmp, r3
         jsr     @r3
         nop
@@ -2205,6 +2284,7 @@ c20_snapa:  .long SNAP_A
 c20_snapb:  .long SNAP_B
 c20_id:     .long 20
 c20_cmp:    .long 0x80000000 + _m8_cmp
+c20_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c20_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -2286,6 +2366,9 @@ c21_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c21_id, r5
+        mov.l   c21_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c21_cmp, r3
         jsr     @r3
         nop
@@ -2309,6 +2392,7 @@ c21_snapa:  .long SNAP_A
 c21_snapb:  .long SNAP_B
 c21_id:     .long 21
 c21_cmp:    .long 0x80000000 + _m8_cmp
+c21_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c21_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -2390,6 +2474,9 @@ c22_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c22_id, r5
+        mov.l   c22_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c22_cmp, r3
         jsr     @r3
         nop
@@ -2413,6 +2500,7 @@ c22_snapa:  .long SNAP_A
 c22_snapb:  .long SNAP_B
 c22_id:     .long 22
 c22_cmp:    .long 0x80000000 + _m8_cmp
+c22_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c22_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -2494,6 +2582,9 @@ c23_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c23_id, r5
+        mov.l   c23_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c23_cmp, r3
         jsr     @r3
         nop
@@ -2517,6 +2608,7 @@ c23_snapa:  .long SNAP_A
 c23_snapb:  .long SNAP_B
 c23_id:     .long 23
 c23_cmp:    .long 0x80000000 + _m8_cmp
+c23_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c23_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -2598,6 +2690,9 @@ c24_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c24_id, r5
+        mov.l   c24_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c24_cmp, r3
         jsr     @r3
         nop
@@ -2621,6 +2716,7 @@ c24_snapa:  .long SNAP_A
 c24_snapb:  .long SNAP_B
 c24_id:     .long 24
 c24_cmp:    .long 0x80000000 + _m8_cmp
+c24_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c24_flush:  .long 0x80000000 + _m8_flush
 
 ENTRY(_m8_run_all)

@@ -53,6 +53,8 @@
 !   SNAP_A           0x80011000   (P1, untranslated)
 !   SNAP_B           0x80011100   (P1, untranslated)
 !   ctlsv            0x80011200   (PrivMem D-side control-reg baseline save slot)
+!   M8_FCNT          0x80011300   (fault counter; _h_common increments it once
+!                                  per TLB fault, both fast and slow path)
 !   PGD              0x80010000 -> PTE table base 0x80010400 (PGD[0]=0x80010401)
 !   PTE for 0x00100  0x80010800   (= pte_tab[0x100])  value 0x001000F1
 !   TSB (16 entries) 0x80010C00
@@ -71,6 +73,17 @@
 
 #define SNAP_A 0x80011000
 #define SNAP_B 0x80011100
+! M8_FCNT: total TLB faults taken, incremented once per entry to _h_common
+! (which is the common target of the IMISS/DMISS_R/DMISS_W vectors, so it
+! counts every fault on both the fast and the slow path).
+!
+! Why this exists: the axes compare a faulting run against a reference run and
+! assert the architectural state matches. That says nothing about whether a
+! fault ever happened, so a case whose fault stops firing still passes. Measured
+! on m8_dsdslot_0 (2026-08-07): pointing a case's flush at _m8_flush+6, so
+! MMUCR.TI is never set and no fault CAN occur, left the case green. The
+! counter turns "a fault fired" into something a case can assert.
+#define M8_FCNT 0x80011300
 
         .section .vect
         .long start
@@ -244,6 +257,41 @@ _m8_cmp_fail:
 2:      bra     2b
         nop
 
+        ! _m8_fcntchk: assert at least one fault was taken by the run that just
+        !              finished, THEN clear the counter for the next run.
+        !              r5 = this case's numeric ID (same convention as _m8_cmp:
+        !              on failure the ID is written to TEST_RESULT_ADDRESS and
+        !              the test spins, so the co-sim reports Result=<id>).
+        !              Clobbers r0, r1.
+        !
+        ! Check-and-clear, so no separate "reset" call is needed at the flush
+        ! sites: every measured run starts from zero because the preceding
+        ! check zeroed it. That matters for more than brevity -- the counter
+        ! must NOT be cleared inside _m8_flush, because the mutation this whole
+        ! mechanism exists to catch (pointing a case's flush literal at
+        ! _m8_flush+6 so the flush is skipped) would then skip the clear too,
+        ! leave a stale nonzero count behind, and pass anyway.
+        !
+        ! Deliberately ">= 1", not an exact count: it closes the demonstrated
+        ! hole (a case whose fault never fires still passing) without baking in
+        ! a per-case expected number that nothing currently derives. An exact
+        ! count would also catch "faulted, but fewer times than intended" --
+        ! e.g. the instruction under test replaced by a nop, which still faults
+        ! on the delay-slot I-fetch and so survives this check. Tightening to
+        ! per-leg golden counts is a separate step.
+        .balign 4
+ENTRY(_m8_fcntchk)
+        mov.l   m8_fcnt_p, r0
+        mov.l   @r0, r1
+        tst     r1, r1
+        bt      _m8_cmp_fail           ! count == 0 -> no fault fired
+        mov     #0, r1
+        rts
+         mov.l  r1, @r0                ! clear for the next run
+
+        .balign 4
+m8_fcnt_p: .long M8_FCNT
+
         .align 2
 m8_mmucr:  .long 0xFF000010
 m8_snapa:  .long SNAP_A
@@ -270,6 +318,15 @@ _v_store:                               ! _vbase + 0x440  (DMISS_W)
 
         ! ---- §4.1 hot path (bank-1 scratch; AT stays ON). ----
 _h_common:
+        ! M8_FCNT++ -- placed BEFORE the fast/slow split so it counts every
+        ! fault regardless of which path services it. r4/r5 are bank-1 scratch
+        ! here (hardware sets RB=1 on exception entry) and the fast path below
+        ! only uses r0-r3, so clobbering them is safe; _h_slow reloads r4-r7
+        ! itself before the walker call.
+        mov.l   H_fcnt, r4
+        mov.l   @r4, r5
+        add     #1, r5
+        mov.l   r5, @r4
         .word   0x0043                  ! STC TSBPTR, r0
         mov.l   @r0+, r1                ! tag_hi (expected VPN)
         .word   0x0253                  ! STC PTEH, r2
@@ -310,6 +367,7 @@ _h_realfault:
         nop
 
         .align 2
+H_fcnt:   .long M8_FCNT
 H_pgd:    .long 0x80010000
 H_walk:   .long 0x80000000 + ___jcore_tlb_walk  ! P1 alias: walker runs untranslated
 H_mmucr:  .long 0xFF000010

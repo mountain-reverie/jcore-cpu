@@ -110,6 +110,18 @@ check_led_log() {
 echo "==> Step 1: go test ./..."
 go -C "$SCRIPT_DIR" test ./...
 
+echo "==> Step 1b: committed generated files match their sources"
+# MUST run before Step 2 and before any build: Step 2 regenerates decode/*.vhd
+# and the .vhm->.vhd rules regenerate core/datapath.vhd, so after either of
+# those a drift check can only ever pass. Checking here is the only point at
+# which the COMMITTED bytes are still the ones under test.
+#
+# Drift in a committed generated file is invisible to every other step -- a
+# stale copy builds and simulates fine, and mmu_sim.sh regenerates at build
+# time so it never reads the committed copy. A fully green suite therefore
+# cannot detect it; this step is the only thing that can.
+make -C "$REPO_ROOT" verify-generated TOOLS_DIR="$TOOLS_DIR"
+
 echo "==> Step 2: regenerate decode/*.vhd (ROM_WIDTH=$ROM_WIDTH)"
 make -C "$REPO_ROOT/decode" generate ROM_WIDTH="$ROM_WIDTH"
 
@@ -222,8 +234,24 @@ else
     sim_fail=0
     sim_skip=0
 
-    for img in "$REPO_ROOT"/sim/tests/*.img; do
-        name="$(basename "$img" .img)"
+    # Iterate the Makefile's BASE_IMGS list, NOT a *.img glob. sim/mmu_sim.sh
+    # builds J4-only images into this same directory; a glob sweeps those up
+    # and runs them on the base-J2 cpu_ctb, which cannot pass them. That is
+    # not hypothetical -- it is what produced a bogus "101 of 105 failed" on a
+    # tree whose committed sources are green. Driving the list from the
+    # Makefile makes leftover files structurally irrelevant rather than
+    # something the caller has to remember to clean.
+    base_imgs="$(make -s -C "$REPO_ROOT/sim/tests" print-base-imgs)"
+    if [ -z "$base_imgs" ]; then
+        echo "regression: sim/tests print-base-imgs returned nothing" >&2
+        exit 1
+    fi
+
+    for name in $base_imgs; do
+        if [ ! -f "$REPO_ROOT/sim/tests/$name.img" ]; then
+            echo "regression: $name.img missing after 'make all'" >&2
+            exit 1
+        fi
 
         # Check known-broken list.
         if echo " $KNOWN_BROKEN_TESTS " | grep -q " $name "; then

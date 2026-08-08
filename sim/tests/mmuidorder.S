@@ -95,25 +95,30 @@
 !
 ! ---- What this guard LOCKS, and what is still OPEN ----
 !
-! LOCKED (checks 1-3). Against the pristine tree this guard reports
-! **Result=2**: the older D-side fault is NEVER DELIVERED. `texc_ack` clears the
-! held request at a boundary whose exception was not the D-side one, and the
-! page fault simply vanishes.
+! LOCKED. Against the pristine tree this guard reports **Result=2**: the older
+! D-side fault is NEVER DELIVERED. Two decode_core terms fix it, and each was
+! isolated by building it ALONE:
 !
-! The mechanism is NOT the one the review predicted, and the difference was
-! measured, not argued. The review blamed the younger I-side arm of `next_op`
-! winning above the held D-side arms. A/B says otherwise: with the I-side arm
-! change REVERTED but the `event_wins` qualification kept, this guard is GREEN.
-! What actually drops the fault here is an ASYNCHRONOUS EVENT arm winning the
-! boundary while `texc_ack` fires regardless. So the fix that this guard locks
-! is the `event_wins` qualification of `texc_ack` / `texc_defer_cap_o`.
+!   | decode_core variant                          | this guard |
+!   | pristine                                     | Result=2   |
+!   | + texc_defer_cap_o `and texc_req = '0'`      | Result=4   |
+!   | + also the next_op if_fault arms `texc_req='0'` | PASS    |
 !
-! The `and texc_req = '0'` on the two if_fault arms is kept as well, but it is
-! a SEPARATE, defensive change that NO guard currently exercises: a probe
-! confirmed the I-side-arm coincidence is reachable (it fires in
-! m8_dsdslot_0), so the hazard the review described is real, but nothing yet
-! turns red without that term. Treat it as unguarded until something does.
-! Do not cite this file as evidence for it.
+! So they fix DIFFERENT halves:
+!   * texc_defer_cap_o's `texc_req = '0'` stops the younger deferred I-side CSR
+!     capture from clobbering the older D-side fault's TEA/restart context, so
+!     the fault is DELIVERED at all (gets past checks 2 and 3).
+!   * the `texc_req = '0'` on next_op's two if_fault arms makes the OLDER held
+!     D-side request win the boundary, so the older load is actually RESTARTED
+!     and lands its value (check 4).
+!
+! The review that prompted this file named the second term exactly, and it was
+! right. An earlier revision of this header claimed otherwise -- that the
+! mechanism was an asynchronous-event arm and not the I-side arm. That claim
+! came from an A/B run while check 4 was still DISABLED, so "green" only ever
+! meant checks 1-3, which the first term alone already satisfies. Measured
+! since: `event_wins` never asserts anywhere in this guard, and never coincides
+! with a held TLB request anywhere in the whole suite. It is not the mechanism.
 !
 ! NOTHING IS LOST. With the fix, check 4 passes: the older load is restarted
 ! after its fault is serviced and lands its value in r12. Delivery ordering was

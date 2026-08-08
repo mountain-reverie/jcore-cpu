@@ -655,9 +655,8 @@ else
   # deferred I-fetch fault at the same dispatch boundary. Locks the
   # `event_wins` qualification of texc_ack/texc_defer_cap_o in decode_core:
   # against the pristine tree this guard reports Result=2, the older page fault
-  # never delivered at all. See the file header -- its check 4 (the older
-  # access actually landing its value) is a SEPARATE, still-OPEN defect and is
-  # deliberately not asserted.
+  # never delivered at all. All four checks are asserted, including that the
+  # older access lands its value -- nothing is lost once delivery is ordered.
   run_guard mmuidorder "" 100us
 fi
 

@@ -31,6 +31,21 @@ verify-decode:
 	@$(MAKE) --no-print-directory -C decode diff
 
 verify-v2p:
+	@# BLIND SPOT THIS COVERS. The loop below compares the WORKING-TREE .vhd
+	@# against a fresh v2p run. Every build regenerates that file, so locally the
+	@# comparison is regenerated-vs-regenerated and passes no matter what is
+	@# COMMITTED. In CI the working tree IS the commit, so the same loop catches a
+	@# stale committed copy -- which is exactly how it failed on 2026-08-08 after a
+	@# core/datapath.vhm edit was committed without its regenerated .vhd. This
+	@# extra check gives the local run the signal it was missing.
+	@for f in $(V2P_TRACKED); do \
+	  if git rev-parse --git-dir >/dev/null 2>&1 && \
+	     ! git diff --quiet -- "$$f" 2>/dev/null; then \
+	    echo "NOTE: $$f is regenerated but UNCOMMITTED."; \
+	    echo "      The check below compares your working tree and will pass;"; \
+	    echo "      CI compares the committed copy and will FAIL. Commit it."; \
+	  fi; \
+	done
 	@set -e; ok=1; \
 	for f in $(V2P_TRACKED); do \
 	  src=$${f%.vhd}.vhm; \

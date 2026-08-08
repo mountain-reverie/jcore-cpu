@@ -126,6 +126,7 @@ mmufsr.elf: mmufsr.o
 mmudslot.elf: mmudslot.o
 mmuidslot.elf: mmuidslot.o
 mmufaultage.elf: mmufaultage.o
+mmumhorder.elf: mmumhorder.o
 mmurte.elf: mmurte.o
 mmustore.elf: mmustore.o
 mmuimiss.elf: mmuimiss.o

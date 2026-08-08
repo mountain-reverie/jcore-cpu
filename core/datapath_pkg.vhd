@@ -47,6 +47,7 @@ package datapath_pack is
   --   TSBPTR = (TSBBR and not 0xF) or ((hash and mask) << 4)
   -- TSBBR[N+3:4] are reserved-0 so clearing the low nibble and ORing the
   -- 16-byte-scaled index suffices (no variable base mask needed).
+
   function tsb_ptr (
     va     : std_logic_vector(31 downto 0);
     tsbcfg : std_logic_vector(31 downto 0);
@@ -156,24 +157,30 @@ package body datapath_pack is
     tsbcfg : std_logic_vector(31 downto 0);
     tsbbr  : std_logic_vector(31 downto 0)
   ) return std_logic_vector is
+
     variable v_vpn   : unsigned(31 downto 0);
     variable v_hash  : unsigned(31 downto 0);
     variable v_mask  : unsigned(31 downto 0);
     variable v_idx   : unsigned(31 downto 0);
     variable v_shift : integer range 0 to 31;
     variable v_size  : integer range 0 to 31;
+
   begin
+
     v_vpn   := x"000" & unsigned(va(31 downto 12));
     v_shift := to_integer(unsigned(tsbcfg(7 downto 4)));
     v_size  := to_integer(unsigned(tsbbr(3 downto 0)));
-    if tsbcfg(3 downto 0) = x"1" then
+
+    if (tsbcfg(3 downto 0) = x"1") then
       v_hash := v_vpn xor shift_right(v_vpn, v_shift);
     else
       v_hash := v_vpn;
     end if;
+
     v_mask := shift_left(to_unsigned(1, 32), v_size) - 1;
     v_idx  := (v_hash and v_mask);
     return (tsbbr and x"FFFFFFF0") or std_logic_vector(shift_left(v_idx, 4));
+
   end function tsb_ptr;
 
 end package body datapath_pack;

@@ -258,6 +258,9 @@ cA1_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cA1_id, r5
+        mov.l   cA1_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA1_cmp, r3
         jsr     @r3
         nop
@@ -315,6 +318,9 @@ cB1_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cB1_id, r5
+        mov.l   cB1_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB1_cmp, r3
         jsr     @r3
         nop
@@ -343,6 +349,7 @@ cA1_snapa:     .long SNAP_A
 cA1_snapb:     .long SNAP_B
 cA1_id:        .long 1001
 cA1_cmp:       .long 0x80000000 + _m8_cmp
+cA1_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA1_flush:     .long 0x80000000 + _m8_flush
 cB1_flush:     .long 0x80000000 + _m8_flush
 cB1_dsva:      .long 0x00101000
@@ -352,6 +359,7 @@ cB1_snapa:     .long SNAP_A
 cB1_snapb:     .long SNAP_B
 cB1_id:        .long 2001
 cB1_cmp:       .long 0x80000000 + _m8_cmp
+cB1_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_2:                       ! LDC.L @Rm+, GBR  (PrivMem, D-side in delay slot)
@@ -406,6 +414,9 @@ c2_Db:
         ldc     r1, gbr
         mov     #8, r4
         mov.l   c2_id, r5
+        mov.l   c2_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c2_cmp, r3
         jsr     @r3
         nop
@@ -421,6 +432,7 @@ c2_snapa:  .long SNAP_A
 c2_snapb:  .long SNAP_B
 c2_id:     .long 2
 c2_cmp:    .long 0x80000000 + _m8_cmp
+c2_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c2_flush:  .long 0x80000000 + _m8_flush
 c2_poison: .long 0xBADC0DE1
 
@@ -459,6 +471,9 @@ c3_Db:
         ! ---- compare ----
         mov     #8, r4
         mov.l   c3_id, r5
+        mov.l   c3_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c3_cmp, r3
         jsr     @r3
         nop
@@ -471,6 +486,7 @@ c3_snapa:  .long SNAP_A
 c3_snapb:  .long SNAP_B
 c3_id:     .long 3
 c3_cmp:    .long 0x80000000 + _m8_cmp
+c3_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c3_flush:  .long 0x80000000 + _m8_flush
 c3_poison: .long 0xBADC0DE1
 
@@ -509,6 +525,9 @@ c4_Db:
         ! ---- compare ----
         mov     #8, r4
         mov.l   c4_id, r5
+        mov.l   c4_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c4_cmp, r3
         jsr     @r3
         nop
@@ -521,6 +540,7 @@ c4_snapa:  .long SNAP_A
 c4_snapb:  .long SNAP_B
 c4_id:     .long 4
 c4_cmp:    .long 0x80000000 + _m8_cmp
+c4_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c4_flush:  .long 0x80000000 + _m8_flush
 c4_poison: .long 0xBADC0DE1
 
@@ -577,6 +597,9 @@ c5_Db:
         lds     r1, mach
         mov     #8, r4
         mov.l   c5_id, r5
+        mov.l   c5_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c5_cmp, r3
         jsr     @r3
         nop
@@ -592,6 +615,7 @@ c5_snapa:  .long SNAP_A
 c5_snapb:  .long SNAP_B
 c5_id:     .long 5
 c5_cmp:    .long 0x80000000 + _m8_cmp
+c5_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c5_flush:  .long 0x80000000 + _m8_flush
 c5_poison: .long 0xBADC0DE1
 
@@ -648,6 +672,9 @@ c6_Db:
         lds     r1, macl
         mov     #8, r4
         mov.l   c6_id, r5
+        mov.l   c6_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c6_cmp, r3
         jsr     @r3
         nop
@@ -663,6 +690,7 @@ c6_snapa:  .long SNAP_A
 c6_snapb:  .long SNAP_B
 c6_id:     .long 6
 c6_cmp:    .long 0x80000000 + _m8_cmp
+c6_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c6_flush:  .long 0x80000000 + _m8_flush
 c6_poison: .long 0xBADC0DE1
 
@@ -719,6 +747,9 @@ c7_Db:
         lds     r1, pr
         mov     #8, r4
         mov.l   c7_id, r5
+        mov.l   c7_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c7_cmp, r3
         jsr     @r3
         nop
@@ -734,6 +765,7 @@ c7_snapa:  .long SNAP_A
 c7_snapb:  .long SNAP_B
 c7_id:     .long 7
 c7_cmp:    .long 0x80000000 + _m8_cmp
+c7_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c7_flush:  .long 0x80000000 + _m8_flush
 c7_poison: .long 0xBADC0DE1
 
@@ -821,6 +853,9 @@ cA8_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cA8_id, r5
+        mov.l   cA8_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA8_cmp, r3
         jsr     @r3
         nop
@@ -874,6 +909,9 @@ cB8_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cB8_id, r5
+        mov.l   cB8_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB8_cmp, r3
         jsr     @r3
         nop
@@ -902,6 +940,7 @@ cA8_snapa:     .long SNAP_A
 cA8_snapb:     .long SNAP_B
 cA8_id:        .long 1008
 cA8_cmp:       .long 0x80000000 + _m8_cmp
+cA8_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA8_flush:     .long 0x80000000 + _m8_flush
 cB8_flush:     .long 0x80000000 + _m8_flush
 cB8_dsva:      .long 0x00101000
@@ -911,6 +950,7 @@ cB8_snapa:     .long SNAP_A
 cB8_snapb:     .long SNAP_B
 cB8_id:        .long 2008
 cB8_cmp:       .long 0x80000000 + _m8_cmp
+cB8_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_9:                       ! MOV.B @Rm+, Rn  (General, D-side delay-slot maximal + target-only)
@@ -996,6 +1036,9 @@ cA9_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cA9_id, r5
+        mov.l   cA9_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA9_cmp, r3
         jsr     @r3
         nop
@@ -1049,6 +1092,9 @@ cB9_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cB9_id, r5
+        mov.l   cB9_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB9_cmp, r3
         jsr     @r3
         nop
@@ -1077,6 +1123,7 @@ cA9_snapa:     .long SNAP_A
 cA9_snapb:     .long SNAP_B
 cA9_id:        .long 1009
 cA9_cmp:       .long 0x80000000 + _m8_cmp
+cA9_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA9_flush:     .long 0x80000000 + _m8_flush
 cB9_flush:     .long 0x80000000 + _m8_flush
 cB9_dsva:      .long 0x00101000
@@ -1086,6 +1133,7 @@ cB9_snapa:     .long SNAP_A
 cB9_snapb:     .long SNAP_B
 cB9_id:        .long 2009
 cB9_cmp:       .long 0x80000000 + _m8_cmp
+cB9_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_10:                       ! MOV.B @Rm, Rn  (General, D-side delay-slot maximal + target-only)
@@ -1171,6 +1219,9 @@ cA10_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cA10_id, r5
+        mov.l   cA10_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA10_cmp, r3
         jsr     @r3
         nop
@@ -1224,6 +1275,9 @@ cB10_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cB10_id, r5
+        mov.l   cB10_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB10_cmp, r3
         jsr     @r3
         nop
@@ -1252,6 +1306,7 @@ cA10_snapa:     .long SNAP_A
 cA10_snapb:     .long SNAP_B
 cA10_id:        .long 1010
 cA10_cmp:       .long 0x80000000 + _m8_cmp
+cA10_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA10_flush:     .long 0x80000000 + _m8_flush
 cB10_flush:     .long 0x80000000 + _m8_flush
 cB10_dsva:      .long 0x00101000
@@ -1261,6 +1316,7 @@ cB10_snapa:     .long SNAP_A
 cB10_snapb:     .long SNAP_B
 cB10_id:        .long 2010
 cB10_cmp:       .long 0x80000000 + _m8_cmp
+cB10_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_11:                       ! MOV.B R0, @(disp, Rn)  (General, D-side delay-slot maximal + target-only)
@@ -1350,6 +1406,9 @@ cA11_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cA11_id, r5
+        mov.l   cA11_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA11_cmp, r3
         jsr     @r3
         nop
@@ -1407,6 +1466,9 @@ cB11_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cB11_id, r5
+        mov.l   cB11_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB11_cmp, r3
         jsr     @r3
         nop
@@ -1435,6 +1497,7 @@ cA11_snapa:     .long SNAP_A
 cA11_snapb:     .long SNAP_B
 cA11_id:        .long 1011
 cA11_cmp:       .long 0x80000000 + _m8_cmp
+cA11_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA11_flush:     .long 0x80000000 + _m8_flush
 cB11_flush:     .long 0x80000000 + _m8_flush
 cB11_dsva:      .long 0x00101000
@@ -1444,6 +1507,7 @@ cB11_snapa:     .long SNAP_A
 cB11_snapb:     .long SNAP_B
 cB11_id:        .long 2011
 cB11_cmp:       .long 0x80000000 + _m8_cmp
+cB11_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_12:                       ! MOV.B Rm, @Rn  (General, D-side delay-slot maximal + target-only)
@@ -1533,6 +1597,9 @@ cA12_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cA12_id, r5
+        mov.l   cA12_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA12_cmp, r3
         jsr     @r3
         nop
@@ -1590,6 +1657,9 @@ cB12_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cB12_id, r5
+        mov.l   cB12_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB12_cmp, r3
         jsr     @r3
         nop
@@ -1618,6 +1688,7 @@ cA12_snapa:     .long SNAP_A
 cA12_snapb:     .long SNAP_B
 cA12_id:        .long 1012
 cA12_cmp:       .long 0x80000000 + _m8_cmp
+cA12_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA12_flush:     .long 0x80000000 + _m8_flush
 cB12_flush:     .long 0x80000000 + _m8_flush
 cB12_dsva:      .long 0x00101000
@@ -1627,6 +1698,7 @@ cB12_snapa:     .long SNAP_A
 cB12_snapb:     .long SNAP_B
 cB12_id:        .long 2012
 cB12_cmp:       .long 0x80000000 + _m8_cmp
+cB12_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_13:                       ! MOV.B Rm,@-Rn  (General, D-side delay-slot maximal + target-only)
@@ -1716,6 +1788,9 @@ cA13_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cA13_id, r5
+        mov.l   cA13_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA13_cmp, r3
         jsr     @r3
         nop
@@ -1773,6 +1848,9 @@ cB13_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cB13_id, r5
+        mov.l   cB13_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB13_cmp, r3
         jsr     @r3
         nop
@@ -1801,6 +1879,7 @@ cA13_snapa:     .long SNAP_A
 cA13_snapb:     .long SNAP_B
 cA13_id:        .long 1013
 cA13_cmp:       .long 0x80000000 + _m8_cmp
+cA13_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA13_flush:     .long 0x80000000 + _m8_flush
 cB13_flush:     .long 0x80000000 + _m8_flush
 cB13_dsva:      .long 0x00101000
@@ -1810,6 +1889,7 @@ cB13_snapa:     .long SNAP_A
 cB13_snapb:     .long SNAP_B
 cB13_id:        .long 2013
 cB13_cmp:       .long 0x80000000 + _m8_cmp
+cB13_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_14:                       ! MOV.L @(disp, Rm), Rn  (General, D-side delay-slot maximal + target-only)
@@ -1895,6 +1975,9 @@ cA14_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cA14_id, r5
+        mov.l   cA14_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA14_cmp, r3
         jsr     @r3
         nop
@@ -1948,6 +2031,9 @@ cB14_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cB14_id, r5
+        mov.l   cB14_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB14_cmp, r3
         jsr     @r3
         nop
@@ -1976,6 +2062,7 @@ cA14_snapa:     .long SNAP_A
 cA14_snapb:     .long SNAP_B
 cA14_id:        .long 1014
 cA14_cmp:       .long 0x80000000 + _m8_cmp
+cA14_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA14_flush:     .long 0x80000000 + _m8_flush
 cB14_flush:     .long 0x80000000 + _m8_flush
 cB14_dsva:      .long 0x00101000
@@ -1985,6 +2072,7 @@ cB14_snapa:     .long SNAP_A
 cB14_snapb:     .long SNAP_B
 cB14_id:        .long 2014
 cB14_cmp:       .long 0x80000000 + _m8_cmp
+cB14_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_15:                       ! MOV.L @Rm+, Rn  (General, D-side delay-slot maximal + target-only)
@@ -2070,6 +2158,9 @@ cA15_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cA15_id, r5
+        mov.l   cA15_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA15_cmp, r3
         jsr     @r3
         nop
@@ -2123,6 +2214,9 @@ cB15_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cB15_id, r5
+        mov.l   cB15_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB15_cmp, r3
         jsr     @r3
         nop
@@ -2151,6 +2245,7 @@ cA15_snapa:     .long SNAP_A
 cA15_snapb:     .long SNAP_B
 cA15_id:        .long 1015
 cA15_cmp:       .long 0x80000000 + _m8_cmp
+cA15_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA15_flush:     .long 0x80000000 + _m8_flush
 cB15_flush:     .long 0x80000000 + _m8_flush
 cB15_dsva:      .long 0x00101000
@@ -2160,6 +2255,7 @@ cB15_snapa:     .long SNAP_A
 cB15_snapb:     .long SNAP_B
 cB15_id:        .long 2015
 cB15_cmp:       .long 0x80000000 + _m8_cmp
+cB15_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_16:                       ! MOV.L @Rm, Rn  (General, D-side delay-slot maximal + target-only)
@@ -2245,6 +2341,9 @@ cA16_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cA16_id, r5
+        mov.l   cA16_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA16_cmp, r3
         jsr     @r3
         nop
@@ -2298,6 +2397,9 @@ cB16_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cB16_id, r5
+        mov.l   cB16_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB16_cmp, r3
         jsr     @r3
         nop
@@ -2326,6 +2428,7 @@ cA16_snapa:     .long SNAP_A
 cA16_snapb:     .long SNAP_B
 cA16_id:        .long 1016
 cA16_cmp:       .long 0x80000000 + _m8_cmp
+cA16_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA16_flush:     .long 0x80000000 + _m8_flush
 cB16_flush:     .long 0x80000000 + _m8_flush
 cB16_dsva:      .long 0x00101000
@@ -2335,6 +2438,7 @@ cB16_snapa:     .long SNAP_A
 cB16_snapb:     .long SNAP_B
 cB16_id:        .long 2016
 cB16_cmp:       .long 0x80000000 + _m8_cmp
+cB16_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_17:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side delay-slot maximal + target-only)
@@ -2424,6 +2528,9 @@ cA17_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cA17_id, r5
+        mov.l   cA17_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA17_cmp, r3
         jsr     @r3
         nop
@@ -2481,6 +2588,9 @@ cB17_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cB17_id, r5
+        mov.l   cB17_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB17_cmp, r3
         jsr     @r3
         nop
@@ -2509,6 +2619,7 @@ cA17_snapa:     .long SNAP_A
 cA17_snapb:     .long SNAP_B
 cA17_id:        .long 1017
 cA17_cmp:       .long 0x80000000 + _m8_cmp
+cA17_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA17_flush:     .long 0x80000000 + _m8_flush
 cB17_flush:     .long 0x80000000 + _m8_flush
 cB17_dsva:      .long 0x00101000
@@ -2518,6 +2629,7 @@ cB17_snapa:     .long SNAP_A
 cB17_snapb:     .long SNAP_B
 cB17_id:        .long 2017
 cB17_cmp:       .long 0x80000000 + _m8_cmp
+cB17_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_18:                       ! MOV.L Rm, @Rn  (General, D-side delay-slot maximal + target-only)
@@ -2607,6 +2719,9 @@ cA18_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cA18_id, r5
+        mov.l   cA18_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA18_cmp, r3
         jsr     @r3
         nop
@@ -2664,6 +2779,9 @@ cB18_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cB18_id, r5
+        mov.l   cB18_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB18_cmp, r3
         jsr     @r3
         nop
@@ -2692,6 +2810,7 @@ cA18_snapa:     .long SNAP_A
 cA18_snapb:     .long SNAP_B
 cA18_id:        .long 1018
 cA18_cmp:       .long 0x80000000 + _m8_cmp
+cA18_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA18_flush:     .long 0x80000000 + _m8_flush
 cB18_flush:     .long 0x80000000 + _m8_flush
 cB18_dsva:      .long 0x00101000
@@ -2701,6 +2820,7 @@ cB18_snapa:     .long SNAP_A
 cB18_snapb:     .long SNAP_B
 cB18_id:        .long 2018
 cB18_cmp:       .long 0x80000000 + _m8_cmp
+cB18_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_19:                       ! MOV.L Rm,@-Rn  (General, D-side delay-slot maximal + target-only)
@@ -2790,6 +2910,9 @@ cA19_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cA19_id, r5
+        mov.l   cA19_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA19_cmp, r3
         jsr     @r3
         nop
@@ -2847,6 +2970,9 @@ cB19_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cB19_id, r5
+        mov.l   cB19_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB19_cmp, r3
         jsr     @r3
         nop
@@ -2875,6 +3001,7 @@ cA19_snapa:     .long SNAP_A
 cA19_snapb:     .long SNAP_B
 cA19_id:        .long 1019
 cA19_cmp:       .long 0x80000000 + _m8_cmp
+cA19_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA19_flush:     .long 0x80000000 + _m8_flush
 cB19_flush:     .long 0x80000000 + _m8_flush
 cB19_dsva:      .long 0x00101000
@@ -2884,6 +3011,7 @@ cB19_snapa:     .long SNAP_A
 cB19_snapb:     .long SNAP_B
 cB19_id:        .long 2019
 cB19_cmp:       .long 0x80000000 + _m8_cmp
+cB19_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_20:                       ! MOV.W @(disp, Rm), R0  (General, D-side delay-slot maximal + target-only)
@@ -2969,6 +3097,9 @@ cA20_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cA20_id, r5
+        mov.l   cA20_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA20_cmp, r3
         jsr     @r3
         nop
@@ -3022,6 +3153,9 @@ cB20_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cB20_id, r5
+        mov.l   cB20_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB20_cmp, r3
         jsr     @r3
         nop
@@ -3050,6 +3184,7 @@ cA20_snapa:     .long SNAP_A
 cA20_snapb:     .long SNAP_B
 cA20_id:        .long 1020
 cA20_cmp:       .long 0x80000000 + _m8_cmp
+cA20_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA20_flush:     .long 0x80000000 + _m8_flush
 cB20_flush:     .long 0x80000000 + _m8_flush
 cB20_dsva:      .long 0x00101000
@@ -3059,6 +3194,7 @@ cB20_snapa:     .long SNAP_A
 cB20_snapb:     .long SNAP_B
 cB20_id:        .long 2020
 cB20_cmp:       .long 0x80000000 + _m8_cmp
+cB20_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_21:                       ! MOV.W @Rm+, Rn  (General, D-side delay-slot maximal + target-only)
@@ -3144,6 +3280,9 @@ cA21_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cA21_id, r5
+        mov.l   cA21_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA21_cmp, r3
         jsr     @r3
         nop
@@ -3197,6 +3336,9 @@ cB21_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cB21_id, r5
+        mov.l   cB21_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB21_cmp, r3
         jsr     @r3
         nop
@@ -3225,6 +3367,7 @@ cA21_snapa:     .long SNAP_A
 cA21_snapb:     .long SNAP_B
 cA21_id:        .long 1021
 cA21_cmp:       .long 0x80000000 + _m8_cmp
+cA21_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA21_flush:     .long 0x80000000 + _m8_flush
 cB21_flush:     .long 0x80000000 + _m8_flush
 cB21_dsva:      .long 0x00101000
@@ -3234,6 +3377,7 @@ cB21_snapa:     .long SNAP_A
 cB21_snapb:     .long SNAP_B
 cB21_id:        .long 2021
 cB21_cmp:       .long 0x80000000 + _m8_cmp
+cB21_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_22:                       ! MOV.W @Rm, Rn  (General, D-side delay-slot maximal + target-only)
@@ -3319,6 +3463,9 @@ cA22_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cA22_id, r5
+        mov.l   cA22_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA22_cmp, r3
         jsr     @r3
         nop
@@ -3372,6 +3519,9 @@ cB22_retb_l:
         mov.l   r8, @(4,r2)
         mov     #8, r4
         mov.l   cB22_id, r5
+        mov.l   cB22_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB22_cmp, r3
         jsr     @r3
         nop
@@ -3400,6 +3550,7 @@ cA22_snapa:     .long SNAP_A
 cA22_snapb:     .long SNAP_B
 cA22_id:        .long 1022
 cA22_cmp:       .long 0x80000000 + _m8_cmp
+cA22_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA22_flush:     .long 0x80000000 + _m8_flush
 cB22_flush:     .long 0x80000000 + _m8_flush
 cB22_dsva:      .long 0x00101000
@@ -3409,6 +3560,7 @@ cB22_snapa:     .long SNAP_A
 cB22_snapb:     .long SNAP_B
 cB22_id:        .long 2022
 cB22_cmp:       .long 0x80000000 + _m8_cmp
+cB22_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_23:                       ! MOV.W R0, @(disp, Rn)  (General, D-side delay-slot maximal + target-only)
@@ -3498,6 +3650,9 @@ cA23_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cA23_id, r5
+        mov.l   cA23_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA23_cmp, r3
         jsr     @r3
         nop
@@ -3555,6 +3710,9 @@ cB23_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cB23_id, r5
+        mov.l   cB23_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB23_cmp, r3
         jsr     @r3
         nop
@@ -3583,6 +3741,7 @@ cA23_snapa:     .long SNAP_A
 cA23_snapb:     .long SNAP_B
 cA23_id:        .long 1023
 cA23_cmp:       .long 0x80000000 + _m8_cmp
+cA23_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA23_flush:     .long 0x80000000 + _m8_flush
 cB23_flush:     .long 0x80000000 + _m8_flush
 cB23_dsva:      .long 0x00101000
@@ -3592,6 +3751,7 @@ cB23_snapa:     .long SNAP_A
 cB23_snapb:     .long SNAP_B
 cB23_id:        .long 2023
 cB23_cmp:       .long 0x80000000 + _m8_cmp
+cB23_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_24:                       ! MOV.W Rm, @Rn  (General, D-side delay-slot maximal + target-only)
@@ -3681,6 +3841,9 @@ cA24_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cA24_id, r5
+        mov.l   cA24_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA24_cmp, r3
         jsr     @r3
         nop
@@ -3738,6 +3901,9 @@ cB24_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cB24_id, r5
+        mov.l   cB24_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB24_cmp, r3
         jsr     @r3
         nop
@@ -3766,6 +3932,7 @@ cA24_snapa:     .long SNAP_A
 cA24_snapb:     .long SNAP_B
 cA24_id:        .long 1024
 cA24_cmp:       .long 0x80000000 + _m8_cmp
+cA24_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA24_flush:     .long 0x80000000 + _m8_flush
 cB24_flush:     .long 0x80000000 + _m8_flush
 cB24_dsva:      .long 0x00101000
@@ -3775,6 +3942,7 @@ cB24_snapa:     .long SNAP_A
 cB24_snapb:     .long SNAP_B
 cB24_id:        .long 2024
 cB24_cmp:       .long 0x80000000 + _m8_cmp
+cB24_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_25:                       ! MOV.W Rm,@-Rn  (General, D-side delay-slot maximal + target-only)
@@ -3864,6 +4032,9 @@ cA25_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cA25_id, r5
+        mov.l   cA25_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA25_cmp, r3
         jsr     @r3
         nop
@@ -3921,6 +4092,9 @@ cB25_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cB25_id, r5
+        mov.l   cB25_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB25_cmp, r3
         jsr     @r3
         nop
@@ -3949,6 +4123,7 @@ cA25_snapa:     .long SNAP_A
 cA25_snapb:     .long SNAP_B
 cA25_id:        .long 1025
 cA25_cmp:       .long 0x80000000 + _m8_cmp
+cA25_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA25_flush:     .long 0x80000000 + _m8_flush
 cB25_flush:     .long 0x80000000 + _m8_flush
 cB25_dsva:      .long 0x00101000
@@ -3958,6 +4133,7 @@ cB25_snapa:     .long SNAP_A
 cB25_snapb:     .long SNAP_B
 cB25_id:        .long 2025
 cB25_cmp:       .long 0x80000000 + _m8_cmp
+cB25_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_26:                       ! STS.L MACH, @-Rn  (General, D-side delay-slot maximal + target-only)
@@ -4047,6 +4223,9 @@ cA26_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cA26_id, r5
+        mov.l   cA26_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA26_cmp, r3
         jsr     @r3
         nop
@@ -4104,6 +4283,9 @@ cB26_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cB26_id, r5
+        mov.l   cB26_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB26_cmp, r3
         jsr     @r3
         nop
@@ -4132,6 +4314,7 @@ cA26_snapa:     .long SNAP_A
 cA26_snapb:     .long SNAP_B
 cA26_id:        .long 1026
 cA26_cmp:       .long 0x80000000 + _m8_cmp
+cA26_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA26_flush:     .long 0x80000000 + _m8_flush
 cB26_flush:     .long 0x80000000 + _m8_flush
 cB26_dsva:      .long 0x00101000
@@ -4141,6 +4324,7 @@ cB26_snapa:     .long SNAP_A
 cB26_snapb:     .long SNAP_B
 cB26_id:        .long 2026
 cB26_cmp:       .long 0x80000000 + _m8_cmp
+cB26_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_27:                       ! STS.L MACL, @-Rn  (General, D-side delay-slot maximal + target-only)
@@ -4230,6 +4414,9 @@ cA27_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cA27_id, r5
+        mov.l   cA27_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA27_cmp, r3
         jsr     @r3
         nop
@@ -4287,6 +4474,9 @@ cB27_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cB27_id, r5
+        mov.l   cB27_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB27_cmp, r3
         jsr     @r3
         nop
@@ -4315,6 +4505,7 @@ cA27_snapa:     .long SNAP_A
 cA27_snapb:     .long SNAP_B
 cA27_id:        .long 1027
 cA27_cmp:       .long 0x80000000 + _m8_cmp
+cA27_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA27_flush:     .long 0x80000000 + _m8_flush
 cB27_flush:     .long 0x80000000 + _m8_flush
 cB27_dsva:      .long 0x00101000
@@ -4324,6 +4515,7 @@ cB27_snapa:     .long SNAP_A
 cB27_snapb:     .long SNAP_B
 cB27_id:        .long 2027
 cB27_cmp:       .long 0x80000000 + _m8_cmp
+cB27_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_28:                       ! STS.L PR, @-Rn  (General, D-side delay-slot maximal + target-only)
@@ -4413,6 +4605,9 @@ cA28_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cA28_id, r5
+        mov.l   cA28_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA28_cmp, r3
         jsr     @r3
         nop
@@ -4470,6 +4665,9 @@ cB28_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cB28_id, r5
+        mov.l   cB28_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB28_cmp, r3
         jsr     @r3
         nop
@@ -4498,6 +4696,7 @@ cA28_snapa:     .long SNAP_A
 cA28_snapb:     .long SNAP_B
 cA28_id:        .long 1028
 cA28_cmp:       .long 0x80000000 + _m8_cmp
+cA28_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA28_flush:     .long 0x80000000 + _m8_flush
 cB28_flush:     .long 0x80000000 + _m8_flush
 cB28_dsva:      .long 0x00101000
@@ -4507,6 +4706,7 @@ cB28_snapa:     .long SNAP_A
 cB28_snapb:     .long SNAP_B
 cB28_id:        .long 2028
 cB28_cmp:       .long 0x80000000 + _m8_cmp
+cB28_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
         .balign 4
 _m8_case_29:                       ! TAS.B @Rn  (General, D-side delay-slot maximal + target-only)
@@ -4596,6 +4796,9 @@ cA29_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cA29_id, r5
+        mov.l   cA29_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA29_cmp, r3
         jsr     @r3
         nop
@@ -4653,6 +4856,9 @@ cB29_retb_l:
         mov.l   r1, @(4,r2)
         mov     #8, r4
         mov.l   cB29_id, r5
+        mov.l   cB29_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB29_cmp, r3
         jsr     @r3
         nop
@@ -4681,6 +4887,7 @@ cA29_snapa:     .long SNAP_A
 cA29_snapb:     .long SNAP_B
 cA29_id:        .long 1029
 cA29_cmp:       .long 0x80000000 + _m8_cmp
+cA29_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA29_flush:     .long 0x80000000 + _m8_flush
 cB29_flush:     .long 0x80000000 + _m8_flush
 cB29_dsva:      .long 0x00101000
@@ -4690,6 +4897,7 @@ cB29_snapa:     .long SNAP_A
 cB29_snapb:     .long SNAP_B
 cB29_id:        .long 2029
 cB29_cmp:       .long 0x80000000 + _m8_cmp
+cB29_fcntchk:       .long 0x80000000 + _m8_fcntchk
 
 ENTRY(_m8_run_all)
         sts.l   pr, @-r15

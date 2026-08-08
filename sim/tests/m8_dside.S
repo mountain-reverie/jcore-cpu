@@ -196,6 +196,9 @@ _m8_case_1:                       ! CAS.L Rm, Rn, @R0  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c1_id, r5
+        mov.l   c1_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c1_cmp, r3
         jsr     @r3
         nop
@@ -212,6 +215,7 @@ c1_snapa:  .long SNAP_A
 c1_snapb:  .long SNAP_B
 c1_id:     .long 1
 c1_cmp:    .long 0x80000000 + _m8_cmp
+c1_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c1_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -261,6 +265,9 @@ _m8_case_2:                       ! LDC.L @Rm+, GBR  (PrivMem, D-side)
         ldc     r1, gbr
         mov     #8, r4
         mov.l   c2_id, r5
+        mov.l   c2_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c2_cmp, r3
         jsr     @r3
         nop
@@ -276,6 +283,7 @@ c2_snapa:  .long SNAP_A
 c2_snapb:  .long SNAP_B
 c2_id:     .long 2
 c2_cmp:    .long 0x80000000 + _m8_cmp
+c2_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c2_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -307,6 +315,9 @@ _m8_case_3:                       ! LDC.L @Rm+, SR  (PrivMem mode-preserving, D-
         ! ---- compare ----
         mov     #8, r4
         mov.l   c3_id, r5
+        mov.l   c3_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c3_cmp, r3
         jsr     @r3
         nop
@@ -319,6 +330,7 @@ c3_snapa:  .long SNAP_A
 c3_snapb:  .long SNAP_B
 c3_id:     .long 3
 c3_cmp:    .long 0x80000000 + _m8_cmp
+c3_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c3_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -350,6 +362,9 @@ _m8_case_4:                       ! LDC.L @Rm+, VBR  (PrivMem mode-preserving, D
         ! ---- compare ----
         mov     #8, r4
         mov.l   c4_id, r5
+        mov.l   c4_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c4_cmp, r3
         jsr     @r3
         nop
@@ -362,6 +377,7 @@ c4_snapa:  .long SNAP_A
 c4_snapb:  .long SNAP_B
 c4_id:     .long 4
 c4_cmp:    .long 0x80000000 + _m8_cmp
+c4_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c4_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -411,6 +427,9 @@ _m8_case_5:                       ! LDS.L @Rm+, MACH  (PrivMem, D-side)
         lds     r1, mach
         mov     #8, r4
         mov.l   c5_id, r5
+        mov.l   c5_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c5_cmp, r3
         jsr     @r3
         nop
@@ -426,6 +445,7 @@ c5_snapa:  .long SNAP_A
 c5_snapb:  .long SNAP_B
 c5_id:     .long 5
 c5_cmp:    .long 0x80000000 + _m8_cmp
+c5_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c5_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -475,6 +495,9 @@ _m8_case_6:                       ! LDS.L @Rm+, MACL  (PrivMem, D-side)
         lds     r1, macl
         mov     #8, r4
         mov.l   c6_id, r5
+        mov.l   c6_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c6_cmp, r3
         jsr     @r3
         nop
@@ -490,6 +513,7 @@ c6_snapa:  .long SNAP_A
 c6_snapb:  .long SNAP_B
 c6_id:     .long 6
 c6_cmp:    .long 0x80000000 + _m8_cmp
+c6_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c6_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -539,6 +563,9 @@ _m8_case_7:                       ! LDS.L @Rm+, PR  (PrivMem, D-side)
         lds     r1, pr
         mov     #8, r4
         mov.l   c7_id, r5
+        mov.l   c7_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c7_cmp, r3
         jsr     @r3
         nop
@@ -554,6 +581,7 @@ c7_snapa:  .long SNAP_A
 c7_snapb:  .long SNAP_B
 c7_id:     .long 7
 c7_cmp:    .long 0x80000000 + _m8_cmp
+c7_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c7_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -965,6 +993,9 @@ _m8_case_10:                       ! MOV.B @(disp, Rm), R0  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c10_id, r5
+        mov.l   c10_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c10_cmp, r3
         jsr     @r3
         nop
@@ -981,6 +1012,7 @@ c10_snapa:  .long SNAP_A
 c10_snapb:  .long SNAP_B
 c10_id:     .long 10
 c10_cmp:    .long 0x80000000 + _m8_cmp
+c10_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c10_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1018,6 +1050,9 @@ _m8_case_11:                       ! MOV.B @Rm+, Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c11_id, r5
+        mov.l   c11_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c11_cmp, r3
         jsr     @r3
         nop
@@ -1034,6 +1069,7 @@ c11_snapa:  .long SNAP_A
 c11_snapb:  .long SNAP_B
 c11_id:     .long 11
 c11_cmp:    .long 0x80000000 + _m8_cmp
+c11_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c11_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1071,6 +1107,9 @@ _m8_case_12:                       ! MOV.B @Rm, Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c12_id, r5
+        mov.l   c12_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c12_cmp, r3
         jsr     @r3
         nop
@@ -1087,6 +1126,7 @@ c12_snapa:  .long SNAP_A
 c12_snapb:  .long SNAP_B
 c12_id:     .long 12
 c12_cmp:    .long 0x80000000 + _m8_cmp
+c12_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c12_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1128,6 +1168,9 @@ _m8_case_13:                       ! MOV.B R0, @(disp, Rn)  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c13_id, r5
+        mov.l   c13_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c13_cmp, r3
         jsr     @r3
         nop
@@ -1144,6 +1187,7 @@ c13_snapa:  .long SNAP_A
 c13_snapb:  .long SNAP_B
 c13_id:     .long 13
 c13_cmp:    .long 0x80000000 + _m8_cmp
+c13_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c13_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1185,6 +1229,9 @@ _m8_case_14:                       ! MOV.B Rm, @Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c14_id, r5
+        mov.l   c14_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c14_cmp, r3
         jsr     @r3
         nop
@@ -1201,6 +1248,7 @@ c14_snapa:  .long SNAP_A
 c14_snapb:  .long SNAP_B
 c14_id:     .long 14
 c14_cmp:    .long 0x80000000 + _m8_cmp
+c14_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c14_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1242,6 +1290,9 @@ _m8_case_15:                       ! MOV.B Rm,@-Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c15_id, r5
+        mov.l   c15_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c15_cmp, r3
         jsr     @r3
         nop
@@ -1258,6 +1309,7 @@ c15_snapa:  .long SNAP_A
 c15_snapb:  .long SNAP_B
 c15_id:     .long 15
 c15_cmp:    .long 0x80000000 + _m8_cmp
+c15_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c15_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1295,6 +1347,9 @@ _m8_case_16:                       ! MOV.L @(disp, Rm), Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c16_id, r5
+        mov.l   c16_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c16_cmp, r3
         jsr     @r3
         nop
@@ -1311,6 +1366,7 @@ c16_snapa:  .long SNAP_A
 c16_snapb:  .long SNAP_B
 c16_id:     .long 16
 c16_cmp:    .long 0x80000000 + _m8_cmp
+c16_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c16_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1348,6 +1404,9 @@ _m8_case_17:                       ! MOV.L @Rm+, Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c17_id, r5
+        mov.l   c17_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c17_cmp, r3
         jsr     @r3
         nop
@@ -1364,6 +1423,7 @@ c17_snapa:  .long SNAP_A
 c17_snapb:  .long SNAP_B
 c17_id:     .long 17
 c17_cmp:    .long 0x80000000 + _m8_cmp
+c17_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c17_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1401,6 +1461,9 @@ _m8_case_18:                       ! MOV.L @Rm, Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c18_id, r5
+        mov.l   c18_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c18_cmp, r3
         jsr     @r3
         nop
@@ -1417,6 +1480,7 @@ c18_snapa:  .long SNAP_A
 c18_snapb:  .long SNAP_B
 c18_id:     .long 18
 c18_cmp:    .long 0x80000000 + _m8_cmp
+c18_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c18_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1458,6 +1522,9 @@ _m8_case_19:                       ! MOV.L Rm, @(disp, Rn)  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c19_id, r5
+        mov.l   c19_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c19_cmp, r3
         jsr     @r3
         nop
@@ -1474,6 +1541,7 @@ c19_snapa:  .long SNAP_A
 c19_snapb:  .long SNAP_B
 c19_id:     .long 19
 c19_cmp:    .long 0x80000000 + _m8_cmp
+c19_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c19_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1515,6 +1583,9 @@ _m8_case_20:                       ! MOV.L Rm, @Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c20_id, r5
+        mov.l   c20_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c20_cmp, r3
         jsr     @r3
         nop
@@ -1531,6 +1602,7 @@ c20_snapa:  .long SNAP_A
 c20_snapb:  .long SNAP_B
 c20_id:     .long 20
 c20_cmp:    .long 0x80000000 + _m8_cmp
+c20_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c20_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1572,6 +1644,9 @@ _m8_case_21:                       ! MOV.L Rm,@-Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c21_id, r5
+        mov.l   c21_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c21_cmp, r3
         jsr     @r3
         nop
@@ -1588,6 +1663,7 @@ c21_snapa:  .long SNAP_A
 c21_snapb:  .long SNAP_B
 c21_id:     .long 21
 c21_cmp:    .long 0x80000000 + _m8_cmp
+c21_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c21_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1625,6 +1701,9 @@ _m8_case_22:                       ! MOV.W @(disp, Rm), R0  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c22_id, r5
+        mov.l   c22_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c22_cmp, r3
         jsr     @r3
         nop
@@ -1641,6 +1720,7 @@ c22_snapa:  .long SNAP_A
 c22_snapb:  .long SNAP_B
 c22_id:     .long 22
 c22_cmp:    .long 0x80000000 + _m8_cmp
+c22_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c22_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1678,6 +1758,9 @@ _m8_case_23:                       ! MOV.W @Rm+, Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c23_id, r5
+        mov.l   c23_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c23_cmp, r3
         jsr     @r3
         nop
@@ -1694,6 +1777,7 @@ c23_snapa:  .long SNAP_A
 c23_snapb:  .long SNAP_B
 c23_id:     .long 23
 c23_cmp:    .long 0x80000000 + _m8_cmp
+c23_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c23_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1731,6 +1815,9 @@ _m8_case_24:                       ! MOV.W @Rm, Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c24_id, r5
+        mov.l   c24_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c24_cmp, r3
         jsr     @r3
         nop
@@ -1747,6 +1834,7 @@ c24_snapa:  .long SNAP_A
 c24_snapb:  .long SNAP_B
 c24_id:     .long 24
 c24_cmp:    .long 0x80000000 + _m8_cmp
+c24_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c24_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1788,6 +1876,9 @@ _m8_case_25:                       ! MOV.W R0, @(disp, Rn)  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c25_id, r5
+        mov.l   c25_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c25_cmp, r3
         jsr     @r3
         nop
@@ -1804,6 +1895,7 @@ c25_snapa:  .long SNAP_A
 c25_snapb:  .long SNAP_B
 c25_id:     .long 25
 c25_cmp:    .long 0x80000000 + _m8_cmp
+c25_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c25_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1845,6 +1937,9 @@ _m8_case_26:                       ! MOV.W Rm, @Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c26_id, r5
+        mov.l   c26_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c26_cmp, r3
         jsr     @r3
         nop
@@ -1861,6 +1956,7 @@ c26_snapa:  .long SNAP_A
 c26_snapb:  .long SNAP_B
 c26_id:     .long 26
 c26_cmp:    .long 0x80000000 + _m8_cmp
+c26_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c26_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1902,6 +1998,9 @@ _m8_case_27:                       ! MOV.W Rm,@-Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c27_id, r5
+        mov.l   c27_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c27_cmp, r3
         jsr     @r3
         nop
@@ -1918,6 +2017,7 @@ c27_snapa:  .long SNAP_A
 c27_snapb:  .long SNAP_B
 c27_id:     .long 27
 c27_cmp:    .long 0x80000000 + _m8_cmp
+c27_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c27_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -1959,6 +2059,9 @@ _m8_case_28:                       ! STC.L GBR, @-Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c28_id, r5
+        mov.l   c28_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c28_cmp, r3
         jsr     @r3
         nop
@@ -1975,6 +2078,7 @@ c28_snapa:  .long SNAP_A
 c28_snapb:  .long SNAP_B
 c28_id:     .long 28
 c28_cmp:    .long 0x80000000 + _m8_cmp
+c28_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c28_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -2016,6 +2120,9 @@ _m8_case_29:                       ! STC.L SR, @-Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c29_id, r5
+        mov.l   c29_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c29_cmp, r3
         jsr     @r3
         nop
@@ -2032,6 +2139,7 @@ c29_snapa:  .long SNAP_A
 c29_snapb:  .long SNAP_B
 c29_id:     .long 29
 c29_cmp:    .long 0x80000000 + _m8_cmp
+c29_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c29_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -2073,6 +2181,9 @@ _m8_case_30:                       ! STC.L VBR, @-Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c30_id, r5
+        mov.l   c30_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c30_cmp, r3
         jsr     @r3
         nop
@@ -2089,6 +2200,7 @@ c30_snapa:  .long SNAP_A
 c30_snapb:  .long SNAP_B
 c30_id:     .long 30
 c30_cmp:    .long 0x80000000 + _m8_cmp
+c30_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c30_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -2130,6 +2242,9 @@ _m8_case_31:                       ! STS.L MACH, @-Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c31_id, r5
+        mov.l   c31_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c31_cmp, r3
         jsr     @r3
         nop
@@ -2146,6 +2261,7 @@ c31_snapa:  .long SNAP_A
 c31_snapb:  .long SNAP_B
 c31_id:     .long 31
 c31_cmp:    .long 0x80000000 + _m8_cmp
+c31_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c31_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -2187,6 +2303,9 @@ _m8_case_32:                       ! STS.L MACL, @-Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c32_id, r5
+        mov.l   c32_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c32_cmp, r3
         jsr     @r3
         nop
@@ -2203,6 +2322,7 @@ c32_snapa:  .long SNAP_A
 c32_snapb:  .long SNAP_B
 c32_id:     .long 32
 c32_cmp:    .long 0x80000000 + _m8_cmp
+c32_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c32_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -2244,6 +2364,9 @@ _m8_case_33:                       ! STS.L PR, @-Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c33_id, r5
+        mov.l   c33_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c33_cmp, r3
         jsr     @r3
         nop
@@ -2260,6 +2383,7 @@ c33_snapa:  .long SNAP_A
 c33_snapb:  .long SNAP_B
 c33_id:     .long 33
 c33_cmp:    .long 0x80000000 + _m8_cmp
+c33_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c33_flush:  .long 0x80000000 + _m8_flush
 
         .balign 4
@@ -2301,6 +2425,9 @@ _m8_case_34:                       ! TAS.B @Rn  (General, D-side)
         ! ---- compare ----
         mov     #8, r4
         mov.l   c34_id, r5
+        mov.l   c34_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c34_cmp, r3
         jsr     @r3
         nop
@@ -2317,6 +2444,7 @@ c34_snapa:  .long SNAP_A
 c34_snapb:  .long SNAP_B
 c34_id:     .long 34
 c34_cmp:    .long 0x80000000 + _m8_cmp
+c34_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c34_flush:  .long 0x80000000 + _m8_flush
 
 ENTRY(_m8_run_all)

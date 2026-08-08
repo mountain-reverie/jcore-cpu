@@ -1337,6 +1337,9 @@ _m8_case_{{.ID}}:                       ! {{.Name}}  (PrivMem mode-preserving, D
         ! ---- compare ----
         mov     #8, r4
         mov.l   c{{.ID}}_id, r5
+        mov.l   c{{.ID}}_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c{{.ID}}_cmp, r3
         jsr     @r3
         nop
@@ -1349,6 +1352,7 @@ c{{.ID}}_snapa:  .long SNAP_A
 c{{.ID}}_snapb:  .long SNAP_B
 c{{.ID}}_id:     .long {{.ID}}
 c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
+c{{.ID}}_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
 `
 
@@ -1396,6 +1400,9 @@ _m8_case_{{.ID}}:                       ! {{.Name}}  (General, D-side)
 {{end}}        ! ---- compare ----
         mov     #8, r4
         mov.l   c{{.ID}}_id, r5
+        mov.l   c{{.ID}}_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c{{.ID}}_cmp, r3
         jsr     @r3
         nop
@@ -1412,6 +1419,7 @@ c{{.ID}}_snapa:  .long SNAP_A
 c{{.ID}}_snapb:  .long SNAP_B
 c{{.ID}}_id:     .long {{.ID}}
 c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
+c{{.ID}}_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
 `
 
@@ -1547,6 +1555,9 @@ cA{{.ID}}_retb_l:
 {{else}}        mov.l   r8, @(4,r2)
 {{end}}        mov     #8, r4
         mov.l   cA{{.ID}}_id, r5
+        mov.l   cA{{.ID}}_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cA{{.ID}}_cmp, r3
         jsr     @r3
         nop
@@ -1608,6 +1619,9 @@ cB{{.ID}}_retb_l:
 {{else}}        mov.l   r8, @(4,r2)
 {{end}}        mov     #8, r4
         mov.l   cB{{.ID}}_id, r5
+        mov.l   cB{{.ID}}_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   cB{{.ID}}_cmp, r3
         jsr     @r3
         nop
@@ -1636,6 +1650,7 @@ cA{{.ID}}_snapa:     .long SNAP_A
 cA{{.ID}}_snapb:     .long SNAP_B
 cA{{.ID}}_id:        .long {{.IDA}}
 cA{{.ID}}_cmp:       .long 0x80000000 + _m8_cmp
+cA{{.ID}}_fcntchk:       .long 0x80000000 + _m8_fcntchk
 cA{{.ID}}_flush:     .long 0x80000000 + _m8_flush
 cB{{.ID}}_flush:     .long 0x80000000 + _m8_flush
 cB{{.ID}}_dsva:      .long 0x00101000
@@ -1645,6 +1660,7 @@ cB{{.ID}}_snapa:     .long SNAP_A
 cB{{.ID}}_snapb:     .long SNAP_B
 cB{{.ID}}_id:        .long {{.IDB}}
 cB{{.ID}}_cmp:       .long 0x80000000 + _m8_cmp
+cB{{.ID}}_fcntchk:       .long 0x80000000 + _m8_fcntchk
 `
 
 // PrivMem D-side: as General plus the DestCtrl register. Original control reg
@@ -1697,6 +1713,9 @@ _m8_case_{{.ID}}:                       ! {{.Name}}  (PrivMem, D-side)
         {{.CtrlLoad}}
         mov     #8, r4
         mov.l   c{{.ID}}_id, r5
+        mov.l   c{{.ID}}_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c{{.ID}}_cmp, r3
         jsr     @r3
         nop
@@ -1712,6 +1731,7 @@ c{{.ID}}_snapa:  .long SNAP_A
 c{{.ID}}_snapb:  .long SNAP_B
 c{{.ID}}_id:     .long {{.ID}}
 c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
+c{{.ID}}_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
 `
 
@@ -1774,6 +1794,9 @@ c{{.ID}}_Db:
         {{.CtrlLoad}}
         mov     #8, r4
         mov.l   c{{.ID}}_id, r5
+        mov.l   c{{.ID}}_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c{{.ID}}_cmp, r3
         jsr     @r3
         nop
@@ -1789,6 +1812,7 @@ c{{.ID}}_snapa:  .long SNAP_A
 c{{.ID}}_snapb:  .long SNAP_B
 c{{.ID}}_id:     .long {{.ID}}
 c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
+c{{.ID}}_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
 c{{.ID}}_poison: .long 0xBADC0DE1
 `
@@ -1834,6 +1858,9 @@ c{{.ID}}_Db:
         ! ---- compare ----
         mov     #8, r4
         mov.l   c{{.ID}}_id, r5
+        mov.l   c{{.ID}}_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c{{.ID}}_cmp, r3
         jsr     @r3
         nop
@@ -1846,6 +1873,7 @@ c{{.ID}}_snapa:  .long SNAP_A
 c{{.ID}}_snapb:  .long SNAP_B
 c{{.ID}}_id:     .long {{.ID}}
 c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
+c{{.ID}}_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
 c{{.ID}}_poison: .long 0xBADC0DE1
 `
@@ -2023,6 +2051,9 @@ c{{.ID}}_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c{{.ID}}_id, r5
+        mov.l   c{{.ID}}_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c{{.ID}}_cmp, r3
         jsr     @r3
         nop
@@ -2045,6 +2076,7 @@ c{{.ID}}_snapa:  .long SNAP_A
 c{{.ID}}_snapb:  .long SNAP_B
 c{{.ID}}_id:     .long {{.ID}}
 c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
+c{{.ID}}_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
 `
 
@@ -2137,6 +2169,9 @@ c{{.ID}}_iretb_l:
         ! ---- compare {r0,r8,T,MACH,MACL,SR&mask} = 24 bytes ----
         mov     #24, r4
         mov.l   c{{.ID}}_id, r5
+        mov.l   c{{.ID}}_fcntchk, r3
+        jsr     @r3
+         nop
         mov.l   c{{.ID}}_cmp, r3
         jsr     @r3
         nop
@@ -2160,5 +2195,6 @@ c{{.ID}}_snapa:  .long SNAP_A
 c{{.ID}}_snapb:  .long SNAP_B
 c{{.ID}}_id:     .long {{.ID}}
 c{{.ID}}_cmp:    .long 0x80000000 + _m8_cmp
+c{{.ID}}_fcntchk:    .long 0x80000000 + _m8_fcntchk
 c{{.ID}}_flush:  .long 0x80000000 + _m8_flush
 `

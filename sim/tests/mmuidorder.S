@@ -84,10 +84,8 @@
 !      This is the review's predicted signature.
 !   3  no log entry for page 1 -- the YOUNGER I-side fault never fired, so the
 !      coincidence under test did not occur and check 4 proves nothing.
-!   4  r12 != the seeded data word -- the older load never landed its value.
-!      *** CURRENTLY DISABLED: THIS CHECK FAILS ON THE TREE AS IT STANDS. ***
-!      See "Residual defect" below. Re-enable by deleting the `bra 4f` at the
-!      head of check 4 in _check.
+!   4  r12 != the seeded data word. INSTRUCTION LOST: the older load was
+!      dropped and never restarted. The primary check.
 !   8  fault log full -- the run is not converging (a handler is re-faulting
 !      forever). Surfaces a livelock as a result code, not a stop-time timeout.
 !
@@ -117,34 +115,48 @@
 ! turns red without that term. Treat it as unguarded until something does.
 ! Do not cite this file as evidence for it.
 !
-! RESIDUAL DEFECT, OPEN, NOT LOCKED (check 4). Delivering the fault is not the
-! same as the access surviving. MEASURED after the fix: the older load
-! re-executes -- the trace shows `rte` landing back on 0x0FFC -- yet r12 still
-! reads 0x55, the sentinel, at _check. Its value never lands.
+! NOTHING IS LOST. With the fix, check 4 passes: the older load is restarted
+! after its fault is serviced and lands its value in r12. Delivery ordering was
+! the whole defect.
 !
-! What was ruled out, with a datapath probe on the two suppression paths:
-!   * `reg_wr_w_g` squashes the w-port writeback exactly ONCE, on the load's
-!     FIRST pass, when the load is itself the faulting access. That is the
-!     CORRECT, deliberate behaviour (the g_squash_ifetch fix that
-!     sim/tests/mmufaultage.S locks) and not the loss.
-!   * the `mem.issue` gate never blocks the access at all (probe silent).
-! So the value is lost somewhere after a successful, unsquashed re-execution.
-! The likely remaining suspect, unverified: the second fault is the delay-slot
-! IMISS, whose restart PC is the BRANCH at 0x0FFE, so the final pass through
-! the code re-enters BELOW the load at 0x0FFC and the last execution that could
-! have committed never happens. If that is right, the defect is in which
-! instruction the delay-slot restart PC rewinds to when an older access in the
-! same bundle has not yet retired -- not in the squash logic at all.
+! ---- A retracted "residual defect", and the reason it is worth recording ----
 !
-! Do NOT "fix" that from this paragraph. Re-enable check 4, reproduce Result=4,
-! and measure it the way the ordering half was measured.
+! An earlier revision of this file reported a SECOND, open defect: that even
+! after the fix the older load re-executed but never landed its value
+! (Result=4). That was WRONG, and it was wrong because of a bug in THIS FILE,
+! not in the RTL. The race instruction is hand-assembled, and it was written
 !
-! ---- Non-vacuity ----
-! Mutate and confirm red before trusting green:
-!   * pre-map page 3 (the load cannot fault)      -> expect 2
-!   * pre-map page 1 (the delay slot cannot fault)-> expect 3
-!   * seed page 3 with a different value          -> expect 4, proving the
-!     primary check reads the load's result and not a constant
+!     .word 0x6DD2      ! "MOV.L @R13, R12"
+!
+! 0x6DD2 is `MOV.L @R13, R13` -- MOV.L @Rm,Rn is 0110 nnnn mmmm 0010, so
+! n=12,m=13 is 0x6CD2. The load was writing r13, r12 kept its sentinel, and the
+! guard dutifully reported the older access as lost. Two RTL probes were spent
+! chasing it (the w-port squash and the base-restore arm, both innocent, both
+! now known-good) before the encoding was checked.
+!
+! The lesson is specific and worth keeping: a hand-assembled `.word` is an
+! UNCHECKED assertion about the hardware. The assembler validates nothing here.
+! When a guard reports a defect that the RTL cannot explain, re-derive every
+! hand-written opcode from its encoding table BEFORE probing the RTL.
+!
+! ---- Non-vacuity (MEASURED 2026-08-08, not reasoned) ----
+! Against the PRISTINE tree (decode_core without the event_wins qualification)
+! this guard reports **Result=2**. Each of the three live checks was then also
+! mutated independently against the FIXED tree, and each reported its OWN code:
+!
+!   | mutation                                   | result |
+!   | pre-map page 3 (the load cannot fault)     |   2    |
+!   | pre-map page 1 (the delay slot cannot fault)|  3    |
+!   | seed page 3 with a different value         |   4    |
+!
+! The last one is what proves check 4 reads the load's actual result rather
+! than a constant -- and, given the encoding bug above, that it reads the right
+! REGISTER. Re-run all three after any change to the construction.
+!
+! Both mutation rounds must be run WITHOUT `mmu_sim.sh -n`. `-n` reuses the
+! existing build and silently skips RTL recompilation; a first attempt at these
+! three ran against a stale pristine build and produced 2/3/2, which looks
+! plausible and is meaningless.
 !
 ! Layout (absolute VAs via .org in the VMA-0 image, like mmufaultage.S):
 !   Page 0 (0x0000-0x0FFF): identity-mapped code, handler, literals, log.
@@ -305,8 +317,6 @@ _check:
         !     a SECOND, separate defect from the delivery-ordering one this
         !     guard locks, and it is OPEN. Re-enable by deleting the `bra 4f`
         !     below; expect Result=4 until the write-back path is fixed.
-        bra     4f
-        nop
         mov.l   k_dataword, r4
         cmp/eq  r4, r12
         bt      4f
@@ -449,7 +459,11 @@ _log_end:
         !         dispatch boundary is where the held D-side request is still
         !         live -- the coincidence under test.
         .org 0x0FFC
-        .word   0x6DD2                  ! MOV.L @R13, R12   (r13 = 0x3000)
+        .word   0x6CD2                  ! MOV.L @R13, R12   (r13 = 0x3000)
+                                        ! 0110 nnnn mmmm 0010, n=12 m=13.
+                                        ! NOT 0x6DD2 -- that is @R13,R13, which
+                                        ! silently made an earlier revision of
+                                        ! this guard report a bogus Result=4.
         .word   0x412B                  ! JMP @R1           (r1  = 0x1004)
 
         ! ---- Page 1 (UNMAPPED). 0x1000 is the delay slot; 0x1004 is the

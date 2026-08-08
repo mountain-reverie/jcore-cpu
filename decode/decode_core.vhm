@@ -134,8 +134,8 @@ architecture arch of decode_core is
   signal texc_req       : std_logic;
   signal texc_kind_held : tlb_exc_kind_t;
   signal texc_ack       : std_logic;
-  -- '1' when an asynchronous-event arm of next_op wins this boundary; see its
-  -- assignment for why the TLB ack/capture strobes must be gated on it.
+  -- '1' when an ASYNCHRONOUS-EVENT arm of next_op wins this boundary. Used only
+  -- to suppress the deferred I-side CSR capture; see texc_defer_cap_o.
   signal event_wins     : std_logic;
 
   -- Ordered exception delivery (J4+PRIV_ARCH). '1' while an instruction OLDER
@@ -667,11 +667,14 @@ begin
   mispredict <= '1' when (decode_type = ROM and predicted_addr /= ra_base)
                 else '0';
 
-  -- '1' when one of next_op's ASYNCHRONOUS EVENT arms wins the boundary. Those
-  -- arms sit ABOVE every TLB arm, so when this is set no TLB exception is
-  -- dispatched this slot and neither the held request nor the deferred capture
-  -- may be consumed. Mirrors the two event arms in next_op exactly -- keep the
-  -- two in step.
+  -- TLB exception request hold. Set on the combinational fault pulse, cleared
+  -- when the exception is dispatched. texc_ack mirrors the op-latch condition in
+  -- the decode_core process (slot, not stalled, at an instruction boundary), so
+  -- the request clears exactly when next_op is latched into the registered op.
+  -- Same op-latch condition as texc_ack below, but for the DEFERRED I-side
+  -- request (if_fault), which has no hold register.
+  -- Mirrors next_op's two asynchronous-event arms, which sit ABOVE every TLB
+  -- arm. Keep the two in step.
   event_wins <= '1' when (PRIV_ARCH and event_i.en = '1' and event_i.cmd = RESET_CPU)
                       or (delay_slot = '0' and event_i.en = '1' and (
                           ( maskint = '0' and event_i.cmd = INTERRUPT
@@ -680,35 +683,27 @@ begin
                             or event_i.cmd = BREAK ) ))
                 else '0';
 
-  -- TLB exception request hold. Set on the combinational fault pulse, cleared
-  -- when the exception is dispatched. texc_ack mirrors the op-latch condition in
-  -- the decode_core process (slot, not stalled, at an instruction boundary), so
-  -- the request clears exactly when next_op is latched into the registered op.
-  -- Same op-latch condition as texc_ack below, but for the DEFERRED I-side
-  -- request (if_fault), which has no hold register.
-  --
-  -- BOTH are additionally qualified by which arm of next_op actually wins.
-  -- Without that, either signal fires on a boundary where its exception was NOT
-  -- dispatched, and the state it consumes is lost:
-  --   * texc_ack cleared the held D-side request whenever the boundary
-  --     condition held, including when a YOUNGER deferred I-fetch fault won the
-  --     arm above it. MEASURED (sim/tests/mmuidorder.S, Result=2 then Result=4
-  --     before this fix): the D-side page fault was never delivered and the
-  --     faulting load silently kept stale data. Now the older D-side request
-  --     also WINS the arm (see `texc_req = '0'` on the if_fault arms in
-  --     next_op), so this clears exactly when its own arm dispatches.
-  --   * texc_defer_cap_o drove the datapath's MMUFSR/TEA/PTEH/TSBPTR/tlb_exc_pc
-  --     capture on any boundary with if_fault set, so an interrupt or a held
-  --     D-side fault winning instead would overwrite those CSRs with a fault
-  --     that was never raised -- and if_exc_captured then suppressed the real
-  --     capture. It now fires only when its own arm wins.
+  -- texc_defer_cap_o drives the datapath's MMUFSR/TEA/PTEH/TSBPTR/tlb_exc_pc
+  -- capture for a DEFERRED I-side fault. It must fire only on a boundary that
+  -- actually dispatches that fault, because the capture OVERWRITES shared CSRs
+  -- and if_exc_captured then suppresses the real one.
+  --   texc_req = '0': an OLDER held D-side fault wins the boundary (see the
+  --     if_fault arms of next_op). MEASURED -- without this term the D-side
+  --     fault's TEA/restart context is clobbered by the younger I-side capture
+  --     and the fault is never delivered at all: sim/tests/mmuidorder.S
+  --     reports Result=2.
+  --   event_wins = '0': an interrupt/reset/break arm wins instead. This term is
+  --     SUPPRESSION ONLY -- it prevents a CSR write, it does not retain any
+  --     state -- so it cannot create a deferred dispatch. It is NOT exercised
+  --     by any current guard (measured: event_wins never coincides with a held
+  --     TLB request anywhere in the suite), and is kept as a cheap, side-effect
+  --     free guard against a hazard that is real but unreached.
   texc_defer_cap_o <= '1' when PRIV_ARCH and slot = '1' and if_fault = '1'
                                and texc_req = '0' and event_wins = '0'
                                and this'register.id_stall = '0'
                                and this'register.instr_seq_zero = '1'
                       else '0';
   texc_ack <= '1' when PRIV_ARCH and slot = '1' and texc_req = '1'
-                       and event_wins = '0'
                        and this'register.id_stall = '0'
                        and this'register.instr_seq_zero = '1'
               else '0';
@@ -790,12 +785,13 @@ begin
     -- latched at the next instruction boundary.
     -- Deferred I-fetch faults: raised from the instruction's OWN recorded fault
     -- bit, so this arm fires exactly when the faulting instruction reaches ID.
-    -- `texc_req = '0'`: a HELD D-side request belongs to an instruction OLDER
-    -- than the one in ID, so it must be delivered FIRST. Without this the
-    -- younger I-side arm won and the older D-side fault was dropped outright
-    -- (sim/tests/mmuidorder.S). The I-side fault needs no hold register to
-    -- survive the detour: it is recorded WITH its instruction, which is
-    -- re-fetched after the D-side handler returns, so it simply re-raises.
+    -- `texc_req = '0'` on both I-side arms: a HELD D-side request belongs to an
+    -- instruction OLDER than the one in ID and must be delivered FIRST. MEASURED
+    -- (sim/tests/mmuidorder.S check 4): without it the younger I-side fault wins,
+    -- its restart PC rewinds only as far as the branch, and the older load is
+    -- never re-executed -- it silently keeps stale data. The I-side fault needs
+    -- no hold register to survive the detour: it is recorded WITH its
+    -- instruction, which is re-fetched after the D-side handler returns.
     system_op(TLB_IMISS)
       when PRIV_ARCH and if_fault = '1' and if_fault_prot = '0'
            and texc_req = '0' else

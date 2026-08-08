@@ -660,7 +660,8 @@ else
   run_guard mmumhorder "" 100us
   # Ordered delivery of an OLDER held D-side TLB fault against a YOUNGER
   # deferred I-fetch fault at the same dispatch boundary. Locks the
-  # `event_wins` qualification of texc_ack/texc_defer_cap_o in decode_core:
+  # two decode_core terms -- texc_defer_cap_o's `texc_req = '0'` (delivery) and
+  # the same term on next_op's if_fault arms (the older access is restarted):
   # against the pristine tree this guard reports Result=2, the older page fault
   # never delivered at all. All four checks are asserted, including that the
   # older access lands its value -- nothing is lost once delivery is ordered.

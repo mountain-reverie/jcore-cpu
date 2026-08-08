@@ -181,6 +181,23 @@ else
 #
 #   mmubratest    IF: invalid read addr XXXXXXXX -- fetches an undefined
 #                 address; the guard runs off the rails entirely.
+#                 RETIRED 2026-08-07 (deleted, with its Makefile rule) --
+#                 broken by construction, not rot, and not a CPU defect: it
+#                 maps page 1 NO-EXECUTE (PTEL=0xA8, VPN=1) and then places
+#                 _done/_fail at `.org 0x1000`, i.e. INSIDE that same
+#                 no-execute page, so its exit path is unreachable. It also
+#                 sets VBR=0 and installs no handler, so the resulting IPROT
+#                 vectors to 0x400 -- which is `far1`, straight back into the
+#                 nop sled. Re-measured on the current tree first: it fails
+#                 identically to 2026-08-01, so deferred I-fetch delivery
+#                 changed nothing here.
+#                 It was a DIAGNOSTIC scaffold ("does a taken bra to a far
+#                 label work after AT is enabled?"), written to isolate the
+#                 mmuidslot hang -- not a guard of a CPU property. That
+#                 question is now answered yes by m8_idslot_0-2 (green and
+#                 wired in) and by the rest of this suite, which branches
+#                 under AT throughout. Its historical role is recorded in
+#                 docs/superpowers/handover-mmu-delay-slot-data-fault.md.
 #   m8_idslot_0   Test failed. Result=2   (FIXED + wired in, 2026-08-06)
 #   m8_idslot_1   Test failed. Result=25  (FIXED + wired in, 2026-08-06)
 #   m8_idslot_2   Test failed. Result=49  (FIXED + wired in, 2026-08-06)
@@ -197,7 +214,8 @@ else
 # The three m8_idslot_* Result=2 failures were NOT rot: they were the real
 # I-side delay-slot restart defect (the restart landed on the delay slot instead
 # of backing up to the branch). Deferred I-fetch fault delivery fixes all three
-# and they are now in the run below. mmubratest is untouched and still orphaned.
+# and they are now in the run below. mmubratest was the fourth orphan and is
+# now RETIRED (see above) -- there are no orphaned guards left.
 #
 # m8_dsdslot_0 (2026-08-04 review round): the axis's branch-target vacuity
 # bug (buggy and correct restart PCs coincided, so it could never fail) was

@@ -264,6 +264,31 @@ mode in this repo, not an exotic one. Before trusting green:
   `sim/tests/`. Prove the probe itself is live (relax it until it fires) before
   believing a zero-hit result.
 
+### Style gate: `scripts/vhdl-lint.sh`
+
+`vhdl-lint` is a **separate, gating** CI workflow (vsg / VHDL-Style-Guide,
+`vsg_config.yaml`). It is not part of `regression.sh` or `sim/mmu_sim.sh`, so a
+green local suite says nothing about it — and it only triggers on push/PR, not
+on the `workflow_dispatch` used to re-run `full-regression`.
+
+Run it before pushing RTL:
+
+```
+scripts/vhdl-lint.sh          # whole tree, ~20 min
+scripts/vhdl-lint.sh --fix    # auto-fix
+vsg -c vsg_config.yaml -f core/cpu.vhd --fix   # one file, seconds
+```
+
+Two traps worth knowing:
+
+- **Alignment rules make edits contagious.** `type_400` aligns `:` within a
+  declaration group, so adding one longer field name puts its NEIGHBOURS in
+  violation. `git blame` on a violating line will point at an old, innocent
+  commit; that does not mean the violation is pre-existing. Check whether
+  `master` is clean instead.
+- Generated and `.vhm`-derived `.vhd` files are excluded (see the script's
+  exclusion lists) — fix the `.vhm`, never the derived `.vhd`.
+
 ### Tracked generated files
 
 `core/datapath.vhd` is generated from `core/datapath.vhm` by v2p **and

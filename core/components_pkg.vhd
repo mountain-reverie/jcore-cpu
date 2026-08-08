@@ -279,7 +279,7 @@ package cpu2j0_components_pack is
     --   ma_dslot='0': tlb_exc_pc = ex_if_pc + 4 -> SPC = faulting instruction PC.
     --   ma_dslot='1': ex_if_pc is the delay slot (= branch PC + 2), so
     --                 tlb_exc_pc = ex_if_pc + 2 -> SPC = branch PC.
-    ma_dslot         : std_logic;
+    ma_dslot : std_logic;
     -- DEFERRED I-FETCH FAULT (J4+PRIV_ARCH). An instruction-fetch TLB fault is
     -- NOT raised when the fetch faults -- at that moment the pipeline cannot know
     -- the fetch's context (measured: a delay-slot fetch faults BEFORE its branch
@@ -298,8 +298,8 @@ package cpu2j0_components_pack is
     -- with the matching if_pc one delta later. An earlier note here suspected
     -- mis-attribution to a P1 address; that was a sampling artifact of reading
     -- if_pc at if_fault's rising edge, before if_pc had settled.
-    if_fault_next    : std_logic;
-    if_fault         : std_logic;
+    if_fault_next : std_logic;
+    if_fault      : std_logic;
     -- Fault KIND, riding the same two hops: '1' = IPROT, '0' = IMISS. One bit
     -- covers the deferred set because MULTI_HIT is NOT deferred -- it dispatches
     -- through General Illegal, whose register model captures SPC/SSR like any
@@ -309,7 +309,7 @@ package cpu2j0_components_pack is
     -- One-shot for the deferred capture (datapath.vhm). if_fault is a LEVEL held
     -- for as long as the faulting instruction sits in ID, so without this a stall
     -- would re-capture every cycle; it clears when the instruction leaves ID.
-    if_exc_captured    : std_logic;
+    if_exc_captured : std_logic;
     -- HOW IT IS CONSUMED (step 2, done):
     --   * decode_core's next_op raises TLB_IMISS / TLB_IPROT directly from
     --     if_fault (+ if_fault_prot) instead of from the held texc_req, and the

@@ -116,13 +116,13 @@ architecture stru of cpu is
   -- at that instruction's dispatch boundary (fault-on-use). dec_id_dslot: decode's
   -- ID-aligned delay-slot flag, returned to the datapath so its deferred capture
   -- can apply the -2 restart bias. See if_fault in components_pkg.vhd.
-  signal inst_fault   : std_logic;
-  signal inst_fault_prot   : std_logic;
-  signal dp_if_fault  : std_logic;
-  signal dp_if_fault_prot  : std_logic;
-  signal dec_id_dslot      : std_logic;
+  signal inst_fault         : std_logic;
+  signal inst_fault_prot    : std_logic;
+  signal dp_if_fault        : std_logic;
+  signal dp_if_fault_prot   : std_logic;
+  signal dec_id_dslot       : std_logic;
   signal dec_texc_defer_cap : std_logic;
-  signal tlb_fault_va : std_logic_vector(31 downto 0);
+  signal tlb_fault_va       : std_logic_vector(31 downto 0);
   -- D-store-on-bus is itself faulting (drives the external demote-to-read).
   signal d_store_faulting : std_logic;
   signal tlb_exc_expevt   : std_logic_vector(11 downto 0);
@@ -621,6 +621,7 @@ begin
           fva      := i_va_32;
         end if;
       end if;
+
       -- Captured immediately: any exc_en set by the branch above came from
       -- fva = i_va_32 (an instruction-fetch VA), for every exc_kind it can
       -- raise. Must be read before the D-side branch below can overwrite
@@ -666,12 +667,14 @@ begin
       else
         inst_fault <= '0';
       end if;
+
       -- Kind of the recorded I-fetch fault.
       if (exc_kind = IPROT) then
         inst_fault_prot <= '1';
       else
         inst_fault_prot <= '0';
       end if;
+
       tlb_exc_en   <= exc_en;
       tlb_exc_kind <= exc_kind;
       tlb_exc_pend <= exc_en;
@@ -687,6 +690,7 @@ begin
       else
         tlb_exc_is_i <= '0';
       end if;
+
       -- tlb_exc_ifetch: "this fault's VA is an instruction-fetch VA", for
       -- EVERY exc_kind the i_at_translated branch can raise, including
       -- MULTI_HIT. See its declaration comment for why this must NOT be
@@ -772,17 +776,17 @@ begin
   end generate g_mmu;
 
   g_no_mmu : if not PRIV_ARCH generate
-    mmu_o          <= NULL_MMU_O;
-    tlb_exc_en     <= '0';
-    tlb_exc_kind   <= IMISS;
-    tlb_exc_pend   <= '0';
-    tlb_exc_fsr    <= (others => '0');
-    tlb_fault_va   <= (others => '0');
-    tlb_exc_expevt <= (others => '0');
+    mmu_o           <= NULL_MMU_O;
+    tlb_exc_en      <= '0';
+    tlb_exc_kind    <= IMISS;
+    tlb_exc_pend    <= '0';
+    tlb_exc_fsr     <= (others => '0');
+    tlb_fault_va    <= (others => '0');
+    tlb_exc_expevt  <= (others => '0');
     inst_fault      <= '0'; -- tie off so J1/J2 datapath sees a constant, not a float
     inst_fault_prot <= '0';
-    tlb_exc_is_i   <= '0'; -- tie off so J1/J2 datapath sees a constant, not a float
-    tlb_exc_ifetch <= '0'; -- tie off so J1/J2 datapath sees a constant, not a float
+    tlb_exc_is_i    <= '0'; -- tie off so J1/J2 datapath sees a constant, not a float
+    tlb_exc_ifetch  <= '0'; -- tie off so J1/J2 datapath sees a constant, not a float
   end generate g_no_mmu;
 
 end architecture stru;

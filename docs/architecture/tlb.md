@@ -244,6 +244,47 @@ a prefetcher would reintroduce this surface and must be re-reviewed.
   the nested-fault/exception path — by far the dominant risk, and entirely in the
   kernel's hands.
 
+### 7.1 Handler residency — a hard requirement on the kernel
+
+**TLB faults are not detected while `SR.RB=1`.** Both detection paths in
+`core/cpu.vhd` are gated on `dp_sr.rb = '0'` — the I-side at the
+`i_at_translated` branch and the D-side at the `exc_en = '0' and
+d_at_translated = '1' ...` branch. Exception entry sets `RB=1`, so a handler
+cannot itself take a TLB fault.
+
+This is deliberate and it is what makes nested TLB faults structurally
+impossible: `core/cpu.vhd`'s `g_dblflt` gate converts an INTERRUPT/ERROR at
+`RB=1` and a nested `illegal_instr` into a defined `RESET_CPU`, but it does
+**not** cover a nested TLB exception. Nothing needs it to, because no such
+exception can be raised.
+
+**The cost, and the requirement it imposes.** Suppressing the fault does *not*
+suppress translation. `i_at_translated` / `d_at_translated` are functions of
+`MMUCR.AT` and the segment alone (`SEG_P0` / `SEG_P3`), not of `RB`. So a
+handler running in P0/P3 with `AT=1` is still translated, and on a TLB miss
+neither arm of the address-fold applies, so **the virtual address is passed to
+the bus as the physical address**. The access silently goes to the wrong place;
+no exception reports it.
+
+Therefore:
+
+> **Invariant.** Handler code, its literal pools, its stack, and every datum it
+> touches before it can re-establish a mapping MUST be either in **P1/P2**
+> (fixed-translate, never TLB-dependent) or in **P0/P3 pages guaranteed
+> resident** for the lifetime of the handler. A TLB-fault handler that can miss
+> on its own working set does not fault — it silently reads and executes the
+> wrong physical addresses.
+
+Linux takes the P1 route: `sim/tests/Makefile` links `mmulinux`, `mmuboot` and
+`mmuhuge` with `sh32_p1.x`, so `jcore_vbr_base` and the whole miss path live at
+P1. `sim/tests/m8_runtime.inc` does the same by calling every runtime helper
+through its `0x80000000 +` alias. The bare-metal guards that *do* put handlers
+in P0 (`mmufaultage.S`, `mmuidorder.S`) satisfy the invariant the other way, by
+identity-mapping page 0 before enabling `AT` and never evicting it.
+
+This invariant is currently unenforced and unguarded — nothing fails if a
+kernel violates it. See the note in §9.5.
+
 The full attack-landscape analysis, spec review, and implementation review are in
 the design repository's `docs/mmu/security-review.md`.
 
@@ -254,6 +295,9 @@ the design repository's `docs/mmu/security-review.md`.
 | Security / correctness property | Guard(s) |
 |---|---|
 | Basic VA→PA translation | `mmuxlate` |
+| Ordered delivery: older held D-side fault vs younger deferred I-fetch fault | `mmuidorder` |
+| I-side MULTI_HIT does not pre-empt an older in-flight D-side access | `mmumhorder` |
+| Handler residency invariant (§7.1) | **none — unguarded** |
 | Permission enforcement (U/W/X, user + kernel, all 6 classes) | `mmufault` |
 | ASID cross-tenant isolation + global-bit | `mmuasid` |
 | STALE single-entry revocation | `mmustale` |
@@ -478,6 +522,16 @@ through stub pages), `m8_dside` cases 8 and 9 (MAC dual-base at all three fault
 positions), `mmurestartpc`, `mmupcprobe`, `mmudspcprobe` (restart-PC exactness).*
 
 Known gaps, in priority order:
+
+0. **The §7.1 handler-residency invariant is unenforced and unguarded.** Nothing
+   in the RTL or the test suite fails if a handler can take a TLB miss on its own
+   working set; the fault is simply suppressed and the access goes to the VA as a
+   PA. A guard would install a handler in a P0 page, evict that page, and assert
+   the resulting behaviour is a defined reset rather than a silent wrong access —
+   at which point the desired behaviour has to be decided first, since today
+   there is none. Related: a review of 2026-08-08 flagged the `RB=1` suppression
+   at `core/cpu.vhd:653` as a defect; it is better understood as this invariant's
+   enabling mechanism, and the defect is the missing enforcement, not the gate.
 
 1. **`MOVMU.L Rm,@-R15` is a Model-C form that is STRUCTURALLY unrestartable,
    not merely uncovered.** It is not the MAC dual-base *shape*: MAC touches

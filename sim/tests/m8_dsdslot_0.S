@@ -8,164 +8,164 @@
 ! No cumulative-fetch ceiling applies (straight-line P1 execution), so this
 ! axis is a single image, unlike IFetch/IFetchDSlot.
 ! Manifest of excluded (skipped) instructions:
-! case 1 skipped: ADD #imm, Rn has no D-side memory access
-! case 1 skipped: ADD Rm, Rn has no D-side memory access
-! case 1 skipped: ADDC Rm, Rn has no D-side memory access
-! case 1 skipped: ADDV Rm, Rn has no D-side memory access
-! case 1 skipped: AND #imm, R0 has no D-side memory access
-! case 1 skipped: AND Rm, Rn has no D-side memory access
-! case 1 skipped: AND.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 1 skipped: BF /S label is Bespoke (dedicated guard)
-! case 1 skipped: BF label is Bespoke (dedicated guard)
-! case 1 skipped: BGND has no D-side memory access
-! case 1 skipped: BRA label is Bespoke (dedicated guard)
-! case 1 skipped: BRAF Rm is Bespoke (dedicated guard)
-! case 1 skipped: BSR label is Bespoke (dedicated guard)
-! case 1 skipped: BSRF Rm is Bespoke (dedicated guard)
-! case 1 skipped: BT /S label is Bespoke (dedicated guard)
-! case 1 skipped: BT label is Bespoke (dedicated guard)
-! case 1 skipped: Break has no D-side memory access
-! case 2 skipped: CLDS CP0_Rm, CP0_COM has no D-side memory access
-! case 2 skipped: CLDS CPI_Rm, CPI_COM has no D-side memory access
-! case 2 skipped: CLRMAC has no D-side memory access
-! case 2 skipped: CLRT has no D-side memory access
-! case 2 skipped: CMP /EQ #imm, R0 has no D-side memory access
-! case 2 skipped: CMP /EQ Rm, Rn has no D-side memory access
-! case 2 skipped: CMP /GE Rm, Rn has no D-side memory access
-! case 2 skipped: CMP /GT Rm, Rn has no D-side memory access
-! case 2 skipped: CMP /HI Rm, Rn has no D-side memory access
-! case 2 skipped: CMP /HS Rm, Rn has no D-side memory access
-! case 2 skipped: CMP /STR Rm, Rn has no D-side memory access
-! case 2 skipped: CMP/EQ ASIDR, Rn has no D-side memory access
-! case 2 skipped: CMP/EQ PTEH, Rn has no D-side memory access
-! case 2 skipped: CMP/PL Rn has no D-side memory access
-! case 2 skipped: CMP/PZ Rn has no D-side memory access
-! case 2 skipped: CSTS CP0_COM, CP0_Rn has no D-side memory access
-! case 2 skipped: CSTS CPI_COM, CPI_Rn has no D-side memory access
-! case 2 skipped: DIV0S Rm, Rn has no D-side memory access
-! case 2 skipped: DIV0U has no D-side memory access
-! case 2 skipped: DIV1 Rm, Rn has no D-side memory access
-! case 2 skipped: DMULS.L Rm, Rn has no D-side memory access
-! case 2 skipped: DMULU.L Rm, Rn has no D-side memory access
-! case 2 skipped: DT Rn has no D-side memory access
-! case 2 skipped: EXTS.B Rm, Rn has no D-side memory access
-! case 2 skipped: EXTS.W Rm, Rn has no D-side memory access
-! case 2 skipped: EXTU.B Rm, Rn has no D-side memory access
-! case 2 skipped: EXTU.W Rm, Rn has no D-side memory access
-! case 2 skipped: Error has no D-side memory access
-! case 2 skipped: General Illegal has no D-side memory access
-! case 2 skipped: Interrupt has no D-side memory access
-! case 2 skipped: JMP @Rm is Bespoke (dedicated guard)
-! case 2 skipped: JSR @Rm is Bespoke (dedicated guard)
-! case 2 skipped: LDC Rm, ASIDR has no D-side memory access
-! case 2 skipped: LDC Rm, PTEH has no D-side memory access
-! case 2 skipped: LDC Rm, PTEL has no D-side memory access
-! case 2 skipped: LDC Rm, Rn_BANK has no D-side memory access
-! case 2 skipped: LDC Rm, SPC has no D-side memory access
-! case 2 skipped: LDC Rm, SR has no D-side memory access
-! case 2 skipped: LDC Rm, SSR has no D-side memory access
-! case 2 skipped: LDC Rm, VBR has no D-side memory access
-! case 2 skipped: LDC, Rm, GBR has no D-side memory access
-! case 5 skipped: LDS Rm, CP0_COM has no D-side memory access
-! case 5 skipped: LDS Rm, CPI_COM has no D-side memory access
-! case 5 skipped: LDS Rm, MACH has no D-side memory access
-! case 5 skipped: LDS Rm, MACL has no D-side memory access
-! case 5 skipped: LDS Rm, PR has no D-side memory access
-! case 8 skipped: LDTLB is Bespoke (dedicated guard)
-! case 8 skipped: LDTLB.RN is Bespoke (dedicated guard)
-! case 8 skipped: LDTLB.RN Rm has no D-side memory access
-! case 8 skipped: MAC.L @Rm+, @Rn+: effective address not modelled: dual memory-pointer instruction (only one base register is seeded)
-! case 8 skipped: MAC.W @Rm+, @Rn+: effective address not modelled: dual memory-pointer instruction (only one base register is seeded)
-! case 8 skipped: MOV #imm, Rn has no D-side memory access
-! case 8 skipped: MOV Rm, Rn has no D-side memory access
-! case 8 skipped: MOV.B @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 8 skipped: MOV.B @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 11 skipped: MOV.B R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 12 skipped: MOV.B Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 14 skipped: MOV.L @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 14 skipped: MOV.L @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 14 skipped: MOV.L @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
-! case 17 skipped: MOV.L R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 17 skipped: MOV.L Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 20 skipped: MOV.W @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 20 skipped: MOV.W @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 20 skipped: MOV.W @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
-! case 23 skipped: MOV.W R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
-! case 24 skipped: MOV.W Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 26 skipped: MOVA @(disp, PC), R0 has no D-side memory access
-! case 26 skipped: MOVT Rn has no D-side memory access
-! case 26 skipped: MUL.L Rm, Rn has no D-side memory access
-! case 26 skipped: MULS.W Rm, Rn has no D-side memory access
-! case 26 skipped: MULU.W Rm, Rn has no D-side memory access
-! case 26 skipped: NEG Rm, Rn has no D-side memory access
-! case 26 skipped: NEGC Rm, Rn has no D-side memory access
-! case 26 skipped: NOP has no D-side memory access
-! case 26 skipped: NOT Rm, Rn has no D-side memory access
-! case 26 skipped: OR #imm, R0 has no D-side memory access
-! case 26 skipped: OR Rm, Rn has no D-side memory access
-! case 26 skipped: OR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 26 skipped: ROTCL Rn has no D-side memory access
-! case 26 skipped: ROTCR Rn has no D-side memory access
-! case 26 skipped: ROTL Rn has no D-side memory access
-! case 26 skipped: ROTR Rn has no D-side memory access
-! case 26 skipped: RTE is Bespoke (dedicated guard)
-! case 26 skipped: RTS is Bespoke (dedicated guard)
-! case 26 skipped: Reset CPU: control-register memory store in a delay slot not yet modelled by DSideDSlot
-! case 26 skipped: SETT has no D-side memory access
-! case 26 skipped: SHAD Rm, Rn has no D-side memory access
-! case 26 skipped: SHAL Rn has no D-side memory access
-! case 26 skipped: SHAR Rn has no D-side memory access
-! case 26 skipped: SHLD Rm, Rn has no D-side memory access
-! case 26 skipped: SHLL Rn has no D-side memory access
-! case 26 skipped: SHLL16 Rn has no D-side memory access
-! case 26 skipped: SHLL2 Rn has no D-side memory access
-! case 26 skipped: SHLL8 Rn has no D-side memory access
-! case 26 skipped: SHLR Rn has no D-side memory access
-! case 26 skipped: SHLR16 Rn has no D-side memory access
-! case 26 skipped: SHLR2 Rn has no D-side memory access
-! case 26 skipped: SHLR8 Rn has no D-side memory access
-! case 26 skipped: SLEEP is Bespoke (dedicated guard)
-! case 26 skipped: STC ASIDR, Rn has no D-side memory access
-! case 26 skipped: STC EXPEVT, Rn has no D-side memory access
-! case 26 skipped: STC GBR, Rn has no D-side memory access
-! case 26 skipped: STC INTEVT, Rn has no D-side memory access
-! case 26 skipped: STC PTEH, Rn has no D-side memory access
-! case 26 skipped: STC PTEL, Rn has no D-side memory access
-! case 26 skipped: STC Rm_BANK, Rn has no D-side memory access
-! case 26 skipped: STC SPC, Rn has no D-side memory access
-! case 26 skipped: STC SR, Rn has no D-side memory access
-! case 26 skipped: STC SSR, Rn has no D-side memory access
-! case 26 skipped: STC TRA, Rn has no D-side memory access
-! case 26 skipped: STC TSBPTR, Rn has no D-side memory access
-! case 26 skipped: STC VBR, Rn has no D-side memory access
-! case 26 skipped: STC.L GBR, @-Rn: control-register-sourced memory store in a delay slot not yet modelled by DSideDSlot (DestCtrl is empty for STC.L -- it reads a control reg and writes memory -- so the PrivMem/DestCtrl guard above cannot catch it; the generic GPR-store template hangs on this form)
-! case 26 skipped: STC.L SR, @-Rn: control-register-sourced memory store in a delay slot not yet modelled by DSideDSlot (DestCtrl is empty for STC.L -- it reads a control reg and writes memory -- so the PrivMem/DestCtrl guard above cannot catch it; the generic GPR-store template hangs on this form)
-! case 26 skipped: STC.L VBR, @-Rn: control-register-sourced memory store in a delay slot not yet modelled by DSideDSlot (DestCtrl is empty for STC.L -- it reads a control reg and writes memory -- so the PrivMem/DestCtrl guard above cannot catch it; the generic GPR-store template hangs on this form)
-! case 26 skipped: STS CP0_COM, Rn has no D-side memory access
-! case 26 skipped: STS CPI_COM, Rn has no D-side memory access
-! case 26 skipped: STS MACH, Rn has no D-side memory access
-! case 26 skipped: STS MACL, Rn has no D-side memory access
-! case 26 skipped: STS PR, Rn has no D-side memory access
-! case 29 skipped: SUB Rm, Rn has no D-side memory access
-! case 29 skipped: SUBC Rm, Rn has no D-side memory access
-! case 29 skipped: SUBV Rm, Rn has no D-side memory access
-! case 29 skipped: SWAP.B Rm, Rn has no D-side memory access
-! case 29 skipped: SWAP.W Rm, Rn has no D-side memory access
-! case 29 skipped: Slot Illegal has no D-side memory access
-! case 30 skipped: TLB DMISS R has no D-side memory access
-! case 30 skipped: TLB DMISS W has no D-side memory access
-! case 30 skipped: TLB DPROT R has no D-side memory access
-! case 30 skipped: TLB DPROT W has no D-side memory access
-! case 30 skipped: TLB IMISS has no D-side memory access
-! case 30 skipped: TLB IPROT has no D-side memory access
-! case 30 skipped: TRAPA #imm has no D-side memory access
-! case 30 skipped: TST #imm, R0 has no D-side memory access
-! case 30 skipped: TST Rm, Rn has no D-side memory access
-! case 30 skipped: TST.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 30 skipped: XOR #imm, R0 has no D-side memory access
-! case 30 skipped: XOR Rm, Rn has no D-side memory access
-! case 30 skipped: XOR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
-! case 30 skipped: XTRACT Rm, Rn has no D-side memory access
+! skipped: ADD #imm, Rn has no D-side memory access
+! skipped: ADD Rm, Rn has no D-side memory access
+! skipped: ADDC Rm, Rn has no D-side memory access
+! skipped: ADDV Rm, Rn has no D-side memory access
+! skipped: AND #imm, R0 has no D-side memory access
+! skipped: AND Rm, Rn has no D-side memory access
+! skipped: AND.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! skipped: BF /S label is Bespoke (dedicated guard)
+! skipped: BF label is Bespoke (dedicated guard)
+! skipped: BGND has no D-side memory access
+! skipped: BRA label is Bespoke (dedicated guard)
+! skipped: BRAF Rm is Bespoke (dedicated guard)
+! skipped: BSR label is Bespoke (dedicated guard)
+! skipped: BSRF Rm is Bespoke (dedicated guard)
+! skipped: BT /S label is Bespoke (dedicated guard)
+! skipped: BT label is Bespoke (dedicated guard)
+! skipped: Break has no D-side memory access
+! skipped: CLDS CP0_Rm, CP0_COM has no D-side memory access
+! skipped: CLDS CPI_Rm, CPI_COM has no D-side memory access
+! skipped: CLRMAC has no D-side memory access
+! skipped: CLRT has no D-side memory access
+! skipped: CMP /EQ #imm, R0 has no D-side memory access
+! skipped: CMP /EQ Rm, Rn has no D-side memory access
+! skipped: CMP /GE Rm, Rn has no D-side memory access
+! skipped: CMP /GT Rm, Rn has no D-side memory access
+! skipped: CMP /HI Rm, Rn has no D-side memory access
+! skipped: CMP /HS Rm, Rn has no D-side memory access
+! skipped: CMP /STR Rm, Rn has no D-side memory access
+! skipped: CMP/EQ ASIDR, Rn has no D-side memory access
+! skipped: CMP/EQ PTEH, Rn has no D-side memory access
+! skipped: CMP/PL Rn has no D-side memory access
+! skipped: CMP/PZ Rn has no D-side memory access
+! skipped: CSTS CP0_COM, CP0_Rn has no D-side memory access
+! skipped: CSTS CPI_COM, CPI_Rn has no D-side memory access
+! skipped: DIV0S Rm, Rn has no D-side memory access
+! skipped: DIV0U has no D-side memory access
+! skipped: DIV1 Rm, Rn has no D-side memory access
+! skipped: DMULS.L Rm, Rn has no D-side memory access
+! skipped: DMULU.L Rm, Rn has no D-side memory access
+! skipped: DT Rn has no D-side memory access
+! skipped: EXTS.B Rm, Rn has no D-side memory access
+! skipped: EXTS.W Rm, Rn has no D-side memory access
+! skipped: EXTU.B Rm, Rn has no D-side memory access
+! skipped: EXTU.W Rm, Rn has no D-side memory access
+! skipped: Error has no D-side memory access
+! skipped: General Illegal has no D-side memory access
+! skipped: Interrupt has no D-side memory access
+! skipped: JMP @Rm is Bespoke (dedicated guard)
+! skipped: JSR @Rm is Bespoke (dedicated guard)
+! skipped: LDC Rm, ASIDR has no D-side memory access
+! skipped: LDC Rm, PTEH has no D-side memory access
+! skipped: LDC Rm, PTEL has no D-side memory access
+! skipped: LDC Rm, Rn_BANK has no D-side memory access
+! skipped: LDC Rm, SPC has no D-side memory access
+! skipped: LDC Rm, SR has no D-side memory access
+! skipped: LDC Rm, SSR has no D-side memory access
+! skipped: LDC Rm, VBR has no D-side memory access
+! skipped: LDC, Rm, GBR has no D-side memory access
+! skipped: LDS Rm, CP0_COM has no D-side memory access
+! skipped: LDS Rm, CPI_COM has no D-side memory access
+! skipped: LDS Rm, MACH has no D-side memory access
+! skipped: LDS Rm, MACL has no D-side memory access
+! skipped: LDS Rm, PR has no D-side memory access
+! skipped: LDTLB is Bespoke (dedicated guard)
+! skipped: LDTLB.RN is Bespoke (dedicated guard)
+! skipped: LDTLB.RN Rm has no D-side memory access
+! skipped: MAC.L @Rm+, @Rn+: effective address not modelled: dual memory-pointer instruction (only one base register is seeded)
+! skipped: MAC.W @Rm+, @Rn+: effective address not modelled: dual memory-pointer instruction (only one base register is seeded)
+! skipped: MOV #imm, Rn has no D-side memory access
+! skipped: MOV Rm, Rn has no D-side memory access
+! skipped: MOV.B @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! skipped: MOV.B @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! skipped: MOV.B R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! skipped: MOV.B Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! skipped: MOV.L @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! skipped: MOV.L @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! skipped: MOV.L @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
+! skipped: MOV.L R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! skipped: MOV.L Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! skipped: MOV.W @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! skipped: MOV.W @(disp, GBR), R0: effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! skipped: MOV.W @(disp, PC), Rn: effective address not modelled: PC-relative base is not seeded by the fixed register choice
+! skipped: MOV.W R0, @(disp, GBR): effective address not modelled: GBR-relative base is not seeded by the fixed register choice
+! skipped: MOV.W Rm, @(R0, Rn): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! skipped: MOVA @(disp, PC), R0 has no D-side memory access
+! skipped: MOVT Rn has no D-side memory access
+! skipped: MUL.L Rm, Rn has no D-side memory access
+! skipped: MULS.W Rm, Rn has no D-side memory access
+! skipped: MULU.W Rm, Rn has no D-side memory access
+! skipped: NEG Rm, Rn has no D-side memory access
+! skipped: NEGC Rm, Rn has no D-side memory access
+! skipped: NOP has no D-side memory access
+! skipped: NOT Rm, Rn has no D-side memory access
+! skipped: OR #imm, R0 has no D-side memory access
+! skipped: OR Rm, Rn has no D-side memory access
+! skipped: OR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! skipped: ROTCL Rn has no D-side memory access
+! skipped: ROTCR Rn has no D-side memory access
+! skipped: ROTL Rn has no D-side memory access
+! skipped: ROTR Rn has no D-side memory access
+! skipped: RTE is Bespoke (dedicated guard)
+! skipped: RTS is Bespoke (dedicated guard)
+! skipped: Reset CPU: control-register memory store in a delay slot not yet modelled by DSideDSlot
+! skipped: SETT has no D-side memory access
+! skipped: SHAD Rm, Rn has no D-side memory access
+! skipped: SHAL Rn has no D-side memory access
+! skipped: SHAR Rn has no D-side memory access
+! skipped: SHLD Rm, Rn has no D-side memory access
+! skipped: SHLL Rn has no D-side memory access
+! skipped: SHLL16 Rn has no D-side memory access
+! skipped: SHLL2 Rn has no D-side memory access
+! skipped: SHLL8 Rn has no D-side memory access
+! skipped: SHLR Rn has no D-side memory access
+! skipped: SHLR16 Rn has no D-side memory access
+! skipped: SHLR2 Rn has no D-side memory access
+! skipped: SHLR8 Rn has no D-side memory access
+! skipped: SLEEP is Bespoke (dedicated guard)
+! skipped: STC ASIDR, Rn has no D-side memory access
+! skipped: STC EXPEVT, Rn has no D-side memory access
+! skipped: STC GBR, Rn has no D-side memory access
+! skipped: STC INTEVT, Rn has no D-side memory access
+! skipped: STC PTEH, Rn has no D-side memory access
+! skipped: STC PTEL, Rn has no D-side memory access
+! skipped: STC Rm_BANK, Rn has no D-side memory access
+! skipped: STC SPC, Rn has no D-side memory access
+! skipped: STC SR, Rn has no D-side memory access
+! skipped: STC SSR, Rn has no D-side memory access
+! skipped: STC TRA, Rn has no D-side memory access
+! skipped: STC TSBPTR, Rn has no D-side memory access
+! skipped: STC VBR, Rn has no D-side memory access
+! skipped: STC.L GBR, @-Rn: control-register-sourced memory store in a delay slot not yet modelled by DSideDSlot (DestCtrl is empty for STC.L -- it reads a control reg and writes memory -- so the PrivMem/DestCtrl guard above cannot catch it; the generic GPR-store template hangs on this form)
+! skipped: STC.L SR, @-Rn: control-register-sourced memory store in a delay slot not yet modelled by DSideDSlot (DestCtrl is empty for STC.L -- it reads a control reg and writes memory -- so the PrivMem/DestCtrl guard above cannot catch it; the generic GPR-store template hangs on this form)
+! skipped: STC.L VBR, @-Rn: control-register-sourced memory store in a delay slot not yet modelled by DSideDSlot (DestCtrl is empty for STC.L -- it reads a control reg and writes memory -- so the PrivMem/DestCtrl guard above cannot catch it; the generic GPR-store template hangs on this form)
+! skipped: STS CP0_COM, Rn has no D-side memory access
+! skipped: STS CPI_COM, Rn has no D-side memory access
+! skipped: STS MACH, Rn has no D-side memory access
+! skipped: STS MACL, Rn has no D-side memory access
+! skipped: STS PR, Rn has no D-side memory access
+! skipped: SUB Rm, Rn has no D-side memory access
+! skipped: SUBC Rm, Rn has no D-side memory access
+! skipped: SUBV Rm, Rn has no D-side memory access
+! skipped: SWAP.B Rm, Rn has no D-side memory access
+! skipped: SWAP.W Rm, Rn has no D-side memory access
+! skipped: Slot Illegal has no D-side memory access
+! skipped: TLB DMISS R has no D-side memory access
+! skipped: TLB DMISS W has no D-side memory access
+! skipped: TLB DPROT R has no D-side memory access
+! skipped: TLB DPROT W has no D-side memory access
+! skipped: TLB IMISS has no D-side memory access
+! skipped: TLB IPROT has no D-side memory access
+! skipped: TRAPA #imm has no D-side memory access
+! skipped: TST #imm, R0 has no D-side memory access
+! skipped: TST Rm, Rn has no D-side memory access
+! skipped: TST.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! skipped: XOR #imm, R0 has no D-side memory access
+! skipped: XOR Rm, Rn has no D-side memory access
+! skipped: XOR.B #imm, @(R0, GBR): effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
+! skipped: XTRACT Rm, Rn has no D-side memory access
 #include "m8_runtime.inc"
 
 #if CONFIG_PRIV_ARCH

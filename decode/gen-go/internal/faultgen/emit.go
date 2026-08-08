@@ -281,7 +281,7 @@ func EmitCase(c Class, id int) (block string, dispatch string, err error) {
 
 func emitCase(c Class, id int, axis Axis) (block string, dispatch string, err error) {
 	if c.Bucket == Bespoke {
-		return fmt.Sprintf("! case %d skipped: %s is Bespoke (dedicated guard)\n", id, c.Instr.Name),
+		return fmt.Sprintf("! skipped: %s is Bespoke (dedicated guard)\n", c.Instr.Name),
 			"", errSkip
 	}
 
@@ -327,7 +327,7 @@ func unmodelledBase(name string) (reason string, bad bool) {
 
 func emitDSide(c Class, id int) (string, string, error) {
 	if c.Mem == NoMem || !c.DFaults {
-		return fmt.Sprintf("! case %d skipped: %s has no D-side memory access\n", id, c.Instr.Name),
+		return fmt.Sprintf("! skipped: %s has no D-side memory access\n", c.Instr.Name),
 			"", errSkip
 	}
 	// MAC.L/MAC.W @Rm+,@Rn+ are dual-pointer post-increments -- the highest-
@@ -338,7 +338,7 @@ func emitDSide(c Class, id int) (string, string, error) {
 		return emitMacD(c, id)
 	}
 	if reason, bad := unmodelledBase(c.Instr.Name); bad {
-		return fmt.Sprintf("! case %d skipped: %s: %s\n", id, c.Instr.Name, reason),
+		return fmt.Sprintf("! skipped: %s: %s\n", c.Instr.Name, reason),
 			"", errSkip
 	}
 	// Control-register memory LOADS (LDC.L/LDS.L @Rm+,ctrl): the auto-modify
@@ -359,8 +359,8 @@ func emitDSide(c Class, id int) (string, string, error) {
 	// r0 the implicit pointer would diverge from the seeded base and the probe
 	// would be vacuous, so skip honestly rather than mis-model.
 	if strings.HasPrefix(c.Instr.Name, "CAS.") && regBase != 0 {
-		return fmt.Sprintf("! case %d skipped: %s: implicit-R0 pointer requires regBase==r0 (currently r%d)\n",
-				id, c.Instr.Name, regBase),
+		return fmt.Sprintf("! skipped: %s: implicit-R0 pointer requires regBase==r0 (currently r%d)\n",
+				c.Instr.Name, regBase),
 			"", errSkip
 	}
 	word, err := encodeWord(c)
@@ -382,7 +382,7 @@ func emitDSide(c Class, id int) (string, string, error) {
 	if c.Mem == Write {
 		pa, reason, ok := storeProbeAddr(c, word, workloadVA)
 		if !ok {
-			return fmt.Sprintf("! case %d skipped: %s: %s\n", id, c.Instr.Name, reason),
+			return fmt.Sprintf("! skipped: %s: %s\n", c.Instr.Name, reason),
 				"", errSkip
 		}
 		probeAddr = pa
@@ -412,14 +412,14 @@ func emitDSide(c Class, id int) (string, string, error) {
 		// itself uses: zeroing VBR/SR/SSR/SPC means the cold-TLB fault vectors
 		// to garbage instead of the handler (a hang), so skip those here.
 		if exceptionCritical[c.DestCtrl] {
-			return fmt.Sprintf("! case %d skipped: %s writes exception-critical control reg %q (cannot be clobbered across a fault)\n",
-					id, c.Instr.Name, c.DestCtrl),
+			return fmt.Sprintf("! skipped: %s writes exception-critical control reg %q (cannot be clobbered across a fault)\n",
+					c.Instr.Name, c.DestCtrl),
 				"", errSkip
 		}
 		ca := ctrlFor(c.DestCtrl)
 		if !ca.ok {
-			return fmt.Sprintf("! case %d skipped: %s writes control reg %q (mode-unsafe / not representable)\n",
-					id, c.Instr.Name, c.DestCtrl),
+			return fmt.Sprintf("! skipped: %s writes control reg %q (mode-unsafe / not representable)\n",
+					c.Instr.Name, c.DestCtrl),
 				"", errSkip
 		}
 		d.CtrlSave = fmt.Sprintf(ca.store, "r1")
@@ -458,14 +458,14 @@ func emitCtrlLoadD(c Class, id int) (string, string, error) {
 		if st, ok := ctrlStore[reg]; ok {
 			return emitModePreservingCtrlLoadD(c, id, st)
 		}
-		return fmt.Sprintf("! case %d skipped: %s: mode-unsafe (SR/VBR govern execution/vectoring) and no STC available for the mode-preserving payload\n",
-				id, c.Instr.Name),
+		return fmt.Sprintf("! skipped: %s: mode-unsafe (SR/VBR govern execution/vectoring) and no STC available for the mode-preserving payload\n",
+				c.Instr.Name),
 			"", errSkip
 	}
 	ca := ctrlFor(reg)
 	if !ca.ok {
-		return fmt.Sprintf("! case %d skipped: %s: control reg %q not representable for snapshot/restore\n",
-				id, c.Instr.Name, reg),
+		return fmt.Sprintf("! skipped: %s: control reg %q not representable for snapshot/restore\n",
+				c.Instr.Name, reg),
 			"", errSkip
 	}
 	word, err := encodeWord(c)
@@ -635,25 +635,25 @@ func ifetchUnsupported(name string) (reason string, bad bool) {
 //     in-page fetch; the fetch-restart mechanism is fully exercised by General.
 func emitIFetch(c Class, id int) (string, string, error) {
 	if c.Bucket == Bespoke || !c.IFaults {
-		return fmt.Sprintf("! case %d skipped: %s excluded from I-fetch axis (control-flow/system; dedicated guard)\n", id, c.Instr.Name),
+		return fmt.Sprintf("! skipped: %s excluded from I-fetch axis (control-flow/system; dedicated guard)\n", c.Instr.Name),
 			"", errSkip
 	}
 	if c.Instr.Plane == "system" {
-		return fmt.Sprintf("! case %d skipped: %s is a microcode-only system entry (plane=system), not a fetchable instruction\n", id, c.Instr.Name),
+		return fmt.Sprintf("! skipped: %s is a microcode-only system entry (plane=system), not a fetchable instruction\n", c.Instr.Name),
 			"", errSkip
 	}
 	if reason, bad := ifetchUnsupported(c.Instr.Name); bad {
-		return fmt.Sprintf("! case %d skipped: %s: %s\n", id, c.Instr.Name, reason),
+		return fmt.Sprintf("! skipped: %s: %s\n", c.Instr.Name, reason),
 			"", errSkip
 	}
 	if c.Mem != NoMem {
-		return fmt.Sprintf("! case %d skipped: %s accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)\n",
-				id, c.Instr.Name),
+		return fmt.Sprintf("! skipped: %s accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)\n",
+				c.Instr.Name),
 			"", errSkip
 	}
 	if c.Bucket == PrivMem {
-		return fmt.Sprintf("! case %d skipped: %s writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)\n",
-				id, c.Instr.Name),
+		return fmt.Sprintf("! skipped: %s writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)\n",
+				c.Instr.Name),
 			"", errSkip
 	}
 	word, err := encodeWord(c)
@@ -688,25 +688,25 @@ func render(t *template.Template, d caseData) (string, string, error) {
 // instruction scope as the I-fetch axis (General non-memory, non-branch).
 func emitIFetchDSlot(c Class, id int) (string, string, error) {
 	if c.Bucket == Bespoke || !c.IFaults {
-		return fmt.Sprintf("! case %d skipped: %s excluded from I-fetch-delay-slot axis (control-flow/system; a branch is illegal in a delay slot)\n", id, c.Instr.Name),
+		return fmt.Sprintf("! skipped: %s excluded from I-fetch-delay-slot axis (control-flow/system; a branch is illegal in a delay slot)\n", c.Instr.Name),
 			"", errSkip
 	}
 	if c.Instr.Plane == "system" {
-		return fmt.Sprintf("! case %d skipped: %s is a microcode-only system entry (plane=system), not a fetchable instruction\n", id, c.Instr.Name),
+		return fmt.Sprintf("! skipped: %s is a microcode-only system entry (plane=system), not a fetchable instruction\n", c.Instr.Name),
 			"", errSkip
 	}
 	if reason, bad := ifetchUnsupported(c.Instr.Name); bad {
-		return fmt.Sprintf("! case %d skipped: %s: %s\n", id, c.Instr.Name, reason),
+		return fmt.Sprintf("! skipped: %s: %s\n", c.Instr.Name, reason),
 			"", errSkip
 	}
 	if c.Mem != NoMem {
-		return fmt.Sprintf("! case %d skipped: %s accesses memory; the I-fetch-delay-slot axis is fetch-only (data-access-in-delay-slot precision is the DSideDSlot axis)\n",
-				id, c.Instr.Name),
+		return fmt.Sprintf("! skipped: %s accesses memory; the I-fetch-delay-slot axis is fetch-only (data-access-in-delay-slot precision is the DSideDSlot axis)\n",
+				c.Instr.Name),
 			"", errSkip
 	}
 	if c.Bucket == PrivMem {
-		return fmt.Sprintf("! case %d skipped: %s writes/needs a control register; the I-fetch-delay-slot axis sweeps the General non-memory set\n",
-				id, c.Instr.Name),
+		return fmt.Sprintf("! skipped: %s writes/needs a control register; the I-fetch-delay-slot axis sweeps the General non-memory set\n",
+				c.Instr.Name),
 			"", errSkip
 	}
 	word, err := encodeWord(c)
@@ -1067,11 +1067,11 @@ func EmitDSideDSlotImagesSkip(classes []Class, skip map[int]bool) ([]string, err
 // restart precision is already exercised by the General forms here).
 func emitDSideDSlot(c Class, id int) (string, string, error) {
 	if c.Mem == NoMem || !c.DFaults {
-		return fmt.Sprintf("! case %d skipped: %s has no D-side memory access\n", id, c.Instr.Name),
+		return fmt.Sprintf("! skipped: %s has no D-side memory access\n", c.Instr.Name),
 			"", errSkip
 	}
 	if reason, bad := unmodelledBase(c.Instr.Name); bad {
-		return fmt.Sprintf("! case %d skipped: %s: %s\n", id, c.Instr.Name, reason),
+		return fmt.Sprintf("! skipped: %s: %s\n", c.Instr.Name, reason),
 			"", errSkip
 	}
 	if strings.HasPrefix(c.Instr.Name, "LDC.L") || strings.HasPrefix(c.Instr.Name, "LDS.L") {
@@ -1086,7 +1086,7 @@ func emitDSideDSlot(c Class, id int) (string, string, error) {
 	// covers STC.L below -- STC.L READS a control register and WRITES memory,
 	// so DestCtrl=="" and this guard never sees it.
 	if c.Bucket == PrivMem && c.DestCtrl != "" {
-		return fmt.Sprintf("! case %d skipped: %s: control-register memory store in a delay slot not yet modelled by DSideDSlot\n", id, c.Instr.Name),
+		return fmt.Sprintf("! skipped: %s: control-register memory store in a delay slot not yet modelled by DSideDSlot\n", c.Instr.Name),
 			"", errSkip
 	}
 	// STC.L ctrl,@-Rn (GBR/SR/VBR) sources a control register and stores it to
@@ -1098,11 +1098,11 @@ func emitDSideDSlot(c Class, id int) (string, string, error) {
 	// this axis. Scoped to STC.L only -- STS.L MACH/MACL/PR,@-Rn (cases
 	// 29-31) pass on this axis today and must keep running.
 	if strings.HasPrefix(c.Instr.Name, "STC.L") {
-		return fmt.Sprintf("! case %d skipped: %s: control-register-sourced memory store in a delay slot not yet modelled by DSideDSlot (DestCtrl is empty for STC.L -- it reads a control reg and writes memory -- so the PrivMem/DestCtrl guard above cannot catch it; the generic GPR-store template hangs on this form)\n", id, c.Instr.Name),
+		return fmt.Sprintf("! skipped: %s: control-register-sourced memory store in a delay slot not yet modelled by DSideDSlot (DestCtrl is empty for STC.L -- it reads a control reg and writes memory -- so the PrivMem/DestCtrl guard above cannot catch it; the generic GPR-store template hangs on this form)\n", c.Instr.Name),
 			"", errSkip
 	}
 	if strings.HasPrefix(c.Instr.Name, "CAS.") && regBase != 0 {
-		return fmt.Sprintf("! case %d skipped: %s: implicit-R0 pointer requires regBase==r0 (currently r%d)\n", id, c.Instr.Name, regBase),
+		return fmt.Sprintf("! skipped: %s: implicit-R0 pointer requires regBase==r0 (currently r%d)\n", c.Instr.Name, regBase),
 			"", errSkip
 	}
 	word, err := encodeWord(c)
@@ -1124,7 +1124,7 @@ func emitDSideDSlot(c Class, id int) (string, string, error) {
 	if c.Mem == Write {
 		pa, reason, ok := storeProbeAddr(c, word, dslotDataPage)
 		if !ok {
-			return fmt.Sprintf("! case %d skipped: %s: %s\n", id, c.Instr.Name, reason),
+			return fmt.Sprintf("! skipped: %s: %s\n", c.Instr.Name, reason),
 				"", errSkip
 		}
 		probeAddr = pa
@@ -1244,14 +1244,14 @@ func emitCtrlLoadDSlot(c Class, id int) (string, string, error) {
 		if st, ok := ctrlStore[reg]; ok {
 			return emitModePreservingCtrlLoadDSlot(c, id, st)
 		}
-		return fmt.Sprintf("! case %d skipped: %s: mode-unsafe (SR/VBR govern execution/vectoring) and no STC available for a mode-preserving payload\n",
-				id, c.Instr.Name),
+		return fmt.Sprintf("! skipped: %s: mode-unsafe (SR/VBR govern execution/vectoring) and no STC available for a mode-preserving payload\n",
+				c.Instr.Name),
 			"", errSkip
 	}
 	ca := ctrlFor(reg)
 	if !ca.ok {
-		return fmt.Sprintf("! case %d skipped: %s: control reg %q not representable for snapshot/restore\n",
-				id, c.Instr.Name, reg),
+		return fmt.Sprintf("! skipped: %s: control reg %q not representable for snapshot/restore\n",
+				c.Instr.Name, reg),
 			"", errSkip
 	}
 	word, err := encodeWord(c)

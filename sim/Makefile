@@ -247,15 +247,38 @@ cpu_pure_tb: ram.img
 
 -include $(SRCS:.c=.P)
 
+# ---------------------------------------------------------------------------
+# CPU_VARIANT stamp. The .vhh preprocessing below bakes in -DCONFIG_PRIV_ARCH /
+# -DCONFIG_SH2A_ARCH / ..., all DERIVED from CPU_VARIANT, but make compares only
+# the .vhd/.h timestamps -- so `make CPU_VARIANT=j4 cpu_tb.vhh` over a tree built
+# at j2 reports "up to date" and leaves a PRIV_ARCH=false testbench in place.
+# MEASURED: without this, that exact sequence leaves `grep -c 'PRIV_ARCH => true'
+# cpu_tb.vhh` at 0 after asking for j4.
+#
+# DECODE_GEN_DIR above already solves this for the generated decoder by keying
+# its path on $(CPU_VARIANT)-w$(CPU_ROM_WIDTH); this is the same guarantee for
+# the artifacts that are NOT path-keyed. sim/mmu_sim.sh's `rm -f cpu_tb.vhh
+# cpu_ctb ...` and its defensive `grep -q 'PRIV_ARCH => true'` were both
+# workarounds for this missing dependency.
+#
+# Rewritten only when the value CHANGES, so it does not force a rebuild on
+# every invocation.
+.PHONY: FORCE
+.cpu-variant: FORCE
+	@echo '$(CPU_VARIANT) $(CPU_ROM_WIDTH) $(CONFIG_PRIV_ARCH) $(CONFIG_SH2A_ARCH) $(CONFIG_DSP_ALU) $(CONFIG_DECODE_ROM) $(CONFIG_MULT_SEQ) $(CONFIG_PREFETCHER) $(CONFIG_RING_BUS)' > $@.tmp
+	@if cmp -s $@.tmp $@; then rm -f $@.tmp; else \
+	  test ! -f $@ || echo "  CPU_VARIANT/config changed; rebuilding"; \
+	  mv $@.tmp $@; fi
+
 # Add dependencies to particular vhh files. TODO: how to avoid
 # repeating this rule?
-cpu_tb.vhh: cpu_tb.vhd cpu_signals.h sim/sim_macros.h
+cpu_tb.vhh: cpu_tb.vhd cpu_signals.h sim/sim_macros.h .cpu-variant
 	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_SH2A_ARCH=$(CONFIG_SH2A_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -DCONFIG_DECODE_ROM=$(CONFIG_DECODE_ROM) -DCONFIG_MULT_SEQ=$(CONFIG_MULT_SEQ) -I. -I../config -Isim $< -o $@
 
-cpu_cache_tb.vhh: cpu_cache_tb.vhd cpu_signals.h sim/sim_macros.h
+cpu_cache_tb.vhh: cpu_cache_tb.vhd cpu_signals.h sim/sim_macros.h .cpu-variant
 	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -DCONFIG_DSP_ALU=$(CONFIG_DSP_ALU) -I. -I../config -Isim $< -o $@
 
-cpu_dualcore_tb.vhh: cpu_dualcore_tb.vhd cpu_signals.h sim/sim_macros.h
+cpu_dualcore_tb.vhh: cpu_dualcore_tb.vhd cpu_signals.h sim/sim_macros.h .cpu-variant
 	LD_LIBRARY_PATH='' gcc -x c-header -E -P -w -nostdinc -DVHDL -DCONFIG_PREFETCHER=$(CONFIG_PREFETCHER) -DCONFIG_RING_BUS=$(CONFIG_RING_BUS) -DCONFIG_PRIV_ARCH=$(CONFIG_PRIV_ARCH) -I. -I../config -Isim $< -o $@
 
 %.vpi:
@@ -319,7 +342,7 @@ decode-symmetry:
 clean:
 	rm -f *.o *.P *.vpi *.vvp sim/*.o sim/*.P sim/*.vpi sim/*.vvp *.vhh
 	rm -f *.cf $(VHDL_TOPS) cpu_ctb
-	rm -f decodeop
+	rm -f decodeop .cpu-variant
 #	rm -f ram.img
 
 .PHONY: clean cpu_sim_pkg

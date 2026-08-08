@@ -184,13 +184,34 @@ mmudspcprobe_latemw.elf: mmudspcprobe_latemw.o
 mmuimissrest.elf: mmuimissrest.o
 mmusmep.elf: mmusmep.o
 
-sh2a_%.o: sh2a_%.S
+
+# ---------------------------------------------------------------------------
+# CPU_VARIANT stamp. CFLAGS carries -DCONFIG_PRIV_ARCH / -DCONFIG_SH2A_ARCH,
+# both DERIVED from CPU_VARIANT above -- but make only ever compares .S/.c
+# timestamps, so `make CPU_VARIANT=j4 foo.img` over a tree built at j2 reports
+# "up to date" and hands back the J2 binary. That is not hypothetical: it is
+# what makes regression.sh Step 6 run J4 images on a base-J2 cpu_ctb and report
+# ~74 of 77 sim tests failing, a total-collapse signature that looks like a
+# catastrophic RTL regression and is purely stale artifacts.
+#
+# .cpu-variant records the variant actually used to build the objects in this
+# directory. It is rewritten only when the value CHANGES (cmp before mv), so it
+# does not itself force a rebuild on every invocation -- but when the variant
+# does change, every .o depending on it is correctly out of date.
+.PHONY: FORCE
+.cpu-variant: FORCE
+	@echo '$(CPU_VARIANT) $(CONFIG_PRIV_ARCH) $(CONFIG_SH2A_ARCH)' > $@.tmp
+	@if cmp -s $@.tmp $@; then rm -f $@.tmp; else \
+	  test ! -f $@ || echo "  CPU_VARIANT changed to '$(CPU_VARIANT)'; rebuilding"; \
+	  mv $@.tmp $@; fi
+
+sh2a_%.o: sh2a_%.S .cpu-variant
 	$(CC) $(CFLAGS) -Wa,--isa=sh2a -c $< -o $@
 
-%.o: %.S
+%.o: %.S .cpu-variant
 	$(CC) $(CFLAGS) -c $< -o $@
 
-%.o: %.c
+%.o: %.c .cpu-variant
 	$(CC) $(CFLAGS) -c $< -o $@
 
 sh2a_movi20.elf: sh2a_movi20.o
@@ -277,7 +298,7 @@ m8_%.img: m8_%.elf
 	$(OBJCOPY) -v -S -O binary --srec-forceS3 $< $@
 
 clean:
-	rm -f *.o *.elf *.img *.map
+	rm -f *.o *.elf *.img *.map .cpu-variant
 
 .PHONY: clean j4-guards
 mmutsb.elf: mmutsb.o

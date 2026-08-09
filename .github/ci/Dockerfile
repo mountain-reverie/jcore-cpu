@@ -43,7 +43,7 @@ ARG BINUTILS_JCORE_REPO=https://github.com/mountain-reverie/binutils-gdb.git
 # shifts shad/shld (needed by testrom/tests/testshift.s; J2 really does
 # implement them, see sim/tests/shldshadguard.S). Previous pin was cf1e4755
 # (stc expevt/intevt/tra,Rn on top of the existing J4 mnemonics).
-ARG BINUTILS_JCORE_COMMIT=4f87e9efef249273d926bfc12bc0dc864065723b
+ARG BINUTILS_JCORE_COMMIT=0f59415e6b6be86ac438502dd549abd95e5d5680
 ARG SH2_GCC_VERSION=14.2.0
 ARG GO_VERSION=1.26.2
 # OpenSTA is not packaged for Ubuntu; built from source below. OpenSTA requires

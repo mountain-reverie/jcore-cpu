@@ -561,9 +561,9 @@ begin
         pteh_vpn    => dp_mmu_regs.pteh(31 downto 12),
         -- Install data, not the CSR: LDTLB.RN Rm drives this from XBUS so it
         -- does not need a separate slot to stage PTEL := Rm first.
-        ptel        => dp_tlb_ptel,
-        asidr       => dp_mmu_regs.asidr(15 downto 0),
-        ti          => dp_mmu_regs.mmucr(2)
+        ptel  => dp_tlb_ptel,
+        asidr => dp_mmu_regs.asidr(15 downto 0),
+        ti    => dp_mmu_regs.mmucr(2)
       );
 
     mmu_o.i_pa_tag <= tlb_i_pa;

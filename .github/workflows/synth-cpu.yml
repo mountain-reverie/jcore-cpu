@@ -324,12 +324,21 @@ jobs:
         # slower; the cache variants are CDC-limited), each set conservatively
         # below the representative Fmax so the noisy metric does not flake while
         # still catching real erosion. Re-baseline on intentional toolchain bumps.
+        #
+        # j4 was re-baselined 35 -> 30 MHz when the j4 leg gained the J4 overlay
+        # decoder (see synth/cpu_synth.sh). Before that it kept the BASE (J2)
+        # decoder, so sr.tlb_wr was a constant '0' and yosys pruned most of the
+        # TLB -- the old floor was guarding a J4 that barely had an MMU, which is
+        # why its comment read "J4 == J2 core today". Representative Fmax went
+        # 37.66 -> 33.38 MHz because the MMU is now actually in the netlist. That
+        # is a one-time SCOPE change, not erosion; the floor keeps ~10% margin,
+        # matching the ratio the other variants use.
         run: |
           set -euo pipefail
           case "${{ matrix.variant }}" in
             j1)  floor=33 ;;                    # J1 ~38-40 MHz representative
             j2)  floor="${ECP5_FMIN_MHZ}" ;;    # J2 ~42-43 MHz; env floor 40
-            j4)  floor=35 ;;                    # J4 == J2 core today (margin vs ~42-43 noisy Fmax)
+            j4)  floor=30 ;;                    # J4 WITH the MMU: ~33 MHz representative
             j2c) floor=18 ;;                    # cpu+cache, single-clock CDC-limited
             j4c) floor=18 ;;
             *)   floor=18 ;;                    # j2a/j2ac: report-only (no floor gate)

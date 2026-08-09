@@ -22,33 +22,42 @@
 #   cycles of counter and ~3 of branch"; that estimate is retired. Set
 #   BENCH_GUARD=mmurun to reproduce the old, scaffolding-inflated figures.
 #
-#   MEASURED, 11-insn fast path (cosim 100 MHz / 10 ns period), fault ->
+#   MEASURED, 9-insn fast path (cosim 100 MHz / 10 ns period), fault ->
 #   back-executing-the-faulting-instruction. Run sim/profile_tlb_hotpath.py for
 #   the per-instruction attribution these totals come from.
 #
 #                              | I-side (IMISS) | D-side (DMISS_R/W)
 #     -------------------------+----------------+-------------------
 #     HW exception entry       |      5 cyc     |       6 cyc
-#     handler body (11 insns)  |     17 cyc     |      17 cyc
+#     handler body (9 insns)   |     15 cyc     |      15 cyc
 #     LDTLB.RN install+redirect|      4 cyc     |       4 cyc
 #     -------------------------+----------------+-------------------
-#     TSB hit, TOTAL           |     26 cyc     |      27 cyc
+#     TSB hit, TOTAL           |     24 cyc     |      25 cyc
 #     cold (-> C walker)       |     75 cyc     |      76 cyc
 #
 #   The handler body is IDENTICAL on both sides. The whole I-vs-D difference is
 #   ONE cycle of hardware exception entry -- the D-side fault resolves a cycle
 #   later in the pipe. Nothing else differs.
 #
-#   Where the 17-cycle body goes (D-side; I-side is the same):
+#   Where the 15-cycle body goes (D-side; I-side is the same):
 #       1  stc tsbptr,r0        1  mov.l @r0+,r1 (tag_lo)
 #       1  mov.l @r0+,r1        2  mov.l @r0,r3  (TTE; load-use)
 #       2  cmp/eq pteh,r1       1  cmp/eq asidr,r1
 #       3  bf (not taken)       2  bf (not taken)
-#       2  cmp/miss expevt      1  bf (not taken)
 #       1  ldtlb.rn r3
-#   => the three NOT-TAKEN bf's cost 6 of the 17 cycles (35%). That is the
+#   => the two NOT-TAKEN bf's cost 5 of the 15 cycles (33%). That is the
 #   single largest software-visible bucket and is why static not-taken branch
 #   prediction is item 1 below.
+#
+#   HISTORY. 27/26 -> 25/24 came from splitting TLB protection faults off the
+#   miss vector onto VBR+0x100, which is what SH-4 itself does (SH7750 manual
+#   Rev 2.0 02/99: misses H'400, protection H'100). J4 had merged all six
+#   causes onto H'400, which forced the hot path to run
+#   `stc expevt / add / cmp/pl` -- later fused into a purpose-built CMP/MISS
+#   EXPEVT instruction -- on EVERY TSB hit just to tell miss from protection.
+#   The split removed the caller, so CMP/MISS was withdrawn and its encoding
+#   returned to the free pool. Guard: mmuvecsplit (each vector writes a
+#   distinct marker; corrupt the split and sub-test D fails with Result=4).
 #
 #   HISTORICAL CORRECTION. This header once reported 21 cyc dwell / 28 cyc total
 #   for the D-side and wrote the 21-vs-17 gap up as an unexplained I-vs-D
@@ -65,10 +74,11 @@
 #   test differs -- this is a measurement, not a model):
 #       stc expevt + add #-128 + cmp/pl (13 insns):  29 cyc fault->resume
 #       cmp/miss expevt                 (11 insns):  27 cyc fault->resume
-#       => 2 cycles saved per TLB miss (~7%), and r2 freed on the fast path.
-#   (Both legs were measured with the old padded bracket, at 30 and 28; the pad
-#   added a constant 1 to each, so the 2-cycle DELTA is unaffected. The absolute
-#   figures above are the corrected, unpadded ones.)
+#       separate protection vector      ( 9 insns):  25 cyc fault->resume
+#   Both software approaches are now HISTORY: the vector split beat the fused
+#   instruction by another 2 cycles AND removed the livelock hazard by
+#   construction rather than by a software check. Recorded because the
+#   intermediate step is the more tempting one and was in fact taken first.
 #   Note the marginal cost here is ~1 cycle per removed instruction, NOT the
 #   ~2 that dividing total dwell by instruction count suggests. Do not size
 #   future hot-path changes with that ratio -- A/B them here instead.

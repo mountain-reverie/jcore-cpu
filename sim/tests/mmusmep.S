@@ -312,6 +312,16 @@ p_test_result_pass: .long   TEST_PASS_MAGIC
         ! ================================================================
         .balign 4
 _v_trapa:                              ! = VBR + 0x100 = _v_ifetch - 0x300
+        ! VBR+0x100 is now a SHARED general-exception vector: TRAPA
+        ! (EXPEVT=0x160) and TLB PROTECTION (IPROT 0x0A0 / DPROT_R/W 0x0C0)
+        ! both land here since protection faults were split off the miss
+        ! vector to match SH-4 (misses H'400, protection H'100). Dispatch on
+        ! EXPEVT: anything that is not TRAPA is the IPROT this guard is
+        ! actually testing, so hand it to the _v_ifetch body unchanged.
+        .word   0x0052                  ! STC EXPEVT, r0
+        mov.l   Hc_trapa_expevt, r1
+        cmp/eq  r0, r1
+        bf      _v_ifetch               ! not TRAPA -> IPROT: the real subject
         mov.l   Htrapa_marker, r0
         mov.l   r10, @r0                ! g_user_marker = r10 (set by user code)
         .word   0x0132                  ! STC SSR, r1
@@ -326,6 +336,7 @@ _v_trapa:                              ! = VBR + 0x100 = _v_ifetch - 0x300
         nop
 
         .balign 4
+Hc_trapa_expevt: .long 0x00000160       ! EXPEVT for TRAPA
 Htrapa_marker:  .long _g_user_marker
 Htrapa_mdbit:   .long 0x40000000        ! SR.MD bit, forced onto SSR before RTE
 Htrapa_resume:  .long after_ok

@@ -1,7 +1,7 @@
 ! mmubenchi.S -- I-SIDE TLB-miss hot-path BENCHMARK guard.
 !
 ! The instruction-fetch twin of mmubench.S. Same byte-faithful copy of
-! linux@jcore's JCORE_TLB_FASTPATH (11 insns, inlined at the vector, no
+! linux@jcore's JCORE_TLB_FASTPATH (9 insns, inlined at the vector, no
 ! tsb_hits++ counter, no `bra` stub), but the faulting access is an I-FETCH
 ! rather than a data load/store, so sim/bench_tlb_hotpath.sh reports the IMISS
 ! fault->resume latency instead of the DMISS one.
@@ -18,7 +18,7 @@
 !
 ! Overlay .word encodings (assembler does not know these J4 forms):
 !   STC TSBPTR,r0 =0x004B   STC PTEH,r5 =0x058B   STC TSBPTR,r6=0x064B
-!   CMP/EQ PTEH,r1=0x01CB   CMP/EQ ASIDR,r1=0x01DB   CMP/MISS EXPEVT=0x00EB
+!   CMP/EQ PTEH,r1=0x01CB   CMP/EQ ASIDR,r1=0x01DB
 !   LDC r0,ASIDR  =0x407E   LDC r0,PTEL =0x406E
 !   LDC r0,VBR    =0x402E   LDTLB.RN     =0x0078   LDTLB.RN r3 =0x03FB
 #include "sim_instr.h"
@@ -277,7 +277,25 @@ p_test_result_pass: .long   TEST_PASS_MAGIC
         ! shared hot path.
         .balign 4
 _vbase:
-        .space 0x400, 0
+        ! VBR+0x100 -- general exceptions, which since the miss/protection
+        ! vector split includes IPROT/DPROT_R/DPROT_W. This workload never
+        ! takes one (all four PTEs are W|X|U|D|V), so arriving here is a
+        ! defect. Distinct result code so it cannot be read as a walker fault.
+        .org    _vbase + 0x100
+_v_general:
+        mov.l   HP_mmucr, r0
+        mov     #0, r1
+        mov.l   r1, @r0                 ! disable AT
+        mov.l   HP_result, r0
+        mov     #8, r1
+        mov.l   r1, @r0                 ! TEST_RESULT = 8 (unexpected prot/general)
+1:      bra     1b
+        nop
+        .align  2
+HP_mmucr:  .long 0xFF000010
+HP_result: .long TEST_RESULT_ADDRESS
+
+        .org    _vbase + 0x400
         ! _vbase + 0x400 -- ALL TLB faults. The fast path is INLINED HERE,
         ! exactly as linux@jcore inlines JCORE_TLB_FASTPATH at its vector, and
         ! is byte-identical to sim/tests/mmubench.S's copy. `_h_common` aliases
@@ -292,8 +310,6 @@ _h_common:
         mov.l   @r0, r3                 !          r3 = TTE data (PTEL)
         .word   0x01DB                  ! cmp/eq   asidr, r1
         bf      _h_slow
-        .word   0x00EB                  ! cmp/miss expevt -- T=1 iff a miss
-        bf      _h_prot
         .word   0x03FB                  ! ldtlb.rn r3  (PTEL<-r3; install + return)
 
         ! ---- Slow path: call the C walker. ----

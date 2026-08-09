@@ -536,7 +536,7 @@
   name = "TLB IPROT"
   format = "d8"
   opcode = "---- 1011 dddd dddd"
-  operation = "SPC<-TLBPC (I-fetch restart PC, delay-slot aware); SSR<-SR; MD/RB/BL; EXPEVT<-0x0A0; PC<-VBR+0x400"
+  operation = "SPC<-TLBPC (I-fetch restart PC, delay-slot aware); SSR<-SR; MD/RB/BL; EXPEVT<-0x0A0; PC<-VBR+0x100"
   plane = "system"
   # SPC <- TLBPC (I-side restart PC captured in the datapath); see TLB IMISS.
   [[instr.slots]]
@@ -558,7 +558,7 @@
     pc = "HOLD"
   [[instr.slots]]
     xbus = "VBR"
-    ybus = "1024"
+    ybus = "256"
     arith = "ADD"
     zbus = "PC"
     zbus_sel = "ARITH"
@@ -577,7 +577,7 @@
   name = "TLB DPROT R"
   format = "d8"
   opcode = "---- 1100 dddd dddd"
-  operation = "SPC<-TLBPC-4 (faulting PC); SSR<-TLBSR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x400"
+  operation = "SPC<-TLBPC-4 (faulting PC); SSR<-TLBSR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x100"
   plane = "system"
   [[instr.slots]]
     alu_y = "4"
@@ -598,7 +598,7 @@
     pc = "HOLD"
   [[instr.slots]]
     xbus = "VBR"
-    ybus = "1024"
+    ybus = "256"
     arith = "ADD"
     zbus = "PC"
     zbus_sel = "ARITH"
@@ -617,7 +617,7 @@
   name = "TLB DPROT W"
   format = "d8"
   opcode = "---- 1101 dddd dddd"
-  operation = "SPC<-TLBPC-4 (faulting PC); SSR<-TLBSR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x400"
+  operation = "SPC<-TLBPC-4 (faulting PC); SSR<-TLBSR; MD/RB/BL; EXPEVT<-0x0C0; PC<-VBR+0x100"
   plane = "system"
   [[instr.slots]]
     alu_y = "4"
@@ -638,7 +638,7 @@
     pc = "HOLD"
   [[instr.slots]]
     xbus = "VBR"
-    ybus = "1024"
+    ybus = "256"
     arith = "ADD"
     zbus = "PC"
     zbus_sel = "ARITH"

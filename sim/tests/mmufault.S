@@ -412,7 +412,7 @@ ENTRY(after_f)
         .align 2
 p_rbclear:          .long 0xDFFFFFFF
 p_mdmask:           .long 0xBFFFFFFF
-p_vbr_val:          .long _v_tlb - 0x400 ! VBR so VBR+0x400 = _v_tlb
+p_vbr_val:          .long _vbase ! VBR so VBR+0x400 = _v_tlb
 p_mmucr:            .long 0xFF000010
 p_ptel_page0:       .long 0x000000C8   ! W|X|C -- U=0 (kernel-only): this is the
                                        ! guard's OWN code page, always fetched in
@@ -578,6 +578,20 @@ p_test_result_pass: .long   TEST_PASS_MAGIC
         ! ================================================================
 
         .balign 4
+! ---- Vector page (VBR = _vbase) ----
+! Since TLB protection faults were split off the miss vector to VBR+0x100
+! (matching SH-4: misses H'400, protection H'100), a guard that only places
+! code at +0x400 sends every IPROT/DPROT_R/DPROT_W into whatever happens to
+! sit 0x300 bytes before its handler. The old `VBR = _v_tlb - 0x400` idiom had
+! no valid +0x100 at all. Both vectors now land on the same EXPEVT-driven
+! handler, so every assertion below is unchanged; only the arrival path is.
+        .balign 4
+_vbase:
+        .org    _vbase + 0x100
+_v_prot:                                ! VBR+0x100: IPROT / DPROT_R / DPROT_W
+        bra     _v_tlb
+        nop
+        .org    _vbase + 0x400
 _v_tlb:                                ! = VBR + 0x400 (ALL TLB faults; EXPEVT distinguishes)
         mov.l   Hmmucr, r0             ! +0  load MMUCR addr
         mov     #0, r1                 ! +2

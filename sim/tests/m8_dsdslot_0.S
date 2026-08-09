@@ -38,7 +38,6 @@
 ! skipped: CMP /STR Rm, Rn has no D-side memory access
 ! skipped: CMP/EQ ASIDR, Rn has no D-side memory access
 ! skipped: CMP/EQ PTEH, Rn has no D-side memory access
-! skipped: CMP/MISS EXPEVT has no D-side memory access
 ! skipped: CMP/PL Rn has no D-side memory access
 ! skipped: CMP/PZ Rn has no D-side memory access
 ! skipped: CSTS CP0_COM, CP0_Rn has no D-side memory access

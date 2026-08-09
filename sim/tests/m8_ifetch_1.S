@@ -18,7 +18,6 @@
 ! skipped: CLRMAC: clrmac microcoded as TEMP1^TEMP1 -> 'U'/'X' in sim (MAC snapshot not comparable)
 ! skipped: CMP/EQ ASIDR, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 ! skipped: CMP/EQ PTEH, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
-! skipped: CMP/MISS EXPEVT writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 ! skipped: CSTS CP0_COM, CP0_Rn: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 ! skipped: CSTS CPI_COM, CPI_Rn: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 ! skipped: Error is a microcode-only system entry (plane=system), not a fetchable instruction

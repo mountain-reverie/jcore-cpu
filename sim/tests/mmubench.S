@@ -9,7 +9,7 @@
 ! standing between the measurement and the number anyone actually cares about.
 !
 ! This guard removes the estimate. Its handler is a BYTE-FAITHFUL copy of
-! linux@jcore's JCORE_TLB_FASTPATH (arch/sh/kernel/cpu/jcore/ex.S): 11
+! linux@jcore's JCORE_TLB_FASTPATH (arch/sh/kernel/cpu/jcore/ex.S): 9
 ! instructions, inlined AT the vector with no taken branch on a hit, no
 ! counter, same register discipline (r0/r1/r3 only; r2 untouched). What
 ! sim/bench_tlb_hotpath.sh measures here is the production cost directly.
@@ -28,7 +28,6 @@
 ! Overlay .word encodings (assembler does not know these J4 forms):
 !   STC TSBPTR,r0 =0x004B   STC PTEH,r5 =0x058B   STC TSBPTR,r6=0x064B
 !   CMP/EQ PTEH,r1=0x01CB   CMP/EQ ASIDR,r1=0x01DB
-!   CMP/MISS EXPEVT=0x00EB
 !   LDC r0,ASIDR  =0x407E   LDC r0,PTEL =0x406E
 !   LDC r0,VBR    =0x402E   LDTLB.RN     =0x0078   LDTLB.RN r3 =0x03FB
 #include "sim_instr.h"
@@ -125,13 +124,11 @@ kmain:
         mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0
 
         ! ================= SECOND TOUCHES (4 TSB hot-path hits) ==============
-        ! B is a STORE on purpose. It faults with EXPEVT = DMISS_W = 0x080,
-        ! which sits EXACTLY on CMP/MISS's inclusive boundary -- the one value
-        ! that separates a correct `0x080 >= EXPEVT` from an off-by-one
-        ! `0x07F >= EXPEVT`. Under the off-by-one, this store would be
-        ! classified as a protection fault and divert to _h_prot (result 8).
-        ! The loads (DMISS_R = 0x060) cannot detect that. Do not turn this
-        ! back into a load.
+        ! B is a STORE on purpose, so the hit set covers DMISS_W (EXPEVT
+        ! 0x080) and not just DMISS_R (0x060). It also proves stores reach the
+        ! MISS vector: since the miss/protection vector split, a store landing
+        ! at VBR+0x100 instead of VBR+0x400 would mean the fault classifier put
+        ! a write miss on the protection side (result 8). Do not make it a load.
         mov.l   va_A, r0 ; mov.l @r0, r8
         mov.l   va_B, r0 ; mov.l sv_B2, r1 ; mov.l r1, @r0   ! store -> DMISS_W 0x080
         mov.l   va_C, r0 ; mov.l @r0, r10
@@ -211,7 +208,25 @@ p_test_result_pass: .long   TEST_PASS_MAGIC
         ! ===================== Exception vector base =====================
         .balign 4
 _vbase:
-        .space 0x400, 0
+        ! VBR+0x100 -- general exceptions, which since the miss/protection
+        ! vector split includes IPROT/DPROT_R/DPROT_W. This workload never
+        ! takes one (all four PTEs are W|X|U|D|V), so arriving here is a
+        ! defect. Distinct result code so it cannot be read as a walker fault.
+        .org    _vbase + 0x100
+_v_general:
+        mov.l   HP_mmucr, r0
+        mov     #0, r1
+        mov.l   r1, @r0                 ! disable AT
+        mov.l   HP_result, r0
+        mov     #8, r1
+        mov.l   r1, @r0                 ! TEST_RESULT = 8 (unexpected prot/general)
+1:      bra     1b
+        nop
+        .align  2
+HP_mmucr:  .long 0xFF000010
+HP_result: .long TEST_RESULT_ADDRESS
+
+        .org    _vbase + 0x400
 
         ! _vbase + 0x400 -- ALL TLB faults. The fast path is INLINED HERE,
         ! exactly as linux@jcore inlines JCORE_TLB_FASTPATH at its vector:
@@ -231,11 +246,6 @@ _h_common:
                                         !          compare + bf below
         .word   0x01DB                  ! cmp/eq   asidr, r1
         bf      _h_slow
-        .word   0x00EB                  ! cmp/miss expevt  -- T=1 iff EXPEVT<=0x080
-                                        !          (a miss); T=0 on a protection
-                                        !          fault. Inverted vs the old
-                                        !          stc/add/cmp-pl sequence, hence bf.
-        bf      _h_prot
         .word   0x03FB                  ! ldtlb.rn r3  (PTEL<-r3; install + return)
 
         ! ---- Slow path: call the C walker. Must come IMMEDIATELY after the
@@ -273,7 +283,7 @@ _h_realfault:
 1:      bra     1b
         nop
 
-        ! ---- Protection fault on a TSB hit. Not reachable in this workload
+        ! ---- (unreachable) protection-fault landing. Not reachable in this workload
         ! (all four PTEs are W|X|U|D|V), so reaching it is a defect, not a path
         ! to benchmark. Placed AFTER _h_slow so it stays outside the measured
         ! [_h_common, _h_slow) window. Distinct result code so it cannot be

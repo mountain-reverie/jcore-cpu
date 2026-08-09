@@ -18,7 +18,6 @@
 ! skipped: CLRMAC: clrmac microcoded as TEMP1^TEMP1 -> 'U'/'X' in sim (MAC snapshot not comparable)
 ! skipped: CMP/EQ ASIDR, Rn writes/needs a control register; the I-fetch-delay-slot axis sweeps the General non-memory set
 ! skipped: CMP/EQ PTEH, Rn writes/needs a control register; the I-fetch-delay-slot axis sweeps the General non-memory set
-! skipped: CMP/MISS EXPEVT writes/needs a control register; the I-fetch-delay-slot axis sweeps the General non-memory set
 ! skipped: CSTS CP0_COM, CP0_Rn: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 ! skipped: CSTS CPI_COM, CPI_Rn: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 ! skipped: Error is a microcode-only system entry (plane=system), not a fetchable instruction

@@ -720,7 +720,6 @@ var csvInstrOrder = []string{
 	"STC ASIDR, Rn",
 	"CMP/EQ PTEH, Rn",
 	"CMP/EQ ASIDR, Rn",
-	"CMP/MISS EXPEVT",
 	"STC TSBPTR, Rn",
 	"LDTLB",
 	"LDTLB.RN",

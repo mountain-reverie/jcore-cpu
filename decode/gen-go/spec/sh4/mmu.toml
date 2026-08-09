@@ -14,14 +14,20 @@
 #
 # `0000 nnnn xxxx 0011` has only two slots left that are clean against the
 # target set, so the whole read side moved to `0000 nnnn xxxx 1011`, which had
-# seven -- enough for all six plus the new CMP/MISS, and it already hosted
-# LDTLB.RN Rm (0x?FB). Verify with:
+# seven, and it already hosted LDTLB.RN Rm (0x?FB). Verify with:
 #
 #   go run ./cmd/cpugen freespace --avoid j2,sh2a,sh4,sh4a,dsp \
 #       --overlay sh4 --form "----nnnn----1011" --region 0
 #
-# That block is now FULL. The next reserve for J4-only `0000 nnnn`-shaped
-# instructions is `0000 nnnn xxxx 1000` (8 virgin slots as of this writing).
+# Six of the seven are used (0100/1000/1001/1011 reads, 1100/1101 compares);
+# 1110 is free. It briefly held CMP/MISS EXPEVT, a fused EXPEVT fault-class
+# test the miss fast path needed to tell a miss from a protection fault --
+# necessary only because all six TLB causes shared the vector VBR+0x400.
+# Giving protection faults their own vector (VBR+0x100, which is what SH-4
+# itself does -- see exceptions.toml) removed the caller, so the instruction
+# and its encoding were withdrawn rather than left as dead ISA surface.
+# The next reserve for J4-only `0000 nnnn`-shaped instructions is
+# `0000 nnnn xxxx 1000` (8 virgin slots as of this writing).
 #
 # ---- DELIBERATE FORECLOSURE: SH-DSP ----
 # The LDC write side (`0100 mmmm xxxx 1110`, xxxx = 0101 PTEH / 0110 PTEL /
@@ -168,49 +174,6 @@
     zbus = "Rn"
     zbus_sel = "Y"
 
-# ---- CMP/MISS EXPEVT: fused fault-class test for the TLB-miss hot path ----
-# All six TLB causes share the one vector VBR+0x400, so a PROTECTION fault
-# against a VPN/ASID that still has a valid TSB slot also TSB-hits on the fast
-# path. Installing that (e.g. read-only) entry again and retrying livelocks,
-# because do_page_fault() is never reached to fix the pte up. The handler must
-# therefore separate miss from protection on EVERY TSB hit -- the hottest path
-# in the kernel. In software that costs three instructions and a scratch reg:
-#
-#     stc  expevt, r2        ! r2 = EXPEVT
-#     add  #-128, r2         ! (mov #0x80 would sign-extend to 0xFFFFFF80)
-#     cmp/pl r2              ! T = EXPEVT > 0x80  ->  protection fault
-#
-# CMP/MISS EXPEVT collapses all three into one, freeing r2 as well. Its sense
-# is INVERTED relative to the sequence above (T=1 means MISS, so the handler
-# uses BF, not BT) because that is what costs no new datapath: xbus already
-# reaches buses.imm_val and ybus already has SEL_EXPEVT, but xbus has no
-# SEL_EXPEVT input -- so EXPEVT has to be the RIGHT operand, and CMP/HS-shaped
-# microcode computes `xbus >= ybus`, i.e. `128 >= EXPEVT`.
-#
-# THRESHOLD. The boundary is 128 (0x080) INCLUSIVE, not 127:
-#     miss:       IMISS 0x040, DMISS_R 0x060, DMISS_W 0x080   -> all <= 0x080
-#     protection: IPROT 0x0A0, DPROT_R/W 0x0C0                -> all >  0x080
-# DMISS_W sits exactly ON the boundary, so a `>= 0x07F` test would misclassify
-# every store miss as a protection fault. MULTI_HIT (0x180) never reaches this
-# vector -- it goes to VBR+0x100 -- so it does not constrain the threshold.
-# EXPEVT's known DPROT_R/DPROT_W lossiness does not matter here: both are
-# protection faults and take the same branch. Unsigned compare is used (not
-# signed) because EXPEVT is a 12-bit field zero-extended onto ybus.
-[[instr]]
-  name = "CMP/MISS EXPEVT"
-  privileged = true
-  format = "0"
-  opcode = "0000 0000 1110 1011"
-  operation = "When EXPEVT <= 0x080 (a TLB miss, not a protection fault), 1 -> T"
-  [[instr.slots]]
-    mask_int = "YES"
-    arith = "SUB"
-    arith_sr = ">="
-    pc = "INC"
-    sr = "ARITH"
-    xbus = "128"
-    ybus = "EXPEVT"
-
 [[instr]]
   name = "LDTLB"
   privileged = true
@@ -221,14 +184,6 @@
     mask_int = "YES"
     pc = "INC"
 
-# ---- LDTLB.RN: fused Load-TLB-and-Return, NO delay slot (SH-2A-style) ----
-# Equivalent to LDTLB immediately followed by a non-delayed return: latch
-# {PTEH, PTEL, ASIDR} into a TLB entry AND restore SR<-SSR, PC<-SPC and redirect
-# WITHOUT executing a delay slot. Slot 0 installs the entry and restores SR (so
-# MD/privilege is correct at the target before it dispatches); slot 1 sets
-# PC<-SPC; slots 2-3 issue the fetch at the target and dispatch it using the
-# same non-delayed redirect tail as exception entry / Break / Reset CPU.
-# Opcode 0x0078 (0x0068 freed for SH-2A nott; 0x0078 is clean across all SH arches).
 [[instr]]
   name = "LDTLB.RN"
   privileged = true

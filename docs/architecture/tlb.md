@@ -103,15 +103,16 @@ A **miss** (no matching entry) raises `IMISS` (`0x040`), `DMISS_R` (`0x060`), or
 `DMISS_W` (`0x080`) by access type. `EXPEVT` holds the cause and `TEA`
 the faulting virtual address (both privileged-read only).
 
-All six causes share the single vector `VBR+0x400` (§5), so the miss handler
-**must** distinguish miss from protection on every TSB hit: a protection fault
-against a VPN/ASID that still has a valid TSB slot would otherwise reinstall the
-same entry and livelock. The threshold is `EXPEVT <= 0x080` (miss) vs
-`EXPEVT > 0x080` (protection) — note `DMISS_W = 0x080` sits exactly on the
-boundary and is a *miss*. `CMP/MISS EXPEVT` performs precisely this test in one
-instruction, setting `T=1` for a miss (§10).
+**Misses and protection faults take different vectors**, as on SH-4: the three
+miss causes vector to `VBR+0x400`, the three protection causes to `VBR+0x100`
+(the general exception vector, shared with Error / Slot Illegal / General
+Illegal / TRAPA). The miss handler therefore never has to ask which kind of
+fault it is. That matters for more than speed: a protection fault against a
+VPN/ASID that still has a valid TSB slot would TSB-hit on the miss path, and
+reinstalling the same entry livelocks — the split excludes that by
+construction rather than by a software check. *Guard: `mmuvecsplit`.*
 
-A supplementary read-only register, `MMUFSR` (MMU Fault Status Register, P4 MMIO `0xFF00002C`), latches the fault-cause `KIND` and access-type flags alongside `TEA` and `PTEH`. Its low byte is deliberately formatted as a Linux `FAULT_CODE_*` image: `[0] WRITE`, `[2] ITLB`, `[3] PROT`, `[4] USER`; the high nibble encodes `KIND` (1–7: miss/prot variants, 0 if no fault latched). **Critically, `MMUFSR` distinguishes `DPROT_R` from `DPROT_W`**, which both report `EXPEVT=0x0C0` and vector to `VBR+0x400`. The entire low byte for a `MULTI_HIT` fault is zero (since it is not a page fault). Software must read `MMUFSR` in the exception prologue; it is overwritten by the next fault.
+A supplementary read-only register, `MMUFSR` (MMU Fault Status Register, P4 MMIO `0xFF00002C`), latches the fault-cause `KIND` and access-type flags alongside `TEA` and `PTEH`. Its low byte is deliberately formatted as a Linux `FAULT_CODE_*` image: `[0] WRITE`, `[2] ITLB`, `[3] PROT`, `[4] USER`; the high nibble encodes `KIND` (1–7: miss/prot variants, 0 if no fault latched). **Critically, `MMUFSR` distinguishes `DPROT_R` from `DPROT_W`**, which both report `EXPEVT=0x0C0` and vector to `VBR+0x100`. The entire low byte for a `MULTI_HIT` fault is zero (since it is not a page fault). Software must read `MMUFSR` in the exception prologue; it is overwritten by the next fault.
 
 **Privileged-mode (`MD=1`) rules.** The kernel honours `X` and `W` (it cannot
 execute an `X=0` page nor write a `W=0` page — the `MD` term gates only the `U`

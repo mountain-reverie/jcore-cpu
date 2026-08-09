@@ -22,10 +22,28 @@
 #   cycles of counter and ~3 of branch"; that estimate is retired. Set
 #   BENCH_GUARD=mmurun to reproduce the old, scaffolding-inflated figures.
 #
-#   MEASURED, 11-insn fast path (cosim 100 MHz / 10 ns period):
-#       cold-miss probe dwell        9 cyc
-#       TSB-hit fast-path dwell     21 cyc
-#       full fault -> resume        28 cyc   <-- the number that matters
+#   MEASURED, 11-insn fast path (cosim 100 MHz / 10 ns period), fault ->
+#   back-executing-the-faulting-instruction:
+#
+#                          | I-side (IMISS) | D-side (DMISS_R/W)
+#     ---------------------+----------------+-------------------
+#     TSB hit (steady)     |     26 cyc     |      28 cyc
+#     cold (-> C walker)   |     75 cyc     |      76 cyc
+#     fast-path dwell, hit |     17 cyc     |      21 cyc
+#     fast-path dwell, cold|      9 cyc     |       9 cyc
+#
+#   BENCH_GUARD=mmubench (default) gives the D-side column; BENCH_GUARD=mmubenchi
+#   gives the I-side. Both run the SAME byte-faithful copy of linux@jcore's
+#   JCORE_TLB_FASTPATH; only the faulting access type differs.
+#
+#   D-side is ~2 cyc dearer on a hit. The dwell gap is larger (21 vs 17) than
+#   the end-to-end gap (28 vs 26), i.e. part of it is absorbed by entry/exit
+#   overlap. The cause is NOT established -- plausibly the D-side fault
+#   resolving later in the pipe (MA stage) leaving more to drain -- so do not
+#   quote a reason for it without measuring one.
+#
+#   The D-side row is 3x DMISS_R + 1x DMISS_W and all four are 28 cyc, so read
+#   and write misses cost the same.
 #
 #   CMP/MISS EXPEVT A/B (same harness, same workload, only the fault-class
 #   test differs -- this is a measurement, not a model):
@@ -147,12 +165,26 @@ print(f"bench:   cold-miss probe dwell (cyc): {cold}  median {med(cold)}")
 print(f"bench:   TSB-hit fast-path dwell (cyc): {hit}  median {med(hit)}")
 # one full fault->resume around the first TSB hit (user code = pc below _vbase,
 # so the vector stub / handler region is excluded)
-if len(wins) > len(dw)//2:
-    ent,ext = wins[len(dw)//2]
-    pre =[t for t,v in ev if t< ent and v < VB][-1:]   # faulting user instr before entry
-    post=[t for t,v in ev if t> ext and v < VB][:1]    # resumed user instr after exit
-    if pre and post:
-        print(f"bench:   one TSB-hit fault->resume: {(post[0]-pre[0])//PER} cycles"
-              f" ({os.environ.get('GUARD','?')}; mmubench == the real linux handler, no correction needed)")
+def faultresume(windows):
+    out = []
+    for ent, ext in windows:
+        pre  = [t for t, v in ev if t < ent and v < VB][-1:]   # faulting user instr before entry
+        post = [t for t, v in ev if t > ext and v < VB][:1]    # resumed user instr after exit
+        if pre and post:
+            out.append((post[0] - pre[0]) // PER)
+    return out
+
+# NOTE on the cold numbers: the walker (___jcore_tlb_walk) links ABOVE _vbase,
+# so it is not counted as "user" code and a cold window's resume is genuinely
+# the re-executed faulting instruction, not the walker's first insn. If the
+# link order ever changes so the walker falls below _vbase, the cold
+# fault->resume figures silently collapse to near the probe dwell -- sanity
+# check them against the probe dwell before trusting a sudden improvement.
+coldff = faultresume(wins[:len(dw)//2])
+hitff  = faultresume(wins[len(dw)//2:])
+if coldff:
+    print(f"bench:   COLD (TSB miss -> C walker) fault->resume (cyc): {coldff}  median {med(coldff)}")
+if hitff:
+    print(f"bench:   TSB-HIT fault->resume (cyc, one per hit): {hitff}  median {med(hitff)}")
 PY
 echo "bench: done. See the header of this script for the baseline + future-work notes."

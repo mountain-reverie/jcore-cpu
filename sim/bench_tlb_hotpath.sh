@@ -168,6 +168,23 @@ VCD="${TMPDIR:-/tmp}/tlb_hotpath_bench.vcd"
 GUARD="${BENCH_GUARD:-mmubench}"
 P1=0x80000000                                 # the guard runs code from the P1 alias
 
+# --- fidelity gate: is the guard still the code Linux runs? ---
+# Every number below assumes mmubench/mmubenchi carry a byte-faithful copy of
+# linux@jcore's JCORE_TLB_FASTPATH. The two live in different repos and the J4
+# instructions are hand-assembled as .word, so a divergence would not fail to
+# build or fail a guard -- it would just make this benchmark quietly measure
+# code Linux does not run. Refuse to report numbers in that case.
+if [ -f "${LINUX_SRC:-../linux}/arch/sh/kernel/cpu/jcore/ex.o" ]; then
+  if ! sim/check_bench_fidelity.sh >&2; then
+    echo "bench: REFUSING to report -- the guard has drifted from linux@jcore." >&2
+    echo "bench: fix the guard (or accept the divergence deliberately) first." >&2
+    exit 1
+  fi
+else
+  echo "bench: NOTE -- linux@jcore ex.o absent, fidelity NOT checked." >&2
+  echo "bench:        run sim/linux_sim.sh first to enable the check." >&2
+fi
+
 # --- symbol addresses from the guard ELF (fast-path start _h_common, end _h_slow) ---
 make CONFIG_PRIV_ARCH=1 -C sim/tests "$GUARD".elf >/dev/null 2>&1 \
   || { echo "bench: failed to build sim/tests/$GUARD.elf" >&2; exit 1; }

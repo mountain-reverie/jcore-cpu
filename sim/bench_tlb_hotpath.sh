@@ -28,12 +28,12 @@
 #
 #                              | I-side (IMISS) | D-side (DMISS_R/W)
 #     -------------------------+----------------+-------------------
-#     HW exception entry       |      5 cyc     |       6 cyc
+#     HW exception entry       |      4 cyc     |       5 cyc
 #     handler body (9 insns)   |     15 cyc     |      15 cyc
 #     LDTLB.RN install+redirect|      4 cyc     |       4 cyc
 #     -------------------------+----------------+-------------------
-#     TSB hit, TOTAL           |     24 cyc     |      25 cyc
-#     cold (-> C walker)       |     75 cyc     |      76 cyc
+#     TSB hit, TOTAL           |     23 cyc     |      24 cyc
+#     cold (-> C walker)       |     74 cyc     |      75 cyc
 #
 #   The handler body is IDENTICAL on both sides. The whole I-vs-D difference is
 #   ONE cycle of hardware exception entry -- the D-side fault resolves a cycle
@@ -49,7 +49,18 @@
 #   single largest software-visible bucket and is why static not-taken branch
 #   prediction is item 1 below.
 #
-#   HISTORY. 27/26 -> 25/24 came from splitting TLB protection faults off the
+#   HISTORY, newest first.
+#
+#   25/24 -> 24/23: exception ENTRY lost a cycle. Its six microcode slots wrote
+#   SPC, then SSR+SR-bits, then EXPEVT, then PC -- four independent register
+#   writes serialized only because sr_sel is a single-selector case. SR-bits and
+#   EXPEVT touch different registers (this.sr vs this.priv) and never contended
+#   for anything, so a combined SEL_EXCEPTION_EXPEVT arm merges them: sr_sel_t
+#   goes 12 -> 13 literals, still 4 bits, no new control signal, no new datapath.
+#   The cause code rides the slot immediate on xbus, which the SSR slot left
+#   free. All TEN exception entries benefit, not just the TLB ones.
+#
+#   27/26 -> 25/24 came from splitting TLB protection faults off the
 #   miss vector onto VBR+0x100, which is what SH-4 itself does (SH7750 manual
 #   Rev 2.0 02/99: misses H'400, protection H'100). J4 had merged all six
 #   causes onto H'400, which forced the hot path to run

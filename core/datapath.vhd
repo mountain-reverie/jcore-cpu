@@ -1836,6 +1836,19 @@ end generate;
                 this.sr.md := '1';
                 this.sr.rb := '1';
                 this.sr.bl := '1';
+              when SEL_EXCEPTION_EXPEVT =>
+                -- Exception entry AND cause capture in ONE cycle. Identical to
+                -- SEL_EXCEPTION followed by SEL_EXPEVT; they were two slots only
+                -- because sr_sel is a single-selector case, never because they
+                -- contend for anything -- one writes this.sr, the other
+                -- this.priv. Merging them takes a cycle off every exception
+                -- entry at the cost of one enum literal. The old SR is still
+                -- captured to SSR in this same slot via the ybus read, which
+                -- uses the registered (pre-update) SR, exactly as before.
+                this.sr.md := '1';
+                this.sr.rb := '1';
+                this.sr.bl := '1';
+                if PRIV_ARCH then this.priv.expevt := buses.imm_val(11 downto 0); end if;
               when SEL_EXPEVT =>
                 -- SH-4 cause capture (J4): latch the slot immediate (the
                 -- exception code) into EXPEVT. J1/J2 never select these

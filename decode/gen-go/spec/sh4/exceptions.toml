@@ -89,11 +89,8 @@
     ybus = "SR"
     zbus = "SSR"
     zbus_sel = "Y"
-    sr = "EXCEPTION"
-  [[instr.slots]]                 # EXPEVT <- 0x100 (write address error)
     xbus = "256"
-    sr = "EXPEVT"
-    pc = "HOLD"
+    sr = "EXCEPTION+EXPEVT"
   [[instr.slots]]
     xbus = "VBR"
     ybus = "256"
@@ -131,11 +128,8 @@
     ybus = "SR"
     zbus = "SSR"
     zbus_sel = "Y"
-    sr = "EXCEPTION"
-  [[instr.slots]]                 # EXPEVT <- 0x1A0
     xbus = "416"
-    sr = "EXPEVT"
-    pc = "HOLD"
+    sr = "EXCEPTION+EXPEVT"
   [[instr.slots]]
     xbus = "VBR"
     ybus = "256"
@@ -173,11 +167,8 @@
     ybus = "SR"
     zbus = "SSR"
     zbus_sel = "Y"
-    sr = "EXCEPTION"
-  [[instr.slots]]                 # EXPEVT <- 0x180
     xbus = "384"
-    sr = "EXPEVT"
-    pc = "HOLD"
+    sr = "EXCEPTION+EXPEVT"
   [[instr.slots]]
     xbus = "VBR"
     ybus = "256"
@@ -215,11 +206,8 @@
     ybus = "SR"
     zbus = "SSR"
     zbus_sel = "Y"
-    sr = "EXCEPTION"
-  [[instr.slots]]                 # EXPEVT <- 0x160
     xbus = "352"
-    sr = "EXPEVT"
-    pc = "HOLD"
+    sr = "EXCEPTION+EXPEVT"
   [[instr.slots]]                 # TRA <- imm << 2  (U*4 = op.code(7:0) << 2)
     xbus = "U*4"
     sr = "TRA"
@@ -430,11 +418,8 @@
     ybus = "SR"
     zbus = "SSR"
     zbus_sel = "Y"
-    sr = "EXCEPTION"
-  [[instr.slots]]                 # EXPEVT <- fault cause
     xbus = "64"
-    sr = "EXPEVT"
-    pc = "HOLD"
+    sr = "EXCEPTION+EXPEVT"
   [[instr.slots]]
     xbus = "VBR"
     ybus = "1024"
@@ -470,11 +455,8 @@
     ybus = "TLBSR"
     zbus = "SSR"
     zbus_sel = "Y"
-    sr = "EXCEPTION"
-  [[instr.slots]]                 # EXPEVT <- fault cause
     xbus = "96"
-    sr = "EXPEVT"
-    pc = "HOLD"
+    sr = "EXCEPTION+EXPEVT"
   [[instr.slots]]
     xbus = "VBR"
     ybus = "1024"
@@ -510,11 +492,8 @@
     ybus = "TLBSR"
     zbus = "SSR"
     zbus_sel = "Y"
-    sr = "EXCEPTION"
-  [[instr.slots]]                 # EXPEVT <- fault cause
     xbus = "128"
-    sr = "EXPEVT"
-    pc = "HOLD"
+    sr = "EXCEPTION+EXPEVT"
   [[instr.slots]]
     xbus = "VBR"
     ybus = "1024"
@@ -551,11 +530,8 @@
     ybus = "SR"
     zbus = "SSR"
     zbus_sel = "Y"
-    sr = "EXCEPTION"
-  [[instr.slots]]                 # EXPEVT <- fault cause
     xbus = "160"
-    sr = "EXPEVT"
-    pc = "HOLD"
+    sr = "EXCEPTION+EXPEVT"
   [[instr.slots]]
     xbus = "VBR"
     ybus = "256"
@@ -591,11 +567,8 @@
     ybus = "TLBSR"
     zbus = "SSR"
     zbus_sel = "Y"
-    sr = "EXCEPTION"
-  [[instr.slots]]                 # EXPEVT <- fault cause
     xbus = "192"
-    sr = "EXPEVT"
-    pc = "HOLD"
+    sr = "EXCEPTION+EXPEVT"
   [[instr.slots]]
     xbus = "VBR"
     ybus = "256"
@@ -631,11 +604,8 @@
     ybus = "TLBSR"
     zbus = "SSR"
     zbus_sel = "Y"
-    sr = "EXCEPTION"
-  [[instr.slots]]                 # EXPEVT <- fault cause
     xbus = "192"
-    sr = "EXPEVT"
-    pc = "HOLD"
+    sr = "EXCEPTION+EXPEVT"
   [[instr.slots]]
     xbus = "VBR"
     ybus = "256"

@@ -31,6 +31,29 @@
 #         equivalent and stays on the LUT-only cpu_timing_j1/cpu_synth_j1.
 #   j4 -> elaborate cpu_synth_j4 (== J2 today);
 #         adds synth/cpu_synth_j4_config.vhd to the file list.
+#
+#         j4 binds priv_arch => true and, since 2026-08-09, also regenerates
+#         the J4 overlay decoder -- so the TLB is both instantiated AND
+#         reachable and its area/timing are really measured.
+#
+#         It did not always. Before that, j4 kept the BASE (J2) decoder, which
+#         has no LDTLB, so sr.tlb_wr was a constant '0', the TLB write port was
+#         dead, and yosys pruned most of the TLB. The arithmetic is the proof,
+#         not an inference: tlb_array_t is 32 x tlb_entry_t and tlb_entry_t is
+#         71 bits (components_pkg.vhd), so the TLB alone is 2272 FF -- yet the
+#         WHOLE j4 timing build P&Rd at 2067 FF. It could not have been in there.
+#
+#         Two consequences, both measured before the fix, worth keeping because
+#         they say what a blind metric costs:
+#           - the j4 size/Fmax dashboard series under-reported J4 and was
+#             largely blind to MMU area;
+#           - an MMU RTL change that happened to defeat the pruning read as a
+#             catastrophic regression. One (LDTLB.RN Rm sourcing PTEL from
+#             XBUS) measured -12.6% Fmax / +54% cells on j4 and +0.7% Fmax /
+#             -55 LUT on j4c. Same change, same commit.
+#
+#         EXPECT A ONE-TIME STEP in the j4 series at that commit: the TLB
+#         appears in the numbers for the first time. It is not a regression.
 # When SYNTH_VARIANT is unset or j2 the synth commands are byte-identical to the
 # original J2-only script (so the existing J2 dashboard series is unbroken).
 set -euo pipefail
@@ -157,6 +180,16 @@ case "$SYNTH_VARIANT" in
       TOP="cpu_synth_j4"; TIMING_TOP="cpu_timing_j4"
       FILES+=(synth/cpu_synth_j4_config.vhd)
     fi
+    # Every j4 backend binds PRIV_ARCH=true (cpu_timing_j4 for timing/ice40,
+    # cpu_synth_j4_priv for asic/ecp5), so the TLB is INSTANTIATED. Without the
+    # J4 overlay decoder it is not REACHABLE: the base decoder has no LDTLB, so
+    # sr.tlb_wr is a constant '0', the TLB write port is dead, and yosys prunes
+    # most of the TLB away. Regenerate the overlay here for exactly the same
+    # reason j4c does, as a SYNTH-TIME TRANSIENT -- the cleanup() trap restores
+    # the committed base tables on every exit path, and CI's decoder gate
+    # compares those in a separate job.
+    echo "cpu_synth.sh: regenerating J4 overlay decoder for j4 (transient)" >&2
+    make -C "$ROOT/decode" generate-j4 >&2
     # M0: for the asic/ecp5 area backends, elaborate via cpu_synth_j4_priv
     # (a pass-through top that binds cpu with PRIV_ARCH=true via configuration
     # generic map). The yosys ghdl plugin does not support the -g elaboration
@@ -181,7 +214,8 @@ case "$SYNTH_VARIANT" in
         # which lives only in the generate-j4 tables. Regenerate them as a SYNTH-
         # TIME TRANSIENT (the committed base tables stay untouched: CI's decoder
         # gate compares the committed tables against a clean `make generate`, run
-        # in a separate job). j1/j2/j4/j2c keep the base decoder unchanged.
+        # in a separate job). j1/j2/j2c keep the base decoder unchanged; j4
+        # regenerates it too (see the j4 leg above).
         echo "cpu_synth.sh: regenerating J4 overlay decoder for j4c (transient)" >&2
         make -C decode generate-j4 >&2
         ;;

@@ -239,10 +239,15 @@ _h_common:
         .word   0x03FB                  ! ldtlb.rn r3  (PTEL<-r3; install + return)
 
         ! ---- Slow path: call the C walker. Must come IMMEDIATELY after the
-        ! fast path: sim/bench_tlb_hotpath.sh measures dwell as "PC within
-        ! [_h_common, _h_slow)", so anything placed in between would be
-        ! counted as fast-path code. ----
-        .balign 4
+        ! fast path, with NO alignment padding: sim/bench_tlb_hotpath.sh
+        ! measures dwell as "PC within [_h_common, _h_slow)", so a pad word here
+        ! lands inside the measured window. It is not merely dead space either --
+        ! LDTLB.RN has no delay slot, so the PC parks on whatever follows it for
+        ! the 4 cycles the install+redirect takes, and a pad word absorbs those
+        ! into the reported dwell. A `.balign 4` here previously made this guard
+        ! report 21 cyc against mmubenchi's 17 for the SAME 11 instructions, and
+        ! that phantom 4-cycle gap got written up as an unexplained I-vs-D
+        ! microarchitectural difference. It was padding. Do not re-add it. ----
 _h_slow:
         sts.l   pr, @-r15
         mov.l   H_pgd, r4               ! r4 = pgd (P1)

@@ -23,33 +23,52 @@
 #   BENCH_GUARD=mmurun to reproduce the old, scaffolding-inflated figures.
 #
 #   MEASURED, 11-insn fast path (cosim 100 MHz / 10 ns period), fault ->
-#   back-executing-the-faulting-instruction:
+#   back-executing-the-faulting-instruction. Run sim/profile_tlb_hotpath.py for
+#   the per-instruction attribution these totals come from.
 #
-#                          | I-side (IMISS) | D-side (DMISS_R/W)
-#     ---------------------+----------------+-------------------
-#     TSB hit (steady)     |     26 cyc     |      28 cyc
-#     cold (-> C walker)   |     75 cyc     |      76 cyc
-#     fast-path dwell, hit |     17 cyc     |      21 cyc
-#     fast-path dwell, cold|      9 cyc     |       9 cyc
+#                              | I-side (IMISS) | D-side (DMISS_R/W)
+#     -------------------------+----------------+-------------------
+#     HW exception entry       |      5 cyc     |       6 cyc
+#     handler body (11 insns)  |     17 cyc     |      17 cyc
+#     LDTLB.RN install+redirect|      4 cyc     |       4 cyc
+#     -------------------------+----------------+-------------------
+#     TSB hit, TOTAL           |     26 cyc     |      27 cyc
+#     cold (-> C walker)       |     75 cyc     |      76 cyc
 #
-#   BENCH_GUARD=mmubench (default) gives the D-side column; BENCH_GUARD=mmubenchi
-#   gives the I-side. Both run the SAME byte-faithful copy of linux@jcore's
-#   JCORE_TLB_FASTPATH; only the faulting access type differs.
+#   The handler body is IDENTICAL on both sides. The whole I-vs-D difference is
+#   ONE cycle of hardware exception entry -- the D-side fault resolves a cycle
+#   later in the pipe. Nothing else differs.
 #
-#   D-side is ~2 cyc dearer on a hit. The dwell gap is larger (21 vs 17) than
-#   the end-to-end gap (28 vs 26), i.e. part of it is absorbed by entry/exit
-#   overlap. The cause is NOT established -- plausibly the D-side fault
-#   resolving later in the pipe (MA stage) leaving more to drain -- so do not
-#   quote a reason for it without measuring one.
+#   Where the 17-cycle body goes (D-side; I-side is the same):
+#       1  stc tsbptr,r0        1  mov.l @r0+,r1 (tag_lo)
+#       1  mov.l @r0+,r1        2  mov.l @r0,r3  (TTE; load-use)
+#       2  cmp/eq pteh,r1       1  cmp/eq asidr,r1
+#       3  bf (not taken)       2  bf (not taken)
+#       2  cmp/miss expevt      1  bf (not taken)
+#       1  ldtlb.rn r3
+#   => the three NOT-TAKEN bf's cost 6 of the 17 cycles (35%). That is the
+#   single largest software-visible bucket and is why static not-taken branch
+#   prediction is item 1 below.
 #
-#   The D-side row is 3x DMISS_R + 1x DMISS_W and all four are 28 cyc, so read
-#   and write misses cost the same.
+#   HISTORICAL CORRECTION. This header once reported 21 cyc dwell / 28 cyc total
+#   for the D-side and wrote the 21-vs-17 gap up as an unexplained I-vs-D
+#   microarchitectural difference. It was neither unexplained nor
+#   microarchitectural: mmubench.S had a `.balign 4` before _h_slow, and since
+#   LDTLB.RN has no delay slot the PC parks on the following word for the 4
+#   redirect cycles -- so the pad word pulled those 4 cycles inside the measured
+#   [_h_common,_h_slow) window, and also pushed the window exit out by one,
+#   inflating the total by 1. Removing the pad gives 17/27, matching mmubenchi
+#   term for term. Lesson: a bracket defined by symbol addresses silently
+#   measures whatever the assembler puts between them.
 #
 #   CMP/MISS EXPEVT A/B (same harness, same workload, only the fault-class
 #   test differs -- this is a measurement, not a model):
-#       stc expevt + add #-128 + cmp/pl (13 insns):  23 dwell / 30 fault->resume
-#       cmp/miss expevt                 (11 insns):  21 dwell / 28 fault->resume
+#       stc expevt + add #-128 + cmp/pl (13 insns):  29 cyc fault->resume
+#       cmp/miss expevt                 (11 insns):  27 cyc fault->resume
 #       => 2 cycles saved per TLB miss (~7%), and r2 freed on the fast path.
+#   (Both legs were measured with the old padded bracket, at 30 and 28; the pad
+#   added a constant 1 to each, so the 2-cycle DELTA is unaffected. The absolute
+#   figures above are the corrected, unpadded ones.)
 #   Note the marginal cost here is ~1 cycle per removed instruction, NOT the
 #   ~2 that dividing total dwell by instruction count suggests. Do not size
 #   future hot-path changes with that ratio -- A/B them here instead.

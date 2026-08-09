@@ -112,6 +112,9 @@ package datapath_pack is
       cop_o              : out   cop_o_t;
       priv_o             : out   cpu_priv_o_t := NULL_PRIV_O;
       mmu_regs_o         : out   mmu_reg_t := MMU_REG_RESET;
+      -- PTEL the TLB installs on tlb_wr: the CSR normally, XBUS for
+      -- LDTLB.RN Rm (see datapath.vhm). Combinational -- same-cycle write.
+      tlb_ptel_o         : out   std_logic_vector(31 downto 0) := (others => '0');
       sr_o               : out   sr_t;
       tlb_squash_o       : out   std_logic := '0';
       tlb_exc_pend       : in    std_logic := '0';

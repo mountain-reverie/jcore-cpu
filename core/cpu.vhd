@@ -81,6 +81,7 @@ architecture stru of cpu is
   signal sig_inst_o : cpu_instruction_o_t;
   -- Datapath MMU state exported for TLB (PRIV_ARCH only; tied-off otherwise).
   signal dp_mmu_regs : mmu_reg_t;
+  signal dp_tlb_ptel : std_logic_vector(31 downto 0);
   signal dp_sr       : sr_t;
   -- TLB output signals (Task 8 will consume hit/prot; mmu_o carries PA tags out).
   signal tlb_i_hit      : std_logic;
@@ -395,6 +396,7 @@ begin
       cop_o              => cop_o,
       priv_o             => priv_o,
       mmu_regs_o         => dp_mmu_regs,
+      tlb_ptel_o         => dp_tlb_ptel,
       sr_o               => dp_sr,
       tlb_squash_o       => dp_tlb_squash,
       tlb_exc_pend       => tlb_exc_pend,
@@ -557,7 +559,9 @@ begin
         at          => dp_mmu_regs.mmucr(0),
         tlb_wr      => sr.tlb_wr,
         pteh_vpn    => dp_mmu_regs.pteh(31 downto 12),
-        ptel        => dp_mmu_regs.ptel,
+        -- Install data, not the CSR: LDTLB.RN Rm drives this from XBUS so it
+        -- does not need a separate slot to stage PTEL := Rm first.
+        ptel        => dp_tlb_ptel,
         asidr       => dp_mmu_regs.asidr(15 downto 0),
         ti          => dp_mmu_regs.mmucr(2)
       );

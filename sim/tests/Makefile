@@ -70,6 +70,19 @@ mmulinux.o: mmulinux.S
 mmulinux.elf: mmulinux.o $(TLBJCORE_O) $(EX_O) $(ENTRY_O)
 	$(J4LD) -T sh32_p1.x -Map main.map $^ $(LIBGCC) -o $@
 
+# mmulinuxexc: the same real-linux-objects harness, but for the NON-TLB fixed
+# vectors (VBR+0x100 general/TRAPA/protection, VBR+0x600 interrupt). mmulinux
+# covers VBR+0x400 only, which is why those two were the ones found broken.
+mmulinuxexc.o: mmulinuxexc.S
+	mkdir -p $(J4BIN) && ln -sf $(abspath $(J4GAS)) $(J4BIN)/as
+	$(CC) $(CFLAGS) -D__ASSEMBLY__ -I$(LINUX_SRC)/arch/sh/include -B$(J4BIN) -Wa,--isa=any -c $< -o $@
+
+mmulinuxexc.elf: mmulinuxexc.o $(TLBJCORE_O) $(EX_O) $(ENTRY_O)
+	$(J4LD) -T sh32_p1.x -Map main.map $^ $(LIBGCC) -o $@
+
+mmulinuxexc.img: mmulinuxexc.elf
+	$(J4OBJCOPY) -v -S -O binary --srec-forceS3 $< $@
+
 mmulinux.img: mmulinux.elf
 	$(J4OBJCOPY) -v -S -O binary --srec-forceS3 $< $@
 

@@ -30,10 +30,14 @@
 #     -------------------------+----------------+-------------------
 #     HW exception entry       |      4 cyc     |       5 cyc
 #     handler body (9 insns)   |     15 cyc     |      15 cyc
-#     LDTLB.RN install+redirect|      4 cyc     |       4 cyc
+#     LDTLB.RN install+redirect|      3 cyc     |       3 cyc
 #     -------------------------+----------------+-------------------
-#     TSB hit, TOTAL           |     23 cyc     |      24 cyc
+#     TSB hit, TOTAL           |     22 cyc     |      23 cyc
 #     cold (-> C walker)       |     74 cyc     |      75 cyc
+#
+#   The COLD path keeps the 4-cycle redirect: it uses the parameterless
+#   LDTLB.RN, which still stages through the PTEL CSR because the C walker
+#   writes the TTE there. Only LDTLB.RN Rm takes the shortcut.
 #
 #   The handler body is IDENTICAL on both sides. The whole I-vs-D difference is
 #   ONE cycle of hardware exception entry -- the D-side fault resolves a cycle
@@ -50,6 +54,16 @@
 #   prediction is item 1 below.
 #
 #   HISTORY, newest first.
+#
+#   24/23 -> 23/22: LDTLB.RN Rm lost a slot. It used to
+#   spend one staging `PTEL := Rm` before it could assert tlb_wr, because the
+#   TLB's ptel port was wired to the PTEL CSR flop -- even though the hot path
+#   already held the TTE in a GPR. `tlb_wr = "XBUS"` sources the install data
+#   from XBUS in the same slot as the TLB write; the register file has two read
+#   ports and that slot only used one (ybus <- SSR), so Rm rides the free xbus
+#   port. Measured on SYNTH_VARIANT=j4c (NOT j4 -- see synth/cpu_synth.sh):
+#   41.23 -> 41.50 MHz, 7802 -> 7747 LUT, FF unchanged. The removed microcode
+#   slot pays for the mux and a little over.
 #
 #   25/24 -> 24/23: exception ENTRY lost a cycle. Its six microcode slots wrote
 #   SPC, then SSR+SR-bits, then EXPEVT, then PC -- four independent register

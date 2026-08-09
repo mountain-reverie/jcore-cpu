@@ -212,10 +212,17 @@
     pc = "INC"
 
 # ---- LDTLB.RN Rm: LDTLB.RN with PTEL sourced from a GPR (jcore-only) ----
-# Same install+return as LDTLB.RN, but slot 0 first does PTEL := Rm (fused
-# LDC Rm,PTEL) so the TLB-miss HOT PATH -- which already has the TTE data in a
-# register from the TSB prefetch -- installs in one instruction instead of
-# `ldc Rm,ptel; ldtlb.rn`. The parameterless LDTLB.RN (0x0078) is retained for
+# Same install+return as LDTLB.RN, but the TTE comes straight from a GPR, so
+# the TLB-miss HOT PATH -- which already holds it from the TSB prefetch --
+# installs in one instruction instead of `ldc Rm,ptel; ldtlb.rn`.
+#
+# It used to spend a whole slot staging `PTEL := Rm` before it could assert
+# tlb_wr, because the TLB's ptel port was wired to the PTEL CSR flop. It no
+# longer does: `tlb_wr = "XBUS"` sources the install data from XBUS in the
+# same slot as the TLB write. The register file has two read ports and this
+# slot only needed one (ybus <- SSR for the SR restore), so Rm rides the free
+# xbus port -- one 32-bit mux inside the MMU block buys a cycle off every TLB
+# miss, with no change to the exception model. The parameterless LDTLB.RN (0x0078) is retained for
 # the slow path / setup code, where PTEL naturally lands in the CSR (the C
 # walker writes it there). Encoding 0x?FB is the top of the `xxxx 1011` MMU
 # block (see the ENCODING POLICY note at the top of this file); it does not
@@ -225,16 +232,12 @@
   privileged = true
   format = "m"
   opcode = "0000 mmmm 1111 1011"
-  operation = "Rm -> PTEL; PTEH/PTEL/ASIDR -> TLB; SR<-SSR, PC<-SPC (no delay slot)"
+  operation = "{ASIDR, PTEH.VPN, Rm} -> TLB; SR<-SSR, PC<-SPC (no delay slot)"
 
   [[instr.slots]]
     mask_int = "YES"
-    ybus = "Rm"
-    zbus = "PTEL"
-    zbus_sel = "Y"
-    pc = "HOLD"
-  [[instr.slots]]
-    tlb_wr = "YES"
+    tlb_wr = "XBUS"
+    xbus = "Rm"
     ybus = "SSR"
     zbus_sel = "Y"
     sr = "Z"

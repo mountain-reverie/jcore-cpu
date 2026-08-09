@@ -653,6 +653,15 @@ func assignSR(v string, out AssignMap) error {
 		// SH-4 exception entry: set MD/RB/BL (interrupt mask handled separately
 		// via INT_MASK for interrupts).
 		out[SigSrSel] = "SEL_EXCEPTION"
+	case "EXCEPTION+EXPEVT":
+		// Exception entry AND cause capture in ONE slot. These write different
+		// registers (this.sr.md/rb/bl vs this.priv.expevt) and were serialized
+		// only because sr_sel is a single-selector case -- a microcode encoding
+		// artifact, not a resource conflict. Merging them takes one cycle off
+		// every exception entry for one extra enum literal (12 -> 13 values,
+		// still 4 bits) and no new datapath. The exception code rides the slot
+		// immediate, which the SSR slot leaves free (it uses ybus, not xbus).
+		out[SigSrSel] = "SEL_EXCEPTION_EXPEVT"
 	case "EXPEVT":
 		// SH-4 cause capture: latch the slot immediate into EXPEVT (J4).
 		out[SigSrSel] = "SEL_EXPEVT"

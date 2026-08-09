@@ -63,8 +63,8 @@
 !   TSBBR/TSBCFG     0xFF000014 / 0xFF000018
 !
 ! Overlay .word encodings (assembler does not know these J4 forms):
-!   STC TSBPTR,r0 =0x0043   STC PTEH,r2 =0x0253   STC ASIDR,r2 =0x0273
-!   STC PTEH,r5   =0x0553   STC TSBPTR,r6=0x0643
+!   STC TSBPTR,r0 =0x004B   STC PTEH,r2 =0x028B   STC ASIDR,r2 =0x02BB
+!   STC PTEH,r5   =0x058B   STC TSBPTR,r6=0x064B
 !   LDC r0,ASIDR  =0x407E   LDC r0,PTEL =0x406E    LDC r3,PTEL =0x436E
 !   LDC r0,VBR    =0x402E   LDTLB.RN     =0x0078
 
@@ -352,13 +352,13 @@ _h_common:
         mov.l   @r4, r5
         add     #1, r5
         mov.l   r5, @r4
-        .word   0x0043                  ! STC TSBPTR, r0
+        .word   0x004B                  ! STC TSBPTR, r0
         mov.l   @r0+, r1                ! tag_hi (expected VPN)
-        .word   0x0253                  ! STC PTEH, r2
+        .word   0x028B                  ! STC PTEH, r2
         cmp/eq  r1, r2
         bf      _h_slow
         mov.l   @r0+, r1                ! tag_lo (expected ASID_TAG)
-        .word   0x0273                  ! STC ASIDR, r2
+        .word   0x02BB                  ! STC ASIDR, r2
         cmp/eq  r1, r2
         bf      _h_slow
         mov.l   @r0, r3                 ! TTE Data (PTEL image)
@@ -369,8 +369,8 @@ _h_common:
 _h_slow:
         sts.l   pr, @-r15
         mov.l   H_pgd, r4               ! r4 = pgd (P1)
-        .word   0x0553                  ! STC PTEH, r5   (faulting page VA)
-        .word   0x0643                  ! STC TSBPTR, r6 (TSB slot ptr)
+        .word   0x058B                  ! STC PTEH, r5   (faulting page VA)
+        .word   0x064B                  ! STC TSBPTR, r6 (TSB slot ptr)
         mov.l   H_walk, r7
         jsr     @r7
          nop

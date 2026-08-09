@@ -9,8 +9,8 @@
 ! without these opcodes the words are illegal -> the guard traps (RED).
 !
 ! Encodings (jcore MMU space, tail 0011, compare-variant middle nibble):
-!   CMP/EQ.PTEH r1 = 0000 0001 1101 0011 = 0x01D3
-!   CMP/EQ.ASID r1 = 0000 0001 1111 0011 = 0x01F3
+!   CMP/EQ.PTEH r1 = 0000 0001 1100 1011 = 0x01CB
+!   CMP/EQ.ASID r1 = 0000 0001 1101 1011 = 0x01DB
 !   LDC r0,PTEH = 0x405E   LDC r0,ASIDR = 0x407E
 !
 ! Result codes:
@@ -59,25 +59,25 @@ ENTRY(start)
 
         ! ---- CMP/EQ.PTEH: match -> T=1. ----
         mov.l   p_pteh_val, r1
-        .word   0x01D3                  ! CMP/EQ.PTEH r1  (r1 vs PTEH)
+        .word   0x01CB                  ! CMP/EQ.PTEH r1  (r1 vs PTEH)
         mov     #1, r9
         bf      _fail                   ! T=0 => fail 1
 
         ! ---- CMP/EQ.PTEH: mismatch -> T=0. ----
         mov.l   p_pteh_bad, r1
-        .word   0x01D3                  ! CMP/EQ.PTEH r1
+        .word   0x01CB                  ! CMP/EQ.PTEH r1
         mov     #2, r9
         bt      _fail                   ! T=1 => fail 2
 
         ! ---- CMP/EQ.ASID: match -> T=1. ----
         mov.l   p_asid_val, r1
-        .word   0x01F3                  ! CMP/EQ.ASID r1  (r1 vs ASIDR)
+        .word   0x01DB                  ! CMP/EQ.ASID r1  (r1 vs ASIDR)
         mov     #3, r9
         bf      _fail                   ! T=0 => fail 3
 
         ! ---- CMP/EQ.ASID: mismatch -> T=0. ----
         mov.l   p_asid_bad, r1
-        .word   0x01F3                  ! CMP/EQ.ASID r1
+        .word   0x01DB                  ! CMP/EQ.ASID r1
         mov     #4, r9
         bt      _fail                   ! T=1 => fail 4
 

@@ -1,4 +1,4 @@
-! mmufsr.S -- MMUFSR (MMU Fault Status Register, MMIO 0xFF000028) guard.
+! mmufsr.S -- MMUFSR (MMU Fault Status Register, MMIO 0xFF00002C) guard.
 !
 ! THE POINT OF THIS GUARD: EXPEVT alone cannot distinguish every fault cause
 ! (DPROT_R and DPROT_W both raise EXPEVT=0x0C0 via the single merged vector
@@ -532,7 +532,7 @@ p_ptel_ro:          .long 0x00000068   ! X|U|C  (W=0 -> DPROT_W)
 p_ptel_nx:          .long 0x000000A8   ! W|U|C  (X=0 -> IPROT)
 p_ptel_super:       .long 0x000000C8   ! W|X|C  (U=0 -> DPROT_R)
 p_mmucr:            .long 0xFF000010
-p_fsr_addr:         .long 0xFF000028
+p_fsr_addr:         .long 0xFF00002C
 p_g_exp_fsr:        .long _g_exp_fsr
 p_g_exp_expevt:     .long _g_exp_expevt
 p_g_bad_fsr:        .long _g_bad_fsr
@@ -635,7 +635,7 @@ _v_tlb:                                ! = VBR + 0x400
 
         .balign 4
 Hmmucr:         .long 0xFF000010
-Hfsr_addr:      .long 0xFF000028
+Hfsr_addr:      .long 0xFF00002C
 Hexp_fsr:       .long _g_exp_fsr
 Hexp_expevt:    .long _g_exp_expevt
 
@@ -728,7 +728,7 @@ _gi_bad:
 
         .balign 4
 Gimmucr:        .long 0xFF000010
-Gifsr_addr:     .long 0xFF000028
+Gifsr_addr:     .long 0xFF00002C
 Giexp_fsr:      .long _g_exp_fsr
 Giexp_expevt:   .long c_gi_expevt
 Giresume:       .long _g_resume

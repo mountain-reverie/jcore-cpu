@@ -282,7 +282,7 @@ p_test_result_pass: .long TEST_PASS_MAGIC
 	.space 0x400, 0
 	.balign 4
 _v_pc:
-	.word	0x0153			! STC PTEH, r1
+	.word	0x018B			! STC PTEH, r1
 	mov.l	Hpagemask, r0
 	and	r0, r1			! r1 = page base
 	mov.l	Hdbase, r0

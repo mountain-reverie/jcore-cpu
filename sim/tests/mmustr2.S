@@ -163,7 +163,7 @@ p_test_result_pass: .long   TEST_PASS_MAGIC
 _v_store:                               ! = VBR + 0x400
         ! HW captured PTEH = faulting page VPN (4 KB). Leave PTEH as-is (it is
         ! the LDTLB tag); just derive the identity PTEL from it.
-        .word   0x0153                  ! STC PTEH, r1   (faulting page VPN, 4KB)
+        .word   0x018B                  ! STC PTEH, r1   (faulting page VPN, 4KB)
         mov.l   Hpagemask, r0
         and     r0, r1                  ! r1 = page base
         mov.l   Hflags, r0

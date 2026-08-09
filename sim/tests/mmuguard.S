@@ -3,7 +3,7 @@
 ! privilege trap is absent on J4+MMU OR if a MMU opcode executes on J2/non-MMU.
 !
 ! Test A — MD=0 privilege trap (J4 (CONFIG_PRIV_ARCH=1)):
-!   Drop to user mode (clear SR.MD); execute STC PTEH,R1 (.word 0x0153).
+!   Drop to user mode (clear SR.MD); execute STC PTEH,R1 (.word 0x018B).
 !   Must NOT execute but instead vector to VBR+0x100 (General-Illegal handler)
 !   with EXPEVT=0x180. Handler reads EXPEVT via STC EXPEVT,R0 (.word 0x0052)
 !   and confirms the correct code, then commits PASS.
@@ -16,7 +16,7 @@
 !   vector table. Landing in the handler is PASS; fall-through is FAIL.
 !
 ! Opcodes (assembler does not know these J4-overlay forms, so .word them):
-!   STC PTEH,R1  = 0000 0001 0101 0011 = 0x0153
+!   STC PTEH,R1  = 0000 0001 1000 1011 = 0x018B
 !   LDC R0,PTEH  = 0100 0000 0101 1110 = 0x405E
 !   STC EXPEVT,R0= 0000 0000 0101 0010 = 0x0052
 !
@@ -76,7 +76,7 @@ ENTRY(start)
         nop
 
         ! user mode: execute privileged MMU instruction STC PTEH,R1
-        .word   0x0153                ! STC PTEH,R1 -- must NOT execute, must trap
+        .word   0x018B                ! STC PTEH,R1 -- must NOT execute, must trap
         ! fall-through = instruction did NOT trap -> fail
         mov     #5, r9
         bra     _fail

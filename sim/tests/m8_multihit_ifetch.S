@@ -553,7 +553,7 @@ _h_bad_fsr:
 
         .align  2
 Hmmucr:         .long   0xFF000010
-Hfsr_addr:      .long   0xFF000028
+Hfsr_addr:      .long   0xFF00002C
 Hexp_fsr:       .long   c_fsr_multihit
 Hexp_expevt:    .long   c_expevt_multihit
 Hresume:        .long   _g_resume

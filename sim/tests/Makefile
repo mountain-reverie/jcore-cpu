@@ -23,7 +23,7 @@ LDFLAGS = -T sh32.x -Map main.map
 # instead of globbing *.img, so J4-only images left behind in this
 # directory by a previous sim/mmu_sim.sh run can never be swept up and
 # run against a decoder that cannot pass them.
-BASE_IMGS := interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img rteredir.img mmureg.img mmuguard.img mmuxlate.img mmufault.img mmufsr.img mmudslot.img mmurte.img mmustore.img mmuimiss.img mmuimiss_illegal.img mmusr.img mmuicolor.img mmudcbit.img mmuldtlbr.img mmutsb.img mmurun.img mmuidx.img mmustres.img mmustr2.img mmudrain.img mmuimissrest.img mmushadowld.img mmushadowst.img mmurestartpc.img mmupcprobe.img mmudspcprobe.img mmudspcprobe_late.img mmudspcprobe_lateb.img mmudspcprobe_latew.img mmudspcprobe_latec.img mmudspcprobe_latem.img mmudspcprobe_latemw.img mmustcldslot.img mmusmep.img mmuirun.img mmuainc.img mmuainc2.img mmureloc.img mmurelocif.img mmurelocbp.img mmustale.img mmuasid.img mmuglobal.img mmumultihit.img mmudblflt.img mmunest_trapa.img mmunest_slotill.img mmunest.img mmuremap.img mmucmpcsr.img mmupage4k.img mmupagereloc16k.img mmupage16k.img mmupage64k.img mmupage1m.img mmupagemix.img mmupagemix2.img mmupagewalk.img m8_smoke.img m8_dside.img m8_ifetch_0.img m8_ifetch_1.img m8_ifetch_2.img m8_macarith.img m8_macseq.img m8_dsdslot_0.img m8_multihit_ifetch.img shldshadguard.img
+BASE_IMGS := interrupts.img rte.img privmode.img banktest.img exctest.img excguard.img trapatest.img pm3vec.img pm3guard.img rteredir.img mmureg.img mmuguard.img mmuxlate.img mmufault.img mmufsr.img mmudslot.img mmurte.img mmustore.img mmuimiss.img mmuimiss_illegal.img mmusr.img mmuicolor.img mmudcbit.img mmuldtlbr.img mmutsb.img mmurun.img mmubench.img mmuidx.img mmustres.img mmustr2.img mmudrain.img mmuimissrest.img mmushadowld.img mmushadowst.img mmurestartpc.img mmupcprobe.img mmudspcprobe.img mmudspcprobe_late.img mmudspcprobe_lateb.img mmudspcprobe_latew.img mmudspcprobe_latec.img mmudspcprobe_latem.img mmudspcprobe_latemw.img mmustcldslot.img mmusmep.img mmuirun.img mmuainc.img mmuainc2.img mmureloc.img mmurelocif.img mmurelocbp.img mmustale.img mmuasid.img mmuglobal.img mmumultihit.img mmudblflt.img mmunest_trapa.img mmunest_slotill.img mmunest.img mmuremap.img mmucmpcsr.img mmupage4k.img mmupagereloc16k.img mmupage16k.img mmupage64k.img mmupage1m.img mmupagemix.img mmupagemix2.img mmupagewalk.img m8_smoke.img m8_dside.img m8_ifetch_0.img m8_ifetch_1.img m8_ifetch_2.img m8_macarith.img m8_macseq.img m8_dsdslot_0.img m8_multihit_ifetch.img shldshadguard.img
 
 all: $(BASE_IMGS)
 
@@ -266,6 +266,7 @@ sh2a_bitmem_rmw.elf: sh2a_bitmem_rmw.o
 sh2a_pref.elf: sh2a_pref.o
 sh2a_tbr.elf: sh2a_tbr.o
 j4_illegal_trap.elf: j4_illegal_trap.o
+mmubench.elf: mmubench.o tlbwalk.o
 mmurun.elf: mmurun.o tlbwalk.o
 mmuirun.elf: mmuirun.o tlbwalk.o
 mmuainc.elf: mmuainc.o tlbwalk.o

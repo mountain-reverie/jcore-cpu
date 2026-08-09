@@ -135,7 +135,7 @@
 ! 10 data pages.
 !
 ! Overlay .word encodings (the assembler does not know these J4 forms):
-!   STC PTEH,r1 = 0x0153   LDC r0,VBR  = 0x402E   LDC r0,PTEH  = 0x405E
+!   STC PTEH,r1 = 0x018B   LDC r0,VBR  = 0x402E   LDC r0,PTEH  = 0x405E
 !   LDC r0,PTEL = 0x406E   LDC r0,ASIDR= 0x407E   LDTLB = 0x0038  LDTLB.RN = 0x0078
 !
 ! ---- _fail integrity net ----
@@ -710,7 +710,7 @@ p_test_result_pass: .long TEST_PASS_MAGIC
         .space 0x400, 0
         .balign 4
 _v_drain:
-        .word   0x0153                  ! STC PTEH, r1 -- HW-captured faulting VPN
+        .word   0x018B                  ! STC PTEH, r1 -- HW-captured faulting VPN
         mov.l   Hpagemask, r0
         and     r0, r1                  ! r1 = page base
         ! Pick the PTEL flags from the layout contract: ALL the stub pages (A,

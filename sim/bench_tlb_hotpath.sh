@@ -3,10 +3,10 @@
 # latency (cycles per miss) from a cosim VCD PC trace.
 #
 # WHY. The TLB-refill hot path (linux arch/sh/kernel/cpu/jcore/ex.S
-# JCORE_TLB_FASTPATH, mirrored by the mmurun guard's _h_common) runs on EVERY
+# JCORE_TLB_FASTPATH, mirrored byte-for-byte by the mmubench guard) runs on EVERY
 # TLB miss, so its cycle cost is the MMU's dominant steady-state overhead. This
 # benchmark makes that cost observable and regression-checkable: it runs the
-# mmurun guard (4 cold-miss walker installs, then 4 steady-state TSB hits) under
+# mmubench guard (4 cold-miss walker installs, then 4 steady-state TSB hits) under
 # the J4 overlay with a VCD dump, traces the architectural pc[31:0] signal, and
 # reports the fast-path dwell for the cold misses and the TSB hits, plus one
 # full fault->resume latency.
@@ -14,34 +14,55 @@
 # ------------------------------------------------------------------------------
 # MEASURED BASELINE (2026-07-23; cosim clock 100 MHz / 10 ns period).
 #
-#   Steady-state TSB hit. This bench measures the fast-path dwell (pc in
-#   [_h_common, _h_slow)) = ~24 cycles on the mmurun guard, and one full
-#   fault->resume = ~38 cycles. The guard carries ~7 cycles of tsb_hits++ counter
-#   (2 loads + add + store) that the REAL inlined linux handler does not, and its
-#   `bra _h_common` stub adds ~3 (linux inlines the fast path at the vector, no
-#   taken branch). Netting those out, the production per-miss latency is:
+#   NOTE (2026-08-08): this bench now runs the `mmubench` guard, whose handler
+#   is a byte-faithful copy of linux@jcore's JCORE_TLB_FASTPATH -- no tsb_hits++
+#   counter, no `bra` stub, inlined at the vector. Everything below is therefore
+#   MEASURED production cost. The previous baseline came from the `mmurun`
+#   correctness guard and had to be corrected by a hand-estimated "net out ~7
+#   cycles of counter and ~3 of branch"; that estimate is retired. Set
+#   BENCH_GUARD=mmurun to reproduce the old, scaffolding-inflated figures.
+#
+#   MEASURED, 11-insn fast path (cosim 100 MHz / 10 ns period):
+#       cold-miss probe dwell        9 cyc
+#       TSB-hit fast-path dwell     21 cyc
+#       full fault -> resume        28 cyc   <-- the number that matters
+#
+#   CMP/MISS EXPEVT A/B (same harness, same workload, only the fault-class
+#   test differs -- this is a measurement, not a model):
+#       stc expevt + add #-128 + cmp/pl (13 insns):  23 dwell / 30 fault->resume
+#       cmp/miss expevt                 (11 insns):  21 dwell / 28 fault->resume
+#       => 2 cycles saved per TLB miss (~7%), and r2 freed on the fast path.
+#   Note the marginal cost here is ~1 cycle per removed instruction, NOT the
+#   ~2 that dividing total dwell by instruction count suggests. Do not size
+#   future hot-path changes with that ratio -- A/B them here instead.
+#
+#   Rough attribution of the 28 cycles:
 #       - HW exception entry   ~7 cyc  (FIXED: fault in MA stage -> PC=VBR+0x400;
 #                                       HW saves SPC/SSR, loads PTEH/ASIDR/TSBPTR)
-#       - fast-path body      ~17 cyc  (STC TSBPTR + 3 TSB loads + 2 cmp/eq +
-#                                       2 bf + ldtlb.rn; = 24 dwell - ~7 counter)
+#       - fast-path body       21 cyc dwell, overlapping entry/exit
 #       - return / resume      ~5 cyc  (FIXED: ldtlb.rn install -> redirect to
 #                                       SPC -> re-fetch the faulting instruction)
-#       => ~29 cycles per TLB-hit miss; ~12 (~40%) is FIXED HW entry+return.
+#     ~12 cyc (~40%) is FIXED hardware entry+return that no software change reaches.
 #
 #   Cold miss (TSB empty): ~10 cyc fast-path probe (STC + load tag + cmp/eq + bf),
 #   then diverts to the C page-table walker (jcore_tlb_miss_slow) -- much larger.
 #
-#   Instruction-count history (all merged): 12 -> 9 insns on the fast path:
-#     cmp/eq.pteh/asid  12->10 (PR#135), ldtlb.rn Rm 10->9 (PR#138),
-#     3-TLB-vectors-merged-to-1 I-cache footprint (PR#140).
+#   Instruction-count history on the fast path:
+#     12 -> 10  cmp/eq.pteh/asid fused tag compares (PR#135)
+#     10 ->  9  ldtlb.rn Rm (PR#138)
+#      9 -> 13  protection-fault livelock fix: stc expevt + add + cmp/pl + bt
+#               had to run on every TSB hit (single-vector consequence)
+#     13 -> 11  cmp/miss expevt folds those three into one and frees r2
+#   Also: 3 TLB vectors merged to 1, shrinking the I-cache footprint (PR#140).
 #
 # ------------------------------------------------------------------------------
 # FUTURE IMPROVEMENTS in this area (ranked by value/realism):
 #
 #   1. STATIC NOT-TAKEN BRANCH PREDICTION (top pick). The trace shows each
 #      not-taken `bf` costs ~2-3 cycles -- there is no prediction, so fetch
-#      stalls until the branch resolves. The two hot-path bf's (both not-taken
-#      on a hit) burn ~5 cycles for nothing. A simple predict-fall-through would
+#      stalls until the branch resolves. There are now THREE not-taken bf's on
+#      a hit (two tag compares + the cmp/miss fault-class test), so this is
+#      worth ~7 cycles. A simple predict-fall-through would
 #      nearly eliminate that AND benefit all code, not just the MMU path. HW
 #      change to the fetch stage; widest benefit for the cost.
 #
@@ -70,12 +91,15 @@ set -uo pipefail
 cd "$(dirname "$0")/.."                       # jcore-cpu root
 NM="${NM:-sh2-elf-nm}"
 VCD="${TMPDIR:-/tmp}/tlb_hotpath_bench.vcd"
-P1=0x80000000                                 # mmurun runs code from the P1 alias
+# mmubench mirrors the real linux handler exactly (no counter, no bra stub).
+# BENCH_GUARD=mmurun reproduces the older, scaffolding-inflated numbers.
+GUARD="${BENCH_GUARD:-mmubench}"
+P1=0x80000000                                 # the guard runs code from the P1 alias
 
 # --- symbol addresses from the guard ELF (fast-path start _h_common, end _h_slow) ---
-make CONFIG_PRIV_ARCH=1 -C sim/tests mmurun.elf >/dev/null 2>&1 \
-  || { echo "bench: failed to build sim/tests/mmurun.elf" >&2; exit 1; }
-syms=$("$NM" sim/tests/mmurun.elf 2>/dev/null) \
+make CONFIG_PRIV_ARCH=1 -C sim/tests "$GUARD".elf >/dev/null 2>&1 \
+  || { echo "bench: failed to build sim/tests/$GUARD.elf" >&2; exit 1; }
+syms=$("$NM" sim/tests/"$GUARD".elf 2>/dev/null) \
   || { echo "bench: $NM not found (set NM=<sh toolchain nm>)" >&2; exit 1; }
 hc=$(awk '$3=="_h_common"{print $1}' <<<"$syms")
 hs=$(awk '$3=="_h_slow"{print $1}'   <<<"$syms")
@@ -85,12 +109,12 @@ HC=$((P1 + 0x$hc)); HS=$((P1 + 0x$hs)); VB=$((P1 + 0x$vb))
 printf 'bench: fast-path range [_h_common 0x%08x .. _h_slow 0x%08x); user code below _vbase 0x%08x\n' "$HC" "$HS" "$VB"
 
 # --- run the guard under the J4 overlay with a VCD dump ---
-echo "bench: running mmurun under the J4 overlay (VCD -> $VCD) ..."
-MMU_VCD="$VCD" sim/mmu_sim.sh mmurun >/dev/null 2>&1 || true
+echo "bench: running $GUARD under the J4 overlay (VCD -> $VCD) ..."
+MMU_VCD="$VCD" sim/mmu_sim.sh "$GUARD" >/dev/null 2>&1 || true
 [ -s "$VCD" ] || { echo "bench: no VCD produced" >&2; exit 1; }
 
 # --- trace pc[31:0]; report cold-probe / TSB-hit dwell + one fault->resume ---
-HC=$HC HS=$HS VB=$VB VCD="$VCD" python3 - <<'PY'
+HC=$HC HS=$HS VB=$VB VCD="$VCD" GUARD="$GUARD" python3 - <<'PY'
 import os, re
 HC=int(os.environ['HC']); HS=int(os.environ['HS']); VB=int(os.environ['VB']); VCD=os.environ['VCD']
 PER=None; pcid=None; ev=[]; cur=0
@@ -120,7 +144,7 @@ cold=[d for d in dw[:len(dw)//2]]; hit=[d for d in dw[len(dw)//2:]]
 def med(x): return sorted(x)[len(x)//2] if x else 0
 print(f"bench: clock period {PER/1e6:.1f} ns, {len(wins)} fast-path visits")
 print(f"bench:   cold-miss probe dwell (cyc): {cold}  median {med(cold)}")
-print(f"bench:   TSB-hit fast-path dwell (cyc, incl guard tsb_hits++): {hit}  median {med(hit)}")
+print(f"bench:   TSB-hit fast-path dwell (cyc): {hit}  median {med(hit)}")
 # one full fault->resume around the first TSB hit (user code = pc below _vbase,
 # so the vector stub / handler region is excluded)
 if len(wins) > len(dw)//2:
@@ -129,6 +153,6 @@ if len(wins) > len(dw)//2:
     post=[t for t,v in ev if t> ext and v < VB][:1]    # resumed user instr after exit
     if pre and post:
         print(f"bench:   one TSB-hit fault->resume: {(post[0]-pre[0])//PER} cycles"
-              f" (guard, incl tsb_hits++ counter + bra stub; real linux is a few cyc less)")
+              f" ({os.environ.get('GUARD','?')}; mmubench == the real linux handler, no correction needed)")
 PY
 echo "bench: done. See the header of this script for the baseline + future-work notes."

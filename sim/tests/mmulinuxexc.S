@@ -53,7 +53,7 @@
 !    2  A: wrong vector marker
 !    3  A: EXPEVT mismatch
 !    4  A: TRA mismatch
-!    5  A: recorded resume PC != the trapa instruction
+!    5  A: recorded resume PC != the insn AFTER trapa (completion-type)
 !    6  B: entry not reached
 !    7  B: EXPEVT mismatch (expected General Illegal 0x180)
 !    8  C: entry not reached
@@ -89,6 +89,10 @@
         .long _sim_instr_end
         .long _done
         .long _fail
+        ! CMD_ENABLE_EVENT_TRIGGER maps EVENT_TRIGGER_ADDRESS; without it that
+        ! address is unmapped and sub-test D's interrupt request faults instead
+        ! of raising anything ("invalid write addr: 0xBCDE0000 in range: (nil)").
+        .long CMD_ENABLE_EVENT_TRIGGER
         .long CMD_ENABLE_TEST_RESULT
 _sim_instr_end: .long 0
 
@@ -121,6 +125,42 @@ kmain:
         mov     #0, r0
         lds     r0, pr
 
+        ! ---- Define every register the pt_regs save will store. In a running
+        ! kernel these always hold something; in a bare-metal image they are X,
+        ! and JCORE_SAVE_REGS writing an undefined value trips the bus model
+        ! ("SRAM: invalid write data: UUUU..."). Bank-1 r0-r7 are reachable
+        ! from bank 0 only through the r*_bank aliases. ----
+        mov     #0, r0
+        ldc     r0, gbr
+        lds     r0, mach
+        lds     r0, macl
+        lds     r0, pr
+        ! LDC r0,rN_bank as .word: the mnemonic makes gas mark this object
+        ! sh3-nommu, and this binutils fork cannot merge sh3-nommu with sh-j4
+        ! ("internal error: merge of architecture ... produced unknown
+        ! architecture") when linking against the real linux@jcore objects.
+        ! Encoding 0100 mmmm 1nnn 1110, m=0 (r0), n = target bank register.
+        .word   0x408E                  ! LDC r0, r0_bank
+        .word   0x409E                  ! LDC r0, r1_bank
+        .word   0x40AE                  ! LDC r0, r2_bank
+        .word   0x40BE                  ! LDC r0, r3_bank
+        .word   0x40CE                  ! LDC r0, r4_bank
+        .word   0x40DE                  ! LDC r0, r5_bank
+        .word   0x40EE                  ! LDC r0, r6_bank
+        .word   0x40FE                  ! LDC r0, r7_bank
+        mov     #0, r8  ; mov #0, r9  ; mov #0, r10 ; mov #0, r11
+        mov     #0, r12 ; mov #0, r13 ; mov #0, r14
+        ! ...and bank-0 r4-r7, which this harness never otherwise touches. On
+        ! entry SR.RB=1, so the save's `stc rN_bank` reads the OTHER bank --
+        ! bank 0 -- and an untouched r4-r7 there is still X.
+        mov     #0, r4  ; mov #0, r5  ; mov #0, r6  ; mov #0, r7
+        ! ...and r1-r3. The sub-test setup below only ever writes r0/r1, so
+        ! r2 and r3 are still X when the first exception fires and the save
+        ! stores them. This is the whole list: pt_regs holds r0-r14, and every
+        ! one of them must be defined before the FIRST exception, not merely
+        ! before the code that happens to read it back.
+        mov     #0, r1  ; mov #0, r2  ; mov #0, r3
+
         ! ---- Zero the handshake globals the linux-side stubs write. ----
         mov.l   k_marker,   r0 ; mov #0, r1 ; mov.l r1, @r0
         mov.l   k_expevt,   r0 ; mov #0, r1 ; mov.l r1, @r0
@@ -151,8 +191,13 @@ _after_a:
         mov.l   c_expevt_trapa, r3 ; cmp/eq r3, r2 ; mov #3, r9 ; bf _fail
         mov.l   k_tra, r0 ; mov.l @r0, r2
         mov     #0x1C, r3 ; cmp/eq r3, r2 ; mov #4, r9 ; bf _fail
+        ! TRAPA is a COMPLETION-type exception: SPC points at the instruction
+        ! AFTER it, because a syscall must not re-execute its own trapa. That
+        ! is the opposite of a fault (DPROT_W in sub-test C), where SPC is the
+        ! faulting instruction so it can be retried. Asserting a_trapa here is
+        ! what Result=5 was catching -- the guard was wrong, not the kernel.
         mov.l   k_resumepc, r0 ; mov.l @r0, r2
-        mov.l   p_a_trapa, r3 ; cmp/eq r3, r2 ; mov #5, r9 ; bf _fail
+        mov.l   p_after_a, r3 ; cmp/eq r3, r2 ; mov #5, r9 ; bf _fail
 
         ! ================= B: General Illegal -> VBR+0x100 =================
         mov.l   k_marker, r0 ; mov #0, r1 ; mov.l r1, @r0
@@ -160,7 +205,16 @@ _after_a:
         mov.l   k_saved_sp, r0 ; mov.l r15, @r0
         mov.l   p_after_b, r0 ; mov.l k_resume_to, r1 ; mov.l r0, @r1
 b_illegal:
-        .word   0x00FE                  ! undefined -> General Illegal
+        ! 0x00EB must be UNDEFINED for this sub-test to mean anything. It is
+        ! the slot CMP/MISS EXPEVT vacated when the miss/protection vector
+        ! split removed its only caller, and `cpugen freespace --avoid
+        ! j2,sh2a,sh4,sh4a,dsp --form "----nnnn----1011" --region 0` still
+        ! reports 1110 free. Do NOT reuse 0x00FE here: that is
+        ! `mov.l @(R0,R15),R0`, a perfectly valid load, and this sub-test
+        ! silently tested nothing until that was noticed.
+        ! If 0x00EB is ever allocated, pick another virgin encoding -- the
+        ! symptom will be sub-test B reporting "entry not reached".
+        .word   0x00EB                  ! undefined -> General Illegal
 _after_b:
         mov.l   k_marker, r0 ; mov.l @r0, r2
         tst     r2, r2       ; mov #6, r9 ; bt _fail
@@ -201,15 +255,25 @@ _after_c:
         mov.l   k_armed, r0 ; mov #4, r1 ; mov.l r1, @r0
         mov.l   k_saved_sp, r0 ; mov.l r15, @r0
         mov.l   p_after_d, r0 ; mov.l k_resume_to, r1 ; mov.l r0, @r1
-        ! Drop SR.BL and IMASK so the pending cosim interrupt can be taken.
+        ! Drop SR.BL and SR.IMASK so the interrupt can be taken at all: BL=1
+        ! blocks exceptions outright, and on reset IMASK=0xF masks every level.
         stc     sr, r0
         mov.l   p_irq_enable, r1
         and     r1, r0
         ldc     r0, sr
         nop
         nop
+        ! Nothing raises an interrupt on its own -- the cosim only does so when
+        ! the harness writes EVENT_TRIGGER_ADDRESS (sim/cpu_ctb.c trigger_event):
+        ! bits 14-12 = event_req (0 = interrupt), bits 11-0 = info, which for an
+        ! interrupt is (ilevel << 8) | vector. Same encoding interrupts.S uses.
+        ! Without this the guard just spins in d_wait until --stop-time, which
+        ! reads as "interrupt entry not reached" when in truth none was sent.
+        mov.l   k_evt_trigger, r0
+        mov.l   v_irq_req, r1
+        mov.l   r1, @r0                 ! request ilevel 0xF, vector 12
 d_wait:
-        bra     d_wait                  ! interrupt must break this loop
+        bra     d_wait                  ! the interrupt must break this loop
         nop
 _after_d:
         mov.l   k_marker, r0 ; mov.l @r0, r2
@@ -223,6 +287,8 @@ _after_d:
         .align 2
 p_rbclear:        .long 0xDFFFFFFF
 p_irq_enable:     .long 0xEFFFFF0F      ! clear BL (bit28) and IMASK[7:4]
+k_evt_trigger:    .long EVENT_TRIGGER_ADDRESS
+v_irq_req:        .long 0x00000F0C      ! req=0 (interrupt), ilevel=0xF, vector=12      ! clear BL (bit28) and IMASK[7:4]
 k_vbr:            .long jcore_vbr_base
 k_mmucr:          .long 0xFF000010
 k_marker:         .long 0x80030000
@@ -237,7 +303,11 @@ c_expevt_trapa:   .long 0x00000160
 c_expevt_illegal: .long 0x00000180
 c_expevt_dprotw:  .long 0x000000C0
 va_ro:            .long 0x00200000
-ptel_ro:          .long 0x00200068      ! PA | X|U|C  (W=0 -> DPROT_W on store)
+! Backing PA must lie in the region the cosim actually backs with memory.
+! mmulinux's own backing page is 0x00040000, so use that; PA 0x00200000 gets
+! no ACK ("Rd did not see ACK for data sram") and the guard hangs instead of
+! reporting a code. The VA above is free to be anything unmapped.
+ptel_ro:          .long 0x00040068      ! PA | X|U|C  (W=0 -> DPROT_W on store)
 p_a_trapa:        .long a_trapa
 p_after_a:        .long _after_a
 p_after_b:        .long _after_b
@@ -383,5 +453,10 @@ hx_resumepc:  .long 0x8003000C
 hx_faultva:   .long 0x80030010
 hx_saved_sp:  .long 0x80030018
 hx_resume_to: .long 0x8003001C
-hx_rbclear:   .long 0xDFFFFFFF
+! Clears BOTH SR.RB (bit 29) and SR.BL (bit 28). Clearing RB alone is not
+! enough: these stubs return with `jmp`, not `rte`, so nothing restores SR from
+! SSR and BL stays set from exception entry. With BL=1 the CPU blocks further
+! exceptions, so the NEXT sub-test's fault is never delivered and the guard
+! reports "entry not reached" for a handler that is perfectly fine.
+hx_rbclear:   .long 0xCFFFFFFF
 #endif

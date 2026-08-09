@@ -904,6 +904,18 @@ ENTRY(exception_handler)
 ! arch_local_irq_restore(flags) / arch_local_save_flags() -- referenced by
 ! tlb-jcore.o's __update_tlb() (not exercised by the miss path scenario 1
 ! drives); never actually called here.
+! jcore_handle_exception(regs, expevt) / do_IRQ(irq, regs) -- referenced by
+! entry.o since J4 gained real handlers at VBR+0x100 and VBR+0x600. This
+! harness never drives a general exception or an interrupt (mmulinuxexc does),
+! so these only need to exist. Reaching one means a fault took a vector this
+! harness did not expect, so spin rather than return into a bogus context.
+ENTRY(jcore_handle_exception)
+1:      bra     1b
+        nop
+ENTRY(do_IRQ)
+1:      bra     1b
+        nop
+
 ENTRY(arch_local_irq_restore)
         rts
         nop

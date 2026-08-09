@@ -114,24 +114,24 @@ package datapath_pack is
       mmu_regs_o         : out   mmu_reg_t := MMU_REG_RESET;
       -- PTEL the TLB installs on tlb_wr: the CSR normally, XBUS for
       -- LDTLB.RN Rm (see datapath.vhm). Combinational -- same-cycle write.
-      tlb_ptel_o         : out   std_logic_vector(31 downto 0) := (others => '0');
-      sr_o               : out   sr_t;
-      tlb_squash_o       : out   std_logic := '0';
-      tlb_exc_pend       : in    std_logic := '0';
-      tlb_fault_va       : in    std_logic_vector(31 downto 0) := (others => '0');
-      tlb_exc_expevt     : in    std_logic_vector(11 downto 0) := (others => '0');
-      tlb_exc_fsr        : in    std_logic_vector(12 downto 0) := (others => '0');
-      delay_slot         : in    std_logic := '0';
-      tlb_exc_is_i       : in    std_logic := '0';
-      inst_fault         : in    std_logic := '0';
-      inst_fault_prot    : in    std_logic := '0';
-      if_fault_o         : out   std_logic;
-      if_fault_prot_o    : out   std_logic;
-      id_delay_slot      : in    std_logic := '0';
-      if_fault_cap       : in    std_logic := '0';
-      tlb_exc_ifetch     : in    std_logic := '0';
-      if_pc              : out   std_logic_vector(31 downto 0);
-      ex_if_pc           : in    std_logic_vector(31 downto 0) := (others => '0')
+      tlb_ptel_o      : out   std_logic_vector(31 downto 0) := (others => '0');
+      sr_o            : out   sr_t;
+      tlb_squash_o    : out   std_logic := '0';
+      tlb_exc_pend    : in    std_logic := '0';
+      tlb_fault_va    : in    std_logic_vector(31 downto 0) := (others => '0');
+      tlb_exc_expevt  : in    std_logic_vector(11 downto 0) := (others => '0');
+      tlb_exc_fsr     : in    std_logic_vector(12 downto 0) := (others => '0');
+      delay_slot      : in    std_logic := '0';
+      tlb_exc_is_i    : in    std_logic := '0';
+      inst_fault      : in    std_logic := '0';
+      inst_fault_prot : in    std_logic := '0';
+      if_fault_o      : out   std_logic;
+      if_fault_prot_o : out   std_logic;
+      id_delay_slot   : in    std_logic := '0';
+      if_fault_cap    : in    std_logic := '0';
+      tlb_exc_ifetch  : in    std_logic := '0';
+      if_pc           : out   std_logic_vector(31 downto 0);
+      ex_if_pc        : in    std_logic_vector(31 downto 0) := (others => '0')
     );
   end component datapath;
 

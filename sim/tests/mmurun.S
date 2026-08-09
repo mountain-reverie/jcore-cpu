@@ -9,8 +9,8 @@
 ! them written by resumed stores -> proves the 0x440 store path end-to-end).
 !
 ! Overlay .word encodings (assembler does not know these J4 forms):
-!   STC TSBPTR,r0 =0x0043   STC PTEH,r2 =0x0253   STC ASIDR,r2 =0x0273
-!   STC PTEH,r5   =0x0553   STC TSBPTR,r6=0x0643
+!   STC TSBPTR,r0 =0x004B   STC PTEH,r2 =0x028B   STC ASIDR,r2 =0x02BB
+!   STC PTEH,r5   =0x058B   STC TSBPTR,r6=0x064B
 !   LDC r0,ASIDR  =0x407E   LDC r0,PTEL =0x406E    LDC r3,PTEL =0x436E
 !   LDC r0,VBR    =0x402E   LDTLB.RN     =0x0078   LDTLB.RN r3 =0x03FB
 
@@ -213,12 +213,12 @@ _v_tlb:                                 ! _vbase + 0x400  (all TLB faults)
         ! and compares against the loaded tag in one insn, replacing the old
         ! STC-to-r2 + cmp/eq pair (2 insns + the r2 scratch) per compare. ----
 _h_common:
-        .word   0x0043                  ! STC TSBPTR, r0
+        .word   0x004B                  ! STC TSBPTR, r0
         mov.l   @r0+, r1                ! tag_hi (expected VPN)
-        .word   0x01D3                  ! cmp/eq pteh,r1  (r1 vs PTEH)
+        .word   0x01CB                  ! cmp/eq pteh,r1  (r1 vs PTEH)
         bf      _h_slow
         mov.l   @r0+, r1                ! tag_lo (expected ASID_TAG)
-        .word   0x01F3                  ! cmp/eq asidr,r1 (r1 vs ASIDR)
+        .word   0x01DB                  ! cmp/eq asidr,r1 (r1 vs ASIDR)
         bf      _h_slow
         mov.l   @r0, r3                 ! TTE Data (PTEL image)
         ! tsb_hits++
@@ -232,8 +232,8 @@ _h_common:
 _h_slow:
         sts.l   pr, @-r15
         mov.l   H_pgd, r4               ! r4 = pgd (P1)
-        .word   0x0553                  ! STC PTEH, r5   (faulting page VA)
-        .word   0x0643                  ! STC TSBPTR, r6 (TSB slot ptr)
+        .word   0x058B                  ! STC PTEH, r5   (faulting page VA)
+        .word   0x064B                  ! STC TSBPTR, r6 (TSB slot ptr)
         mov.l   H_walk, r7
         jsr     @r7
          nop

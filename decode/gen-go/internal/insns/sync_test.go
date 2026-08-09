@@ -103,16 +103,21 @@ func TestSyncSurfacesEncodingCollision(t *testing.T) {
 }
 
 func TestMnemonicAgreementKeepsFoldedMatches(t *testing.T) {
-	// Bucket A (dataset typo via alias) and bucket B (same mnemonic, different
-	// register operand) must STAY folded — they are the same op family, not a
-	// collision. Each lone row stays single and gets marked, with no append.
+	// Bucket A — differences that are pure SPELLING of the same instruction
+	// (dataset typo resolved via alias, stray punctuation) must STAY folded.
+	// The lone row stays single and gets marked, with no append.
+	//
+	// A same-mnemonic/different-control-register pair is NOT in this bucket:
+	// `stc MOD,Rn` and `STC EXPEVT,Rn` are different instructions that happen
+	// to share an encoding, and folding them made insns.json claim J4
+	// implemented the SH-DSP registers while the J4 instruction had no row of
+	// its own. That case is covered by TestControlRegisterOperandsDoNotFold.
 	cases := []struct {
 		rowFormat string
 		specName  string
 	}{
-		{"ldtbl", "LDTLB"},                // A: SH dataset misspells LDTLB
-		{"ldc\tRm,GBR", "LDC, Rm, GBR"},   // A: stray comma in spec name
-		{"stc\tMOD,Rn", "STC EXPEVT, Rn"}, // B: MMU reg over DSP MOD reg
+		{"ldtbl", "LDTLB"},              // A: SH dataset misspells LDTLB
+		{"ldc\tRm,GBR", "LDC, Rm, GBR"}, // A: stray comma in spec name
 	}
 	for _, tc := range cases {
 		d := &Doc{}
@@ -135,6 +140,50 @@ func TestMnemonicAgreementKeepsFoldedMatches(t *testing.T) {
 		}
 		if v, _ := row.Get("J4"); v != true {
 			t.Fatalf("%q vs %q: row should be J4=true, got %v", tc.specName, tc.rowFormat, v)
+		}
+	}
+}
+
+// Two instructions that share a mnemonic and an encoding but name DIFFERENT
+// control registers are different instructions. They must NOT fold: the spec
+// instruction gets its own appended row, and the pre-existing row must not be
+// marked as implemented by the variant.
+//
+// Regression: every one of these folded silently, so insns.json asserted J4
+// implemented SH-DSP's MOD/RS/RE, the J4 MMU LDC forms had no rows at all, and
+// `cpugen freespace` could not report the overlap it was built to find.
+func TestControlRegisterOperandsDoNotFold(t *testing.T) {
+	cases := []struct {
+		rowFormat string
+		specName  string
+		opcode    string
+	}{
+		{"ldc\tRm,MOD", "LDC Rm, PTEH", "0100mmmm01011110"},
+		{"ldc\tRm,RS", "LDC Rm, PTEL", "0100mmmm01101110"},
+		{"ldc\tRm,RE", "LDC Rm, ASIDR", "0100mmmm01111110"},
+		{"stc\tMOD,Rn", "STC EXPEVT, Rn", "0000nnnn01010010"},
+	}
+	for _, tc := range cases {
+		d := &Doc{}
+		row := &Row{}
+		row.Set("group", "g")
+		row.Set("format", tc.rowFormat)
+		row.Set("code", tc.opcode)
+		d.Rows = append(d.Rows, row)
+		in := spec.Instr{Name: tc.specName, Opcode: tc.opcode, Slots: []spec.Slot{{}}}
+		s := &InstrSet{ByKey: map[Key]spec.Instr{}}
+		k, _ := KeyOf(in.Opcode)
+		s.ByKey[k] = in
+		s.Order = append(s.Order, in)
+		rep, err := Sync(d, []VariantData{{Variant{Name: "J4"}, s, &Table{}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rep.Appended) != 1 {
+			t.Fatalf("%q vs %q: want 1 appended row, got %v", tc.specName, tc.rowFormat, rep.Appended)
+		}
+		if v, _ := row.Get("J4"); v == true {
+			t.Fatalf("%q vs %q: the %s row must NOT be marked J4=true", tc.specName, tc.rowFormat, tc.rowFormat)
 		}
 	}
 }

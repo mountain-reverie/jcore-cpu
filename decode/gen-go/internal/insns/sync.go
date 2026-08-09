@@ -240,7 +240,13 @@ func annotateCollides(d *Doc) {
 				}
 			}
 		}
+		// An empty set must CLEAR any previous annotation, not be skipped.
+		// Skipping left rows asserting collisions that no longer existed --
+		// e.g. after the MMU read side moved out of `0000 nnnn xxxx 0011`,
+		// `movco.l` and `prefi` went on claiming to collide with STC ASIDR /
+		// CMP/EQ PTEH, which by then lived in a different family entirely.
 		if len(others) == 0 {
+			a.row.Delete("collides")
 			continue
 		}
 		sort.Strings(others)
@@ -270,7 +276,11 @@ func pickRow(cands []*Row, in spec.Instr) (*Row, error) {
 	if len(cands) == 1 {
 		f, _ := cands[0].Get("format")
 		fs, _ := f.(string)
-		if mnemonicOf(fs) == mnemonicOf(in.Name) {
+		// Mnemonic AND operand signature must agree. Mnemonic alone is not
+		// enough: `ldc Rm,MOD` (SH-DSP) and `LDC Rm,PTEH` (J4) share both the
+		// mnemonic and the encoding 0100mmmm01011110 while being different
+		// instructions -- see operandSig() for what that folding cost us.
+		if sameInstruction(fs, in.Name) {
 			return cands[0], nil
 		}
 		return nil, nil

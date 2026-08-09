@@ -22,7 +22,7 @@
 ! DMISS_R on VA 0x42000; the handler reads TSBPTR (STC), compares to the
 ! expected 0x00010030, disables AT and writes the test result, then spins.
 !
-! RED before M5: STC TSBPTR (0x0043) is undefined -> garbage compare -> the
+! RED before M5: STC TSBPTR (0x004B) is undefined -> garbage compare -> the
 ! handler writes FAIL (or, if it traps, times out). GREEN: TSBPTR == expected.
 !
 ! VBR = _v_load - 0x400 so the DMISS_R vector (VBR+0x400) hits _v_load.
@@ -146,7 +146,7 @@ p_test_result_pass: .long   TEST_PASS_MAGIC
         .balign 4
 _v_load:                                ! = VBR + 0x400
         ! Read hardware-computed TSBPTR and compare to the expected value.
-        .word   0x0043                  ! STC TSBPTR, r0   (read-only, new in M5)
+        .word   0x004B                  ! STC TSBPTR, r0   (read-only, new in M5)
         mov.l   He_tsbptr, r1
         cmp/eq  r0, r1
         bf      _h_bad                  ! TSBPTR mismatch

@@ -67,6 +67,7 @@
 #   CMP /STR Rm, Rn      CMP /STR Rm, Rn has no D-side memory access
 #   CMP/EQ ASIDR, Rn     CMP/EQ ASIDR, Rn has no D-side memory access
 #   CMP/EQ PTEH, Rn      CMP/EQ PTEH, Rn has no D-side memory access
+#   CMP/MISS EXPEVT      CMP/MISS EXPEVT has no D-side memory access
 #   CMP/PL Rn            CMP/PL Rn has no D-side memory access
 #   CMP/PZ Rn            CMP/PZ Rn has no D-side memory access
 #   CSTS CP0_COM, CP0_Rn CSTS CP0_COM, CP0_Rn has no D-side memory access
@@ -282,6 +283,7 @@
 #   CLRMAC               CLRMAC: clrmac microcoded as TEMP1^TEMP1 -> 'U'/'X' in sim (MAC snapshot not comparable)
 #   CMP/EQ ASIDR, Rn     CMP/EQ ASIDR, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 #   CMP/EQ PTEH, Rn      CMP/EQ PTEH, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
+#   CMP/MISS EXPEVT      CMP/MISS EXPEVT writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 #   CSTS CP0_COM, CP0_Rn CSTS CP0_COM, CP0_Rn: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 #   CSTS CPI_COM, CPI_Rn CSTS CPI_COM, CPI_Rn: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 #   Error                Error is a microcode-only system entry (plane=system), not a fetchable instruction
@@ -442,6 +444,7 @@
 #   CMP /STR Rm, Rn      CMP /STR Rm, Rn has no D-side memory access
 #   CMP/EQ ASIDR, Rn     CMP/EQ ASIDR, Rn has no D-side memory access
 #   CMP/EQ PTEH, Rn      CMP/EQ PTEH, Rn has no D-side memory access
+#   CMP/MISS EXPEVT      CMP/MISS EXPEVT has no D-side memory access
 #   CMP/PL Rn            CMP/PL Rn has no D-side memory access
 #   CMP/PZ Rn            CMP/PZ Rn has no D-side memory access
 #   CSTS CP0_COM, CP0_Rn CSTS CP0_COM, CP0_Rn has no D-side memory access

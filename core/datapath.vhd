@@ -1655,7 +1655,19 @@ end generate;
                 elsif ma_ad(7 downto 0) = x"14" then p4_sel_v := P4_TSBBR;
                 elsif ma_ad(7 downto 0) = x"18" then p4_sel_v := P4_TSBCFG;
                 elsif ma_ad(7 downto 0) = x"1C" then p4_sel_v := P4_TSBPTR;
-                elsif ma_ad(7 downto 0) = x"28" then p4_sel_v := P4_MMUFSR;
+                -- SH-4 event block at its architectural addresses. These are
+                -- also reachable via STC TRA/EXPEVT/INTEVT,Rn; the MMIO aliases
+                -- exist so generic (non-J-core) SH-4 kernel code that pokes
+                -- 0xFF0000{20,24,28} keeps working. TRA is read/write on SH-4
+                -- (software writes it to fake a TRAPA code); EXPEVT/INTEVT are
+                -- read-only here -- J4 latches both from the exception itself.
+                elsif ma_ad(7 downto 0) = x"20" then p4_sel_v := P4_TRA;
+                elsif ma_ad(7 downto 0) = x"24" then p4_sel_v := P4_EXPEVT;
+                elsif ma_ad(7 downto 0) = x"28" then p4_sel_v := P4_INTEVT;
+                -- MMUFSR is J4-only and deliberately NOT at 0x28: that address
+                -- is SH-4's INTEVT (see above), and the two collided until this
+                -- was moved to 0x2C -- which SH-4 and SH-4A both leave free.
+                elsif ma_ad(7 downto 0) = x"2C" then p4_sel_v := P4_MMUFSR;
                 end if;
               end if;
               if PRIV_ARCH and seg_v = SEG_P4 then
@@ -1674,7 +1686,9 @@ end generate;
                     when P4_TEA => this.mmu.tea := ma_dw;
                     when P4_TSBBR => this.mmu.tsbbr := ma_dw;
                     when P4_TSBCFG => this.mmu.tsbcfg := ma_dw;
-                    -- P4_TSBPTR is read-only: a write is silently ignored.
+                    when P4_TRA => this.priv.tra := ma_dw(9 downto 0);
+                    -- P4_TSBPTR / P4_EXPEVT / P4_INTEVT / P4_MMUFSR are
+                    -- read-only: a write is silently ignored.
                     when others => null;
                   end case;
                 else
@@ -1685,6 +1699,9 @@ end generate;
                     when P4_TSBBR => this.m_dr_next := this.mmu.tsbbr;
                     when P4_TSBCFG => this.m_dr_next := this.mmu.tsbcfg;
                     when P4_TSBPTR => this.m_dr_next := this.mmu.tsbptr;
+                    when P4_TRA => this.m_dr_next := x"00000" & "00" & this.priv.tra;
+                    when P4_EXPEVT => this.m_dr_next := x"00000" & this.priv.expevt;
+                    when P4_INTEVT => this.m_dr_next := x"00000" & this.priv.intevt;
                     when P4_MMUFSR => this.m_dr_next := this.mmu.fsr;
                     when others => this.m_dr_next := (others => '0');
                   end case;

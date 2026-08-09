@@ -21,6 +21,23 @@ func (r *Row) ensure() {
 	}
 }
 func (r *Row) Get(key string) (any, bool) { v, ok := r.vals[key]; return v, ok }
+
+// Delete removes a key from the row, preserving the order of the rest. Used to
+// retract a derived annotation that no longer holds -- leaving a stale one in
+// place is worse than never having written it, because downstream readers
+// cannot tell the difference.
+func (r *Row) Delete(key string) {
+	if _, ok := r.vals[key]; !ok {
+		return
+	}
+	delete(r.vals, key)
+	for i, k := range r.keys {
+		if k == key {
+			r.keys = append(r.keys[:i], r.keys[i+1:]...)
+			break
+		}
+	}
+}
 func (r *Row) Set(key string, v any) {
 	r.ensure()
 	if _, ok := r.vals[key]; !ok {

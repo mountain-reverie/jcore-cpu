@@ -657,7 +657,7 @@ Glog_end:       .long   _log_end
 Gtag_mh:        .long   2
 Gspc_at_mh:     .long   _spc_at_mh
 Gexp_expevt:    .long   0x00000180
-Gfsr_addr:      .long   0xFF000028
+Gfsr_addr:      .long   0xFF00002C
 Gexp_fsr:       .long   0x00001700
 Gfail:          .long   _fail
 Gmmucr:         .long   0xFF000010

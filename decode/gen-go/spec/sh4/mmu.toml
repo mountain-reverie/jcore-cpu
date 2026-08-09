@@ -1,8 +1,36 @@
-# SH-4 MMU control-register LDC/STC (J4 overlay, PRIV_ARCH). PT-register family:
-#   LDC = 0100 mmmm xxxx 1110 ; STC = 0000 nnnn xxxx 0011
-#   xxxx: 0101 PTEH · 0110 PTEL · 0111 ASIDR. All privileged.
+# SH-4 MMU control registers (J4 overlay, PRIV_ARCH). All privileged.
 # These are additive overlay entries: absent from the base J2 decoder, so
 # they raise General Illegal on J2. See spec §5.
+#
+# ---- ENCODING POLICY (why the read side lives in `0000 nnnn xxxx 1011`) ----
+# J4 is targeted to be a superset of J2, SH-2A, SH-4 and SH-4A, so a J4-only
+# instruction may not occupy an encoding any of those four defines. The read
+# side originally sat in the `0000 nnnn xxxx 0011` family, which does NOT meet
+# that bar -- three of its six members shadowed real SH-4A instructions:
+#
+#   STC PTEL,Rn      0000 nnnn 0110 0011  ==  SH-4A movli.l @Rm,R0   (LL of LL/SC)
+#   STC ASIDR,Rn     0000 nnnn 0111 0011  ==  SH-4A movco.l R0,@Rn   (SC of LL/SC)
+#   CMP/EQ PTEH,Rn   0000 nnnn 1101 0011  ==  SH-4/4A prefi @Rn
+#
+# `0000 nnnn xxxx 0011` has only two slots left that are clean against the
+# target set, so the whole read side moved to `0000 nnnn xxxx 1011`, which had
+# seven -- enough for all six plus the new CMP/MISS, and it already hosted
+# LDTLB.RN Rm (0x?FB). Verify with:
+#
+#   go run ./cmd/cpugen freespace --avoid j2,sh2a,sh4,sh4a,dsp \
+#       --overlay sh4 --form "----nnnn----1011" --region 0
+#
+# That block is now FULL. The next reserve for J4-only `0000 nnnn`-shaped
+# instructions is `0000 nnnn xxxx 1000` (8 virgin slots as of this writing).
+#
+# ---- DELIBERATE FORECLOSURE: SH-DSP ----
+# The LDC write side (`0100 mmmm xxxx 1110`, xxxx = 0101 PTEH / 0110 PTEL /
+# 0111 ASIDR) overlays SH-DSP's `ldc Rm,MOD/RS/RE`, and STC EXPEVT/INTEVT/TRA
+# in exceptions.toml likewise overlay `stc MOD/RS/RE,Rn`. This is NOT an
+# oversight and cannot be avoided: after excluding j2/sh2a/sh4/sh4a the LDC
+# family has exactly three surviving slots, and they are precisely the DSP
+# ones. J4 therefore forecloses SH-DSP permanently. Recorded here because the
+# freespace tool will report the overlap whenever `dsp` is left out of --avoid.
 
 [[instr]]
   name = "LDC Rm, PTEH"
@@ -21,7 +49,7 @@
   name = "STC PTEH, Rn"
   privileged = true
   format = "n"
-  opcode = "0000 nnnn 0101 0011"
+  opcode = "0000 nnnn 1000 1011"
   operation = "PTEH -> Rn"
   [[instr.slots]]
     mask_int = "YES"
@@ -47,7 +75,7 @@
   name = "STC PTEL, Rn"
   privileged = true
   format = "n"
-  opcode = "0000 nnnn 0110 0011"
+  opcode = "0000 nnnn 1001 1011"
   operation = "PTEL -> Rn"
   [[instr.slots]]
     mask_int = "YES"
@@ -73,7 +101,7 @@
   name = "STC ASIDR, Rn"
   privileged = true
   format = "n"
-  opcode = "0000 nnnn 0111 0011"
+  opcode = "0000 nnnn 1011 1011"
   operation = "ASIDR -> Rn"
   [[instr.slots]]
     mask_int = "YES"
@@ -89,13 +117,13 @@
 # (logic XOR, logic_sr ZERO) but with ybus sourced from the MMU CSR (the exact
 # ybus the matching STC uses -- SEL_MMU), so no new datapath: single-cycle, no
 # register written. Encoding co-located with the STC MMU-creg family (tail
-# 0011); the high middle-nibble bit marks the "compare" variant of the read
-# (PTEH read 0101 -> compare 1101; ASIDR read 0111 -> compare 1111). ----
+# 1011), in the contiguous compare sub-block 1100/1101/1110 that sits directly
+# below LDTLB.RN Rm (1111) and directly above the reads (1000/1001/1011). ----
 [[instr]]
   name = "CMP/EQ PTEH, Rn"
   privileged = true
   format = "n"
-  opcode = "0000 nnnn 1101 0011"
+  opcode = "0000 nnnn 1100 1011"
   operation = "When Rn = PTEH, 1 -> T (TSB VPN-tag compare)"
   [[instr.slots]]
     mask_int = "YES"
@@ -110,7 +138,7 @@
   name = "CMP/EQ ASIDR, Rn"
   privileged = true
   format = "n"
-  opcode = "0000 nnnn 1111 0011"
+  opcode = "0000 nnnn 1101 1011"
   operation = "When Rn = ASIDR, 1 -> T (TSB ASID-tag compare)"
   [[instr.slots]]
     mask_int = "YES"
@@ -125,13 +153,13 @@
 # Hardware computes TSBPTR on every TLB miss; software reads it on the miss hot
 # path in one cycle. Read-only: there is no LDC TSBPTR (such an encoding would
 # be illegal). The SH-4 STC control family `xxxx 0010` is fully occupied in base
-# J-core, so this uses a free slot in the `xxxx 0011` family (xxxx=0100),
-# co-located with the other MMU STC regs (PTEH=0101 / PTEL=0110 / ASIDR=0111).
+# J-core, so this lives with the other MMU reads in the `xxxx 1011` family
+# (PTEH=1000 / PTEL=1001 / ASIDR=1011); see the ENCODING POLICY note at the top.
 [[instr]]
   name = "STC TSBPTR, Rn"
   privileged = true
   format = "n"
-  opcode = "0000 nnnn 0100 0011"
+  opcode = "0000 nnnn 0100 1011"
   operation = "TSBPTR -> Rn (read-only TSB slot pointer)"
   [[instr.slots]]
     mask_int = "YES"
@@ -139,6 +167,49 @@
     ybus = "TSBPTR"
     zbus = "Rn"
     zbus_sel = "Y"
+
+# ---- CMP/MISS EXPEVT: fused fault-class test for the TLB-miss hot path ----
+# All six TLB causes share the one vector VBR+0x400, so a PROTECTION fault
+# against a VPN/ASID that still has a valid TSB slot also TSB-hits on the fast
+# path. Installing that (e.g. read-only) entry again and retrying livelocks,
+# because do_page_fault() is never reached to fix the pte up. The handler must
+# therefore separate miss from protection on EVERY TSB hit -- the hottest path
+# in the kernel. In software that costs three instructions and a scratch reg:
+#
+#     stc  expevt, r2        ! r2 = EXPEVT
+#     add  #-128, r2         ! (mov #0x80 would sign-extend to 0xFFFFFF80)
+#     cmp/pl r2              ! T = EXPEVT > 0x80  ->  protection fault
+#
+# CMP/MISS EXPEVT collapses all three into one, freeing r2 as well. Its sense
+# is INVERTED relative to the sequence above (T=1 means MISS, so the handler
+# uses BF, not BT) because that is what costs no new datapath: xbus already
+# reaches buses.imm_val and ybus already has SEL_EXPEVT, but xbus has no
+# SEL_EXPEVT input -- so EXPEVT has to be the RIGHT operand, and CMP/HS-shaped
+# microcode computes `xbus >= ybus`, i.e. `128 >= EXPEVT`.
+#
+# THRESHOLD. The boundary is 128 (0x080) INCLUSIVE, not 127:
+#     miss:       IMISS 0x040, DMISS_R 0x060, DMISS_W 0x080   -> all <= 0x080
+#     protection: IPROT 0x0A0, DPROT_R/W 0x0C0                -> all >  0x080
+# DMISS_W sits exactly ON the boundary, so a `>= 0x07F` test would misclassify
+# every store miss as a protection fault. MULTI_HIT (0x180) never reaches this
+# vector -- it goes to VBR+0x100 -- so it does not constrain the threshold.
+# EXPEVT's known DPROT_R/DPROT_W lossiness does not matter here: both are
+# protection faults and take the same branch. Unsigned compare is used (not
+# signed) because EXPEVT is a 12-bit field zero-extended onto ybus.
+[[instr]]
+  name = "CMP/MISS EXPEVT"
+  privileged = true
+  format = "0"
+  opcode = "0000 0000 1110 1011"
+  operation = "When EXPEVT <= 0x080 (a TLB miss, not a protection fault), 1 -> T"
+  [[instr.slots]]
+    mask_int = "YES"
+    arith = "SUB"
+    arith_sr = ">="
+    pc = "INC"
+    sr = "ARITH"
+    xbus = "128"
+    ybus = "EXPEVT"
 
 [[instr]]
   name = "LDTLB"
@@ -191,8 +262,9 @@
 # register from the TSB prefetch -- installs in one instruction instead of
 # `ldc Rm,ptel; ldtlb.rn`. The parameterless LDTLB.RN (0x0078) is retained for
 # the slow path / setup code, where PTEL naturally lands in the CSR (the C
-# walker writes it there). Encoding = LDTLB.RN's tail with nibble1 1111 (vs the
-# parameterless 0111) so m=0 does not alias 0x0078.
+# walker writes it there). Encoding 0x?FB is the top of the `xxxx 1011` MMU
+# block (see the ENCODING POLICY note at the top of this file); it does not
+# alias the parameterless LDTLB.RN, which lives at 0x0078 in a different family.
 [[instr]]
   name = "LDTLB.RN Rm"
   privileged = true

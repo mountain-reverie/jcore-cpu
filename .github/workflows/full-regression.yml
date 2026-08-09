@@ -334,6 +334,13 @@ jobs:
           # LINUX_SRC/J4GAS/J4LD/J4BIN are exported above; sim/tests/Makefile's
           # `?=` defaults pick them up. 200us matches sim/linux_sim.sh.
           run_guard mmulinux "" 200us 120
+          # mmulinuxexc covers the two fixed vectors mmulinux does not:
+          # VBR+0x100 (TRAPA / General Illegal / TLB protection since the
+          # miss-protection vector split) and VBR+0x600 (interrupts). Both were
+          # laid out wrong until the J4 entry rewrite -- VBR+0x100 landed inside
+          # a J2 pointer table and was executed as instructions -- precisely
+          # because only VBR+0x400 had a guard.
+          run_guard mmulinuxexc "" 200us 120
           # SP3-c: mmuboot links the REAL linux@jcore head_32.S MMU-enable
           # sequence (jcore_mmu_enable, built by kbuild above) and proves the
           # boot bring-up SP2 never covered: AT enables, a present-page

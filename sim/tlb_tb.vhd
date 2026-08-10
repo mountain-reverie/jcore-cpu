@@ -34,20 +34,32 @@
 -- Coverage note (fix round 1): the original 22 cases never set GLOBAL='1'
 -- or the STALE bit at all -- that gap pre-dates this port. Cases 14 and 15
 -- close it directly: 14 proves a global entry is visible under an ASID
--- different from its install ASID (core/tlb.vhd:105/162), and 15 proves a
--- STALE entry is suppressed on the lookup path (:103/160) even though the
--- install path does NOT gate on stale (:232-281 has no stale check --
--- install can freely write a stale-marked entry, e.g. software installing
--- a mapping already soft-invalidated). That install/lookup asymmetry on
--- STALE is exactly the dimension a later install-path change must not
--- regress, hence both directions (install-accepts-stale,
--- lookup-suppresses-stale) are exercised. Still NOT covered here: the U
--- (user/supervisor) permission bit is only exercised via u='0' in every
--- case above (case 7's i_prot check depends on u='0' combined with md='1'
--- with X=0 -- see core/tlb.vhd:114-116); no case sets u='1' or drives
--- md='0', so the SMEP and user/kernel-page paths at :114-116/171 are
--- untested. That gap is not closed by this round and should not be assumed
--- covered.
+-- different from its install ASID (the ASID-isolation term of tlb_match,
+-- core/tlb.vhd), and 15 proves a STALE entry is suppressed on the lookup
+-- path (tlb_match's STALE term) even though the install path does NOT gate
+-- on stale (the LDTLB install process has no stale check -- install can
+-- freely write a stale-marked entry, e.g. software installing a mapping
+-- already soft-invalidated). That install/lookup asymmetry on STALE is
+-- exactly the dimension a later install-path change must not regress,
+-- hence both directions (install-accepts-stale, lookup-suppresses-stale)
+-- are exercised.
+--
+-- Coverage note (fix round 2): round 1 left the U (user/supervisor)
+-- permission bit exercised only via u='0' (case 7's i_prot check depends on
+-- u='0' combined with md='1' with X=0), and no case set u='1' or drove
+-- md='0' -- so the SMEP and user/kernel-page paths in the I-side and D-side
+-- leaf protection predicates (core/tlb.vhd) were untested. That gap is now
+-- closed. Cases 19-23 cover it: 19 proves a user page (U=1) accessed from
+-- user mode (MD=0) is permitted on both I and D sides; 20 proves a
+-- supervisor page (U=0) accessed from user mode (MD=0) faults on both
+-- sides -- the u/md combination round 1 left untested; 21 proves SMEP (a
+-- kernel-mode instruction fetch of a user page faults) and that SMEP is
+-- I-side only (the identical D-side load does not fault); 22 proves S-I7
+-- (a global user page is illegal on both sides regardless of MD -- unlike
+-- 20/21, this fault does not depend on the mode bit at all); 23 proves the
+-- W (writable) check is independent of the U/MD isolation exercised in
+-- 19/20 (a store to a non-writable page faults, a load through the same
+-- entry does not).
 --
 -- ptel layout mirrored from the install path at core/tlb.vhd:
 --   ptel(31 downto 10) = ppn(31 downto 10)  -- entry.ppn; PA_TAG=ppn(27:13),
@@ -454,8 +466,8 @@ begin
 
     -- 14 (new, fix round 1): GLOBAL cross-ASID visibility. A global entry
     -- (ptel bit 2, `g` argument here) must be visible to a lookup under an
-    -- ASID different from the one it was installed with, per the isolation
-    -- predicate at core/tlb.vhd:105/162 (`entry.global = '1' or
+    -- ASID different from the one it was installed with, per the ASID
+    -- isolation term of tlb_match in core/tlb.vhd (`entry.global = '1' or
     -- entry.asid_tag = asid`). Contrast directly against case 3, which
     -- already proves a NON-global entry misses under a different ASID --
     -- this case proves the opposite for g='1', so the ASID half of the
@@ -478,10 +490,11 @@ begin
 
     -- 15 (new, fix round 1): STALE suppression on the lookup path. ptel
     -- bit 1 (tied '0' in every install above) is written straight through
-    -- to entry.stale (core/tlb.vhd:280) and gates both lookup processes
-    -- directly (`entry.stale = '0'` at :103/160) -- install itself does not
-    -- gate on stale at all, so a stale entry can be installed exactly like
-    -- any other. Install one directly with ptel(1)='1' (bypassing the
+    -- to entry.stale in the LDTLB install process (core/tlb.vhd) and gates
+    -- both lookup processes directly via the STALE term of tlb_match
+    -- (`entry.stale = '0'`) -- install itself does not gate on stale at
+    -- all, so a stale entry can be installed exactly like any other.
+    -- Install one directly with ptel(1)='1' (bypassing the
     -- `install` procedure, which always drives '0' there) and confirm the
     -- lookup path suppresses it: a probe of its VA must miss outright, not
     -- merely lose priority to some other entry.
@@ -683,9 +696,9 @@ begin
     d_we <= '0';
     wait for 1 ns;
     check(i_hit = '1', "case 19: user page fetched from user mode must hit");
-    check(i_prot = '0', "case 19: user page fetched from user mode must NOT fault (core/tlb.vhd:132)");
+    check(i_prot = '0', "case 19: user page fetched from user mode must NOT fault (I-side leaf protection predicate, core/tlb.vhd)");
     check(d_hit = '1', "case 19: user page loaded from user mode must hit");
-    check(d_prot = '0', "case 19: user page loaded from user mode must NOT fault (core/tlb.vhd:186)");
+    check(d_prot = '0', "case 19: user page loaded from user mode must NOT fault (D-side leaf protection predicate, core/tlb.vhd)");
 
     -- 20: a supervisor page (U=0) accessed from user mode (MD=0) faults on
     -- both sides -- this is the u/md combination the header called out as
@@ -700,15 +713,16 @@ begin
     d_we <= '0';
     wait for 1 ns;
     check(i_hit = '1', "case 20: supervisor page fetched from user mode must still report a hit");
-    check(i_prot = '1', "case 20: supervisor page fetched from user mode must fault (core/tlb.vhd:132)");
+    check(i_prot = '1', "case 20: supervisor page fetched from user mode must fault (I-side leaf protection predicate, core/tlb.vhd)");
     check(d_hit = '1', "case 20: supervisor page loaded from user mode must still report a hit");
-    check(d_prot = '1', "case 20: supervisor page loaded from user mode must fault (core/tlb.vhd:186)");
+    check(d_prot = '1', "case 20: supervisor page loaded from user mode must fault (D-side leaf protection predicate, core/tlb.vhd)");
 
     -- 21 (mmusmep): SMEP -- a kernel-mode (MD=1) instruction fetch of a
-    -- user page (U=1) faults on the I side (core/tlb.vhd:133), even though
-    -- the same entry is perfectly executable from user mode (case 19). The
-    -- D side has no SMEP term at all: confirm a load through the identical
-    -- entry does NOT fault while in kernel mode.
+    -- user page (U=1) faults on the I side (the SMEP term of the I-side
+    -- leaf protection predicate, core/tlb.vhd), even though the same entry
+    -- is perfectly executable from user mode (case 19). The D side has no
+    -- SMEP term at all: confirm a load through the identical entry does NOT
+    -- fault while in kernel mode.
     flush_all;
     install(vpn       => x"00062", asid_tag => x"0002", ppn => x"00092",
             page_mask => "0000", w => '1', x => '1', u => '1', c => '1',
@@ -719,15 +733,21 @@ begin
     d_we <= '0';
     wait for 1 ns;
     check(i_hit = '1', "case 21: SMEP precondition: kernel fetch of user page must still report a hit");
-    check(i_prot = '1', "case 21: SMEP -- kernel fetch of a user page must fault (core/tlb.vhd:133)");
+    check(i_prot = '1', "case 21: SMEP -- kernel fetch of a user page must fault (SMEP term of the I-side leaf protection predicate, core/tlb.vhd)");
     check(d_hit = '1', "case 21: D-side precondition: kernel load of the same user page must still report a hit");
-    check(d_prot = '0', "case 21: SMEP is I-side only -- a kernel-mode LOAD of the same user page must NOT fault (core/tlb.vhd:186 has no SMEP term)");
+    check(d_prot = '0', "case 21: SMEP is I-side only -- a kernel-mode LOAD of the same user page must NOT fault (the D-side leaf protection predicate, core/tlb.vhd, has no SMEP term)");
 
     -- 22 (mmuglobal, S-I7): a global user page (GLOBAL=1, U=1) is illegal
     -- on both sides regardless of MD -- unlike cases 20/21, this fault does
     -- not depend on the mode bit at all. Check it under both md='0' and
     -- md='1' against the SAME installed entry to prove MD is irrelevant to
-    -- this rule.
+    -- this rule. NOTE: the md='1' leg of the I-side check below is
+    -- confounded -- for a global user page with md='1', the SMEP term
+    -- (u='1' and md='1') also fires, so that leg alone does not
+    -- independently prove S-I7 on the I side. The md='0' leg is the
+    -- load-bearing isolator for S-I7 on the I side (SMEP cannot fire at
+    -- md='0'); the D-side check has no SMEP term at all, so both of its
+    -- legs (md='0' and md='1') are unconfounded proof of S-I7.
     flush_all;
     install(vpn       => x"00063", asid_tag => x"0002", ppn => x"00093",
             page_mask => "0000", w => '1', x => '1', u => '1', c => '1',
@@ -738,13 +758,13 @@ begin
     d_we <= '0';
     wait for 1 ns;
     check(i_hit = '1', "case 22: S-I7 precondition (md=0): global user page fetch must still report a hit");
-    check(i_prot = '1', "case 22: S-I7 (md=0) -- a global user page must fault on fetch regardless of mode (core/tlb.vhd:134)");
+    check(i_prot = '1', "case 22: S-I7 (md=0) -- a global user page must fault on fetch regardless of mode (S-I7 term of the I-side leaf protection predicate, core/tlb.vhd)");
     check(d_hit = '1', "case 22: S-I7 precondition (md=0): global user page load must still report a hit");
-    check(d_prot = '1', "case 22: S-I7 (md=0) -- a global user page must fault on load regardless of mode (core/tlb.vhd:187)");
+    check(d_prot = '1', "case 22: S-I7 (md=0) -- a global user page must fault on load regardless of mode (S-I7 term of the D-side leaf protection predicate, core/tlb.vhd)");
     md   <= '1';
     wait for 1 ns;
-    check(i_prot = '1', "case 22: S-I7 (md=1) -- a global user page must fault on fetch regardless of mode (core/tlb.vhd:134)");
-    check(d_prot = '1', "case 22: S-I7 (md=1) -- a global user page must fault on load regardless of mode (core/tlb.vhd:187)");
+    check(i_prot = '1', "case 22: S-I7 (md=1) -- a global user page must fault on fetch regardless of mode (I-side leaf protection predicate, core/tlb.vhd; NOTE this leg is confounded with SMEP -- see comment above)");
+    check(d_prot = '1', "case 22: S-I7 (md=1) -- a global user page must fault on load regardless of mode (S-I7 term of the D-side leaf protection predicate, core/tlb.vhd; unconfounded, D-side has no SMEP term)");
 
     -- 23: a store (d_we='1') to a non-writable (W=0) user page faults, but
     -- a load (d_we='0') through the SAME entry does not -- the W check is
@@ -758,11 +778,11 @@ begin
     d_we <= '1';
     wait for 1 ns;
     check(d_hit = '1', "case 23: store precondition: non-writable page must still report a hit");
-    check(d_prot = '1', "case 23: a STORE to a non-writable page must fault (core/tlb.vhd:186)");
+    check(d_prot = '1', "case 23: a STORE to a non-writable page must fault (W term of the D-side leaf protection predicate, core/tlb.vhd)");
     d_we <= '0';
     wait for 1 ns;
     check(d_hit = '1', "case 23: load precondition: non-writable page must still report a hit");
-    check(d_prot = '0', "case 23: a LOAD from the same non-writable page must NOT fault (core/tlb.vhd:186)");
+    check(d_prot = '0', "case 23: a LOAD from the same non-writable page must NOT fault (D-side leaf protection predicate, core/tlb.vhd)");
 
     if (fail) then
       report "tlb_tb FAILED"

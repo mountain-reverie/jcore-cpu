@@ -168,6 +168,10 @@ architecture stru of cpu is
   signal walk_bus_ack   : std_logic;
   signal walk_req       : std_logic;
   signal walk_va        : std_logic_vector(31 downto 0);
+  signal walk_va_r      : std_logic_vector(31 downto 0);
+  signal walk_d_miss    : std_logic;
+  signal walk_i_miss    : std_logic;
+  signal d_fault_held   : std_logic;
   signal walk_install   : std_logic;
   signal walk_ptel      : std_logic_vector(31 downto 0);
   signal walk_bus_a     : std_logic_vector(31 downto 0);
@@ -469,29 +473,85 @@ begin
                                and (tlb_d_hit = '0' or tlb_d_prot = '1') else
                       '0';
 
-  -- Walk eligibility. Mirrors the miss arms of the exception process below,
-  -- and ONLY the miss arms: MULTI_HIT and protection faults are not misses and
-  -- must reach their vectors untouched. Gated on rb='0' for the same reason
-  -- the exception process is -- a fault while already in a handler keeps
-  -- today's behaviour exactly. I-side has priority, matching the exception
-  -- process's own ordering.
-  walk_req <= '1' when priv_arch and mmu_walker and dp_sr.rb = '0'
-                       and ((i_at_translated = '1' and sig_inst_o.en = '1'
-                     and tlb_i_multihit = '0' and tlb_i_hit = '0')
-                    or (d_at_translated = '1' and sig_db_o.en = '1'
-                         and tlb_d_multihit = '0' and tlb_d_hit = '0')) else
-              '0';
-
-  walk_va <= i_va_32 when (i_at_translated = '1' and sig_inst_o.en = '1'
-                            and tlb_i_multihit = '0' and tlb_i_hit = '0') else
-             d_va_32;
-
   g_tlb_walk : if PRIV_ARCH and MMU_WALKER generate
+  begin
+
+    -- ---- Walk eligibility ----------------------------------------------
+    -- Mirrors the MISS arms of the exception process below, and ONLY the miss
+    -- arms: MULTI_HIT and protection faults are not misses and must reach their
+    -- vectors untouched. Gated on rb='0' for the same reason the exception
+    -- process is -- a fault while already in a handler keeps today's behaviour
+    -- exactly.
+    walk_d_miss <= '1' when d_at_translated = '1' and sig_db_o.en = '1'
+                            and tlb_d_multihit = '0' and tlb_d_hit = '0' else
+                   '0';
+
+    -- OLDER-INSTRUCTION-FIRST. A D-side access is in MA and therefore belongs
+    -- to an OLDER instruction than the I-fetch running ahead of it; the machine
+    -- drains outstanding load/stores before processing an I-fetch fault, and
+    -- decode_core's next_op gives a HELD D-side request (texc_req) priority
+    -- over both I-side arms. Guards: mmuidorder, mmudrain, mmumhorder.
+    --
+    -- So an I-side walk may only start when no D access is live AND no D fault
+    -- is awaiting dispatch. Without the first term the walker would service the
+    -- younger I-fetch's miss while an older D access is still outstanding --
+    -- and, because the takeover borrows the data bus, it would also let that
+    -- unrelated D access commit externally and then be replayed when the core
+    -- resumes (harmless on plain SRAM, NOT harmless on MMIO or TAS).
+    walk_i_miss <= '1' when i_at_translated = '1' and sig_inst_o.en = '1'
+                            and tlb_i_multihit = '0' and tlb_i_hit = '0'
+                            and sig_db_o.en = '0' and d_fault_held = '0' else
+                   '0';
+
+    walk_req <= '1' when priv_arch and mmu_walker and dp_sr.rb = '0'
+                         and (walk_d_miss = '1' or walk_i_miss = '1') else
+                '0';
+
+    -- D FIRST, for the ordering reason above. (With the gate on walk_i_miss the
+    -- two are already mutually exclusive; the priority is stated anyway so the
+    -- selection is correct on its own terms and does not depend on that.)
+    walk_va <= d_va_32 when walk_d_miss = '1' else
+               i_va_32;
+
+    -- Stand-in for decode_core's held D-side request, texc_req. That signal is
+    -- internal to decode_core and decode.vhd is GENERATED, so exporting it
+    -- would mean changing the decoder generator -- out of scope for this phase.
+    -- Reconstructed here, conservatively, with texc_req's own clear condition:
+    -- the request is retired when the exception is dispatched, which this
+    -- design marks by SR.RB going to 1 (the same "in the handler" indicator the
+    -- exception process itself uses).
+    --
+    -- Only D-side MULTI_HIT and protection set it, because only they can still
+    -- be awaiting dispatch once the access has left the bus. A D-side MISS
+    -- needs no entry here: while it is live sig_db_o.en='1' already blocks the
+    -- I-side walk, and the moment it stops being live it has either been
+    -- installed by the walker -- in which case there is no fault to order
+    -- against -- or raised its exception, which takes SR.RB to 1 and blocks
+    -- walk_req outright. Including the miss term would also self-poison: the
+    -- condition is true on the walk's own first cycle, before busy rises.
+    --
+    -- Worst case this holds longer than texc_req would, which only ever costs
+    -- an I-side walk that then runs a boundary later, or not at all. It cannot
+    -- suppress an exception -- it feeds walk_req, nothing else.
+    p_d_fault_held : process (clk) is
+    begin
+
+      if rising_edge(clk) then
+        if (rst = '1' or dp_sr.rb = '1') then
+          d_fault_held <= '0';
+        elsif (d_at_translated = '1' and sig_db_o.en = '1'
+               and (tlb_d_multihit = '1' or tlb_d_prot = '1')) then
+          d_fault_held <= '1';
+        end if;
+      end if;
+
+    end process p_d_fault_held;
 
     u_tlb_walk : entity work.tlb_walk
       generic map (
-        tsb_ways    => 1,
-        entry_bytes => 16
+        tsb_ways       => 1,
+        entry_bytes    => 16,
+        timeout_cycles => 255
       )
       port map (
         clk          => clk,
@@ -507,6 +567,7 @@ begin
         bus_ack      => walk_bus_ack,
         install      => walk_install,
         install_ptel => walk_ptel,
+        va_r         => walk_va_r,
         busy         => walk_busy,
         cnt_walks    => walk_cnt_walks,
         cnt_hits     => walk_cnt_hits
@@ -547,6 +608,12 @@ begin
     walk_busy    <= '0';
     walk_own     <= '0';
     walk_bus_ack <= '0';
+    walk_req     <= '0';
+    walk_d_miss  <= '0';
+    walk_i_miss  <= '0';
+    walk_va      <= (others => '0');
+    walk_va_r    <= (others => '0');
+    d_fault_held <= '0';
     walk_install <= '0';
     walk_bus_en  <= '0';
     walk_bus_a   <= (others => '0');
@@ -676,9 +743,12 @@ begin
     tlb_ptel_mx <= walk_ptel when walk_install = '1' else
                    dp_tlb_ptel;
     -- On a walker install PTEH has NOT been written (no exception was taken),
-    -- so the TLB's VPN input must come from the live faulting VA instead of
-    -- the CSR.
-    tlb_vpn_mx <= walk_va(31 downto 12) when walk_install = '1' else
+    -- so the TLB's VPN input must come from the faulting VA instead of the CSR
+    -- -- and specifically from the walker's LATCHED copy of it (walk_va_r), not
+    -- from walk_va. walk_va is a combinational selection that can change under
+    -- a walk in progress, which would install the fetched PTEL under the wrong
+    -- VPN. The walker compares its tag against the same latched value.
+    tlb_vpn_mx <= walk_va_r(31 downto 12) when walk_install = '1' else
                   dp_mmu_regs.pteh(31 downto 12);
 
     u_tlb : entity work.tlb
@@ -757,21 +827,26 @@ begin
       -- the bare-metal guards, so it cannot serve as the gate here.) The lingering
       -- second access then raises no exception while RB=1; it re-faults cleanly
       -- after the handler returns (RB back to 0). (J4.)
-      -- walk_busy suppresses the miss exception while the hardware walker is
-      -- probing the TSB. There is deliberately no "walk failed" wire: on a hit
-      -- the install removes the miss condition, and on a miss the walker stops
-      -- with the condition still true, so this process raises the exception on
-      -- the next cycle exactly as it did before.
-      if (i_at_translated = '1' and sig_inst_o.en = '1' and dp_sr.rb = '0'
-          and walk_busy = '0') then
+      -- walk_busy suppresses the MISS exception while the hardware walker is
+      -- probing the TSB -- and ONLY the miss arm. MULTI_HIT and protection are
+      -- not misses, the walker is never armed for them, and they must reach
+      -- their vectors untouched (mmuvecsplit, mmumultihit): the suppression
+      -- therefore sits on the miss arm itself, not on the outer condition.
+      -- There is deliberately no "walk failed" wire: on a hit the install
+      -- removes the miss condition, and on a give-up the walker stops with the
+      -- condition still true, so this process raises the exception on the next
+      -- cycle exactly as it did before.
+      if (i_at_translated = '1' and sig_inst_o.en = '1' and dp_sr.rb = '0') then
         if (tlb_i_multihit = '1') then                                                          -- S-I5: hit-count fault, priority over hit_found/prot
           exc_en   := '1';
           exc_kind := MULTI_HIT;
           fva      := i_va_32;
         elsif (tlb_i_hit = '0') then
-          exc_en   := '1';
-          exc_kind := IMISS;
-          fva      := i_va_32;
+          if (walk_busy = '0') then
+            exc_en   := '1';
+            exc_kind := IMISS;
+            fva      := i_va_32;
+          end if;
         elsif (tlb_i_prot = '1') then
           exc_en   := '1';
           exc_kind := IPROT;
@@ -786,20 +861,23 @@ begin
       v_ifetch := exc_en;
 
       if (exc_en = '0' and d_at_translated = '1' and sig_db_o.en = '1'
-          and dp_sr.rb = '0' and walk_busy = '0') then
+          and dp_sr.rb = '0') then
         if (tlb_d_multihit = '1') then                                                          -- S-I5: hit-count fault, priority over hit_found/prot
           exc_en   := '1';
           exc_kind := MULTI_HIT;
           fva      := d_va_32;
         elsif (tlb_d_hit = '0') then
-          if (sig_db_o.wr = '1') then
-            exc_en   := '1';
-            exc_kind := DMISS_W;
-          else
-            exc_en   := '1';
-            exc_kind := DMISS_R;
+          -- Miss arm only -- see the I-side comment above.
+          if (walk_busy = '0') then
+            if (sig_db_o.wr = '1') then
+              exc_en   := '1';
+              exc_kind := DMISS_W;
+            else
+              exc_en   := '1';
+              exc_kind := DMISS_R;
+            end if;
+            fva := d_va_32;
           end if;
-          fva := d_va_32;
         elsif (tlb_d_prot = '1') then
           if (sig_db_o.wr = '1') then
             exc_en   := '1';

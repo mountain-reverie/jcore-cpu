@@ -10,6 +10,11 @@ $(VHDLS) += core/shifter.vhd
 $(VHDLS) += core/shifter_seq.vhd
 $(VHDLS) += core/datapath.vhd
 $(VHDLS) += core/register_file.vhd
+# core/tlb.vhd itself is variant-gated (added via variants.toml extra_files,
+# only for CPU_VARIANT=j4; see sim/gen/*/variants.mk), but tlb_walk depends
+# only on datapath_pack/cpu2j0_pack and is not yet instantiated anywhere, so
+# it is analyzed unconditionally here alongside the other base core files.
+$(VHDLS) += core/tlb_walk.vhd
 
 # Relative to $(CPU_INC_DIR) when CPU_DECODE_GENERATED actually lives under it
 # (the default, $(CPU_INC_DIR)gen/$(CPU_VARIANT)/decode/...), so that mk_utils.mk

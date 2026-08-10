@@ -1,5 +1,6 @@
 library ieee;
   use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
   use work.cpu2j0_pack.all;
   use work.decode_pack.all;
   use work.cpu2j0_components_pack.all;
@@ -12,6 +13,9 @@ entity cpu is
     copro_decode : boolean := true;
     priv_arch    : boolean := false;
     sh2a_arch    : boolean := false; -- SH-2A extensions (inert plumbing only)
+    -- Hardware TSB walker (core/tlb_walk.vhd). Bring-up scaffolding for A/B
+    -- against the software TLB-miss path; removed in Phase 3.
+    mmu_walker : boolean := true;
     -- Elaboration tag: distinguishes two cpu instances that share this entity/
     -- arch/generics but whose nested register-file architecture is bound
     -- differently per instance by the enclosing cpus configuration (e.g. core0=
@@ -154,11 +158,26 @@ architecture stru of cpu is
   -- conflation was the bug: an I-side MULTI_HIT armed a D-side restore
   -- from a stale shadow because tlb_exc_is_i='0' for it).
   signal tlb_exc_ifetch : std_logic;
-  -- SPIKE ONLY (Task 1) -- deleted in Task 3.
-  signal spike_active : std_logic                    := '0';
-  signal spike_cnt    : std_logic_vector(1 downto 0) := "00";
-  signal spike_done   : std_logic                    := '0'; -- DIAGNOSTIC: one-shot
-  signal dp_db_i      : cpu_data_i_t;
+  -- Data-bus input as seen by the datapath. ack is withheld while the hardware
+  -- TSB walker owns the external bus, so the faulting access is held stable and
+  -- replays once the translation is installed.
+  signal dp_db_i : cpu_data_i_t;
+  -- Hardware TSB walker (core/tlb_walk.vhd) interface.
+  signal walk_busy      : std_logic;
+  signal walk_own       : std_logic;
+  signal walk_bus_ack   : std_logic;
+  signal walk_req       : std_logic;
+  signal walk_va        : std_logic_vector(31 downto 0);
+  signal walk_install   : std_logic;
+  signal walk_ptel      : std_logic_vector(31 downto 0);
+  signal walk_bus_a     : std_logic_vector(31 downto 0);
+  signal walk_bus_en    : std_logic;
+  signal walk_cnt_walks : unsigned(15 downto 0);
+  signal walk_cnt_hits  : unsigned(15 downto 0);
+  -- TLB install-port muxes: LDTLB (decoder) or hardware walker.
+  signal tlb_wr_any  : std_logic;
+  signal tlb_ptel_mx : std_logic_vector(31 downto 0);
+  signal tlb_vpn_mx  : std_logic_vector(19 downto 0);
   -- Dynamic delay-slot flag (decode->datapath): lets a delay-slot D-side TLB
   -- fault restart at the branch. Phase-aligned to the EX control in decode.
   signal dslot : std_logic;
@@ -421,13 +440,12 @@ begin
       ex_if_pc           => dec_ex_if_pc
     );
 
-  -- SPIKE ONLY (Task 1) -- deleted in Task 3.
   -- Withhold ack from the core while the walker owns the bus. The core keeps
   -- sig_db_o.en asserted, so the faulting access is held stable and replays
   -- when ack is restored. Data is passed through unconditionally; only the
   -- handshake is gated.
   dp_db_i.d   <= db_i.d;
-  dp_db_i.ack <= db_i.ack and not spike_active;
+  dp_db_i.ack <= db_i.ack and not walk_busy;
 
   -- D-store TLB-fault write suppression (J4). A store that misses or
   -- violates the TLB must not mutate memory, but a write acks and commits in the
@@ -451,63 +469,95 @@ begin
                                and (tlb_d_hit = '0' or tlb_d_prot = '1') else
                       '0';
 
-  -- SPIKE ONLY (Task 1) -- deleted in Task 3.
-  -- Fake walker: on a D-side TLB miss, hold the external bus for three cycles
-  -- reading a fixed address, then release. Proves the mechanism without an FSM.
-  --
-  -- spike_done makes the takeover ONE-SHOT, and that is the load-bearing
-  -- finding of this spike. Without it the trigger re-arms the cycle after it
-  -- releases -- the miss condition (en=1, tlb_d_hit=0) stays true until an
-  -- entry is installed, and the core cannot install one while its access is
-  -- un-acked -- so the core deadlocks (bus_monitor: "Rd did not see ACK for
-  -- data sram" at the stop time). A takeover of the D bus must therefore be
-  -- self-terminating on the condition that armed it: the real walker must
-  -- install the translation before it releases ack, and must not re-arm on the
-  -- same unresolved miss.
+  -- Walk eligibility. Mirrors the miss arms of the exception process below,
+  -- and ONLY the miss arms: MULTI_HIT and protection faults are not misses and
+  -- must reach their vectors untouched. Gated on rb='0' for the same reason
+  -- the exception process is -- a fault while already in a handler keeps
+  -- today's behaviour exactly. I-side has priority, matching the exception
+  -- process's own ordering.
+  walk_req <= '1' when priv_arch and mmu_walker and dp_sr.rb = '0'
+                       and ((i_at_translated = '1' and sig_inst_o.en = '1'
+                     and tlb_i_multihit = '0' and tlb_i_hit = '0')
+                    or (d_at_translated = '1' and sig_db_o.en = '1'
+                         and tlb_d_multihit = '0' and tlb_d_hit = '0')) else
+              '0';
 
-  g_spike : if PRIV_ARCH generate
+  walk_va <= i_va_32 when (i_at_translated = '1' and sig_inst_o.en = '1'
+                            and tlb_i_multihit = '0' and tlb_i_hit = '0') else
+             d_va_32;
 
-    process (clk) is
+  g_tlb_walk : if PRIV_ARCH and MMU_WALKER generate
+
+    u_tlb_walk : entity work.tlb_walk
+      generic map (
+        tsb_ways    => 1,
+        entry_bytes => 16
+      )
+      port map (
+        clk          => clk,
+        rst          => rst,
+        req          => walk_req,
+        req_va       => walk_va,
+        asidr        => dp_mmu_regs.asidr(15 downto 0),
+        tsbbr        => dp_mmu_regs.tsbbr,
+        tsbcfg       => dp_mmu_regs.tsbcfg,
+        bus_a        => walk_bus_a,
+        bus_en       => walk_bus_en,
+        bus_d        => db_i.d,
+        bus_ack      => walk_bus_ack,
+        install      => walk_install,
+        install_ptel => walk_ptel,
+        busy         => walk_busy,
+        cnt_walks    => walk_cnt_walks,
+        cnt_hits     => walk_cnt_hits
+      );
+
+    -- The walker may only consume an ack it caused. Until walk_own rises the bus
+    -- still belongs to the core's in-flight access, and its ack (which the core
+    -- itself is not allowed to see) would otherwise be latched by the walker as
+    -- a TSB word -- it would compare the core's own load data against the tag.
+    walk_bus_ack <= db_i.ack and walk_own;
+
+    -- Bus ownership handshake for the takeover. On the cycle the walk starts,
+    -- the core's own (faulting) access is still presented to the memory model
+    -- with en='1' and may already be mid-operation; switching the address under
+    -- it, or dropping en, is a protocol violation the SRAM model reports and
+    -- which can wedge the transaction, after which the core waits forever for an
+    -- ack ("Rd did not see ACK for data sram"). So the takeover waits: the core's
+    -- access is left alone until it has been acked on the EXTERNAL bus (that ack
+    -- is still withheld from the datapath, so the access stays in flight for the
+    -- core and replays later), and only then does the walker drive. The walker
+    -- advances only on bus_ack, so it simply waits meanwhile.
+    p_walk_own : process (clk) is
     begin
 
       if rising_edge(clk) then
-        if (spike_active = '0') then
-          if (spike_done = '0' and d_at_translated = '1' and sig_db_o.en = '1'
-              and tlb_d_hit = '0' and tlb_d_multihit = '0'
-              and dp_sr.rb = '0') then
-            spike_active <= '1';
-            spike_done   <= '1';
-            spike_cnt    <= "00";
-          end if;
-        else
-
-          case spike_cnt is
-
-            when "00" =>
-
-              spike_cnt <= "01";
-
-            when "01" =>
-
-              spike_cnt <= "10";
-
-            when others =>
-
-              spike_active <= '0';
-
-          end case;
-
+        if (rst = '1' or walk_busy = '0') then
+          walk_own <= '0';
+        elsif (db_i.ack = '1' or sig_db_o.en = '0') then
+          walk_own <= '1';
         end if;
       end if;
 
-    end process;
+    end process p_walk_own;
 
-  end generate g_spike;
+  end generate g_tlb_walk;
+
+  g_no_tlb_walk : if not (PRIV_ARCH and MMU_WALKER) generate
+    walk_busy    <= '0';
+    walk_own     <= '0';
+    walk_bus_ack <= '0';
+    walk_install <= '0';
+    walk_bus_en  <= '0';
+    walk_bus_a   <= (others => '0');
+    walk_ptel    <= (others => '0');
+  end generate g_no_tlb_walk;
 
   g_dstore_squash : if PRIV_ARCH generate
 
     process (sig_db_o, d_store_faulting, d_at_translated, tlb_d_hit,
-             tlb_d_pa, tlb_d_pa12, tlb_d_page_mask, spike_active) is
+             tlb_d_pa, tlb_d_pa12, tlb_d_page_mask,
+             walk_own, walk_bus_a, walk_bus_en) is
 
       variable offm   : std_logic_vector(15 downto 0);
       variable ppn_lo : std_logic_vector(15 downto 0);
@@ -535,15 +585,23 @@ begin
         db_o.a(27 downto 12) <= (ppn_lo and not offm) or (sig_db_o.a(27 downto 12) and offm);
       end if;
 
-      -- SPIKE ONLY (Task 1) -- deleted in Task 3.
       -- Walker bus takeover. MUST be last and MUST be on the external db_o:
       -- the TLB has already consumed sig_db_o by this point. Gating the
       -- internal sig_db_o here would form the combinational loop described in
       -- the d_store_faulting comment above.
-      if (spike_active = '1') then
-        db_o.a  <= x"10000000";
-        db_o.en <= '1';
-        db_o.rd <= '1';
+      if (walk_own = '1') then
+        db_o.a <= walk_bus_a;
+        -- Same SH P1 untranslated fold the core's own accesses get above: the
+        -- takeover replaces db_o.a wholesale and so bypasses that block. Every
+        -- TSBBR the guards and linux@jcore program is a P1 kernel address
+        -- (e.g. 0x80002C04), which the software miss handler reads through the
+        -- fold; without folding here the walker reads an unmapped 0x8xxxxxxx
+        -- and the SRAM model rejects it.
+        if (walk_bus_a(31 downto 29) = "100") then
+          db_o.a(31 downto 29) <= "000";
+        end if;
+        db_o.en <= walk_bus_en;
+        db_o.rd <= walk_bus_en;
         db_o.wr <= '0';
         db_o.we <= "0000";
       end if;
@@ -613,6 +671,16 @@ begin
                                                  (seg_decode(d_va_32) = SEG_P0 or seg_decode(d_va_32) = SEG_P3) else
                        '0';
 
+    -- TLB install port: LDTLB (decoder) or the hardware walker.
+    tlb_wr_any  <= sr.tlb_wr or walk_install;
+    tlb_ptel_mx <= walk_ptel when walk_install = '1' else
+                   dp_tlb_ptel;
+    -- On a walker install PTEH has NOT been written (no exception was taken),
+    -- so the TLB's VPN input must come from the live faulting VA instead of
+    -- the CSR.
+    tlb_vpn_mx <= walk_va(31 downto 12) when walk_install = '1' else
+                  dp_mmu_regs.pteh(31 downto 12);
+
     u_tlb : entity work.tlb
       port map (
         clk         => clk,
@@ -636,11 +704,11 @@ begin
         asid        => dp_mmu_regs.asidr(15 downto 0),
         md          => dp_sr.md,
         at          => dp_mmu_regs.mmucr(0),
-        tlb_wr      => sr.tlb_wr,
-        pteh_vpn    => dp_mmu_regs.pteh(31 downto 12),
+        tlb_wr      => tlb_wr_any,
+        pteh_vpn    => tlb_vpn_mx,
         -- Install data, not the CSR: LDTLB.RN Rm drives this from XBUS so it
         -- does not need a separate slot to stage PTEL := Rm first.
-        ptel  => dp_tlb_ptel,
+        ptel  => tlb_ptel_mx,
         asidr => dp_mmu_regs.asidr(15 downto 0),
         ti    => dp_mmu_regs.mmucr(2)
       );
@@ -660,7 +728,7 @@ begin
              sig_inst_o, sig_db_o,
              tlb_i_hit, tlb_i_prot, tlb_i_multihit,
              tlb_d_hit, tlb_d_prot, tlb_d_multihit,
-             i_va_32, d_va_32, dp_sr) is
+             i_va_32, d_va_32, dp_sr, walk_busy) is
 
       variable exc_en   : std_logic;
       variable exc_kind : tlb_exc_kind_t;
@@ -689,7 +757,13 @@ begin
       -- the bare-metal guards, so it cannot serve as the gate here.) The lingering
       -- second access then raises no exception while RB=1; it re-faults cleanly
       -- after the handler returns (RB back to 0). (J4.)
-      if (i_at_translated = '1' and sig_inst_o.en = '1' and dp_sr.rb = '0') then
+      -- walk_busy suppresses the miss exception while the hardware walker is
+      -- probing the TSB. There is deliberately no "walk failed" wire: on a hit
+      -- the install removes the miss condition, and on a miss the walker stops
+      -- with the condition still true, so this process raises the exception on
+      -- the next cycle exactly as it did before.
+      if (i_at_translated = '1' and sig_inst_o.en = '1' and dp_sr.rb = '0'
+          and walk_busy = '0') then
         if (tlb_i_multihit = '1') then                                                          -- S-I5: hit-count fault, priority over hit_found/prot
           exc_en   := '1';
           exc_kind := MULTI_HIT;
@@ -711,7 +785,8 @@ begin
       -- exc_en.
       v_ifetch := exc_en;
 
-      if (exc_en = '0' and d_at_translated = '1' and sig_db_o.en = '1' and dp_sr.rb = '0') then
+      if (exc_en = '0' and d_at_translated = '1' and sig_db_o.en = '1'
+          and dp_sr.rb = '0' and walk_busy = '0') then
         if (tlb_d_multihit = '1') then                                                          -- S-I5: hit-count fault, priority over hit_found/prot
           exc_en   := '1';
           exc_kind := MULTI_HIT;

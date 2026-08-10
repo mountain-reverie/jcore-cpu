@@ -22,7 +22,16 @@ entity tlb_walk is
     -- to 2. Keeping the loop parameterised is what makes 2-way revertible.
     tsb_ways : natural := 1;
     -- Bytes per TSB entry. 16 in both phases.
-    entry_bytes : natural := 16
+    entry_bytes : natural := 16;
+    -- Liveness bound on a single walk, in cycles. `busy` suppresses the miss
+    -- exception, so a walk that never finishes is a HANG where the machine
+    -- owes a fault. The walk can stall for reasons outside this entity: the
+    -- faulting access cpu.vhd is waiting to have acked may target a VA the
+    -- memory model does not decode, in which case cpu.vhd never hands the bus
+    -- over and no bus_ack ever arrives. This counter bounds that. On expiry
+    -- the walker gives up exactly as it does on a tag mismatch -- it fails
+    -- OPEN, to the software miss path, never closed into a stall.
+    timeout_cycles : natural := 255
   );
   port (
     clk : in    std_logic;
@@ -45,6 +54,13 @@ entity tlb_walk is
     -- Install into the TLB, one cycle, same port LDTLB uses.
     install      : out   std_logic;
     install_ptel : out   std_logic_vector(31 downto 0);
+    -- The VA this walk was started for, LATCHED at st_idle. cpu.vhd drives the
+    -- TLB's pteh_vpn from this on an install. It must NOT use the live req_va:
+    -- that is a combinational selection over the I- and D-side miss conditions
+    -- and can change under a walk in progress (the I-fetch is not stalled by
+    -- busy), which would install the PTEL fetched for one VA under the VPN of
+    -- another. Same reason the tag compare below uses va_reg.
+    va_r : out   std_logic_vector(31 downto 0);
 
     -- High for the whole walk. cpu.vhd uses it to withhold ack, take the bus,
     -- and suppress the miss exception.
@@ -67,9 +83,13 @@ architecture rtl of tlb_walk is
   signal tried    : std_logic                     := '0';
   signal way      : natural range 0 to 3          := 0;
   signal set_addr : std_logic_vector(31 downto 0) := (others => '0');
-  signal ptel_r   : std_logic_vector(31 downto 0) := (others => '0');
-  signal walks_r  : unsigned(15 downto 0)         := (others => '0');
-  signal hits_r   : unsigned(15 downto 0)         := (others => '0');
+  -- req_va latched at st_idle. The single source of truth for both the tag
+  -- compare and the installed VPN for the whole walk.
+  signal va_reg  : std_logic_vector(31 downto 0)     := (others => '0');
+  signal timeout : natural range 0 to timeout_cycles := 0;
+  signal ptel_r  : std_logic_vector(31 downto 0)     := (others => '0');
+  signal walks_r : unsigned(15 downto 0)             := (others => '0');
+  signal hits_r  : unsigned(15 downto 0)             := (others => '0');
 
   -- Word offset within the current way: 0 = tag_hi, 1 = tag_lo, 2 = data.
 
@@ -92,6 +112,7 @@ begin
   install      <= '1' when state = st_install else
                   '0';
   install_ptel <= ptel_r;
+  va_r         <= va_reg;
   cnt_walks    <= walks_r;
   cnt_hits     <= hits_r;
 
@@ -112,6 +133,7 @@ begin
         state   <= st_idle;
         tried   <= '0';
         way     <= 0;
+        timeout <= 0;
         walks_r <= (others => '0');
         hits_r  <= (others => '0');
       else
@@ -130,7 +152,9 @@ begin
               tried <= '0';
             elsif (tried = '0') then
               set_addr <= tsb_ptr(req_va, tsbcfg, tsbbr);
+              va_reg   <= req_va;
               way      <= 0;
+              timeout  <= 0;
               walks_r  <= walks_r + 1;
               state    <= st_tag_hi;
             end if;
@@ -140,7 +164,7 @@ begin
             if (bus_ack = '1') then
               -- Full 32-bit compare against the 4 KB-granular VPN, which is
               -- what Linux writes into tag_hi (address & PAGE_MASK).
-              if (bus_d(31 downto 12) = req_va(31 downto 12)
+              if (bus_d(31 downto 12) = va_reg(31 downto 12)
                   and bus_d(11 downto 0) = x"000") then
                 state <= st_tag_lo;
               else
@@ -195,6 +219,20 @@ begin
 
         end case;
 
+        -- Liveness. Counted over EVERY non-idle state, so it covers the walk
+        -- stalling on a bus_ack that never comes as well as an FSM that
+        -- somehow fails to advance. Expiry takes the same exit as a tag
+        -- mismatch: `tried` set, state st_idle, busy low -- the miss condition
+        -- is still true, so cpu.vhd raises the exception on the next cycle.
+        if (state /= st_idle) then
+          if (timeout = timeout_cycles) then
+            tried   <= '1';
+            timeout <= 0;
+            state   <= st_idle;
+          else
+            timeout <= timeout + 1;
+          end if;
+        end if;
       end if;
     end if;
 

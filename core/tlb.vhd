@@ -89,6 +89,68 @@ architecture rtl of tlb is
 
   end function tlb_match;
 
+  -- Log-depth reduction for the 32-entry lookup. Replaces the sequential
+  -- for-loop, which carried hit_found/hit_pa/prot across iterations and so
+  -- synthesized to a 32-deep mux chain -- the head of the j4c critical path.
+  --
+  -- Field semantics are preserved EXACTLY:
+  --   hit    = OR of matches
+  --   multi  = two or more matches
+  --   pa/pa12/page_mask/c = HIGHEST-INDEX match wins (loop's last-writer-wins)
+  --   prot   = STICKY OR over matching entries (loop never clears prot), which
+  --            is NOT the same as taking the winning entry's prot bit.
+
+  type sel_t is record
+    hit       : std_logic;
+    multi     : std_logic;
+    pa        : std_logic_vector(14 downto 0);
+    pa12      : std_logic;
+    page_mask : std_logic_vector(3 downto 0);
+    c         : std_logic;
+    prot      : std_logic;
+  end record sel_t;
+
+  type sel_arr_t is array (natural range <>) of sel_t;
+
+  constant sel_none : sel_t :=
+  (
+    hit       => '0',
+    multi     => '0',
+    pa        => (others => '0'),
+    pa12      => '0',
+    page_mask => (others => '0'),
+    c         => '0',
+    prot      => '0'
+  );
+
+  -- lo = lower entry indices, hi = higher. hi wins the field select so the
+  -- tree reproduces the loop's ascending last-writer-wins order.
+
+  function combine (
+    lo,
+    hi : sel_t
+  ) return sel_t is
+
+    variable r : sel_t;
+
+  begin
+
+    r.hit   := lo.hit or hi.hit;
+    r.multi := lo.multi or hi.multi or (lo.hit and hi.hit);
+    r.prot  := lo.prot or hi.prot; -- sticky OR, matches the loop
+
+    if (hi.hit = '1') then
+      r.pa        := hi.pa; r.pa12 := hi.pa12;
+      r.page_mask := hi.page_mask; r.c := hi.c;
+    else
+      r.pa        := lo.pa; r.pa12 := lo.pa12;
+      r.page_mask := lo.page_mask; r.c := lo.c;
+    end if;
+
+    return r;
+
+  end function combine;
+
 begin
 
   -- Combinational I-lookup (instruction fetch). Scan all 32 entries; a usable
@@ -102,49 +164,73 @@ begin
   -- a defined non-recoverable fault (i_multihit), never a silent PA pick.
   process (ram, i_va, asid, md) is
 
-    variable entry         : tlb_entry_t;
-    variable hit_found     : std_logic;
-    variable hit_pa        : std_logic_vector(14 downto 0);
-    variable hit_pa12      : std_logic;
-    variable hit_page_mask : std_logic_vector(3 downto 0);
-    variable hit_c         : std_logic;
-    variable prot          : std_logic;
-    variable multihit      : std_logic;
+    variable entry : tlb_entry_t;
+    variable m     : std_logic;
+    variable leaf  : sel_arr_t(0 to 31);
+    variable lvl   : sel_arr_t(0 to 31);
+    variable n     : natural;
+    variable root  : sel_t;
 
   begin
 
-    hit_found     := '0'; hit_pa := (others => '0'); hit_pa12 := '0';
-    hit_page_mask := (others => '0'); hit_c := '0'; prot := '0'; multihit := '0';
-
+    -- Leaves: all 32 comparisons are independent and evaluate in parallel.
+    -- Fields are masked to zero on a non-match so the root reproduces the
+    -- loop's zero initialisers when nothing hits.
     for k in 0 to 31 loop
 
       entry := ram(k);
 
       if (tlb_match(entry, i_va, asid)) then
-        if (hit_found = '1') then
-          multihit := '1';                                                                                         -- S-I5: sticky flag, 2nd+ match while one already found
-        end if;
-        hit_found     := '1';
-        hit_pa        := entry.ppn(27 downto 13);                                                                  -- PA[27:13] = 15-bit relocation tag
-        hit_pa12      := entry.ppn(12);                                                                            -- PA[12] (PIPT relocation, mmurelocif)
-        hit_page_mask := entry.page_mask;
-        hit_c         := entry.c;
-        if (entry.x = '0' or (entry.u = '0' and md = '0')                                                          -- X / user-on-super (mmufault)
-            or (entry.u = '1' and md = '1')                                                                        -- SMEP: kernel fetch of user page (mmusmep)
-            or (entry.global = '1' and entry.u = '1')) then                                                        -- S-I7: global user page is illegal (mmuglobal)
-          prot := '1';
+        m := '1';
+      else
+        m := '0';
+      end if;
+
+      leaf(k)     := sel_none;
+      leaf(k).hit := m;
+
+      if (m = '1') then
+        leaf(k).pa        := entry.ppn(27 downto 13);
+        leaf(k).pa12      := entry.ppn(12);
+        leaf(k).page_mask := entry.page_mask;
+        leaf(k).c         := entry.c;
+        if (entry.x = '0' or (entry.u = '0' and md = '0')      -- X / user-on-super (mmufault)
+            or (entry.u = '1' and md = '1')                    -- SMEP: kernel fetch of user page (mmusmep)
+            or (entry.global = '1' and entry.u = '1')) then    -- S-I7: global user page illegal (mmuglobal)
+          leaf(k).prot := '1';
         end if;
       end if;
 
     end loop;
 
-    i_hit       <= hit_found;
-    i_pa_tag    <= hit_pa;
-    i_pa12      <= hit_pa12;
-    i_page_mask <= hit_page_mask;
-    i_c         <= hit_c;
-    i_prot      <= prot and hit_found;                                                                             -- prot only meaningful on a hit
-    i_multihit  <= multihit;                                                                                       -- S-I5: duplicate VPN+ASID install (fatal); sticky flag, not a count
+    -- Balanced reduction: 32 -> 16 -> 8 -> 4 -> 2 -> 1, five statically
+    -- unrollable levels (lvl_i is a locally-static loop parameter, so n and
+    -- the inner bound are elaboration-time constants -- required by some
+    -- synthesis tools that reject variable-bound loops). 2*j stays the LOWER
+    -- half at every level so the highest-index-wins field select is unchanged.
+    lvl := leaf;
+
+    for lvl_i in 0 to 4 loop
+
+      n := 32 / (2 ** lvl_i);
+
+      for j in 0 to (n / 2) - 1 loop
+
+        lvl(j) := combine(lvl(2 * j), lvl(2 * j + 1));
+
+      end loop;
+
+    end loop;
+
+    root := lvl(0);
+
+    i_hit       <= root.hit;
+    i_pa_tag    <= root.pa;
+    i_pa12      <= root.pa12;
+    i_page_mask <= root.page_mask;
+    i_c         <= root.c;
+    i_prot      <= root.prot and root.hit;                     -- prot only meaningful on a hit
+    i_multihit  <= root.multi;                                 -- S-I5: duplicate VPN+ASID install (fatal)
 
   end process;
 

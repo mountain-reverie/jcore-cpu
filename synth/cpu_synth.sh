@@ -205,10 +205,16 @@ case "$SYNTH_VARIANT" in
     SYN_BINDING="--syn-binding"
     case "$SYNTH_VARIANT" in
       j4c)
-        TOP="cpu_cache_timing_j4"
         # M3: for j4c asic/ecp5, use the PRIV_ARCH=true variant of
         # the cache timing top (cpu_cache_timing_j4_priv_mmu in
         # cpu_cache_timing_config.vhd) so the real J4+MMU+cache core is synthesized.
+        # This MUST be TOP, not just AREA_TOP: TIMING_TOP is derived from TOP
+        # below, and it is TIMING_TOP that the timing leg elaborates. Setting only
+        # AREA_TOP measured area WITH the MMU and Fmax WITHOUT it -- the same
+        # TLB-pruned-away scope bug the bare-j4 leg already hit (see the ECP5
+        # floor comment in .github/workflows/synth-cpu.yml). Measured on
+        # ECP5-85k CABGA381: 41.50 MHz without the MMU vs 25.17 MHz with it.
+        TOP="cpu_cache_timing_j4_priv_mmu"
         AREA_TOP="cpu_cache_timing_j4_priv_mmu"
         # The MMU build needs the J4 overlay decoder (mmu_reg_* control signals)
         # which lives only in the generate-j4 tables. Regenerate them as a SYNTH-

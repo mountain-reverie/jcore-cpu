@@ -242,48 +242,72 @@ begin
   -- kernel). See docs/architecture/tlb.md §3; guard mmufault (DPROT_R/DPROT_W).
   process (ram, d_va, d_we, asid, md) is
 
-    variable entry         : tlb_entry_t;
-    variable hit_found     : std_logic;
-    variable hit_pa        : std_logic_vector(14 downto 0);
-    variable hit_pa12      : std_logic;
-    variable hit_page_mask : std_logic_vector(3 downto 0);
-    variable hit_c         : std_logic;
-    variable prot          : std_logic;
-    variable multihit      : std_logic;
+    variable entry : tlb_entry_t;
+    variable m     : std_logic;
+    variable leaf  : sel_arr_t(0 to 31);
+    variable lvl   : sel_arr_t(0 to 31);
+    variable n     : natural;
+    variable root  : sel_t;
 
   begin
 
-    hit_found     := '0'; hit_pa := (others => '0'); hit_pa12 := '0';
-    hit_page_mask := (others => '0'); hit_c := '0'; prot := '0'; multihit := '0';
-
+    -- Leaves: all 32 comparisons are independent and evaluate in parallel.
+    -- Fields are masked to zero on a non-match so the root reproduces the
+    -- loop's zero initialisers when nothing hits.
     for k in 0 to 31 loop
 
       entry := ram(k);
 
       if (tlb_match(entry, d_va, asid)) then
-        if (hit_found = '1') then
-          multihit := '1';                                                                                         -- S-I5: sticky flag, 2nd+ match while one already found
-        end if;
-        hit_found     := '1';
-        hit_pa        := entry.ppn(27 downto 13);
-        hit_pa12      := entry.ppn(12);                                                                            -- PA[12] (PIPT relocation)
-        hit_page_mask := entry.page_mask;
-        hit_c         := entry.c;
+        m := '1';
+      else
+        m := '0';
+      end if;
+
+      leaf(k)     := sel_none;
+      leaf(k).hit := m;
+
+      if (m = '1') then
+        leaf(k).pa        := entry.ppn(27 downto 13);
+        leaf(k).pa12      := entry.ppn(12);
+        leaf(k).page_mask := entry.page_mask;
+        leaf(k).c         := entry.c;
         if ((entry.u = '0' and md = '0') or (d_we = '1' and entry.w = '0')
-            or (entry.global = '1' and entry.u = '1')) then                                                        -- S-I7: global user page is illegal (mmuglobal)
-          prot := '1';
+            or (entry.global = '1' and entry.u = '1')) then                -- S-I7 (mmuglobal)
+          leaf(k).prot := '1';
         end if;
       end if;
 
     end loop;
 
-    d_hit       <= hit_found;
-    d_pa_tag    <= hit_pa;
-    d_pa12      <= hit_pa12;
-    d_page_mask <= hit_page_mask;
-    d_c         <= hit_c;
-    d_prot      <= prot and hit_found;
-    d_multihit  <= multihit;                                                                                       -- S-I5: duplicate VPN+ASID install (fatal); sticky flag, not a count
+    -- Balanced reduction: 32 -> 16 -> 8 -> 4 -> 2 -> 1, five statically
+    -- unrollable levels (lvl_i is a locally-static loop parameter, so n and
+    -- the inner bound are elaboration-time constants -- required by some
+    -- synthesis tools that reject variable-bound loops). 2*j stays the LOWER
+    -- half at every level so the highest-index-wins field select is unchanged.
+    lvl := leaf;
+
+    for lvl_i in 0 to 4 loop
+
+      n := 32 / (2 ** lvl_i);
+
+      for j in 0 to (n / 2) - 1 loop
+
+        lvl(j) := combine(lvl(2 * j), lvl(2 * j + 1));
+
+      end loop;
+
+    end loop;
+
+    root := lvl(0);
+
+    d_hit       <= root.hit;
+    d_pa_tag    <= root.pa;
+    d_pa12      <= root.pa12;
+    d_page_mask <= root.page_mask;
+    d_c         <= root.c;
+    d_prot      <= root.prot and root.hit;                                 -- prot only meaningful on a hit
+    d_multihit  <= root.multi;                                             -- S-I5: duplicate VPN+ASID install (fatal)
 
   end process;
 

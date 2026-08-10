@@ -1,0 +1,203 @@
+library ieee;
+  use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
+  use work.cpu2j0_pack.all;
+  use work.datapath_pack.all;
+
+-- Hardware TSB walker (design spec section 5).
+--
+-- On a TLB miss the core stalls (cpu.vhd withholds ack) and this FSM probes
+-- the TSB set for the faulting VPN. On a match it installs through the TLB's
+-- existing tlb_wr port; the faulting access then replays and translates, and
+-- NO exception is ever raised. On no match it simply stops: the miss condition
+-- is still true, so cpu.vhd's exception process raises the fault exactly as it
+-- did before this entity existed. There is therefore no "fail" output.
+--
+-- The walk cannot itself fault: TSBBR is physical, so these reads bypass
+-- translation entirely. No nesting, no recursion, no new exception class.
+
+entity tlb_walk is
+  generic (
+    -- Ways per TSB set. Phase 1 ships 1 (today's format). Phase 2 raises this
+    -- to 2. Keeping the loop parameterised is what makes 2-way revertible.
+    tsb_ways : natural := 1;
+    -- Bytes per TSB entry. 16 in both phases.
+    entry_bytes : natural := 16
+  );
+  port (
+    clk : in    std_logic;
+    rst : in    std_logic;
+
+    -- Miss request. Held by cpu.vhd for as long as the faulting access is
+    -- stalled, so these are stable for the whole walk.
+    req    : in    std_logic;
+    req_va : in    std_logic_vector(31 downto 0);
+    asidr  : in    std_logic_vector(15 downto 0);
+    tsbbr  : in    std_logic_vector(31 downto 0);
+    tsbcfg : in    std_logic_vector(31 downto 0);
+
+    -- Bus. The walker drives its own read; cpu.vhd muxes this onto db_o.
+    bus_a   : out   std_logic_vector(31 downto 0);
+    bus_en  : out   std_logic;
+    bus_d   : in    std_logic_vector(31 downto 0);
+    bus_ack : in    std_logic;
+
+    -- Install into the TLB, one cycle, same port LDTLB uses.
+    install      : out   std_logic;
+    install_ptel : out   std_logic_vector(31 downto 0);
+
+    -- High for the whole walk. cpu.vhd uses it to withhold ack, take the bus,
+    -- and suppress the miss exception.
+    busy : out   std_logic;
+
+    -- Anti-vacuity counters (design spec section 8). Read via the debug
+    -- interface; not architectural.
+    cnt_walks : out   unsigned(15 downto 0);
+    cnt_hits  : out   unsigned(15 downto 0)
+  );
+end entity tlb_walk;
+
+architecture rtl of tlb_walk is
+
+  type state_t is (st_idle, st_tag_hi, st_tag_lo, st_data, st_next_way, st_install);
+
+  signal state : state_t := st_idle;
+  -- One-shot: set when a walk gives up, cleared only when `req` falls. See
+  -- ST_IDLE for why the walker MUST NOT re-arm on a still-asserted req.
+  signal tried    : std_logic                     := '0';
+  signal way      : natural range 0 to 3          := 0;
+  signal set_addr : std_logic_vector(31 downto 0) := (others => '0');
+  signal ptel_r   : std_logic_vector(31 downto 0) := (others => '0');
+  signal walks_r  : unsigned(15 downto 0)         := (others => '0');
+  signal hits_r   : unsigned(15 downto 0)         := (others => '0');
+
+  -- Word offset within the current way: 0 = tag_hi, 1 = tag_lo, 2 = data.
+
+  function way_word (
+    base : std_logic_vector(31 downto 0);
+    w    : natural;
+    word : natural;
+    ebytes : natural
+  ) return std_logic_vector is
+  begin
+
+    return std_logic_vector(unsigned(base) + to_unsigned(w * ebytes + word * 4, 32));
+
+  end function way_word;
+
+begin
+
+  busy         <= '0' when state = st_idle else
+                  '1';
+  install      <= '1' when state = st_install else
+                  '0';
+  install_ptel <= ptel_r;
+  cnt_walks    <= walks_r;
+  cnt_hits     <= hits_r;
+
+  bus_en <= '1' when (state = st_tag_hi or state = st_tag_lo or state = st_data) else
+            '0';
+
+  with state select bus_a <=
+    way_word(set_addr, way, 0, entry_bytes) when st_tag_hi,
+    way_word(set_addr, way, 1, entry_bytes) when st_tag_lo,
+    way_word(set_addr, way, 2, entry_bytes) when st_data,
+    (others => '0') when others;
+
+  process (clk) is
+  begin
+
+    if rising_edge(clk) then
+      if (rst = '1') then
+        state   <= st_idle;
+        tried   <= '0';
+        way     <= 0;
+        walks_r <= (others => '0');
+        hits_r  <= (others => '0');
+      else
+
+        case state is
+
+          when st_idle =>
+
+            -- One-shot. `req` is a LEVEL that stays true until the miss is
+            -- resolved, so without `tried` the walker re-arms the cycle after
+            -- it gives up and the exception can never fire -- the core waits
+            -- forever for an ack. Task 1's spike deadlocked on exactly this.
+            -- Cleared only when req falls, i.e. when the access finally
+            -- completed or the exception took RB to 1.
+            if (req = '0') then
+              tried <= '0';
+            elsif (tried = '0') then
+              set_addr <= tsb_ptr(req_va, tsbcfg, tsbbr);
+              way      <= 0;
+              walks_r  <= walks_r + 1;
+              state    <= st_tag_hi;
+            end if;
+
+          when st_tag_hi =>
+
+            if (bus_ack = '1') then
+              -- Full 32-bit compare against the 4 KB-granular VPN, which is
+              -- what Linux writes into tag_hi (address & PAGE_MASK).
+              if (bus_d(31 downto 12) = req_va(31 downto 12)
+                  and bus_d(11 downto 0) = x"000") then
+                state <= st_tag_lo;
+              else
+                state <= st_next_way;
+              end if;
+            end if;
+
+          when st_tag_lo =>
+
+            if (bus_ack = '1') then
+              -- Full-word compare against zero-extended ASIDR: a garbage or
+              -- half-written tag_lo fails closed rather than aliasing.
+              if (bus_d = (x"0000" & asidr)) then
+                state <= st_data;
+              else
+                state <= st_next_way;
+              end if;
+            end if;
+
+          when st_data =>
+
+            if (bus_ack = '1') then
+              ptel_r <= bus_d;
+              -- V=1 and STALE=0 required. STALE would re-miss immediately and
+              -- livelock; V distinguishes a real entry from a zeroed TSB,
+              -- which would otherwise alias VPN 0.
+              if (bus_d(0) = '1' and bus_d(1) = '0') then
+                hits_r <= hits_r + 1;
+                state  <= st_install;
+              else
+                state <= st_next_way;
+              end if;
+            end if;
+
+          when st_next_way =>
+
+            if (way < tsb_ways - 1) then
+              way   <= way + 1;
+              state <= st_tag_hi;
+            else
+              -- Give up. The miss condition is still true, so cpu.vhd raises
+              -- the exception on the cycle after busy drops. `tried` MUST be
+              -- set here or ST_IDLE re-arms into the same still-true req and
+              -- the exception never gets a cycle in which busy is low.
+              tried <= '1';
+              state <= st_idle;
+            end if;
+
+          when st_install =>
+
+            state <= st_idle;
+
+        end case;
+
+      end if;
+    end if;
+
+  end process;
+
+end architecture rtl;

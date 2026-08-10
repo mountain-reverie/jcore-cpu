@@ -520,6 +520,31 @@ package cpu2j0_components_pack is
     );
   end component shifter;
 
+  component tlb_walk is
+    generic (
+      tsb_ways    : natural := 1;
+      entry_bytes : natural := 16
+    );
+    port (
+      clk          : in    std_logic;
+      rst          : in    std_logic;
+      req          : in    std_logic;
+      req_va       : in    std_logic_vector(31 downto 0);
+      asidr        : in    std_logic_vector(15 downto 0);
+      tsbbr        : in    std_logic_vector(31 downto 0);
+      tsbcfg       : in    std_logic_vector(31 downto 0);
+      bus_a        : out   std_logic_vector(31 downto 0);
+      bus_en       : out   std_logic;
+      bus_d        : in    std_logic_vector(31 downto 0);
+      bus_ack      : in    std_logic;
+      install      : out   std_logic;
+      install_ptel : out   std_logic_vector(31 downto 0);
+      busy         : out   std_logic;
+      cnt_walks    : out   unsigned(15 downto 0);
+      cnt_hits     : out   unsigned(15 downto 0)
+    );
+  end component tlb_walk;
+
 end package cpu2j0_components_pack;
 
 package body cpu2j0_components_pack is

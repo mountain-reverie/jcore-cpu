@@ -667,6 +667,103 @@ begin
     check(i_multihit = '1',
           "case 18: two independently-overlapping entries against one new install is the documented residual gap -- dedup only evicts the first match it scans, so this must still genuinely multi-hit");
 
+    -- 19 (fix round 2, closes the u/md coverage gap documented in the file
+    -- header): a user page (U=1) accessed from user mode (MD=0) is
+    -- permitted on both sides -- no case before this one ever drove
+    -- md='0' or installed u='1'. asid_tag distinguishes this entry from any
+    -- residue left by earlier cases.
+    flush_all;
+    asid <= x"0002";
+    install(vpn       => x"00060", asid_tag => x"0002", ppn => x"00090",
+            page_mask => "0000", w => '1', x => '1', u => '1', c => '1',
+            g         => '0');
+    md   <= '0';
+    i_va <= x"00060000";
+    d_va <= x"00060000";
+    d_we <= '0';
+    wait for 1 ns;
+    check(i_hit = '1', "case 19: user page fetched from user mode must hit");
+    check(i_prot = '0', "case 19: user page fetched from user mode must NOT fault (core/tlb.vhd:132)");
+    check(d_hit = '1', "case 19: user page loaded from user mode must hit");
+    check(d_prot = '0', "case 19: user page loaded from user mode must NOT fault (core/tlb.vhd:186)");
+
+    -- 20: a supervisor page (U=0) accessed from user mode (MD=0) faults on
+    -- both sides -- this is the u/md combination the header called out as
+    -- untested (every earlier case only ever drove md='1').
+    flush_all;
+    install(vpn       => x"00061", asid_tag => x"0002", ppn => x"00091",
+            page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
+            g         => '0');
+    md   <= '0';
+    i_va <= x"00061000";
+    d_va <= x"00061000";
+    d_we <= '0';
+    wait for 1 ns;
+    check(i_hit = '1', "case 20: supervisor page fetched from user mode must still report a hit");
+    check(i_prot = '1', "case 20: supervisor page fetched from user mode must fault (core/tlb.vhd:132)");
+    check(d_hit = '1', "case 20: supervisor page loaded from user mode must still report a hit");
+    check(d_prot = '1', "case 20: supervisor page loaded from user mode must fault (core/tlb.vhd:186)");
+
+    -- 21 (mmusmep): SMEP -- a kernel-mode (MD=1) instruction fetch of a
+    -- user page (U=1) faults on the I side (core/tlb.vhd:133), even though
+    -- the same entry is perfectly executable from user mode (case 19). The
+    -- D side has no SMEP term at all: confirm a load through the identical
+    -- entry does NOT fault while in kernel mode.
+    flush_all;
+    install(vpn       => x"00062", asid_tag => x"0002", ppn => x"00092",
+            page_mask => "0000", w => '1', x => '1', u => '1', c => '1',
+            g         => '0');
+    md   <= '1';
+    i_va <= x"00062000";
+    d_va <= x"00062000";
+    d_we <= '0';
+    wait for 1 ns;
+    check(i_hit = '1', "case 21: SMEP precondition: kernel fetch of user page must still report a hit");
+    check(i_prot = '1', "case 21: SMEP -- kernel fetch of a user page must fault (core/tlb.vhd:133)");
+    check(d_hit = '1', "case 21: D-side precondition: kernel load of the same user page must still report a hit");
+    check(d_prot = '0', "case 21: SMEP is I-side only -- a kernel-mode LOAD of the same user page must NOT fault (core/tlb.vhd:186 has no SMEP term)");
+
+    -- 22 (mmuglobal, S-I7): a global user page (GLOBAL=1, U=1) is illegal
+    -- on both sides regardless of MD -- unlike cases 20/21, this fault does
+    -- not depend on the mode bit at all. Check it under both md='0' and
+    -- md='1' against the SAME installed entry to prove MD is irrelevant to
+    -- this rule.
+    flush_all;
+    install(vpn       => x"00063", asid_tag => x"0002", ppn => x"00093",
+            page_mask => "0000", w => '1', x => '1', u => '1', c => '1',
+            g         => '1');
+    md   <= '0';
+    i_va <= x"00063000";
+    d_va <= x"00063000";
+    d_we <= '0';
+    wait for 1 ns;
+    check(i_hit = '1', "case 22: S-I7 precondition (md=0): global user page fetch must still report a hit");
+    check(i_prot = '1', "case 22: S-I7 (md=0) -- a global user page must fault on fetch regardless of mode (core/tlb.vhd:134)");
+    check(d_hit = '1', "case 22: S-I7 precondition (md=0): global user page load must still report a hit");
+    check(d_prot = '1', "case 22: S-I7 (md=0) -- a global user page must fault on load regardless of mode (core/tlb.vhd:187)");
+    md   <= '1';
+    wait for 1 ns;
+    check(i_prot = '1', "case 22: S-I7 (md=1) -- a global user page must fault on fetch regardless of mode (core/tlb.vhd:134)");
+    check(d_prot = '1', "case 22: S-I7 (md=1) -- a global user page must fault on load regardless of mode (core/tlb.vhd:187)");
+
+    -- 23: a store (d_we='1') to a non-writable (W=0) user page faults, but
+    -- a load (d_we='0') through the SAME entry does not -- the W check is
+    -- independent of the U/MD isolation check exercised in cases 19/20.
+    flush_all;
+    install(vpn       => x"00064", asid_tag => x"0002", ppn => x"00094",
+            page_mask => "0000", w => '0', x => '1', u => '1', c => '1',
+            g         => '0');
+    md   <= '0';
+    d_va <= x"00064000";
+    d_we <= '1';
+    wait for 1 ns;
+    check(d_hit = '1', "case 23: store precondition: non-writable page must still report a hit");
+    check(d_prot = '1', "case 23: a STORE to a non-writable page must fault (core/tlb.vhd:186)");
+    d_we <= '0';
+    wait for 1 ns;
+    check(d_hit = '1', "case 23: load precondition: non-writable page must still report a hit");
+    check(d_prot = '0', "case 23: a LOAD from the same non-writable page must NOT fault (core/tlb.vhd:186)");
+
     if (fail) then
       report "tlb_tb FAILED"
         severity failure;

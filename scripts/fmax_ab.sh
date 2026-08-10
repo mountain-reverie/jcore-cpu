@@ -20,6 +20,7 @@ mkdir -p build
 
 check_synth_log() {
   local synth_log="$1"
+  [ -f "$synth_log" ] || { echo "ERROR: synth log not found: $synth_log" >&2; return 1; }
   # Guard against the TLB-pruned-away failure mode in synthesis.
   local tlbrefs_synth
   tlbrefs_synth=$(grep -ci tlb "$synth_log" || true)

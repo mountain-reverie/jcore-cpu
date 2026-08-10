@@ -125,7 +125,9 @@ VA[11:0]}` (28-bit physical region) and used to index the PIPT L1 caches; `C`
 selects cache vs. uncached bypass.
 
 *Guards: `mmuxlate` (basic translate), `mmufault` (all six miss/prot classes
-incl. user-mode `IPROT`/`DPROT_R` and `DPROT_W`), `mmufsr` (fault status register
+incl. user-mode `IPROT`/`DPROT_R` and `DPROT_W`), `mmuvecsplit` (which VECTOR
+each class takes -- `mmufault` and friends route both vectors to one
+EXPEVT-driven handler and so cannot tell), `mmufsr` (fault status register
 and `DPROT_R`/`DPROT_W` discrimination), `mmureloc`/`mmurelocif`/
 `mmurelocbp` (VA→PA relocation for D, I, and the C=0 bypass).*
 
@@ -312,7 +314,9 @@ the design repository's `docs/mmu/security-review.md`.
 | TLB flush → software re-walk | `mmurun` |
 | VA→PA relocation (D / I / C=0 bypass) | `mmureloc`, `mmurelocif`, `mmurelocbp` |
 | Faulting store does not mutate memory | `mmustore` |
-| Per-access fault vectors + EXPEVT/TEA | `mmufault`, `mmuimiss` |
+| Per-access fault cause + EXPEVT/TEA | `mmufault`, `mmuimiss` |
+| Miss vs protection take DIFFERENT vectors (0x400 / 0x100) | `mmuvecsplit` |
+| TLB-miss hot path matches the real linux@jcore handler | `mmubench`, `mmubenchi` + `sim/check_bench_fidelity.sh` |
 | Fault status register (DPROT_R vs DPROT_W discrimination) / fault status latching | `mmufsr` |
 | Privileged-register / instruction trap | `mmureg`, `mmuguard`, `privmode` |
 | SR / bank state on exception entry | `mmusr` |

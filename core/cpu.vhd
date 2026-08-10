@@ -154,6 +154,11 @@ architecture stru of cpu is
   -- conflation was the bug: an I-side MULTI_HIT armed a D-side restore
   -- from a stale shadow because tlb_exc_is_i='0' for it).
   signal tlb_exc_ifetch : std_logic;
+  -- SPIKE ONLY (Task 1) -- deleted in Task 3.
+  signal spike_active : std_logic                    := '0';
+  signal spike_cnt    : std_logic_vector(1 downto 0) := "00";
+  signal spike_done   : std_logic                    := '0'; -- DIAGNOSTIC: one-shot
+  signal dp_db_i      : cpu_data_i_t;
   -- Dynamic delay-slot flag (decode->datapath): lets a delay-slot D-side TLB
   -- fault restart at the branch. Phase-aligned to the EX control in decode.
   signal dslot : std_logic;
@@ -358,7 +363,7 @@ begin
       enter_debug        => enter_debug,
       db_lock            => db_lock,
       db_o               => sig_db_o,
-      db_i               => db_i,
+      db_i               => dp_db_i,
       inst_o             => sig_inst_o,
       inst_i             => inst_i,
       debug_o            => debug_o,
@@ -416,6 +421,14 @@ begin
       ex_if_pc           => dec_ex_if_pc
     );
 
+  -- SPIKE ONLY (Task 1) -- deleted in Task 3.
+  -- Withhold ack from the core while the walker owns the bus. The core keeps
+  -- sig_db_o.en asserted, so the faulting access is held stable and replays
+  -- when ack is restored. Data is passed through unconditionally; only the
+  -- handshake is gated.
+  dp_db_i.d   <= db_i.d;
+  dp_db_i.ack <= db_i.ack and not spike_active;
+
   -- D-store TLB-fault write suppression (J4). A store that misses or
   -- violates the TLB must not mutate memory, but a write acks and commits in the
   -- same cycle the fault is detected combinationally -- one cycle before the
@@ -438,10 +451,63 @@ begin
                                and (tlb_d_hit = '0' or tlb_d_prot = '1') else
                       '0';
 
+  -- SPIKE ONLY (Task 1) -- deleted in Task 3.
+  -- Fake walker: on a D-side TLB miss, hold the external bus for three cycles
+  -- reading a fixed address, then release. Proves the mechanism without an FSM.
+  --
+  -- spike_done makes the takeover ONE-SHOT, and that is the load-bearing
+  -- finding of this spike. Without it the trigger re-arms the cycle after it
+  -- releases -- the miss condition (en=1, tlb_d_hit=0) stays true until an
+  -- entry is installed, and the core cannot install one while its access is
+  -- un-acked -- so the core deadlocks (bus_monitor: "Rd did not see ACK for
+  -- data sram" at the stop time). A takeover of the D bus must therefore be
+  -- self-terminating on the condition that armed it: the real walker must
+  -- install the translation before it releases ack, and must not re-arm on the
+  -- same unresolved miss.
+
+  g_spike : if PRIV_ARCH generate
+
+    process (clk) is
+    begin
+
+      if rising_edge(clk) then
+        if (spike_active = '0') then
+          if (spike_done = '0' and d_at_translated = '1' and sig_db_o.en = '1'
+              and tlb_d_hit = '0' and tlb_d_multihit = '0'
+              and dp_sr.rb = '0') then
+            spike_active <= '1';
+            spike_done   <= '1';
+            spike_cnt    <= "00";
+          end if;
+        else
+
+          case spike_cnt is
+
+            when "00" =>
+
+              spike_cnt <= "01";
+
+            when "01" =>
+
+              spike_cnt <= "10";
+
+            when others =>
+
+              spike_active <= '0';
+
+          end case;
+
+        end if;
+      end if;
+
+    end process;
+
+  end generate g_spike;
+
   g_dstore_squash : if PRIV_ARCH generate
 
     process (sig_db_o, d_store_faulting, d_at_translated, tlb_d_hit,
-             tlb_d_pa, tlb_d_pa12, tlb_d_page_mask) is
+             tlb_d_pa, tlb_d_pa12, tlb_d_page_mask, spike_active) is
 
       variable offm   : std_logic_vector(15 downto 0);
       variable ppn_lo : std_logic_vector(15 downto 0);
@@ -467,6 +533,19 @@ begin
         ppn_lo               := tlb_d_pa & tlb_d_pa12;   -- PPN[27:12]: bit15=PPN[27] .. bit0=PPN[12]
         db_o.a(31 downto 28) <= "0000";
         db_o.a(27 downto 12) <= (ppn_lo and not offm) or (sig_db_o.a(27 downto 12) and offm);
+      end if;
+
+      -- SPIKE ONLY (Task 1) -- deleted in Task 3.
+      -- Walker bus takeover. MUST be last and MUST be on the external db_o:
+      -- the TLB has already consumed sig_db_o by this point. Gating the
+      -- internal sig_db_o here would form the combinational loop described in
+      -- the d_store_faulting comment above.
+      if (spike_active = '1') then
+        db_o.a  <= x"10000000";
+        db_o.en <= '1';
+        db_o.rd <= '1';
+        db_o.wr <= '0';
+        db_o.we <= "0000";
       end if;
 
     end process;

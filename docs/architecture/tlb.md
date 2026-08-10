@@ -16,6 +16,26 @@ hardware block view and synthesis cost see [j4.md](j4.md); the RTL is
 
 ## 1. What the TLB is
 
+> **IN-PROGRESS WORK — read before editing MMU RTL.** A hardware **TSB**
+> walker is being added on branch `mmu/tsb-hw-walker`. It changes a TLB miss
+> from an exception into a pipeline **stall**: on a TSB hit the entry installs
+> and the access replays with **no exception taken at all** (`SPC`, `SSR`,
+> `EXPEVT`, `PTEH`, `TEA`, `MMUFSR` untouched). On a walk failure the
+> exception fires exactly as described in this document.
+>
+> There is still **no hardware page-table walker** — the walker probes the
+> flat TSB hash array only; `pgd`/`pmd`/`pte` stay private to software. That
+> distinction is the point, not a technicality.
+>
+> **Phase 1 (current) keeps today's TSB format** — 16-byte slot, 1-way,
+> `tag_hi`/`tag_lo`/`data` at `+0`/`+4`/`+8` — and **keeps every existing MMU
+> instruction**. The 2-way 32-byte set and the retirement of seven encodings
+> are Phase 2 and Phase 3 and are **not in the tree**. Everything below
+> describes shipped behaviour and stays accurate for the walk-failure path.
+>
+> Design: `../../../docs/superpowers/specs/2026-08-09-hardware-tsb-walker-design.md`.
+> Spec: `../../../docs/mmu/hardware-spec.md` §5.0.
+
 - **32-entry, fully associative, software-loaded.** There is **no hardware
   page-table walker.** On a TLB miss the core raises an exception and a
   privileged software handler reads the page tables / TSB and installs the

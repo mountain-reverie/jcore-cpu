@@ -1,8 +1,8 @@
 ! mmutsb.S -- M5 guard for the TSB hardware pointer assist.
 !
 ! Proves that on a TLB miss, hardware computes the TSB slot pointer
-! (hardware-spec.md §2.6-2.8, §3.2) and exposes it via the new read-only
-! STC TSBPTR,Rn:
+! (hardware-spec.md §2.6-2.8, §3.2) and exposes it via the read-only
+! P4 register TSBPTR (0xFF00001C):
 !
 !   vpn   = faulting_VA[31:12]
 !   hash  = (TSBCFG.HASH_MODE==1) ? vpn ^ (vpn >> TSBCFG.HASH_SHIFT) : vpn
@@ -22,7 +22,7 @@
 ! DMISS_R on VA 0x42000; the handler reads TSBPTR (STC), compares to the
 ! expected 0x00010060, disables AT and writes the test result, then spins.
 !
-! RED before M5: STC TSBPTR (0x004B) is undefined -> garbage compare -> the
+! RED before M5: the hardware TSBPTR (0xFF00001C) is undefined -> garbage compare -> the
 ! handler writes FAIL (or, if it traps, times out). GREEN: TSBPTR == expected.
 !
 ! VBR = _v_load - 0x400 so the DMISS_R vector (VBR+0x400) hits _v_load.
@@ -146,7 +146,8 @@ p_test_result_pass: .long   TEST_PASS_MAGIC
         .balign 4
 _v_load:                                ! = VBR + 0x400
         ! Read hardware-computed TSBPTR and compare to the expected value.
-        .word   0x004B                  ! STC TSBPTR, r0   (read-only, new in M5)
+        mov.l   Htsbptr_a, r0
+        mov.l   @r0, r0                 ! r0 = TSBPTR (read-only P4 alias)
         mov.l   He_tsbptr, r1
         cmp/eq  r0, r1
         bf      _h_bad                  ! TSBPTR mismatch
@@ -179,6 +180,7 @@ Hmmucr:         .long 0xFF000010
 Hresult:        .long TEST_RESULT_ADDRESS
 Hresult_pass:        .long   TEST_PASS_MAGIC
 He_tsbptr:      .long EXPECTED_TSBPTR
+Htsbptr_a:      .long 0xFF00001C
 
         ! Force .text section alignment to 4 KB so `start` is page-aligned
         ! (mapped as one identity page above). The faulting VA 0x42000 is never

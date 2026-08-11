@@ -26,10 +26,10 @@
 ! perturbing the thing being measured.
 !
 ! Overlay .word encodings (assembler does not know these J4 forms):
-!   STC TSBPTR,r0 =0x004B   STC PTEH,r5 =0x058B   STC TSBPTR,r6=0x064B
-!   CMP/EQ PTEH,r1=0x01CB   CMP/EQ ASIDR,r1=0x01DB
+!   (PTEH 0xFF000000  PTEL 0xFF000004  TSBPTR 0xFF00001C  ASIDR 0xFF000038
+!    are read through their read-only P4 aliases, not STC)
 !   LDC r0,ASIDR  =0x407E   LDC r0,PTEL =0x406E
-!   LDC r0,VBR    =0x402E   LDTLB.RN     =0x0078   LDTLB.RN r3 =0x03FB
+!   LDC r0,VBR    =0x402E   LDTLB.RN     =0x0078
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
 
@@ -242,17 +242,23 @@ HP_result: .long TEST_RESULT_ADDRESS
         ! the same [_h_common, _h_slow) symbol pair it uses for mmurun.
 _v_tlb:
 _h_common:
-        .word   0x004B                  ! stc      tsbptr, r0
+        mov.l   H_tsbptr_a, r0
+        mov.l   @r0, r0                 ! r0 = TSBPTR (P4 alias)
         mov.l   @r0+, r1                !          r1 = tag_hi (expected VPN)
-        .word   0x01CB                  ! cmp/eq   pteh, r1
+        mov.l   H_pteh_a, r2
+        mov.l   @r2, r2                 ! r2 = PTEH (P4 alias)
+        cmp/eq  r1, r2          ! tag_hi vs PTEH
         bf      _h_slow
         mov.l   @r0+, r1                !          r1 = tag_lo (expected ASID_TAG)
         mov.l   @r0, r3                 !          r3 = TTE data (PTEL); load-use
                                         !          latency hides behind the ASID
                                         !          compare + bf below
-        .word   0x01DB                  ! cmp/eq   asidr, r1
+        mov.l   H_asidr_a, r2
+        mov.l   @r2, r2                 ! r2 = ASIDR (P4 alias)
+        cmp/eq  r1, r2          ! tag_lo vs ASIDR
         bf      _h_slow
-        .word   0x03FB                  ! ldtlb.rn r3  (PTEL<-r3; install + return)
+        .word   0x436E                  ! LDC r3, PTEL
+        .word   0x0078                  ! LDTLB.RN (install + return)
 
         ! ---- Slow path: call the C walker. Must come IMMEDIATELY after the
         ! fast path, with NO alignment padding: sim/bench_tlb_hotpath.sh
@@ -267,8 +273,10 @@ _h_common:
 _h_slow:
         sts.l   pr, @-r15
         mov.l   H_pgd, r4               ! r4 = pgd (P1)
-        .word   0x058B                  ! STC PTEH, r5   (faulting page VA)
-        .word   0x064B                  ! STC TSBPTR, r6 (TSB slot ptr)
+        mov.l   H_pteh_a, r5
+        mov.l   @r5, r5                 ! r5 = PTEH (faulting page VA)
+        mov.l   H_tsbptr_a, r6
+        mov.l   @r6, r6                 ! r6 = TSBPTR (TSB slot ptr)
         mov.l   H_walk, r7
         jsr     @r7
          nop
@@ -308,5 +316,8 @@ _h_prot:
 H_pgd:    .long 0x80002000
 H_walk:   .long 0x80000000 + ___jcore_tlb_walk  ! P1 alias: walker must run untranslated
 H_mmucr:  .long 0xFF000010
+H_pteh_a:   .long 0xFF000000
+H_tsbptr_a: .long 0xFF00001C
+H_asidr_a:  .long 0xFF000038
 H_result: .long TEST_RESULT_ADDRESS
 #endif

@@ -271,7 +271,7 @@ p_pat_a4:       .long 0x3C3C3C3C
 p_pat_b:        .long 0x7E7E7E7E
 p_notyet:       .long 0x11111111
 p_sent_spc:     .long 0xDEADBE00
-p_walkcnt:      .long 0xABCD0F00        ! cnt_walks(31:16) : cnt_hits(15:0)
+p_walkcnt:      .long 0xFF000054        ! cnt_walks(31:16) : cnt_hits(15:0)
 p_expect_cnt:   .long 0x00020002
 
 #else

@@ -17,8 +17,8 @@
 ! TEST_RESULT codes: 0 PASS ; 1 Rn wrong (double-increment) ; 2 Rm wrong.
 !
 ! Overlay .word encodings (assembler does not know these J4 forms):
-!   STC TSBPTR,r0 =0x004B   STC PTEH,r2 =0x028B   STC ASIDR,r2 =0x02BB
-!   STC PTEH,r5   =0x058B   STC TSBPTR,r6=0x064B
+!   (PTEH 0xFF000000  PTEL 0xFF000004  TSBPTR 0xFF00001C  ASIDR 0xFF000038
+!    are read through their read-only P4 aliases, not STC)
 !   LDC r0,ASIDR  =0x407E   LDC r0,PTEL =0x406E    LDC r3,PTEL =0x436E
 !   LDC r0,VBR    =0x402E   LDTLB.RN     =0x0078
 
@@ -194,13 +194,16 @@ _v_tlb:                                 ! _vbase + 0x400  (all TLB faults)
 
         ! ---- §4.1 hot path (bank-1 scratch; AT stays ON). ----
 _h_common:
-        .word   0x004B                  ! STC TSBPTR, r0
+        mov.l   H_tsbptr_a, r0
+        mov.l   @r0, r0                 ! r0 = TSBPTR (P4 alias)
         mov.l   @r0+, r1                ! tag_hi (expected VPN)
-        .word   0x028B                  ! STC PTEH, r2
+        mov.l   H_pteh_a, r2
+        mov.l   @r2, r2                 ! r2 = PTEH (P4 alias)
         cmp/eq  r1, r2
         bf      _h_slow
         mov.l   @r0+, r1                ! tag_lo (expected ASID_TAG)
-        .word   0x02BB                  ! STC ASIDR, r2
+        mov.l   H_asidr_a, r2
+        mov.l   @r2, r2                 ! r2 = ASIDR (P4 alias)
         cmp/eq  r1, r2
         bf      _h_slow
         mov.l   @r0, r3                 ! TTE Data (PTEL image)
@@ -211,8 +214,10 @@ _h_common:
 _h_slow:
         sts.l   pr, @-r15
         mov.l   H_pgd, r4               ! r4 = pgd (P1)
-        .word   0x058B                  ! STC PTEH, r5   (faulting page VA)
-        .word   0x064B                  ! STC TSBPTR, r6 (TSB slot ptr)
+        mov.l   H_pteh_a, r5
+        mov.l   @r5, r5                 ! r5 = PTEH (faulting page VA)
+        mov.l   H_tsbptr_a, r6
+        mov.l   @r6, r6                 ! r6 = TSBPTR (TSB slot ptr)
         mov.l   H_walk, r7
         jsr     @r7
          nop
@@ -237,5 +242,8 @@ _h_realfault:
 H_pgd:    .long 0x80002000
 H_walk:   .long 0x80000000 + ___jcore_tlb_walk  ! P1 alias: walker runs untranslated
 H_mmucr:  .long 0xFF000010
+H_pteh_a:   .long 0xFF000000
+H_tsbptr_a: .long 0xFF00001C
+H_asidr_a:  .long 0xFF000038
 H_result: .long TEST_RESULT_ADDRESS
 #endif

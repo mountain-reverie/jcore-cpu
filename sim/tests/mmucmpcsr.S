@@ -1,24 +1,26 @@
-! mmucmpcsr.S -- CMP/EQ.PTEH / CMP/EQ.ASID: the fused TLB-miss hot-path tag
-! compares. Each reads an MMU CSR (PTEH / ASIDR) straight onto ybus (the same
-! SEL_MMU source the matching STC uses) and compares it against Rn, setting T --
-! replacing `STC <csr>,Rt; CMP/EQ Rn,Rt` (2 insns + scratch) with one.
+! mmucmpcsr.S -- TLB-miss hot-path tag compares against the MMU CSRs.
 !
-! Verifies, at MD=1 (privileged): a MATCH sets T=1 and a MISMATCH sets T=0, for
-! both PTEH and ASIDR. Non-vacuous by construction (both the T=1 and T=0 arms
-! must hold; a no-op / always-same result fails one of them). On a base decoder
-! without these opcodes the words are illegal -> the guard traps (RED).
+! This guard used to exercise the fused CMP/EQ.PTEH / CMP/EQ.ASID opcodes.
+! Phase 3 retires them (they occupied encodings SH-4A already defines), so the
+! comparison is now expressed the way every user now expresses it: read the CSR
+! through its read-only P4 alias (PTEH 0xFF000000, ASIDR 0xFF000038) and
+! CMP/EQ against Rn.
 !
-! Encodings (jcore MMU space, tail 0011, compare-variant middle nibble):
-!   CMP/EQ.PTEH r1 = 0000 0001 1100 1011 = 0x01CB
-!   CMP/EQ.ASID r1 = 0000 0001 1101 1011 = 0x01DB
+! The assertions are UNCHANGED: at MD=1 (privileged), a MATCH must set T=1 and
+! a MISMATCH must set T=0, for both PTEH and ASIDR. Non-vacuous by construction
+! (both the T=1 and T=0 arms must hold; a no-op / always-same result fails one
+! of them), and each alias read must return the exact value the preceding LDC
+! wrote, so a dead alias fails the match arm.
+!
+! Encodings (assembler does not know the J4 LDC write side):
 !   LDC r0,PTEH = 0x405E   LDC r0,ASIDR = 0x407E
 !
 ! Result codes:
 !   0  pass
-!   1  CMP/EQ.PTEH match did NOT set T
-!   2  CMP/EQ.PTEH mismatch WRONGLY set T
-!   3  CMP/EQ.ASID match did NOT set T
-!   4  CMP/EQ.ASID mismatch WRONGLY set T
+!   1  PTEH match did NOT set T
+!   2  PTEH mismatch WRONGLY set T
+!   3  ASIDR match did NOT set T
+!   4  ASIDR mismatch WRONGLY set T
 
 !
 ! ---- _fail integrity net ----
@@ -57,27 +59,35 @@ ENTRY(start)
         mov.l   p_asid_val, r0
         .word   0x407E                  ! LDC r0, ASIDR
 
-        ! ---- CMP/EQ.PTEH: match -> T=1. ----
+        ! ---- PTEH compare: match -> T=1. ----
         mov.l   p_pteh_val, r1
-        .word   0x01CB                  ! CMP/EQ.PTEH r1  (r1 vs PTEH)
+        mov.l   p_pteh_a, r2
+        mov.l   @r2, r2                 ! r2 = PTEH (P4 alias)
+        cmp/eq  r1, r2
         mov     #1, r9
         bf      _fail                   ! T=0 => fail 1
 
-        ! ---- CMP/EQ.PTEH: mismatch -> T=0. ----
+        ! ---- PTEH compare: mismatch -> T=0. ----
         mov.l   p_pteh_bad, r1
-        .word   0x01CB                  ! CMP/EQ.PTEH r1
+        mov.l   p_pteh_a, r2
+        mov.l   @r2, r2                 ! r2 = PTEH (P4 alias)
+        cmp/eq  r1, r2
         mov     #2, r9
         bt      _fail                   ! T=1 => fail 2
 
-        ! ---- CMP/EQ.ASID: match -> T=1. ----
+        ! ---- ASIDR compare: match -> T=1. ----
         mov.l   p_asid_val, r1
-        .word   0x01DB                  ! CMP/EQ.ASID r1  (r1 vs ASIDR)
+        mov.l   p_asidr_a, r2
+        mov.l   @r2, r2                 ! r2 = ASIDR (P4 alias)
+        cmp/eq  r1, r2
         mov     #3, r9
         bf      _fail                   ! T=0 => fail 3
 
-        ! ---- CMP/EQ.ASID: mismatch -> T=0. ----
+        ! ---- ASIDR compare: mismatch -> T=0. ----
         mov.l   p_asid_bad, r1
-        .word   0x01DB                  ! CMP/EQ.ASID r1
+        mov.l   p_asidr_a, r2
+        mov.l   @r2, r2                 ! r2 = ASIDR (P4 alias)
+        cmp/eq  r1, r2
         mov     #4, r9
         bt      _fail                   ! T=1 => fail 4
 
@@ -90,6 +100,8 @@ p_pteh_val: .long 0x00ABC000            ! a plausible VPN-tag value
 p_pteh_bad: .long 0x00ABD000            ! differs in one VPN bit
 p_asid_val: .long 0x00005678            ! a plausible ASID_TAG value
 p_asid_bad: .long 0x00005679
+p_pteh_a:   .long 0xFF000000
+p_asidr_a:  .long 0xFF000038
 #endif
 
 ENTRY(_done)

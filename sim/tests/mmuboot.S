@@ -165,7 +165,8 @@ kmain:
         ! ---- Verify the installed TSB slot (TSBPTR still points at
         ! va_A's slot -- no further miss has happened yet). AT stays on;
         ! P1 accesses are untranslated regardless. ----
-        stc     tsbptr, r3
+        mov.l   k_tsbptr_a, r3
+        mov.l   @r3, r3                 ! r3 = TSBPTR (P4 alias)
         mov.l   @r3, r2
         mov.l   k_va_a, r1
         cmp/eq  r1, r2 ; mov #2, r9 ; bf _fail
@@ -234,6 +235,7 @@ k_va_b:         .long 0x00200000       ! deliberately unmapped VA (P0)
 
 k_vbr:          .long _vbase
 k_mmucr:        .long 0xFF000010
+k_tsbptr_a:     .long 0xFF00001C
 
 ENTRY(_done)
         mov.l   p_test_result, r0
@@ -266,13 +268,16 @@ _v_tlb:                                 ! _vbase + 0x400 (all TLB faults)
 
         ! ---- hot path: TSB tag match -> just LDTLB.RN. ----
 _h_common:
-        stc     tsbptr, r0
+        mov.l   H_tsbptr_a, r0
+        mov.l   @r0, r0                 ! r0 = TSBPTR (P4 alias)
         mov.l   @r0, r1                 ! tag_hi
-        stc     pteh, r2
+        mov.l   H_pteh_a, r2
+        mov.l   @r2, r2                 ! r2 = PTEH (P4 alias)
         cmp/eq  r1, r2
         bf      _h_slow
         mov.l   @(4,r0), r1             ! tag_lo
-        stc     asidr, r2
+        mov.l   H_asidr_a, r2
+        mov.l   @r2, r2                 ! r2 = ASIDR (P4 alias)
         cmp/eq  r1, r2
         bf      _h_slow
         mov.l   @(8,r0), r3             ! PTEL data
@@ -287,12 +292,14 @@ _h_common:
         ! ---- slow path: only va_A is a known-good install; anything else
         ! is a deliberate miss with no mapping. ----
 _h_slow:
-        stc     pteh, r2
+        mov.l   H_pteh_a, r2
+        mov.l   @r2, r2                 ! r2 = PTEH (P4 alias)
         mov.l   H_va_a, r1
         cmp/eq  r1, r2
         bf      _h_miss
 
-        stc     tsbptr, r0
+        mov.l   H_tsbptr_a, r0
+        mov.l   @r0, r0                 ! r0 = TSBPTR (P4 alias)
         mov.l   H_va_a,  r1 ; mov.l r1, @r0
         mov     #0, r1      ; mov.l r1, @(4,r0)
         mov.l   H_ptel_a, r1 ; mov.l r1, @(8,r0)
@@ -331,3 +338,6 @@ H_va_a:         .long 0x00100000        ! == k_va_a
 H_ptel_a:       .long 0x000710F1        ! == k_ptel_a
 H_rbclear:      .long 0xDFFFFFFF        ! == p_rbclear
 H_after_miss:   .long after_miss
+H_pteh_a:       .long 0xFF000000
+H_tsbptr_a:     .long 0xFF00001C
+H_asidr_a:      .long 0xFF000038

@@ -75,7 +75,8 @@
 !     the handler is kept VA-driven and identical to the rest of the suite.)
 !
 ! Overlay .word encodings (the assembler does not know these J4 forms):
-!   STC PTEH,r1 = 0x018B   LDC r0,VBR  = 0x402E   LDC r0,PTEH  = 0x405E
+!   LDC r0,VBR  = 0x402E   LDC r0,PTEH  = 0x405E   (PTEH is READ via the
+!   read-only P4 alias 0xFF000000, not STC)
 !   LDC r0,PTEL = 0x406E   LDC r0,ASIDR= 0x407E   LDTLB = 0x0038  LDTLB.RN = 0x0078
 !
 ! ---- _fail integrity net ----
@@ -318,7 +319,8 @@ p_test_result_pass: .long TEST_PASS_MAGIC
         .space 0x400, 0
         .balign 4
 _v_shl:
-        .word   0x018B                  ! STC PTEH, r1 -- HW-captured faulting VPN
+        mov.l   Hpteh_a, r1
+        mov.l   @r1, r1                 ! r1 = PTEH (P4 alias) -- HW-captured faulting VPN
         mov.l   Hpagemask, r0
         and     r0, r1                  ! r1 = page base
         ! Layout contract: anything below the data pool is code/stub and must be
@@ -345,6 +347,7 @@ _h_fail_spin:
         nop
         .align 2
 Hpagemask:      .long 0xFFFFF000
+Hpteh_a:        .long 0xFF000000
 Hflags:         .long 0x000000E8
 Hcflags:        .long 0x000000C8
 Hdbase:         .long _dpage_S0

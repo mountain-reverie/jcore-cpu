@@ -9,15 +9,15 @@
 ! this guard used to exercise is unreachable by design once the walker is
 ! mandatory, since it only ever runs from the miss-exception vector. PASS
 ! requires walker_calls==4 (first-touch cold installs), the walker's own
-! cnt_hits counter (P2 debug word 0xABCD0F00, bits 15:0) advancing by exactly
+! cnt_hits counter (P4 counter word 0xFF000054, bits 15:0) advancing by exactly
 ! 4 across the second-touch phase, and all four data readbacks correct (two of
 ! them written by resumed stores -> proves the 0x440 store path end-to-end).
 !
 ! Overlay .word encodings (assembler does not know these J4 forms):
-!   STC TSBPTR,r0 =0x004B   STC PTEH,r2 =0x028B   STC ASIDR,r2 =0x02BB
-!   STC PTEH,r5   =0x058B   STC TSBPTR,r6=0x064B
+!   (PTEH 0xFF000000  PTEL 0xFF000004  TSBPTR 0xFF00001C  ASIDR 0xFF000038
+!    are read through their read-only P4 aliases, not STC)
 !   LDC r0,ASIDR  =0x407E   LDC r0,PTEL =0x406E    LDC r3,PTEL =0x436E
-!   LDC r0,VBR    =0x402E   LDTLB.RN     =0x0078   LDTLB.RN r3 =0x03FB
+!   LDC r0,VBR    =0x402E   LDTLB.RN     =0x0078
 
 !
 ! ---- _fail integrity net ----
@@ -128,7 +128,7 @@ kmain:
         ! ---- Flush the TLB, keep AT on (TI|AT). TSB stays warm. ----
         mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0
 
-        ! ---- Snapshot the walker's cnt_hits (0xABCD0F00[15:0]) baseline
+        ! ---- Snapshot the walker's cnt_hits (0xFF000054[15:0]) baseline
         ! ---- before the warm-TSB second-touch phase: the hardware walker,
         ! ---- not the software §4.1 path, must serve these four misses now. --
         mov.l   k_walkcnt, r0 ; mov.l @r0, r13
@@ -181,7 +181,7 @@ sv_B:      .long 0x5B5B0002
 sv_D:      .long 0x5B5B0004
 k_wcnt:    .long 0x80010D00   ! must match WALKER_CALLS in tlbwalk.c
 k_hcnt:    .long 0x80002E04
-k_walkcnt: .long 0xABCD0F00   ! cpu.vhd P2 debug word: [31:16]=cnt_walks [15:0]=cnt_hits
+k_walkcnt: .long 0xFF000054   ! P4 walker counters: [31:16]=cnt_walks [15:0]=cnt_hits
 k_mask16:  .long 0x0000FFFF
 k_vbr:     .long 0x80000000 + _vbase
 k_tsbbr_a: .long 0xFF000014
@@ -226,17 +226,22 @@ _v_tlb:                                 ! _vbase + 0x400  (all TLB faults)
         bra     _h_common
         nop
 
-        ! ---- §4.1 hot path (bank-1 scratch; AT stays ON). Uses the fused
-        ! CMP/EQ PTEH / CMP/EQ ASIDR tag compares: each reads the CSR onto ybus
-        ! and compares against the loaded tag in one insn, replacing the old
-        ! STC-to-r2 + cmp/eq pair (2 insns + the r2 scratch) per compare. ----
+        ! ---- §4.1 hot path (bank-1 scratch; AT stays ON). PTEH and ASIDR are
+        ! read through their read-only P4 aliases (0xFF000000 / 0xFF000038) and
+        ! compared against the loaded tag; the fused CMP/EQ PTEH / CMP/EQ ASIDR
+        ! opcodes this used to use were retired in Phase 3. ----
 _h_common:
-        .word   0x004B                  ! STC TSBPTR, r0
+        mov.l   H_tsbptr_a, r0
+        mov.l   @r0, r0                 ! r0 = TSBPTR (P4 alias)
         mov.l   @r0+, r1                ! tag_hi (expected VPN)
-        .word   0x01CB                  ! cmp/eq pteh,r1  (r1 vs PTEH)
+        mov.l   H_pteh_a, r2
+        mov.l   @r2, r2                 ! r2 = PTEH (P4 alias)
+        cmp/eq  r1, r2          ! tag_hi vs PTEH
         bf      _h_slow
         mov.l   @r0+, r1                ! tag_lo (expected ASID_TAG)
-        .word   0x01DB                  ! cmp/eq asidr,r1 (r1 vs ASIDR)
+        mov.l   H_asidr_a, r2
+        mov.l   @r2, r2                 ! r2 = ASIDR (P4 alias)
+        cmp/eq  r1, r2          ! tag_lo vs ASIDR
         bf      _h_slow
         mov.l   @r0, r3                 ! TTE Data (PTEL image)
         ! tsb_hits++
@@ -244,14 +249,17 @@ _h_common:
         mov.l   @r4, r5
         add     #1, r5
         mov.l   r5, @r4
-        .word   0x03FB                  ! LDTLB.RN r3  (PTEL<-r3; install + return)
+        .word   0x436E                  ! LDC r3, PTEL
+        .word   0x0078                  ! LDTLB.RN (install + return)
 
         ! ---- Slow path: call the C walker. ----
 _h_slow:
         sts.l   pr, @-r15
         mov.l   H_pgd, r4               ! r4 = pgd (P1)
-        .word   0x058B                  ! STC PTEH, r5   (faulting page VA)
-        .word   0x064B                  ! STC TSBPTR, r6 (TSB slot ptr)
+        mov.l   H_pteh_a, r5
+        mov.l   @r5, r5                 ! r5 = PTEH (faulting page VA)
+        mov.l   H_tsbptr_a, r6
+        mov.l   @r6, r6                 ! r6 = TSBPTR (TSB slot ptr)
         mov.l   H_walk, r7
         jsr     @r7
          nop
@@ -277,5 +285,8 @@ H_hcnt:   .long 0x80002E04
 H_pgd:    .long 0x80002000
 H_walk:   .long 0x80000000 + ___jcore_tlb_walk  ! P1 alias: walker must run untranslated (AT on during handler)
 H_mmucr:  .long 0xFF000010
+H_pteh_a:   .long 0xFF000000
+H_tsbptr_a: .long 0xFF00001C
+H_asidr_a:  .long 0xFF000038
 H_result: .long TEST_RESULT_ADDRESS
 #endif

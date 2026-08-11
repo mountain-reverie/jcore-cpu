@@ -11,7 +11,7 @@
 ! exception entry, unconditionally, before any handler runs).
 !
 ! It also asserts the walker's cnt_hits counter advanced (read back at the
-! debug MMIO word 0xABCD0F00, wired in cpu.vhd Task 4 Step 2), so a walker
+! P4 counter word 0xFF000054), so a walker
 ! that never runs at all cannot pass quietly just because the load data
 ! happens to look right.
 !
@@ -195,7 +195,7 @@ p_testva:       .long 0x00042000
 p_sent_spc:     .long 0xDEADBE00
 p_sent_ssr:     .long 0x40000000
 p_expevt:       .long 0xFF000024
-p_walkcnt:      .long 0xABCD0F00        ! cpu.vhd-local walker counter window (P2)
+p_walkcnt:      .long 0xFF000054        ! walker counter window (P4, RO)
 
 #else
         bra     _done

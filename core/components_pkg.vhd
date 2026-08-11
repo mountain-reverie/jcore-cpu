@@ -542,6 +542,7 @@ package cpu2j0_components_pack is
       install_ptel : out   std_logic_vector(31 downto 0);
       va_r         : out   std_logic_vector(31 downto 0);
       busy         : out   std_logic;
+      arm          : out   std_logic;
       cnt_walks    : out   unsigned(15 downto 0);
       cnt_hits     : out   unsigned(15 downto 0)
     );

@@ -32,7 +32,14 @@ package datapath_pack is
 
   type p4_sel_t is (
     p4_none, p4_mmucr, p4_ttb, p4_tea, p4_tsbbr, p4_tsbcfg, p4_tsbptr, p4_mmufsr,
-    p4_tra, p4_expevt, p4_intevt, p4_tsbslot, p4_tsbvseed, p4_tsbvict
+    p4_tra, p4_expevt, p4_intevt, p4_tsbslot, p4_tsbvseed, p4_tsbvict,
+    -- Phase 3 (Task 1): read-only P4 aliases for the STC-only registers
+    -- PTEH/PTEL/ASIDR, landed ahead of retiring the STC forms (see
+    -- docs/superpowers/specs/2026-08-09-hardware-tsb-walker-design.md P3.1),
+    -- plus the walker counter window's P4 home (P3.2). Both the STC
+    -- read path and these aliases answer simultaneously for now; nothing
+    -- is retired by this change.
+    p4_pteh, p4_ptel, p4_asidr, p4_tsbcnt
   );
 
   function seg_decode (
@@ -196,7 +203,9 @@ package datapath_pack is
       if_fault_cap    : in    std_logic := '0';
       tlb_exc_ifetch  : in    std_logic := '0';
       if_pc           : out   std_logic_vector(31 downto 0);
-      ex_if_pc        : in    std_logic_vector(31 downto 0) := (others => '0')
+      ex_if_pc        : in    std_logic_vector(31 downto 0) := (others => '0');
+      walk_cnt_walks_i : in   std_logic_vector(15 downto 0) := (others => '0');
+      walk_cnt_hits_i  : in   std_logic_vector(15 downto 0) := (others => '0')
     );
   end component datapath;
 

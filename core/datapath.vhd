@@ -147,7 +147,14 @@ entity datapath is
        -- directly (the ma_if_pc MA-launch shadow is dead state -- see
        -- components_pkg.vhd). '0' on non-MMU builds.
        if_pc : out std_logic_vector(31 downto 0);
-       ex_if_pc : in std_logic_vector(31 downto 0) := (others => '0')
+       ex_if_pc : in std_logic_vector(31 downto 0) := (others => '0');
+       -- Walker counters (core/tlb_walk.vhd), read only via the P4
+       -- P4_TSBCNT alias below (Phase 3 Task 1). The counters
+       -- themselves still live in cpu.vhd/tlb_walk.vhd -- this is a
+       -- pass-through read port, not a new copy of the state. '0' on
+       -- non-MMU builds (J1/J2 bit-identical).
+       walk_cnt_walks_i : in std_logic_vector(15 downto 0) := (others => '0');
+       walk_cnt_hits_i : in std_logic_vector(15 downto 0) := (others => '0')
       );
 end entity datapath;
 architecture stru of datapath is
@@ -1657,9 +1664,20 @@ end generate;
                 -- combinational feedback loop (yosys check -assert) on
                 -- datapath.p4_sel_v. P4_NONE is the "no MMU register at this P4
                 -- address" sentinel (falls into the case `others` branch);
-                -- PTEH/PTEL/ASIDR are never P4-MMIO selected (handled via LDC).
+                -- PTEH/PTEL/ASIDR are P4-MMIO selected for READS ONLY (Phase 3
+                -- Task 1); the LDC write path remains their only write path.
                 p4_sel_v := P4_NONE;
-                if ma_ad(7 downto 0) = x"08" then p4_sel_v := P4_TTB;
+                -- PTEH/PTEL/ASIDR read-only aliases (Phase 3 Task 1): stock
+                -- SH-4 offsets for PTEH/PTEL, J-core-chosen 0x38 for ASIDR
+                -- (0x34 stays reserved for the proposed PTEU). These retire
+                -- `STC PTEH,Rn` / `STC PTEL,Rn` / `STC ASIDR,Rn`, but the STC
+                -- forms are NOT removed yet -- both answer simultaneously
+                -- until a later task migrates every caller. Writes are not
+                -- decoded here: LDC remains the only write path (design D7).
+                if ma_ad(7 downto 0) = x"00" then p4_sel_v := P4_PTEH;
+                elsif ma_ad(7 downto 0) = x"04" then p4_sel_v := P4_PTEL;
+                elsif ma_ad(7 downto 0) = x"38" then p4_sel_v := P4_ASIDR;
+                elsif ma_ad(7 downto 0) = x"08" then p4_sel_v := P4_TTB;
                 elsif ma_ad(7 downto 0) = x"0C" then p4_sel_v := P4_TEA;
                 elsif ma_ad(7 downto 0) = x"10" then p4_sel_v := P4_MMUCR;
                 elsif ma_ad(7 downto 0) = x"14" then p4_sel_v := P4_TSBBR;
@@ -1699,6 +1717,13 @@ end generate;
                 -- nomination is exposed; the state itself never is.
                 elsif ma_ad(7 downto 0) = x"4C" then p4_sel_v := P4_TSBVSEED;
                 elsif ma_ad(7 downto 0) = x"50" then p4_sel_v := P4_TSBVICT;
+                -- Walker counters' P4 home (Phase 3 Task 2/P3.2 of the design):
+                -- 0x54 TSBCNT, read-only, [31:16]=cnt_walks [15:0]=cnt_hits,
+                -- same layout as the P2 0xABCD0F00 window it is replacing.
+                -- The P2 window is NOT removed here -- both answer
+                -- simultaneously until Task 4 retargets the guards and Task 5
+                -- removes the old window. Deliberate duplication, not drift.
+                elsif ma_ad(7 downto 0) = x"54" then p4_sel_v := P4_TSBCNT;
                 end if;
               end if;
               if PRIV_ARCH and seg_v = SEG_P4 then
@@ -1753,6 +1778,11 @@ end generate;
                       this.mmu.vlfsr := tsb_lfsr_next(this.mmu.vlfsr);
                       this.m_dr_next := x"0000000" & "000"
                                         & this.mmu.vlfsr(0);
+                    when P4_PTEH => this.m_dr_next := this.mmu.pteh;
+                    when P4_PTEL => this.m_dr_next := this.mmu.ptel;
+                    when P4_ASIDR => this.m_dr_next := this.mmu.asidr;
+                    when P4_TSBCNT =>
+                      this.m_dr_next := walk_cnt_walks_i & walk_cnt_hits_i;
                     -- P4_TSBVSEED is WRITE-ONLY: no read case, so it falls to
                     -- `others` and reads back a hard zero. See the decode.
                     when others => this.m_dr_next := (others => '0');

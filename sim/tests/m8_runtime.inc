@@ -223,13 +223,26 @@ p_test_result_pass: .long   TEST_PASS_MAGIC
 
 #if CONFIG_PRIV_ARCH
         ! ===================== Shared helpers =====================
-        ! _m8_flush: arm a COLD TLB -- MMUCR |= TI (=5) flushes, keeps AT on.
-        !            TI self-clears.  Clobbers r0, r1.
+        ! _m8_flush: arm a COLD TLB -- MMUCR |= TI (=5) flushes, keeps AT on --
+        !            AND zero the 16-entry TSB, so the hardware walker cannot
+        !            resolve the next faulting access from a warm TSB slot left
+        !            behind by an earlier case.  Without this, only case 1 of
+        !            each sub-image ever reaches software: from case 2 on the
+        !            walker installs from the still-warm TSB with M8_FCNT==0,
+        !            and every _m8_fcntchk downstream reports "no fault fired".
+        !            TI self-clears.  Clobbers r0, r1, r2.
         .balign 4
 ENTRY(_m8_flush)
         mov.l   m8_mmucr, r0
         mov     #5, r1                 ! TI(4) | AT(1)
         mov.l   r1, @r0
+        mov.l   m8_tsb, r0
+        mov     #64, r2
+        mov     #0,  r1
+1:      mov.l   r1, @r0
+        add     #4, r0
+        dt      r2
+        bf      1b
         rts
         nop
 
@@ -319,6 +332,7 @@ m8_fcnt_p: .long M8_FCNT
 
         .align 2
 m8_mmucr:  .long 0xFF000010
+m8_tsb:    .long 0x80010C00
 m8_snapa:  .long SNAP_A
 m8_snapb:  .long SNAP_B
 m8_result: .long TEST_RESULT_ADDRESS

@@ -47,10 +47,22 @@ hardware block view and synthesis cost see [j4.md](j4.md); the RTL is
 > distribution; that is all it does. The isolation mechanism is per-domain TSB
 > partitioning via `TSBBR` (`docs/mmu/hardware-spec.md` §2.13a).
 >
-> **Still Phase 3, still not in the tree:** the retirement of the seven MMU
-> encodings. **Every existing MMU instruction still exists and still works.**
-> Everything below describes shipped behaviour and stays accurate for the
-> walk-failure path.
+> **Phase 3 IS NOW IN THIS BRANCH.** The seven MMU encodings are **retired**:
+> `STC {TSBPTR,PTEH,PTEL,ASIDR},Rn`, `CMP/EQ {PTEH,ASIDR},Rn` and
+> `LDTLB.RN Rm` all decode to **General Illegal**. `LDTLB` (`0x0038`) and the
+> parameterless `LDTLB.RN` (`0x0078`) survive, as do the three
+> `LDC Rm,{PTEH,PTEL,ASIDR}` writes (design D7 — the write side has no MMIO
+> equivalent). The CSRs are now **read** through read-only P4 aliases: `PTEH`
+> `0xFF000000`, `PTEL` `0xFF000004`, `ASIDR` `0xFF000038`, `TSBPTR`
+> `0xFF00001C`. The walker's `cnt_walks`/`cnt_hits` counters moved to P4
+> `0xFF000054` (and are guest-observable — see
+> `../../../docs/hypervisor/design-spec.md` §6). The encoding family
+> `0000 nnnn xxxx 1011` is empty: **8 free slots, all virgin.** Anything below
+> that still shows a retired mnemonic is describing history, not the ISA.
+>
+> **Fmax:** Phase 3 repaid +10.3 % (25.82 → 28.49 MHz), leaving −6.1 % against
+> the pre-walker 30.34 MHz — see [j4.md](j4.md), "Fmax: the hardware TSB
+> walker, measured". The gain was **congestion relief, not logic depth**.
 >
 > Design: `../../../docs/superpowers/specs/2026-08-09-hardware-tsb-walker-design.md`.
 > Spec: `../../../docs/mmu/hardware-spec.md` §5.0, §2.8, §2.8a, §2.12, §2.13.

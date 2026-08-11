@@ -135,6 +135,8 @@ kmain:
         mov.l   k_mmucr, r0 ; mov #1, r1 ; mov.l r1, @r0
 
         ! ================= COLD IMISS: run instructions from the page =========
+! Phase brackets for sim/bench_tlb_hotpath.sh (labels only; no code emitted).
+ENTRY(_bench_cold_start)
         mov.l   va_code, r0            ! 0x00100000
         jmp     @r0                    ! cold IMISS -> handler -> install -> resume
         nop
@@ -158,6 +160,7 @@ ENTRY(_after_ifetch)
         mov.l   k_scratch, r1 ; mov.l r1, @(12,r0)            ! ctl[3] = result=scratch
         mov.l   p_after2, r1 ; mov.l r1, @(16,r0)             ! ctl[4] = _after_ifetch2
         mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0        ! flush TLB, AT+TSB warm
+ENTRY(_bench_warm_start)
         mov.l   va_code, r0
         jmp     @r0                                            ! warm IMISS -> hot path
         nop

@@ -61,6 +61,15 @@ ENTRY(_m8_run_all)
         ! for the nine faultgen-emitted sites, which this hand-written one was
         ! never given. Called through the P1 alias like every other runtime
         ! helper here, so it cannot itself fault on a cold TLB. ----
+        ! r5 is _m8_fcntchk's failure-ID argument (see m8_runtime.inc): on
+        ! "count == 0" it falls into _m8_cmp_fail, which stores r5 to
+        ! TEST_RESULT_ADDRESS. This hand-written call site never set it, so the
+        ! no-fault failure stored an UNINITIALISED register -- 'U' at the SRAM,
+        ! which the co-sim memory model rejects ("invalid write data" ->
+        ! "Bus exception"), never acks, and so wedges the core in an ACK timeout
+        ! instead of reporting a result. The assertion itself is unchanged; this
+        ! only makes its failure legible. Code 3 (2 is _ms_fail's).
+        mov     #3, r5
         mov.l   ms_fcntchk, r3
         jsr     @r3
         nop

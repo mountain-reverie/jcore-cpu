@@ -1354,12 +1354,14 @@ end generate;
             -- the TSB slot for the faulting VPN and latch it into TSBPTR (read-
             -- only via STC TSBPTR / MMIO 0xFF00001C).
             -- vpn = faulting_VA[31:12] (4 KB page number)
-            -- hash = HASH_MODE=1 ? vpn xor (vpn >> HASH_SHIFT) : vpn
+            -- hash = (HASH_MODE=1 ? vpn xor (vpn >> HASH_SHIFT) : vpn)
+            -- xor amix(ASID) -- see tsb_ptr() in datapath_pkg
             -- mask = (1 << TSB_SIZE_LOG) - 1
             -- TSBPTR = (TSBBR and not 0xF) or ((hash and mask) << 4)
             -- TSBBR[N+3:4] are reserved-0 so clearing the low nibble and ORing
             -- the 16-byte-scaled index suffices (no variable base mask needed).
-            this.mmu.tsbptr := tsb_ptr(tlb_fault_va, this.mmu.tsbcfg, this.mmu.tsbbr);
+            this.mmu.tsbptr := tsb_ptr(tlb_fault_va, this.mmu.tsbcfg, this.mmu.tsbbr,
+                                       this.mmu.asidr(15 downto 0));
             -- EXPEVT is NOT written here: the fault cause is latched via a
             -- slot-gated sr="EXPEVT" microcode write in the TLB exception
             -- handler microcode (exceptions.toml), mirroring TRAPA/Error, so
@@ -1421,7 +1423,8 @@ end generate;
             -- it the handler's hot path has no TSBPTR for an I-fetch fault and
             -- every code-page miss falls through to the slow walker (measured:
             -- sim/tests/mmuirun.S tsb_hits went 2 -> 0).
-            this.mmu.tsbptr := tsb_ptr(this.if_pc, this.mmu.tsbcfg, this.mmu.tsbbr);
+            this.mmu.tsbptr := tsb_ptr(this.if_pc, this.mmu.tsbcfg, this.mmu.tsbbr,
+                                            this.mmu.asidr(15 downto 0));
             this.if_exc_captured := '1';
             -- The D-side @Rn+/@-Rn base restore is NOT armed: ma_numz/ma_autoupd/
             -- ma_predec still hold the last memory instruction's state and are
@@ -1721,7 +1724,8 @@ end generate;
                     when P4_TSBSLOT =>
                       this.m_dr_next := tsb_ptr(this.mmu.tsbslot_va,
                                                 this.mmu.tsbcfg,
-                                                this.mmu.tsbbr);
+                                                this.mmu.tsbbr,
+                                                this.mmu.asidr(15 downto 0));
                     when others => this.m_dr_next := (others => '0');
                   end case;
                   this.m_en := '1';

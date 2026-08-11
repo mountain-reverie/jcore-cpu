@@ -13,7 +13,7 @@
 ! and compares against the register's answer.
 !
 !   vpn  = VA >> 12
-!   hash = vpn xor (vpn >> HASH_SHIFT)
+!   hash = (vpn xor (vpn >> HASH_SHIFT)) xor amix(ASID)   [amix(0) == 0]
 !   idx  = hash and ((1 << TSB_SIZE_LOG) - 1)
 !   slot = (TSBBR and not 0xF) or (idx << 4)
 !
@@ -54,6 +54,17 @@ ENTRY(start)
         mov.l   p_tsbcfg_addr, r0
         mov.l   p_tsbcfg_val, r1
         mov.l   r1, @r0
+
+        ! ---- ASID is folded into the index (datapath_pkg tsb_ptr(), Phase-2
+        ! ---- Task 3), so the expectations below are only meaningful for a
+        ! ---- KNOWN ASID. Pin it to 0, for which amix == 0 and the formula in
+        ! ---- the header reduces to the pre-fold one -- which is why all five
+        ! ---- expected values are unchanged by that task. mmuwalkasid.S is the
+        ! ---- guard that covers non-zero ASIDs.
+        mov     #0, r0
+        .word   0x407E                  ! LDC R0,ASIDR
+        nop
+        nop
 
         mov.l   p_slot_reg, r8          ! r8 = &JCORE_TSB_SLOT, kept live
 

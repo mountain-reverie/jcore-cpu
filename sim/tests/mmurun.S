@@ -4,8 +4,13 @@
 ! handler never faults and a TLB flush never evicts code. Four P0 pages are
 ! translated. First touch -> TLB miss + cold-TSB miss -> C walker installs into
 ! TSB+TLB (walker_calls++). MMUCR.TI flush evicts the TLB, TSB stays warm, so
-! the second touch hits the §4.1 asm hot path (tsb_hits++). PASS requires
-! walker_calls==4, tsb_hits==4, and all four data readbacks correct (two of
+! the second touch is now resolved by the HARDWARE TSB walker (core/tlb_walk.vhd)
+! stalling-and-walking with no exception at all -- the §4.1 software hot path
+! this guard used to exercise is unreachable by design once the walker is
+! mandatory, since it only ever runs from the miss-exception vector. PASS
+! requires walker_calls==4 (first-touch cold installs), the walker's own
+! cnt_hits counter (P2 debug word 0xABCD0F00, bits 15:0) advancing by exactly
+! 4 across the second-touch phase, and all four data readbacks correct (two of
 ! them written by resumed stores -> proves the 0x440 store path end-to-end).
 !
 ! Overlay .word encodings (assembler does not know these J4 forms):
@@ -122,7 +127,13 @@ kmain:
         ! ---- Flush the TLB, keep AT on (TI|AT). TSB stays warm. ----
         mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0
 
-        ! ================= SECOND TOUCHES (4 TSB hot-path hits) ==============
+        ! ---- Snapshot the walker's cnt_hits (0xABCD0F00[15:0]) baseline
+        ! ---- before the warm-TSB second-touch phase: the hardware walker,
+        ! ---- not the software §4.1 path, must serve these four misses now. --
+        mov.l   k_walkcnt, r0 ; mov.l @r0, r13
+        mov.l   k_mask16,  r1 ; and    r1, r13
+
+        ! ================= SECOND TOUCHES (4 hardware TSB-walk hits) =========
         mov.l   va_A, r0 ; mov.l @r0, r8           ! A: load (recheck seed)
         mov.l   va_B, r0 ; mov.l @r0, r12          ! B: load -- r12, NOT r9: the verify reuses r9 as its fail-code register (mov #1,r9 on the A line below), which would clobber the B readback before line 127 compares it
         mov.l   va_C, r0 ; mov.l @r0, r10          ! C: load
@@ -137,7 +148,11 @@ kmain:
         mov.l   v_seedC, r1 ; cmp/eq r1, r10 ; mov #3, r9 ; bf _fail
         mov.l   sv_D,    r1 ; cmp/eq r1, r11 ; mov #4, r9 ; bf _fail
         mov.l   k_wcnt, r0 ; mov.l @r0, r2 ; mov #4, r3 ; cmp/eq r3, r2 ; mov #5, r9 ; bf _fail
-        mov.l   k_hcnt, r0 ; mov.l @r0, r2 ; mov #4, r3 ; cmp/eq r3, r2 ; mov #6, r9 ; bf _fail
+        ! ---- Walker cnt_hits must have advanced by exactly 4 over the
+        ! ---- second-touch phase: proof the hardware walker (not a software
+        ! ---- handler that can no longer even be reached) served the hits. --
+        mov.l   k_walkcnt, r0 ; mov.l @r0, r2 ; mov.l k_mask16, r3 ; and r3, r2
+        sub     r13, r2 ; mov #4, r3 ; cmp/eq r3, r2 ; mov #6, r9 ; bf _fail
         mov     #0, r9
         bra     _done
         nop
@@ -165,6 +180,8 @@ sv_B:      .long 0x5B5B0002
 sv_D:      .long 0x5B5B0004
 k_wcnt:    .long 0x80010D00   ! must match WALKER_CALLS in tlbwalk.c
 k_hcnt:    .long 0x80002D04
+k_walkcnt: .long 0xABCD0F00   ! cpu.vhd P2 debug word: [31:16]=cnt_walks [15:0]=cnt_hits
+k_mask16:  .long 0x0000FFFF
 k_vbr:     .long 0x80000000 + _vbase
 k_tsbbr_a: .long 0xFF000014
 v_tsbbr:   .long 0x80002C04

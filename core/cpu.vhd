@@ -85,7 +85,6 @@ architecture stru of cpu is
   signal sig_inst_o : cpu_instruction_o_t;
   -- Datapath MMU state exported for TLB (PRIV_ARCH only; tied-off otherwise).
   signal dp_mmu_regs : mmu_reg_t;
-  signal dp_tlb_ptel : std_logic_vector(31 downto 0);
   signal dp_sr       : sr_t;
   -- TLB output signals (Task 8 will consume hit/prot; mmu_o carries PA tags out).
   signal tlb_i_hit      : std_logic;
@@ -200,11 +199,6 @@ architecture stru of cpu is
   signal walk_side_i    : std_logic;
   signal walk_cnt_walks : unsigned(15 downto 0);
   signal walk_cnt_hits  : unsigned(15 downto 0);
-  -- Walker counter readback at 0xFF000F00. Debug scaffolding for the
-  -- anti-vacuity guards; removed with MMU_WALKER in Phase 3. Decoded here
-  -- rather than in datapath.vhm so no new datapath port is needed.
-  signal walk_cnt_sel  : std_logic;
-  signal walk_cnt_word : std_logic_vector(31 downto 0);
   -- TLB install-port muxes: LDTLB (decoder) or hardware walker.
   signal tlb_wr_any  : std_logic;
   signal tlb_ptel_mx : std_logic_vector(31 downto 0);
@@ -451,7 +445,6 @@ begin
       cop_o              => cop_o,
       priv_o             => priv_o,
       mmu_regs_o         => dp_mmu_regs,
-      tlb_ptel_o         => dp_tlb_ptel,
       sr_o               => dp_sr,
       tlb_squash_o       => dp_tlb_squash,
       tlb_exc_pend       => tlb_exc_pend,
@@ -469,41 +462,21 @@ begin
       tlb_exc_ifetch     => tlb_exc_ifetch,
       if_pc              => dp_if_pc,
       ex_if_pc           => dec_ex_if_pc,
-      -- Walker counters' P4 alias (Phase 3 Task 1, P4_TSBCNT at 0xFF000054):
-      -- pass the same signals the P2 0xABCD0F00 window below reads.
-      walk_cnt_walks_i   => std_logic_vector(walk_cnt_walks),
-      walk_cnt_hits_i    => std_logic_vector(walk_cnt_hits)
+      -- Walker counters' P4 alias (P4_TSBCNT at 0xFF000054).
+      walk_cnt_walks_i => std_logic_vector(walk_cnt_walks),
+      walk_cnt_hits_i  => std_logic_vector(walk_cnt_hits)
     );
 
   -- Withhold ack from the core while the walker owns the bus. The core keeps
   -- sig_db_o.en asserted, so the faulting access is held stable and replays
   -- when ack is restored. Data is passed through unconditionally; only the
   -- handshake is gated.
-  -- Walker counter readback. Debug scaffolding for the anti-vacuity guards;
-  -- removed with MMU_WALKER in Phase 3.
-  --
-  -- The brief placed this in the MMU block's reserved P4 range, but P4 is not
-  -- reachable from here: datapath.vhm absorbs the WHOLE of SEG_P4 internally
-  -- ("no bus transaction is issued") and injects its own read result, so a P4
-  -- address never appears on sig_db_o at all and an unmatched one reads back a
-  -- hard zero. Exposing the counters at a P4 address therefore needs a new
-  -- datapath port and a wider p4_sel_t -- exactly what the brief wanted to
-  -- avoid. So the window sits in P2 instead (untranslated, uncached, and it
-  -- DOES go out on the data bus, which is how the sim result MMIO at
-  -- 0xBCDE0010 works). cpu.vhd decodes it, supplies the data and the ack, and
-  -- withholds db_o.en so the memory model never sees an address it cannot
-  -- decode.
-  walk_cnt_sel <= '1' when priv_arch and mmu_walker
-                           and sig_db_o.en = '1' and sig_db_o.rd = '1'
-                           and sig_db_o.a = x"ABCD0F00" else
-                  '0';
-
-  walk_cnt_word <= std_logic_vector(walk_cnt_walks) &
-                   std_logic_vector(walk_cnt_hits);
-
-  dp_db_i.d   <= walk_cnt_word when walk_cnt_sel = '1' else
-                 db_i.d;
-  dp_db_i.ack <= (db_i.ack or walk_cnt_sel) and not walk_busy;
+  -- The walker counters are read through their P4 alias (P4_TSBCNT,
+  -- 0xFF000054), served inside datapath.vhm from walk_cnt_walks_i /
+  -- walk_cnt_hits_i above. The old P2 debug window at 0xABCD0F00 that decoded
+  -- them here has been retired.
+  dp_db_i.d   <= db_i.d;
+  dp_db_i.ack <= db_i.ack and not walk_busy;
 
   -- Stall the I-FETCH for exactly as long as its own miss exception is
   -- suppressed. walk_supp_i is the single source of truth for "the I-side miss
@@ -785,7 +758,7 @@ begin
 
     process (sig_db_o, d_store_faulting, d_at_translated, tlb_d_hit,
              tlb_d_pa, tlb_d_pa12, tlb_d_page_mask,
-             walk_own, walk_bus_a, walk_bus_en, walk_cnt_sel) is
+             walk_own, walk_bus_a, walk_bus_en) is
 
       variable offm   : std_logic_vector(15 downto 0);
       variable ppn_lo : std_logic_vector(15 downto 0);
@@ -811,14 +784,6 @@ begin
         ppn_lo               := tlb_d_pa & tlb_d_pa12;   -- PPN[27:12]: bit15=PPN[27] .. bit0=PPN[12]
         db_o.a(31 downto 28) <= "0000";
         db_o.a(27 downto 12) <= (ppn_lo and not offm) or (sig_db_o.a(27 downto 12) and offm);
-      end if;
-
-      -- The walker-counter debug window is served entirely inside cpu.vhd
-      -- (data and ack, above). Keep it off the external bus so the memory
-      -- model is never asked to decode it.
-      if (walk_cnt_sel = '1') then
-        db_o.en <= '0';
-        db_o.rd <= '0';
       end if;
 
       -- Walker bus takeover. MUST be last and MUST be on the external db_o:
@@ -910,7 +875,7 @@ begin
     -- TLB install port: LDTLB (decoder) or the hardware walker.
     tlb_wr_any  <= sr.tlb_wr or walk_install;
     tlb_ptel_mx <= walk_ptel when walk_install = '1' else
-                   dp_tlb_ptel;
+                   dp_mmu_regs.ptel;
     -- On a walker install PTEH has NOT been written (no exception was taken),
     -- so the TLB's VPN input must come from the faulting VA instead of the CSR
     -- -- and specifically from the walker's LATCHED copy of it (walk_va_r), not

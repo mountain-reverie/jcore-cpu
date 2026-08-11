@@ -72,13 +72,6 @@ entity datapath is
        cop_o : out cop_o_t;
        priv_o : out cpu_priv_o_t := NULL_PRIV_O; -- SH-4 EXPEVT/INTEVT/TRA (J4)
        mmu_regs_o : out mmu_reg_t := MMU_REG_RESET; -- MMU CSRs for TLB (J4)
-       -- PTEL value the TLB actually installs on tlb_wr. Normally the
-       -- PTEL CSR, but LDTLB.RN Rm drives it straight from XBUS so it
-       -- need not spend a slot staging PTEL := Rm first. Combinational
-       -- on purpose: the TLB write happens in the SAME cycle, so a flop
-       -- here would install the previous value. (J4); tied to the CSR
-       -- on any build without PRIV_ARCH.
-       tlb_ptel_o : out std_logic_vector(31 downto 0) := (others => '0');
        sr_o : out sr_t; -- committed SR for TLB md bit
        -- Accumulate-squash export: the registered tlb_squash (armed on the
        -- first fault cycle, held until handler entry SR.RB='1') gates the MAC
@@ -1717,12 +1710,10 @@ end generate;
                 -- nomination is exposed; the state itself never is.
                 elsif ma_ad(7 downto 0) = x"4C" then p4_sel_v := P4_TSBVSEED;
                 elsif ma_ad(7 downto 0) = x"50" then p4_sel_v := P4_TSBVICT;
-                -- Walker counters' P4 home (Phase 3 Task 2/P3.2 of the design):
-                -- 0x54 TSBCNT, read-only, [31:16]=cnt_walks [15:0]=cnt_hits,
-                -- same layout as the P2 0xABCD0F00 window it is replacing.
-                -- The P2 window is NOT removed here -- both answer
-                -- simultaneously until Task 4 retargets the guards and Task 5
-                -- removes the old window. Deliberate duplication, not drift.
+                -- Walker counters' P4 home: 0x54 TSBCNT, read-only,
+                -- [31:16]=cnt_walks [15:0]=cnt_hits. This is the ONLY way to
+                -- read the counters; the earlier P2 debug window at
+                -- 0xABCD0F00 has been retired.
                 elsif ma_ad(7 downto 0) = x"54" then p4_sel_v := P4_TSBCNT;
                 end if;
               end if;
@@ -2017,7 +2008,6 @@ end generate;
  priv_o.tra <= priv_regs.tra when PRIV_ARCH else (others => '0');
  -- Export MMU CSRs and committed SR for TLB use in cpu.vhd (PRIV_ARCH).
  mmu_regs_o <= mmu_regs;
- tlb_ptel_o <= xbus when (PRIV_ARCH and sr_ctrl.tlb_wr_x = '1') else mmu_regs.ptel;
  sr_o <= sr;
  tlb_squash_r <= this_r.tlb_squash when PRIV_ARCH else '0';
  -- SINGLE SOURCE OF TRUTH for "the precise-exception squash arms on this

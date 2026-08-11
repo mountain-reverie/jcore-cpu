@@ -711,19 +711,14 @@ var csvInstrOrder = []string{
 	"STC EXPEVT, Rn",
 	"STC INTEVT, Rn",
 	"STC TRA, Rn",
-	// MMU control-register instructions (J4 overlay):
+	// MMU control-register instructions (J4 overlay). Write side only: the
+	// STC/CMP-EQ read forms and LDTLB.RN Rm were retired with the software
+	// TLB-miss hot path, and the CSRs are read through their P4 aliases.
 	"LDC Rm, PTEH",
-	"STC PTEH, Rn",
 	"LDC Rm, PTEL",
-	"STC PTEL, Rn",
 	"LDC Rm, ASIDR",
-	"STC ASIDR, Rn",
-	"CMP/EQ PTEH, Rn",
-	"CMP/EQ ASIDR, Rn",
-	"STC TSBPTR, Rn",
 	"LDTLB",
 	"LDTLB.RN",
-	"LDTLB.RN Rm",
 	// SH-2A two-word overlay (spec/sh2a, generate-j2a only): ignored by
 	// base J2 and J4 generation (not in their specs).
 	"MOV.L @(disp12,Rm),Rn",

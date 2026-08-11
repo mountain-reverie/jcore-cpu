@@ -187,20 +187,10 @@ func AssignSlot(instr spec.Instr, slot spec.Slot) (AssignMap, error) {
 	}
 
 	// --- tlb_wr ---
-	// LDTLB: pulse the TLB write port for one cycle in EX stage.
-	//
-	// tlb_wr = "XBUS" additionally sources the installed PTEL from XBUS
-	// instead of the PTEL CSR flop. That exists for LDTLB.RN Rm, whose hot
-	// path already holds the TTE in a GPR: without it the instruction must
-	// burn a whole slot staging `PTEL := Rm` before it may assert tlb_wr,
-	// because the TLB's ptel port is wired to the CSR. The register file has
-	// two read ports and the install slot only uses one (ybus <- SSR), so Rm
-	// rides the free xbus port and the two slots become one.
+	// LDTLB: pulse the TLB write port for one cycle in EX stage. The install
+	// data always comes from the PTEH/PTEL/ASIDR CSR flops.
 	if v := slot["tlb_wr"]; v != "" {
 		out[SigTlbWr] = "1"
-		if strings.ToUpper(v) == "XBUS" {
-			out[SigTlbWrX] = "1"
-		}
 	}
 
 	// --- memory access ---

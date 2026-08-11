@@ -250,7 +250,6 @@ func newStaticPackage() *Package {
 					{Names: []string{"mmu_reg_wr"}, Type: "std_logic"},
 					{Names: []string{"mmu_reg_sel"}, Type: "mmu_reg_sel_t"},
 					{Names: []string{"tlb_wr"}, Type: "std_logic"},
-					{Names: []string{"tlb_wr_x"}, Type: "std_logic"},
 				},
 			},
 			{
@@ -281,7 +280,6 @@ func newStaticPackage() *Package {
 					{Names: []string{"mmu_reg_wr"}, Type: "std_logic"},
 					{Names: []string{"mmu_reg_sel"}, Type: "mmu_reg_sel_t"},
 					{Names: []string{"tlb_wr"}, Type: "std_logic"},
-					{Names: []string{"tlb_wr_x"}, Type: "std_logic"},
 				},
 			},
 			{

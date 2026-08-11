@@ -1,22 +1,31 @@
-! mmup4alias.S -- Phase 3 Task 1: prove the new read-only P4 aliases return
-! the SAME value as their STC counterpart, and that the walker-counter P4
-! alias (0xFF000054) mirrors the P2 debug window (0xABCD0F00).
+! mmup4alias.S -- the read-only P4 MMU-CSR aliases are the ONLY way to read
+! PTEH/PTEL/ASIDR and the walker counters, so this guard proves each alias
+! returns live CSR state.
 !
-! This is the ONLY window in which the alias-vs-STC comparison is possible:
-! Task 4 of this phase retires the STC PTEH/PTEL/ASIDR forms, after which the
-! oracle this guard uses is gone. See docs/superpowers/specs/
-! 2026-08-09-hardware-tsb-walker-design.md P3.1/P3.2 and
-! .superpowers/sdd/2026-08-11-tsb-walker-phase3/task-1-brief.md.
+! ORIGINALLY this compared every alias against its `STC <csr>,Rn` counterpart,
+! and the walker-counter alias (0xFF000054) against the P2 debug window
+! (0xABCD0F00). Both oracles were retired in the same commit as this rewrite:
+! the STC MMU-read encodings and the P2 window are gone, and the aliases are
+! now the sole readers. The comparison is therefore no longer expressible.
+!
+! What replaces it is a WRITE-THEN-READ oracle, which needs no second reader:
+! drive the CSR through LDC (a distinct, non-trivial bit pattern per register)
+! and require the alias to return exactly that value. That still catches the
+! defects the STC comparison caught -- a mis-decoded P4 offset, an alias wired
+! to the wrong CSR, a latched-instead-of-live read -- because the three values
+! are mutually distinct, so any cross-wiring reads back another register's
+! pattern. The counter alias keeps a before/after-a-real-walk check, which is
+! what proved it live rather than a snapshot.
 !
 ! Checks:
-!   1  0xFF000000 (PTEH alias)  != STC PTEH,Rn
-!   2  0xFF000004 (PTEL alias)  != STC PTEL,Rn
-!   3  0xFF000038 (ASIDR alias) != STC ASIDR,Rn
-!   4  0xFF000054 (TSBCNT alias) != 0xABCD0F00 (P2 window) BEFORE any walk
-!   5  walk counter word never advanced -> the walk that should bump it for
-!      check 6 did not happen (setup defect, not the aliasing under test)
-!   6  0xFF000054 (TSBCNT alias) != 0xABCD0F00 (P2 window) AFTER a real walk
-!      (proves the alias tracks live counter state, not a latched snapshot)
+!   1  0xFF000000 (PTEH alias)  != the value LDC wrote to PTEH
+!   2  0xFF000004 (PTEL alias)  != the value LDC wrote to PTEL
+!   3  0xFF000038 (ASIDR alias) != the value LDC wrote to ASIDR
+!   4  0xFF000054 (TSBCNT alias) nonzero BEFORE any walk (must start clean)
+!   5  0xFF000054 (TSBCNT alias) still zero AFTER a walk -> the walk that
+!      should bump it did not happen (setup defect, not the aliasing)
+!   6  0xFF000000 (PTEH alias) does not reflect the LAST LDC PTEH write
+!      (the walk sequence rewrote PTEH; proves the alias is live, not latched)
 #include "sim_instr.h"
 #include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -54,42 +63,37 @@ ENTRY(start)
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
-        ! ================= 1: PTEH alias vs STC ==========================
+        ! ================= 1: PTEH alias vs the value LDC wrote ==========
         mov.l   p_pteh_val, r0
         .word   0x405E                  ! LDC r0, PTEH
-        .word   0x018B                  ! STC PTEH, r1   (0000 0001 1000 1011)
         mov.l   p_pteh_alias, r2
         mov.l   @r2, r3
-        cmp/eq  r1, r3
+        cmp/eq  r0, r3
         mov     #1, r9
         bf      _fail_at
 
-        ! ================= 2: PTEL alias vs STC ==========================
+        ! ================= 2: PTEL alias vs the value LDC wrote ==========
         mov.l   p_ptel_val, r0
         .word   0x406E                  ! LDC r0, PTEL
-        .word   0x019B                  ! STC PTEL, r1   (0000 0001 1001 1011)
         mov.l   p_ptel_alias, r2
         mov.l   @r2, r3
-        cmp/eq  r1, r3
+        cmp/eq  r0, r3
         mov     #2, r9
         bf      _fail_at
 
-        ! ================= 3: ASIDR alias vs STC ==========================
+        ! ================= 3: ASIDR alias vs the value LDC wrote =========
         mov.l   p_asidr_val, r0
         .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x01BB                  ! STC ASIDR, r1  (0000 0001 1011 1011)
         mov.l   p_asidr_alias, r2
         mov.l   @r2, r3
-        cmp/eq  r1, r3
+        cmp/eq  r0, r3
         mov     #3, r9
         bf      _fail_at
 
-        ! ================= 4: TSBCNT alias vs P2 window (before) =========
-        mov.l   p_walkcnt_p2, r0
-        mov.l   @r0, r1
+        ! ================= 4: TSBCNT alias reads clean before any walk ====
         mov.l   p_walkcnt_p4, r0
-        mov.l   @r0, r2
-        cmp/eq  r1, r2
+        mov.l   @r0, r1
+        tst     r1, r1
         mov     #4, r9
         bf      _fail_at
 
@@ -132,18 +136,21 @@ ENTRY(start)
         mov.l   r1, @r0                 ! AT off
 
         ! ================= 5: the walk must have actually run =============
-        mov.l   p_walkcnt_p2, r0
+        ! The counter alias is the only reader; a still-zero word means no walk
+        ! happened, which would make check 4 vacuous.
+        mov.l   p_walkcnt_p4, r0
         mov.l   @r0, r1
         tst     r1, r1
         mov     #5, r9
         bt      _fail_at
 
-        ! ================= 6: TSBCNT alias vs P2 window (after) ==========
-        mov.l   p_walkcnt_p2, r0
+        ! ================= 6: PTEH alias is live, not a latched snapshot ==
+        ! The walk sequence above did `LDC r0, PTEH` with p_pteh_code. If the
+        ! alias were latched at check 1 it would still return p_pteh_val.
+        mov.l   p_pteh_alias, r0
         mov.l   @r0, r1
-        mov.l   p_walkcnt_p4, r0
-        mov.l   @r0, r2
-        cmp/eq  r1, r2
+        mov.l   p_pteh_code, r2
+        cmp/eq  r2, r1
         mov     #6, r9
         bf      _fail_at
 
@@ -165,7 +172,6 @@ p_ptel_val:      .long 0x000067E9
 p_ptel_alias:    .long 0xFF000004
 p_asidr_val:     .long 0x000000AB
 p_asidr_alias:   .long 0xFF000038
-p_walkcnt_p2:    .long 0xABCD0F00
 p_walkcnt_p4:    .long 0xFF000054
 p_pteh_code:     .long start
 p_ptel_code:     .long start + 0x000000C8 ! identity: PPN=start, U cleared (SMEP)

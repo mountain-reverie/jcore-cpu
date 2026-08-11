@@ -1,7 +1,6 @@
 ! mmubenchi.S -- I-SIDE TLB-miss hot-path BENCHMARK guard.
 !
-! The instruction-fetch twin of mmubench.S. Same byte-faithful copy of
-! linux@jcore's JCORE_TLB_FASTPATH (9 insns, inlined at the vector, no
+! The instruction-fetch twin of mmubench.S. Same vector-inlined fast path (no
 ! tsb_hits++ counter, no `bra` stub), but the faulting access is an I-FETCH
 ! rather than a data load/store, so sim/bench_tlb_hotpath.sh reports the IMISS
 ! fault->resume latency instead of the DMISS one.
@@ -168,7 +167,7 @@ ENTRY(_bench_warm_start)
 
 ENTRY(_after_ifetch2)
         ! Warm leg resumed inside the page: that second IMISS was a TSB HIT and
-        ! ran the byte-faithful Linux fast path. Disable AT and verify.
+        ! ran the vector-inlined fast path. Disable AT and verify.
         mov.l   k_mmucr, r0 ; mov #0, r1 ; mov.l r1, @r0
 
         ! Cold sentinel still present.
@@ -300,9 +299,9 @@ HP_mmucr:  .long 0xFF000010
 HP_result: .long TEST_RESULT_ADDRESS
 
         .org    _vbase + 0x400
-        ! _vbase + 0x400 -- ALL TLB faults. The fast path is INLINED HERE,
-        ! exactly as linux@jcore inlines JCORE_TLB_FASTPATH at its vector, and
-        ! is byte-identical to sim/tests/mmubench.S's copy. `_h_common` aliases
+        ! _vbase + 0x400 -- ALL TLB faults. The fast path is INLINED HERE at
+        ! the vector, and is byte-identical to sim/tests/mmubench.S's copy so
+        ! the I-side and D-side numbers are comparable. `_h_common` aliases
         ! the vector so sim/bench_tlb_hotpath.sh can bracket [_h_common,_h_slow).
 _v_tlb:
 _h_common:

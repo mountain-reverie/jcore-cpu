@@ -2,25 +2,27 @@
 # bench_tlb_hotpath.sh -- measure the J4 software-managed TLB-miss hot-path
 # latency (cycles per miss) from a cosim VCD PC trace.
 #
-# WHY. The TLB-refill hot path (linux arch/sh/kernel/cpu/jcore/ex.S
-# JCORE_TLB_FASTPATH, mirrored byte-for-byte by the mmubench guard) runs on EVERY
-# TLB miss, so its cycle cost is the MMU's dominant steady-state overhead. This
-# benchmark makes that cost observable and regression-checkable: it runs the
-# mmubench guard (4 cold-miss walker installs, then 4 steady-state TSB hits) under
-# the J4 overlay with a VCD dump, traces the architectural pc[31:0] signal, and
-# reports the fast-path dwell for the cold misses and the TSB hits, plus one
-# full fault->resume latency.
+# WHY. TLB refill runs on EVERY TLB miss, so its cycle cost is the MMU's
+# dominant steady-state overhead. This benchmark makes that cost observable and
+# regression-checkable: it runs the mmubench guard (4 cold misses, then 4
+# steady-state TSB hits) under the J4 overlay with a VCD dump and reports, per
+# phase, the cycles between two FIXED PROGRAM ADDRESSES enclosing a known number
+# of misses -- plus the walk-FSM windows, so a hardware walker hit can be told
+# from a failed probe.
+#
+# SCOPE. This script measures the hardware TSB walker's cycle cost. It once
+# doubled as a fidelity check that the guard was a byte-faithful copy of
+# linux@jcore's JCORE_TLB_FASTPATH; that software fast path no longer exists
+# (the walker replaced it), so that framing and its gate are gone. What is
+# measured here is the hardware, not a mirror of any kernel source.
 #
 # ------------------------------------------------------------------------------
 # MEASURED BASELINE (2026-07-23; cosim clock 100 MHz / 10 ns period).
 #
-#   NOTE (2026-08-08): this bench now runs the `mmubench` guard, whose handler
-#   is a byte-faithful copy of linux@jcore's JCORE_TLB_FASTPATH -- no tsb_hits++
-#   counter, no `bra` stub, inlined at the vector. Everything below is therefore
-#   MEASURED production cost. The previous baseline came from the `mmurun`
-#   correctness guard and had to be corrected by a hand-estimated "net out ~7
-#   cycles of counter and ~3 of branch"; that estimate is retired. Set
-#   BENCH_GUARD=mmurun to reproduce the old, scaffolding-inflated figures.
+#   HISTORICAL. Everything in this block predates the hardware TSB walker and
+#   describes the SOFTWARE TLB-miss fast path that the walker replaced. It is
+#   kept as the anchor the walker deltas below are quoted against, and because
+#   the A/B lessons in it still apply. It is NOT what this script measures now.
 #
 #   MEASURED, 9-insn fast path (cosim 100 MHz / 10 ns period), fault ->
 #   back-executing-the-faulting-instruction. Run sim/profile_tlb_hotpath.py for
@@ -157,27 +159,26 @@
 #      overestimated this by ~3x; measure hot-path changes, don't model them.)
 #
 # ------------------------------------------------------------------------------
-# WALKER MODE (BENCH_MODE=walker) -- READ THIS BEFORE TRUSTING THE DEFAULT MODE
-# ON A BUILD WITH THE HARDWARE TSB WALKER ENABLED (core/tlb_walk.vhd).
+# WHY THE BRACKET IS A PROGRAM-ADDRESS PAIR AND NOT A HANDLER PC RANGE
 #
-# The default mode above brackets on the HANDLER PC range [_h_common,_h_slow)
-# and then splits the visits it finds into halves, calling the first half cold
-# and the second half TSB-hit. With the walker on, a TSB hit is resolved as a
-# PIPELINE STALL: there is no exception, no vector fetch and NO HANDLER PC IN
-# THE TRACE AT ALL. So mmubench's 8 misses produce only its 4 COLD handler
-# visits, the halving splits those 4 cold visits into "2 cold, 2 hit", and the
-# script reports the cold path twice -- once labelled TSB-HIT (measured: 81 cyc
-# "TSB-HIT", i.e. 3.5x the real 23-cycle software number). It does not fail; it
-# lies. Nor can the bracket be rescued by keying on "faulting PC seen -> seen
-# again": on a hit the PC never changes, so there is no second edge.
+# This script once bracketed on the HANDLER PC range [_h_common,_h_slow) and
+# split the visits it found into halves, calling the first half cold and the
+# second half TSB-hit. With the walker on, a TSB hit is resolved as a PIPELINE
+# STALL: there is no exception, no vector fetch and NO HANDLER PC IN THE TRACE
+# AT ALL. mmubench's 8 misses then produced only its 4 COLD handler visits, the
+# halving split those 4 into "2 cold, 2 hit", and the script reported the cold
+# path twice -- once labelled TSB-HIT (measured: 81 cyc "TSB-HIT", i.e. 3.5x the
+# real 23-cycle software number). It did not fail; it lied. Nor can that bracket
+# be rescued by keying on "faulting PC seen -> seen again": on a hit the PC never
+# changes, so there is no second edge. That mode has been REMOVED.
 #
-# BENCH_MODE=walker measures the only thing that survives: a bracket between two
-# FIXED PROGRAM ADDRESSES enclosing a known number of misses, compared between a
-# walker-ON and a walker-OFF build of the SAME guard binary. Whatever the
-# assembler puts inside the bracket is byte-identical in both legs and cancels
-# in the delta -- which is what makes this immune to the alignment-pad failure
-# recorded under HISTORICAL CORRECTION above. It also prints the walk-FSM
-# windows (walk_busy / walk_install) so a hit can be told from a failed probe.
+# What survives, and is now the only mode: a bracket between two FIXED PROGRAM
+# ADDRESSES enclosing a known number of misses, compared between a walker-ON and
+# a walker-OFF build of the SAME guard binary. Whatever the assembler puts inside
+# the bracket is byte-identical in both legs and cancels in the delta -- which is
+# what makes this immune to the alignment-pad failure recorded under HISTORICAL
+# CORRECTION above. It also prints the walk-FSM windows (walk_busy /
+# walk_install) so a hit can be told from a failed probe.
 #
 #   MEASURED (2026-08-10, mmu/tsb-hw-walker):
 #     guard      phase  misses  walker-OFF  walker-ON   delta
@@ -201,33 +202,14 @@
 #
 # ------------------------------------------------------------------------------
 # Usage:  sim/bench_tlb_hotpath.sh
-#         BENCH_MODE=walker BENCH_GUARD=mmubench sim/bench_tlb_hotpath.sh
+#         BENCH_GUARD=mmubenchi sim/bench_tlb_hotpath.sh
 # Env:    JCORE_SOC (default: sibling ../jcore-soc), NM (default: sh2-elf-nm).
 set -uo pipefail
 cd "$(dirname "$0")/.."                       # jcore-cpu root
 NM="${NM:-sh2-elf-nm}"
 VCD="${TMPDIR:-/tmp}/tlb_hotpath_bench.vcd"
-# mmubench mirrors the real linux handler exactly (no counter, no bra stub).
-# BENCH_GUARD=mmurun reproduces the older, scaffolding-inflated numbers.
 GUARD="${BENCH_GUARD:-mmubench}"
 P1=0x80000000                                 # the guard runs code from the P1 alias
-
-# --- fidelity gate: is the guard still the code Linux runs? ---
-# Every number below assumes mmubench/mmubenchi carry a byte-faithful copy of
-# linux@jcore's JCORE_TLB_FASTPATH. The two live in different repos and the J4
-# instructions are hand-assembled as .word, so a divergence would not fail to
-# build or fail a guard -- it would just make this benchmark quietly measure
-# code Linux does not run. Refuse to report numbers in that case.
-if [ -f "${LINUX_SRC:-../linux}/arch/sh/kernel/cpu/jcore/ex.o" ]; then
-  if ! sim/check_bench_fidelity.sh >&2; then
-    echo "bench: REFUSING to report -- the guard has drifted from linux@jcore." >&2
-    echo "bench: fix the guard (or accept the divergence deliberately) first." >&2
-    exit 1
-  fi
-else
-  echo "bench: NOTE -- linux@jcore ex.o absent, fidelity NOT checked." >&2
-  echo "bench:        run sim/linux_sim.sh first to enable the check." >&2
-fi
 
 # --- symbol addresses from the guard ELF (fast-path start _h_common, end _h_slow) ---
 make CONFIG_PRIV_ARCH=1 -C sim/tests "$GUARD".elf >/dev/null 2>&1 \
@@ -250,9 +232,8 @@ echo "bench: running $GUARD under the J4 overlay (VCD -> $VCD) ..."
 MMU_VCD="$VCD" sim/mmu_sim.sh "$GUARD" >/dev/null 2>&1 || true
 [ -s "$VCD" ] || { echo "bench: no VCD produced" >&2; exit 1; }
 
-# --- walker mode: phase brackets + walk-FSM windows (see header) -------------
-if [ "${BENCH_MODE:-}" = "walker" ]; then
-  GUARD="$GUARD" VCD="$VCD" NM="$NM" python3 - <<'PY'
+# --- phase brackets + walk-FSM windows (see header) --------------------------
+GUARD="$GUARD" VCD="$VCD" NM="$NM" python3 - <<'PY'
 import os, re, subprocess, sys
 P1 = 0x80000000
 guard, vcd, NM = os.environ['GUARD'], os.environ['VCD'], os.environ['NM']
@@ -335,64 +316,5 @@ else:
         print(f'bench:     walk{i}: side={"I" if sig_at(side,a) else "D"} '
               f'busy={(b-a)//PER} cyc  {"INSTALL (TSB hit)" if hit else "FAIL (-> sw handler)"}')
 PY
-  echo "bench: done (walker mode). Compare against a walker-OFF rebuild; see header."
-  exit 0
-fi
+echo "bench: done. Compare against a walker-OFF rebuild; see the script header."
 
-# --- trace pc[31:0]; report cold-probe / TSB-hit dwell + one fault->resume ---
-HC=$HC HS=$HS VB=$VB VCD="$VCD" GUARD="$GUARD" python3 - <<'PY'
-import os, re
-HC=int(os.environ['HC']); HS=int(os.environ['HS']); VB=int(os.environ['VB']); VCD=os.environ['VCD']
-PER=None; pcid=None; ev=[]; cur=0
-for l in open(VCD):
-    l=l.rstrip('\n')
-    if not l: continue
-    if pcid is None:
-        m=re.match(r'\$var reg 32 (\S+) pc\[31:0\] \$end', l)
-        if m: pcid=m.group(1)
-    if l[0]=='#': cur=int(l[1:]); continue
-    if l[0]=='b':
-        p=l.split()
-        if len(p)==2 and p[1]==pcid:
-            try: ev.append((cur, int(p[0][1:],2)))
-            except ValueError: pass
-# clock period: first two distinct pc-change timestamps after 0
-tstamps=sorted({t for t,_ in ev if t>0})
-PER=(tstamps[1]-tstamps[0]) if len(tstamps)>1 else 10_000_000
-# handler-region visits (fast path)
-inh=False; ent=None; wins=[]
-for t,v in ev:
-    h = HC <= v < HS
-    if h and not inh: inh=True; ent=t
-    elif inh and not h: wins.append((ent,t)); inh=False
-dw=[(b-a)//PER for a,b in wins]
-cold=[d for d in dw[:len(dw)//2]]; hit=[d for d in dw[len(dw)//2:]]
-def med(x): return sorted(x)[len(x)//2] if x else 0
-print(f"bench: clock period {PER/1e6:.1f} ns, {len(wins)} fast-path visits")
-print(f"bench:   cold-miss probe dwell (cyc): {cold}  median {med(cold)}")
-print(f"bench:   TSB-hit fast-path dwell (cyc): {hit}  median {med(hit)}")
-# one full fault->resume around the first TSB hit (user code = pc below _vbase,
-# so the vector stub / handler region is excluded)
-def faultresume(windows):
-    out = []
-    for ent, ext in windows:
-        pre  = [t for t, v in ev if t < ent and v < VB][-1:]   # faulting user instr before entry
-        post = [t for t, v in ev if t > ext and v < VB][:1]    # resumed user instr after exit
-        if pre and post:
-            out.append((post[0] - pre[0]) // PER)
-    return out
-
-# NOTE on the cold numbers: the walker (___jcore_tlb_walk) links ABOVE _vbase,
-# so it is not counted as "user" code and a cold window's resume is genuinely
-# the re-executed faulting instruction, not the walker's first insn. If the
-# link order ever changes so the walker falls below _vbase, the cold
-# fault->resume figures silently collapse to near the probe dwell -- sanity
-# check them against the probe dwell before trusting a sudden improvement.
-coldff = faultresume(wins[:len(dw)//2])
-hitff  = faultresume(wins[len(dw)//2:])
-if coldff:
-    print(f"bench:   COLD (TSB miss -> C walker) fault->resume (cyc): {coldff}  median {med(coldff)}")
-if hitff:
-    print(f"bench:   TSB-HIT fault->resume (cyc, one per hit): {hitff}  median {med(hitff)}")
-PY
-echo "bench: done. See the header of this script for the baseline + future-work notes."

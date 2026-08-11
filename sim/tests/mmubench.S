@@ -8,11 +8,17 @@
 ! hand-estimated "net out ~7 cycles of counter and ~3 of branch" -- an estimate
 ! standing between the measurement and the number anyone actually cares about.
 !
-! This guard removes the estimate. Its handler is a BYTE-FAITHFUL copy of
-! linux@jcore's JCORE_TLB_FASTPATH (arch/sh/kernel/cpu/jcore/ex.S): 9
-! instructions, inlined AT the vector with no taken branch on a hit, no
-! counter, same register discipline (r0/r1/r3 only; r2 untouched). What
-! sim/bench_tlb_hotpath.sh measures here is the production cost directly.
+! This guard removes the estimate: its handler is inlined AT the vector with no
+! taken branch on a hit, no counter, and a tight register discipline (r0/r1/r3
+! only; r2 untouched), so sim/bench_tlb_hotpath.sh measures the miss cost and
+! nothing else.
+!
+! NOTE: this handler was once a byte-faithful copy of linux@jcore's
+! JCORE_TLB_FASTPATH, and the bench refused to report numbers unless it still
+! matched. That software fast path no longer exists -- the hardware TSB walker
+! replaced it -- so the mirrors-Linux claim and its fidelity gate are retired.
+! What remains measurable, and what this guard is for, is the walker's own
+! cycle cost (sim/bench_tlb_hotpath.sh, walker-ON vs walker-OFF).
 !
 ! The workload is mmurun's, unchanged: four P0 pages, first touch faults to the
 ! C walker (cold TSB), then MMUCR.TI evicts the TLB while the TSB stays warm so
@@ -234,8 +240,7 @@ HP_result: .long TEST_RESULT_ADDRESS
 
         .org    _vbase + 0x400
 
-        ! _vbase + 0x400 -- ALL TLB faults. The fast path is INLINED HERE,
-        ! exactly as linux@jcore inlines JCORE_TLB_FASTPATH at its vector:
+        ! _vbase + 0x400 -- ALL TLB faults. The fast path is INLINED HERE:
         ! hardware lands on the first instruction and a TSB hit runs straight
         ! to LDTLB.RN with NO taken branch. `_h_common` is an alias for the
         ! vector itself so sim/bench_tlb_hotpath.sh can bracket the path with

@@ -256,7 +256,7 @@ jobs:
           for t in exctest trapatest pm3vec pm3guard privmode banktest excguard \
                    rteredir mmureg mmuguard mmuxlate mmurte mmustore mmuimiss \
                    mmusr mmufault mmufsr mmuldtlbr mmutsb mmuwalkhit mmuwalkmiss mmuwalkstale mmuwalktorn mmuwalkdside mmuwalkiside mmuwalkorder mmutsbslot mmuwalkasid mmutsbvictim mmuwalkway1 mmup4alias mmuidx mmustres mmustr2 \
-                   mmustale mmuasid mmuvecsplit mmurun mmubench mmubenchi mmuirun mmuainc mmuainc2 mmusmep; do
+                   mmustale mmuasid mmuasidsh mmuvecsplit mmurun mmubench mmubenchi mmuirun mmuainc mmuainc2 mmusmep; do
             run_guard "$t"
           done
           # I-side cacheability: instruction fetches run through the live I-cache

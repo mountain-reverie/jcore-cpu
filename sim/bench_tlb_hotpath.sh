@@ -173,21 +173,28 @@
 # changes, so there is no second edge. That mode has been REMOVED.
 #
 # What survives, and is now the only mode: a bracket between two FIXED PROGRAM
-# ADDRESSES enclosing a known number of misses, compared between a walker-ON and
-# a walker-OFF build of the SAME guard binary. Whatever the assembler puts inside
-# the bracket is byte-identical in both legs and cancels in the delta -- which is
-# what makes this immune to the alignment-pad failure recorded under HISTORICAL
-# CORRECTION above. It also prints the walk-FSM windows (walk_busy /
-# walk_install) so a hit can be told from a failed probe.
+# ADDRESSES enclosing a known number of misses. Whatever the assembler puts
+# inside the bracket is byte-identical run to run -- which is what makes this
+# immune to the alignment-pad failure recorded under HISTORICAL CORRECTION
+# above. It also prints the walk-FSM windows (walk_busy / walk_install) so a
+# hit can be told from a failed probe.
 #
-#   MEASURED (2026-08-10, mmu/tsb-hw-walker):
+# The walker is now architecturally mandatory (design decision D1: no
+# MMUCR.HW bit, no software TSB probe) -- there is no walker-OFF build to
+# compare against any more. The numbers below are a HISTORICAL walker-ON vs.
+# walker-OFF delta from when the `mmu_walker` generic still existed; they are
+# kept as the anchor this script's own walker-mode numbers are quoted
+# against, not as a reproducible A/B.
+#
+#   MEASURED (2026-08-10, mmu/tsb-hw-walker, walker-ON vs. then-still-extant
+#   walker-OFF build):
 #     guard      phase  misses  walker-OFF  walker-ON   delta
 #     mmubench   cold      4       254         272      +18  (+4.5/miss)
 #     mmubench   warm      4       130          66      -64  (-16/miss)
 #     mmubenchi  cold      1       106         111       +5
 #     mmubenchi  warm      1        53          39      -14
 #
-#   Anchored on the software baseline this same script reproduces on a
+#   Anchored on the software baseline this same script reproduced on that
 #   walker-OFF build (DMISS 23 / IMISS 22 warm, 75 / 74 cold):
 #     DMISS warm  23 -> 7    IMISS warm  22 -> 8
 #     DMISS cold  75 -> 79.5 IMISS cold  74 -> 79
@@ -196,9 +203,8 @@
 #   Caveat: every TSB read here acks in one cycle because the C walker just
 #   wrote those lines. A cold D-cache TSB read would add fill latency.
 #
-# To produce the walker-OFF leg, flip `mmu_walker` in core/cpu.vhd's generic
-# defaults and REBUILD (never -n). sim/profile_tlb_hotpath.py cannot attribute a
-# walker hit -- it shares the handler bracket -- so use the walk-window dump here.
+# sim/profile_tlb_hotpath.py cannot attribute a walker hit -- it shares the
+# handler bracket -- so use the walk-window dump here.
 #
 # ------------------------------------------------------------------------------
 # Usage:  sim/bench_tlb_hotpath.sh
@@ -301,8 +307,9 @@ for t, v in busy:
     if v and st is None: st = t
     elif not v and st is not None: wins.append((st, t)); st = None
 if not wins:
-    print('bench:   no walk_busy windows -- this is a WALKER-OFF build '
-          '(that is the reference leg; compare its bracket numbers)')
+    print('bench:   no walk_busy windows -- the walker is architecturally '
+          'mandatory now, so this means it never armed; investigate before '
+          'trusting the bracket numbers')
 else:
     def sig_at(lst, tt):
         v = 0
@@ -316,5 +323,5 @@ else:
         print(f'bench:     walk{i}: side={"I" if sig_at(side,a) else "D"} '
               f'busy={(b-a)//PER} cyc  {"INSTALL (TSB hit)" if hit else "FAIL (-> sw handler)"}')
 PY
-echo "bench: done. Compare against a walker-OFF rebuild; see the script header."
+echo "bench: done. See the script header for the historical walker-ON/OFF baseline."
 

@@ -92,7 +92,7 @@ FILES=(
   core/components_pkg.vhd
   core/tlb.vhd
   # cpu.vhd instantiates tlb_walk directly (entity instantiation inside the
-  # MMU_WALKER generate), so the unit must be analysed before cpu.vhd even when
+  # PRIV_ARCH generate), so the unit must be analysed before cpu.vhd even when
   # the generic is false -- ghdl resolves the name at analysis time.
   core/tlb_walk.vhd
   core/mult_pkg.vhd

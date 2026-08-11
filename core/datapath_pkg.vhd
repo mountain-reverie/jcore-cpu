@@ -32,7 +32,7 @@ package datapath_pack is
 
   type p4_sel_t is (
     p4_none, p4_mmucr, p4_ttb, p4_tea, p4_tsbbr, p4_tsbcfg, p4_tsbptr, p4_mmufsr,
-    p4_tra, p4_expevt, p4_intevt, p4_tsbslot
+    p4_tra, p4_expevt, p4_intevt, p4_tsbslot, p4_tsbvseed, p4_tsbvict
   );
 
   function seg_decode (
@@ -49,9 +49,19 @@ package datapath_pack is
   --   amix   = a1 xor (a1 >> 9)
   --   hash   = (HASH_MODE=1 ? vpn xor (vpn >> HASH_SHIFT) : vpn) xor amix
   --   mask   = (1 << TSB_SIZE_LOG) - 1
-  --   TSBPTR = (TSBBR and not 0xF) or ((hash and mask) << 4)
-  -- TSBBR[N+3:4] are reserved-0 so clearing the low nibble and ORing the
-  -- 16-byte-scaled index suffices (no variable base mask needed).
+  --   TSBPTR = (TSBBR and not 0x1F) or ((hash and mask) << 5)
+  -- TSBBR[N+4:5] are reserved-0 so clearing the low five bits and ORing the
+  -- 32-byte-scaled index suffices (no variable base mask needed).
+  --
+  -- Phase-2 Task 4: TSB_SIZE_LOG counts SETS, not entries, and this returns a
+  -- 32-byte-aligned SET address. A set is one 32-byte line holding two
+  -- contiguous 16-byte entries -- way 0 at +0/+4/+8/+12 (tag_hi, tag_lo, data,
+  -- reserved), way 1 at +16/+20/+24/+28. Both ways of a set therefore live in
+  -- ONE line, which is what makes the "overwrite the matching way" rule in the
+  -- kernel (arch/sh/mm/tlb-jcore.c) cheap: software already has both tags in
+  -- hand from the line it read. Associativity here is a PERFORMANCE change --
+  -- it absorbs conflict misses -- and is deliberately not claimed as an
+  -- isolation mechanism.
   --
   -- ASID is folded into the INDEX, not just the tag. Without it the same VA in
   -- two address spaces always lands in the same set, and since a TSB hit is
@@ -83,6 +93,31 @@ package datapath_pack is
     tsbcfg : std_logic_vector(31 downto 0);
     tsbbr  : std_logic_vector(31 downto 0);
     asid   : std_logic_vector(15 downto 0)
+  ) return std_logic_vector;
+
+  -- TSB victim selector (Phase-2 Task 4, Part B).
+  --
+  -- One step of a 16-bit Fibonacci LFSR, taps 16,14,13,11 (x^16+x^14+x^13+x^11+1,
+  -- maximal length 65535). The nomination software reads is bit 0 of the NEW
+  -- state, i.e. which of the two ways to replace when neither tag matches.
+  --
+  -- The SEED IS NOT IN THE HARDWARE. It is written by the OS at MMU init through
+  -- a WRITE-ONLY register (0xFF00004C). A constant seed compiled into this file
+  -- would be public -- this is an open-source core, so the polynomial and any
+  -- built-in seed are readable by anyone, and a victim selector whose sequence
+  -- an attacker can replay offline is no better than a fixed choice. Only the
+  -- 1-bit nomination is exposed (0xFF000050); neither the seed nor the LFSR
+  -- state can be read back, so an attacker cannot resynchronise to the sequence
+  -- even by observing evictions -- each read consumes one bit and advances.
+  --
+  -- Zero is the LFSR's lock-up state. Rather than leave an un-seeded machine
+  -- silently pinned to way 0 (a correct-but-slow failure nobody would notice),
+  -- state 0 self-heals to a fixed non-secret constant. That constant carries no
+  -- security claim; it exists so the selector still round-robins before the OS
+  -- has seeded it. Security comes from the OS seed, and only from it.
+
+  function tsb_lfsr_next (
+    state : std_logic_vector(15 downto 0)
   ) return std_logic_vector;
 
   component datapath is
@@ -225,8 +260,30 @@ package body datapath_pack is
 
     v_mask := shift_left(to_unsigned(1, 32), v_size) - 1;
     v_idx  := (v_hash and v_mask);
-    return (tsbbr and x"FFFFFFF0") or std_logic_vector(shift_left(v_idx, 4));
+    return (tsbbr and x"FFFFFFE0") or std_logic_vector(shift_left(v_idx, 5));
 
   end function tsb_ptr;
+
+  function tsb_lfsr_next (
+    state : std_logic_vector(15 downto 0)
+  ) return std_logic_vector is
+
+    variable v_s  : std_logic_vector(15 downto 0);
+    variable v_fb : std_logic;
+
+  begin
+
+    -- Self-heal out of the all-zero lock-up state (see the header comment).
+    if (state = x"0000") then
+      v_s := x"ACE1";
+    else
+      v_s := state;
+    end if;
+
+    v_fb := v_s(15) xor v_s(13) xor v_s(12) xor v_s(10);
+
+    return v_s(14 downto 0) & v_fb;
+
+  end function tsb_lfsr_next;
 
 end package body datapath_pack;

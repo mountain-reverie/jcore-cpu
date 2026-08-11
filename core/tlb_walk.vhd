@@ -18,10 +18,22 @@ library ieee;
 
 entity tlb_walk is
   generic (
-    -- Ways per TSB set. Phase 1 ships 1 (today's format). Phase 2 raises this
-    -- to 2. Keeping the loop parameterised is what makes 2-way revertible.
+    -- Ways per TSB set. Phase 1 shipped 1; Phase 2 Task 4 raises this to 2.
+    -- Keeping the loop parameterised is what makes 2-way revertible.
+    --
+    -- A set is one 32-byte line of two contiguous 16-byte entries: way 0 at
+    -- +0/+4/+8/+12 (tag_hi, tag_lo, data, reserved), way 1 at +16/+20/+24/+28.
+    -- way_word() below derives those offsets from `entry_bytes`, so the way
+    -- loop needs no per-way address table.
+    --
+    -- The `way < tsb_ways - 1` test in ST_NEXT_WAY is evaluated on the natural
+    -- subtype: at tsb_ways = 1 it is `way < 0`, which is FALSE for the only
+    -- reachable value (way = 0) and never underflows, because `tsb_ways - 1`
+    -- is a universal-integer expression, not a natural one. At tsb_ways = 2 it
+    -- is `way < 1`: way 0 advances to way 1, way 1 gives up. Both elaborate.
     tsb_ways : natural := 1;
-    -- Bytes per TSB entry. 16 in both phases.
+    -- Bytes per TSB ENTRY (not per set). 16 in both phases; a 2-way set is
+    -- therefore 32 bytes, which is what tsb_ptr() now aligns and indexes.
     entry_bytes : natural := 16;
     -- Liveness bound on a single walk, in cycles. `busy` suppresses the miss
     -- exception, so a walk that never finishes is a HANG where the machine

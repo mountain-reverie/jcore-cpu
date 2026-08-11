@@ -7,7 +7,7 @@
 !   vpn   = faulting_VA[31:12]
 !   hash  = (TSBCFG.HASH_MODE==1) ? vpn ^ (vpn >> TSBCFG.HASH_SHIFT) : vpn
 !   mask  = (1 << TSBBR.TSB_SIZE_LOG) - 1
-!   TSBPTR = (TSBBR & ~0xF) | ((hash & mask) << 4)
+!   TSBPTR = (TSBBR & ~0x1F) | ((hash & mask) << 5)
 !
 ! Config (written via MMIO before AT is enabled):
 !   TSBBR  = 0x00010006   base=0x00010000, TSB_SIZE_LOG=6 (64 entries, mask=0x3F)
@@ -16,11 +16,11 @@
 ! Faulting load VA = 0x00042000  ->  vpn = 0x42
 !   hash  = 0x42 ^ (0x42 >> 6) = 0x42 ^ 0x01 = 0x43
 !   index = 0x43 & 0x3F        = 0x03
-!   TSBPTR = 0x00010000 | (0x03 << 4) = 0x00010030
+!   TSBPTR = 0x00010000 | (0x03 << 5) = 0x00010060
 !
 ! Flow: map code page identity, enable AT, configure TSBBR/TSBCFG, take a
 ! DMISS_R on VA 0x42000; the handler reads TSBPTR (STC), compares to the
-! expected 0x00010030, disables AT and writes the test result, then spins.
+! expected 0x00010060, disables AT and writes the test result, then spins.
 !
 ! RED before M5: STC TSBPTR (0x004B) is undefined -> garbage compare -> the
 ! handler writes FAIL (or, if it traps, times out). GREEN: TSBPTR == expected.
@@ -39,7 +39,7 @@
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
 
-#define EXPECTED_TSBPTR 0x00010030
+#define EXPECTED_TSBPTR 0x00010060
 
         .section .vect
         .long start

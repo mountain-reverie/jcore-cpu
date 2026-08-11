@@ -653,7 +653,7 @@ begin
 
     u_tlb_walk : entity work.tlb_walk
       generic map (
-        tsb_ways       => 1,
+        tsb_ways       => 2,
         entry_bytes    => 16,
         timeout_cycles => 255
       )

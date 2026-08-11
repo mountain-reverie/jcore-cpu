@@ -24,22 +24,22 @@
 !   amix = a1 xor (a1 >> 9)
 !   hash = (vpn xor (vpn >> HASH_SHIFT)) xor amix
 !   idx  = hash and ((1 << TSB_SIZE_LOG) - 1)
-!   slot = (TSBBR and not 0xF) or (idx << 4)
+!   set  = (TSBBR and not 0x1F) or (idx << 5)   [32-byte 2-way set]
 !
 ! VA 0x00042000 throughout: vpn=0x42, vpn^(vpn>>6)=0x43.
-!   ASID 0x0000: amix=0x00000 -> idx=0x43&0x3F=0x03 -> 0x00010030
-!   ASID 0x0001: amix=0x00021 -> idx=0x62&0x3F=0x22 -> 0x00010220
-!   ASID 0x0055: amix=0x00AB5 -> idx=0xAF6&0x3F=0x36 -> 0x00010330
-!   ASID 0x1234: amix=0x25A85 -> idx=...&0x3F=0x1D  -> 0x000101D0
+!   ASID 0x0000: amix=0x00000 -> idx=0x43&0x3F=0x03 -> 0x00010060
+!   ASID 0x0001: amix=0x00021 -> idx=0x62&0x3F=0x22 -> 0x00010440
+!   ASID 0x0055: amix=0x00AB5 -> idx=0xAF6&0x3F=0x36 -> 0x00010660
+!   ASID 0x1234: amix=0x25A85 -> idx=...&0x3F=0x1D  -> 0x000103A0
 !
-! A tsb_ptr() that ignores ASID returns 0x00010030 for all four, so the
+! A tsb_ptr() that ignores ASID returns 0x00010060 for all four, so the
 ! mutation fails at result code 2.
 !
 ! Result codes:
-!   1  ASID 0x0000 -> 0x00010030          (agrees with mmutsbslot.S)
-!   2  ASID 0x0001 -> 0x00010220
-!   3  ASID 0x0055 -> 0x00010330
-!   4  ASID 0x1234 -> 0x000101D0
+!   1  ASID 0x0000 -> 0x00010060          (agrees with mmutsbslot.S)
+!   2  ASID 0x0001 -> 0x00010440
+!   3  ASID 0x0055 -> 0x00010660
+!   4  ASID 0x1234 -> 0x000103A0
 !   5  the four slot addresses are not pairwise distinct
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -154,10 +154,10 @@ p_slot_reg:    .long 0xFF000048        ! core/datapath.vhm P4_TSBSLOT
 
 p_va:   .long 0x00042000
 p_asid3: .long 0x00001234
-p_exp0: .long 0x00010030
-p_exp1: .long 0x00010220
-p_exp2: .long 0x00010330
-p_exp3: .long 0x000101D0
+p_exp0: .long 0x00010060
+p_exp1: .long 0x00010440
+p_exp2: .long 0x00010660
+p_exp3: .long 0x000103A0
 #endif
 
 ENTRY(_done)

@@ -101,6 +101,7 @@ kmain:
         ! ---- Zero the 16-entry TSB (64 words). ----
         mov.l   k_tsb,  r0
         mov     #64, r2
+        shll    r2                      ! 2-way sets: 32 B/set => 128 words
         mov     #0,  r1
 1:      mov.l   r1, @r0
         add     #4, r0

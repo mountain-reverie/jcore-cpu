@@ -44,7 +44,7 @@
 !
 !
 ! Slot arithmetic, using mmutsb.S's documented hash:
-!   VA 0x00042000 -> vpn 0x42, hash 0x42^(0x42>>6)=0x43, idx 0x03 -> 0x00010030
+!   VA 0x00042000 -> vpn 0x42, hash 0x42^(0x42>>6)=0x43, idx 0x03 -> 0x00010060
 !   VA 0x00050000 -> vpn 0x50, hash 0x50^(0x50>>6)=0x51, idx 0x11 -> 0x00010110
 ! Both slots are left ZEROED: this guard is about which fault is dispatched,
 ! not about installs, and a zeroed slot makes every walk fail open so both
@@ -242,8 +242,8 @@ p_tsbbr_addr:   .long 0xFF000014
 p_tsbbr_val:    .long 0x00010006        ! base=0x00010000, TSB_SIZE_LOG=6
 p_tsbcfg_addr:  .long 0xFF000018
 p_tsbcfg_val:   .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
-p_va_d:         .long 0x00042000        ! D side; slot 0x00010030, zeroed
-p_target:       .long 0x00050000        ! I side; slot 0x00010110, zeroed
+p_va_d:         .long 0x00042000        ! D side; slot 0x00010060, zeroed
+p_target:       .long 0x00050000        ! I side; slot 0x00010220, zeroed
 p_expevt:       .long 0xFF000024
 p_exp_dmiss_r:  .long 0x00000060        ! DMISS_R -- the OLDER fault
 p_tea:          .long 0xFF00000C

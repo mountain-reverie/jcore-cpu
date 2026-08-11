@@ -223,7 +223,7 @@ _v_miss:
         ! AT must be OFF for this direct physical write to the TSB region --
         ! same convention tsb_fill uses everywhere else in these guards.
         ! With AT still 1 (as it is here, mid-handler) this store would
-        ! itself be translated as a virtual access to unmapped VA 0x00010030
+        ! itself be translated as a virtual access to unmapped VA 0x00010060
         ! instead of landing in the TSB.
         mov.l   p_mmucr, r0
         mov     #0, r1
@@ -260,7 +260,7 @@ p_tsbbr_addr:   .long 0xFF000014
 p_tsbbr_val:    .long 0x00010006        ! base=0x00010000, TSB_SIZE_LOG=6
 p_tsbcfg_addr:  .long 0xFF000018
 p_tsbcfg_val:   .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
-p_tsb_slot:     .long 0x00010030        ! hash(0x00042000) -- see mmutsb.S header
+p_tsb_slot:     .long 0x00010060        ! hash(0x00042000) -- see mmutsb.S header
 p_vpn_old:      .long 0x00043000        ! a DIFFERENT VPN than the one faulted
 p_vpn_new:      .long 0x00042000        ! the VPN actually faulted on
 p_asid:         .long 0x00000000        ! SAME ASID for old and new

@@ -205,6 +205,21 @@ architecture stru of cpu is
   -- rather than in datapath.vhm so no new datapath port is needed.
   signal walk_cnt_sel  : std_logic;
   signal walk_cnt_word : std_logic_vector(31 downto 0);
+  -- TSB slot-address helper (Phase 2 Task 2, docs/soc/p4-mmio-map.md 0x048
+  -- "TSBSLOT"). Write a VA here, read the same address back to get
+  -- tsb_ptr(VA) -- the exact slot address the hardware walker (and the
+  -- software miss path) would use for that VA. Exists so Linux's
+  -- jcore_tsb_slot_offset() bit-for-bit mirror of tsb_ptr() in C can be
+  -- deleted; there is now one implementation, not two. Decoded here for the
+  -- same reason as walk_cnt_sel above: SEG_P4 is fully absorbed inside
+  -- datapath.vhm and never reaches cpu.vhd's return path (see the walker-
+  -- counter comment below), so this window lives at a P2 debug address
+  -- (0xABCD0F10) rather than its documented P4 offset. Unlike walk_cnt_sel
+  -- this is NOT walker scaffolding and is not mmu_walker-gated -- only
+  -- PRIV_ARCH, so it stays available after MMU_WALKER is retired in Phase 3.
+  signal tsb_slot_va   : std_logic_vector(31 downto 0);
+  signal tsb_slot_sel  : std_logic;
+  signal tsb_slot_word : std_logic_vector(31 downto 0);
   -- TLB install-port muxes: LDTLB (decoder) or hardware walker.
   signal tlb_wr_any  : std_logic;
   signal tlb_ptel_mx : std_logic_vector(31 downto 0);
@@ -498,8 +513,43 @@ begin
                    std_logic_vector(walk_cnt_hits);
 
   dp_db_i.d   <= walk_cnt_word when walk_cnt_sel = '1' else
+                 tsb_slot_word when tsb_slot_sel = '1' else
                  db_i.d;
-  dp_db_i.ack <= (db_i.ack or walk_cnt_sel) and not walk_busy;
+  dp_db_i.ack <= (db_i.ack or walk_cnt_sel or tsb_slot_sel) and not walk_busy;
+
+  -- TSB slot-address helper window (0xABCD0F10, see tsb_slot_va declaration
+  -- above). Enabled on either a read or a write of the address; the read
+  -- side returns tsb_ptr() of the last-written VA, the write side is
+  -- latched below. Same P2-not-P4 rationale as walk_cnt_sel.
+
+  g_tsb_slot : if PRIV_ARCH generate
+
+    tsb_slot_sel <= '1' when sig_db_o.en = '1'
+                             and sig_db_o.a = x"ABCD0F10" else
+                    '0';
+
+    tsb_slot_word <= tsb_ptr(tsb_slot_va, dp_mmu_regs.tsbcfg, dp_mmu_regs.tsbbr);
+
+    p_tsb_slot_va : process (clk) is
+    begin
+
+      if rising_edge(clk) then
+        if (rst = '1') then
+          tsb_slot_va <= (others => '0');
+        elsif (tsb_slot_sel = '1' and sig_db_o.wr = '1') then
+          tsb_slot_va <= sig_db_o.d;
+        end if;
+      end if;
+
+    end process p_tsb_slot_va;
+
+  end generate g_tsb_slot;
+
+  g_no_tsb_slot : if not PRIV_ARCH generate
+    tsb_slot_sel  <= '0';
+    tsb_slot_word <= (others => '0');
+    tsb_slot_va   <= (others => '0');
+  end generate g_no_tsb_slot;
 
   -- Stall the I-FETCH for exactly as long as its own miss exception is
   -- suppressed. walk_supp_i is the single source of truth for "the I-side miss
@@ -781,7 +831,7 @@ begin
 
     process (sig_db_o, d_store_faulting, d_at_translated, tlb_d_hit,
              tlb_d_pa, tlb_d_pa12, tlb_d_page_mask,
-             walk_own, walk_bus_a, walk_bus_en, walk_cnt_sel) is
+             walk_own, walk_bus_a, walk_bus_en, walk_cnt_sel, tsb_slot_sel) is
 
       variable offm   : std_logic_vector(15 downto 0);
       variable ppn_lo : std_logic_vector(15 downto 0);
@@ -815,6 +865,16 @@ begin
       if (walk_cnt_sel = '1') then
         db_o.en <= '0';
         db_o.rd <= '0';
+      end if;
+
+      -- TSB slot-address helper window served entirely inside cpu.vhd (data,
+      -- ack and the write-side latch, above). Keep both the read and the
+      -- write off the external bus.
+      if (tsb_slot_sel = '1') then
+        db_o.en <= '0';
+        db_o.rd <= '0';
+        db_o.wr <= '0';
+        db_o.we <= "0000";
       end if;
 
       -- Walker bus takeover. MUST be last and MUST be on the external db_o:

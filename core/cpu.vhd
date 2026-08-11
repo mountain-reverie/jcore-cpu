@@ -162,24 +162,35 @@ architecture stru of cpu is
   -- TSB walker owns the external bus, so the faulting access is held stable and
   -- replays once the translation is installed.
   signal dp_db_i : cpu_data_i_t;
+  -- Instruction-bus input as seen by the datapath. ack is withheld while an
+  -- I-SIDE walk is armed or running, so the faulting fetch is held in flight
+  -- (datapath.vhm's transfer is gated on `inst_o.en = '1' and inst_i.ack = '1'`,
+  -- and it re-presents the same inst_o until it sees one) and replays against
+  -- the installed translation afterwards. Without this the fetch completed
+  -- against the UNTRANSLATED VA during the suppression window and junk
+  -- executed. Exact mirror of dp_db_i.ack on the data side.
+  signal dp_inst_i : cpu_instruction_i_t;
   -- Hardware TSB walker (core/tlb_walk.vhd) interface.
   signal walk_busy : std_logic;
   signal walk_arm  : std_logic;
   -- Per-side miss-exception suppression. See tlb_walk.vhd's `arm` comment.
-  signal walk_supp_i    : std_logic;
-  signal walk_supp_d    : std_logic;
-  signal walk_own       : std_logic;
-  signal walk_bus_ack   : std_logic;
-  signal walk_req       : std_logic;
-  signal walk_va        : std_logic_vector(31 downto 0);
-  signal walk_va_r      : std_logic_vector(31 downto 0);
-  signal walk_d_miss    : std_logic;
-  signal walk_i_miss    : std_logic;
-  signal d_fault_held   : std_logic;
-  signal walk_install   : std_logic;
-  signal walk_ptel      : std_logic_vector(31 downto 0);
-  signal walk_bus_a     : std_logic_vector(31 downto 0);
-  signal walk_bus_en    : std_logic;
+  signal walk_supp_i  : std_logic;
+  signal walk_supp_d  : std_logic;
+  signal walk_own     : std_logic;
+  signal walk_bus_ack : std_logic;
+  signal walk_req     : std_logic;
+  signal walk_va      : std_logic_vector(31 downto 0);
+  signal walk_va_r    : std_logic_vector(31 downto 0);
+  signal walk_d_miss  : std_logic;
+  signal walk_i_miss  : std_logic;
+  signal d_fault_held : std_logic;
+  signal walk_install : std_logic;
+  signal walk_ptel    : std_logic_vector(31 downto 0);
+  signal walk_bus_a   : std_logic_vector(31 downto 0);
+  signal walk_bus_en  : std_logic;
+  -- '1' while the walk in progress is an I-SIDE walk. Registered at the arming
+  -- cycle, when walk_i_miss/walk_d_miss are live and mutually exclusive.
+  signal walk_side_i    : std_logic;
   signal walk_cnt_walks : unsigned(15 downto 0);
   signal walk_cnt_hits  : unsigned(15 downto 0);
   -- Walker counter readback at 0xFF000F00. Debug scaffolding for the
@@ -397,7 +408,7 @@ begin
       db_o               => sig_db_o,
       db_i               => dp_db_i,
       inst_o             => sig_inst_o,
-      inst_i             => inst_i,
+      inst_i             => dp_inst_i,
       debug_o            => debug_o,
       debug_i            => debug_i,
       reg                => reg,
@@ -482,6 +493,16 @@ begin
   dp_db_i.d   <= walk_cnt_word when walk_cnt_sel = '1' else
                  db_i.d;
   dp_db_i.ack <= (db_i.ack or walk_cnt_sel) and not walk_busy;
+
+  -- Stall the I-FETCH for exactly as long as its own miss exception is
+  -- suppressed. walk_supp_i is the single source of truth for "the I-side miss
+  -- is being walked", so the fetch is held over precisely the window in which
+  -- no IMISS can fire -- there is no cycle in which the fetch is free to
+  -- complete untranslated and no cycle in which it is stalled with no walk to
+  -- resolve it. A D-side walk does not stall the fetch (walk_supp_i is now
+  -- per-side), which is what preserves older-instruction-first ordering.
+  dp_inst_i.d   <= inst_i.d;
+  dp_inst_i.ack <= inst_i.ack and not walk_supp_i;
 
   -- D-store TLB-fault write suppression (J4). A store that misses or
   -- violates the TLB must not mutate memory, but a write acks and commits in the
@@ -609,8 +630,32 @@ begin
     -- Miss-exception suppression. A walk suppresses the miss arms for its
     -- whole duration, INCLUDING the arming cycle -- see tlb_walk.vhd's `arm`
     -- comment for why the arming cycle is not optional.
-    walk_supp_i <= walk_busy or walk_arm;
-    walk_supp_d <= walk_busy or walk_arm;
+    -- PER SIDE, as tlb_walk.vhd's `arm` comment requires: only the side
+    -- actually being walked has its miss arm suppressed. An I-side and a D-side
+    -- miss can be live in the same cycle; D wins the walk (walk_va prefers it),
+    -- and the I-side exception must still fire on schedule. walk_i_miss and
+    -- walk_d_miss are mutually exclusive by construction (walk_i_miss requires
+    -- sig_db_o.en = '0', walk_d_miss requires sig_db_o.en = '1'), so the arming
+    -- cycle needs no extra priority term, and walk_side_i alone identifies the
+    -- side for the rest of the walk.
+    walk_supp_i <= (walk_arm and walk_i_miss) or (walk_busy and walk_side_i);
+    walk_supp_d <= (walk_arm and walk_d_miss) or (walk_busy and not walk_side_i);
+
+    -- Which side this walk belongs to, sampled on the arming cycle. `busy`
+    -- rises the cycle after `arm`, so this register is always valid before its
+    -- first use above.
+    p_walk_side : process (clk) is
+    begin
+
+      if rising_edge(clk) then
+        if (rst = '1') then
+          walk_side_i <= '0';
+        elsif (walk_arm = '1') then
+          walk_side_i <= walk_i_miss and not walk_d_miss;
+        end if;
+      end if;
+
+    end process p_walk_side;
 
     -- The walker may only consume an ack it caused. Until walk_own rises the bus
     -- still belongs to the core's in-flight access, and its ack (which the core
@@ -648,6 +693,7 @@ begin
     walk_arm     <= '0';
     walk_supp_i  <= '0';
     walk_supp_d  <= '0';
+    walk_side_i  <= '0';
     walk_own     <= '0';
     walk_bus_ack <= '0';
     walk_req     <= '0';

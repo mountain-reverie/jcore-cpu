@@ -342,3 +342,9 @@ mmutsb.elf: mmutsb.o
 mmuwalkhit.elf: mmuwalkhit.o
 mmuwalkmiss.elf: mmuwalkmiss.o
 mmuwalkstale.elf: mmuwalkstale.o
+mmuwalkdside.elf: mmuwalkdside.o
+mmuwalkorder.elf: mmuwalkorder.o
+# mmuwalkiside needs code at a VA absent from the TLB, so it links with its own
+# script (sh32_tlbtext.x = sh32.x + a .tlbtext section fixed at VA 0x00008000).
+mmuwalkiside.elf: mmuwalkiside.o
+	$(LD) -T sh32_tlbtext.x -Map main.map $^ $(LIBGCC) -o $@

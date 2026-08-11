@@ -90,7 +90,14 @@ run_guard() {  # <name> <sim_top-or-default> [stop-time] [wall-timeout-s]
 
 if [ $# -ge 1 ]; then
   # Single guard. Default the top + stop-time for the known cache/long guards.
-  name="$1"; top="${2:-}"; stop="${3:-}"
+  # A positional arg wins, then the documented `stop=<t> ./mmu_sim.sh <name>`
+  # env override, then the per-guard default in the case below. The env fallback
+  # is NOT redundant: this used to read `stop="${3:-}"`, which unconditionally
+  # clobbered an exported `stop` with the empty string, so `stop=300us` silently
+  # ran at the 80us default. That turns a stop-time overrun into what looks like
+  # a hang that "reproduces identically at a longer stop-time" -- the single most
+  # misleading failure mode this script has. Same reasoning for `top`.
+  name="$1"; top="${2:-${top:-}}"; stop="${3:-${stop:-}}"
   case "$name" in
     mmuicolor)  top="${top:-cpu_cache_tb}"; stop="${stop:-400us}" ;;
     mmudcbit)   top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
@@ -107,6 +114,13 @@ if [ $# -ge 1 ]; then
     mmurelocbp) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmupcprobe|mmudspcprobe) stop="${stop:-200us}" ;;
     m8_dside)   stop="${stop:-300us}" ;;
+    # Keep in step with the budget on the `run_guard m8_dsdslot_0` line below.
+    # Without this arm a single-guard invocation fell back to the 80us default
+    # and died mid-sweep, which looks exactly like a wedge (the bus monitor's
+    # "Rd did not see ACK" warnings are benign and present in passing runs too,
+    # so the tail of the log is actively misleading). It is just the axis
+    # needing ~613us to finish.
+    m8_dsdslot_0) stop="${stop:-900us}" ;;
     m8_ifetch_*) stop="${stop:-12ms}" ;;
   esac
   run_guard "$name" "$top" "${stop:-80us}" "${4:-240}"
@@ -605,7 +619,20 @@ else
   # existing first-cycle-capture comment in datapath.vhm about the I-fetch
   # stream advancing a word while an IMISS persists. Only texc_ack marks the
   # boundary that actually matters.
-  run_guard m8_dsdslot_0 "" 600us
+  # STOP-TIME BUDGET (measured, not guessed). This axis takes ~2600 TLB misses,
+  # so its runtime is dominated by the m8_runtime.inc miss handler and it is the
+  # single most stop-time-sensitive guard in the suite. The old 600us was set
+  # when the handler read PTEH/ASIDR/TSBPTR with register-only STC overlays and
+  # the guard completed at 585.21us -- 2.5% of headroom, which was not a budget
+  # so much as a coincidence. Phase 3 retired those STC forms in favour of the
+  # P4 MMIO aliases, so each of the five reads became a PC-relative literal load
+  # plus an MMIO load; the handler got ~4.7% more expensive and completion moved
+  # to 612.79us, silently overrunning. That is a real and intended cost, not a
+  # defect: nothing hangs and no assertion changed. 900us restores ~47% margin
+  # (measured completion 612.79us) so the next handler change does not rediscover
+  # this the hard way. Both figures are the final timestamp of an MMU_VCD dump,
+  # which ends at the "Test Passed" exit. Wall budget raised to 240s to match.
+  run_guard m8_dsdslot_0 "" 900us 240
   # mmudspcprobe_late: ACTIVE since Defect 7 was fixed (decode/decode_core.vhm,
   # g_dslot -- see the writeup above). Built from mmudspcprobe.S (which pins the
   # slot-0 arm to exactness) with the delay-slot instruction swapped for

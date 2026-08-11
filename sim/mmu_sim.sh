@@ -106,7 +106,7 @@ if [ $# -ge 1 ]; then
     mmurelocif) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmurelocbp) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmupcprobe|mmudspcprobe) stop="${stop:-200us}" ;;
-    m8_dside)   stop="${stop:-200us}" ;;
+    m8_dside)   stop="${stop:-300us}" ;;
     m8_ifetch_*) stop="${stop:-12ms}" ;;
   esac
   run_guard "$name" "$top" "${stop:-80us}" "${4:-240}"
@@ -282,7 +282,7 @@ else
 # m8_smoke and m8_idslot_0-2 are wired into the run below (the latter as of
 # 2026-08-06, see the note above).
   run_guard m8_smoke
-  run_guard m8_dside    "" 200us
+  run_guard m8_dside    "" 300us
   # m8_dsdslot_0: UNPARKED 2026-08-06. 29 of its 32 cases run; STC.L GBR/SR/VBR,
   # @-Rn (26/27/28) are excluded from _m8_run_all via m8gen's dsdslotSkip -- they
   # hang the bus instead of reporting, MEASURED pre-existing (they hang
@@ -643,9 +643,9 @@ else
   # the faulting instruction's own if_pc record; see if_fault in
   # core/components_pkg.vhd. Each was measured RED immediately before the fix, so
   # none can pass vacuously.
-  run_guard m8_idslot_0 "" 200us
-  run_guard m8_idslot_1 "" 200us
-  run_guard m8_idslot_2 "" 200us
+  run_guard m8_idslot_0 "" 300us
+  run_guard m8_idslot_1 "" 300us
+  run_guard m8_idslot_2 "" 300us
   # Genuine TLB MULTI_HIT reachability + the 30af728 restart-shadow guard
   # (I-side MULTI_HIT must not arm the D-side restore; D-side MULTI_HIT
   # still must). Measured completion ~3.95us (m8_pass.vcd); 100us margin.

@@ -468,7 +468,11 @@ begin
       tlb_exc_is_i       => tlb_exc_is_i,
       tlb_exc_ifetch     => tlb_exc_ifetch,
       if_pc              => dp_if_pc,
-      ex_if_pc           => dec_ex_if_pc
+      ex_if_pc           => dec_ex_if_pc,
+      -- Walker counters' P4 alias (Phase 3 Task 1, P4_TSBCNT at 0xFF000054):
+      -- pass the same signals the P2 0xABCD0F00 window below reads.
+      walk_cnt_walks_i   => std_logic_vector(walk_cnt_walks),
+      walk_cnt_hits_i    => std_logic_vector(walk_cnt_hits)
     );
 
   -- Withhold ack from the core while the walker owns the bus. The core keeps

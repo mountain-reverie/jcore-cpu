@@ -1,5 +1,5 @@
-! mmutsbslot.S -- P4 TSB-slot-address helper (core/cpu.vhd tsb_slot_sel,
-! 0xABCD0F10; docs/soc/p4-mmio-map.md 0x048 "TSBSLOT") returns tsb_ptr(VA)
+! mmutsbslot.S -- P4 TSB-slot-address helper (core/datapath.vhm P4_TSBSLOT,
+! 0xFF000048; docs/soc/p4-mmio-map.md 0x048 "TSBSLOT") returns tsb_ptr(VA)
 ! for a spread of VAs.
 !
 ! This is the ONE-TIME oracle check for Phase-2 Task 2: Linux's
@@ -106,7 +106,7 @@ p_tsbbr_addr:  .long 0xFF000014
 p_tsbbr_val:   .long 0x00010006        ! base=0x00010000, TSB_SIZE_LOG=6
 p_tsbcfg_addr: .long 0xFF000018
 p_tsbcfg_val:  .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
-p_slot_reg:    .long 0xABCD0F10        ! core/cpu.vhd tsb_slot_sel
+p_slot_reg:    .long 0xFF000048        ! core/datapath.vhm P4_TSBSLOT
 
 p_va1:  .long 0x00042000
 p_exp1: .long 0x00010030

@@ -348,6 +348,7 @@ mmuwalkorder.elf: mmuwalkorder.o
 mmutsbslot.elf: mmutsbslot.o
 mmuwalkasid.elf: mmuwalkasid.o
 mmutsbvictim.elf: mmutsbvictim.o
+mmuwalkway1.elf: mmuwalkway1.o
 # mmuwalkiside needs code at a VA absent from the TLB, so it links with its own
 # script (sh32_tlbtext.x = sh32.x + a .tlbtext section fixed at VA 0x00008000).
 mmuwalkiside.elf: mmuwalkiside.o

@@ -27,14 +27,38 @@ hardware block view and synthesis cost see [j4.md](j4.md); the RTL is
 > flat TSB hash array only; `pgd`/`pmd`/`pte` stay private to software. That
 > distinction is the point, not a technicality.
 >
-> **Phase 1 (current) keeps today's TSB format** — 16-byte slot, 1-way,
-> `tag_hi`/`tag_lo`/`data` at `+0`/`+4`/`+8` — and **keeps every existing MMU
-> instruction**. The 2-way 32-byte set and the retirement of seven encodings
-> are Phase 2 and Phase 3 and are **not in the tree**. Everything below
-> describes shipped behaviour and stays accurate for the walk-failure path.
+> **Phase 2 is now IN THIS BRANCH (not merged).** The TSB is **2-way**: a set
+> is one 32-byte cache line holding two contiguous 16-byte entries, way 0 at
+> `+0` and way 1 at `+16`, and the walker probes both. `TSBBR.TSB_SIZE_LOG`
+> counts **sets**, `tsb_ptr()` scales by `<< 5`, and **`ASID` is folded into
+> the index** rather than only compared as a tag. `TSBPTR` presents the
+> **set** address; software reads the line, compares both tags, and writes the
+> matching way, or the way hardware nominates. Three new P4 registers:
+> `TSBSLOT` (`0xFF000048`, write a VA / read its set address), `TSBVSEED`
+> (`0xFF00004C`, **write-only** victim-LFSR seed) and `TSBVICT`
+> (`0xFF000050`, **read-only** 1-bit way nomination; the read advances the
+> LFSR).
+>
+> **The `ASID` fold is hardening, not isolation, and must not be described as
+> isolation anywhere.** It is XOR-separable — `hash = f(vpn) ⊕ g(asid)` — and
+> this is an open-source core, so `g` is public and the remaining unknown fits
+> in `2^TSB_SIZE_LOG` (64–1024) offsets, brute-forceable by timing probes. It
+> removes the zero-effort same-VA eviction primitive and improves
+> distribution; that is all it does. The isolation mechanism is per-domain TSB
+> partitioning via `TSBBR` (`docs/mmu/hardware-spec.md` §2.13a).
+>
+> **Still Phase 3, still not in the tree:** the retirement of the seven MMU
+> encodings. **Every existing MMU instruction still exists and still works.**
+> Everything below describes shipped behaviour and stays accurate for the
+> walk-failure path.
 >
 > Design: `../../../docs/superpowers/specs/2026-08-09-hardware-tsb-walker-design.md`.
-> Spec: `../../../docs/mmu/hardware-spec.md` §5.0.
+> Spec: `../../../docs/mmu/hardware-spec.md` §5.0, §2.8, §2.8a, §2.12, §2.13.
+> Guards (`sim/tests/`): `mmuwalkway1` (the real 2-way conflict case),
+> `mmuwalkasid` (the `ASID` fold moves the index), `mmuwalktorn`,
+> `mmuwalkorder` (fault-dispatch ordering), `mmuwalkhit`, `mmuwalkmiss`,
+> `mmuwalkstale`,
+> `mmuwalkdside`, `mmuwalkiside`.
 
 - **32-entry, fully associative, software-loaded.** There is **no hardware
   page-table walker.** On a TLB miss the core raises an exception and a
@@ -266,6 +290,17 @@ a prefetcher would reintroduce this surface and must be re-reviewed.
   non-SMT design (no concurrent observation) and the low clock. Optional
   mitigations: flush L1+TLB on context switch, a constant-time/constant-memory
   miss handler, and mapping secret pages uncacheable (`C=0`).
+- **TSB contention** (Phase 2, in this branch, not merged). The TSB is per-CPU
+  and shared across address spaces, and a hit is ~11× cheaper than a miss, so
+  conflict-based prime+probe against it is real. Phase 2 folds `ASID` into the
+  TSB index and adds an OS-seeded victim LFSR. **Both are hardening and neither
+  is a boundary** — the fold is XOR-separable and public in an open-source
+  core, and the residual unknown is a 64–1024-entry offset space that timing
+  probes can search. What they buy is the removal of the *zero-effort*
+  same-VA eviction primitive and an unpredictable eviction choice. The actual
+  boundary, for a deployment that needs one, is **per-domain TSB partitioning**
+  — disjoint index ranges per trust domain, switched by writing `TSBBR`, which
+  needs no RTL change (`docs/mmu/hardware-spec.md` §2.13a).
 - **Rowhammer** and other DRAM-level effects — a function of the SDRAM part and
   the physical allocator, not the core; the good CPU properties do not help here.
 - **Software correctness** in ASID recycle, global-bit hygiene, revocation, and
@@ -338,6 +373,15 @@ the design repository's `docs/mmu/security-review.md`.
 | SR / bank state on exception entry | `mmusr` |
 | Precise-exception fault transparency (MAC, auto-inc, …) | `m8_*` family |
 | Variable page size (PageMask) | `mmupage4k`, `mmupage16k`, `mmupage64k`, `mmupage1m`, `mmupagemix`, `mmupagemix2`, `mmupagewalk` |
+| Hardware TSB walk installs without an exception (SPC/SSR/EXPEVT untouched) | `mmuwalkhit` |
+| Walk failure still vectors exactly as before | `mmuwalkmiss` |
+| `V=0` / `STALE=1` entries do not install | `mmuwalkstale` |
+| Torn TSB entry never installs a mismatched translation (store order) | `mmuwalktorn` |
+| A live walker does not disturb older-instruction-first fault dispatch | `mmuwalkorder` |
+| D-side ack-withholding; I-fetch walk while the data bus is borrowed | `mmuwalkdside`, `mmuwalkiside` |
+| **2-way TSB: way-1 hit on a real conflict** (Phase 2) | `mmuwalkway1` |
+| **`ASID` participates in the index, not only the tag** (Phase 2) | `mmuwalkasid` |
+| TSB contention as an isolation boundary (per-domain partitioning, §7) | **none — it is a software/hypervisor policy, not an RTL property** |
 
 > ### 8.1 S-I5 — multi-hit: install-time overlap eviction, with hardware
 > detection retained as defence-in-depth
@@ -637,6 +681,50 @@ programmed — so a context switch is a single register write, not a TLB flush.
 - **SPARC v9 / UltraSPARC** `PRIMARY_CONTEXT` & `SECONDARY_CONTEXT` (sun4u,
   ASI `0x21`, 1995) — the direct model for `ASIDR`.
   [SPARC (Wikipedia)](https://en.wikipedia.org/wiki/SPARC)
+
+**`ASID` folded into the TSB index (Phase 2).** Deriving a translation
+structure's *index*, not just its tag, from the address-space identifier.
+- **US 5,493,660**, Hewlett-Packard, *"Software assisted hardware TLB miss
+  handler"*, filed **1992-10-06**, granted 1996-02-20, **expired**. A hardware
+  TLB miss handler forming its pointer by XORing high-order virtual-address
+  bits — the OS-assigned space identifier — with low-order bits, "to provide a
+  more uniform distribution of pointer references over periods when multiple
+  processes execute". Same mechanism, same motivation, same context.
+- **US 5,899,994**, Sun Microsystems, filed **1997-06-26**, **expired** — TSB
+  index from PID + VA. It also warns that XORing a *narrow* process identifier
+  straight in distributes badly, which is why J4's fold is a mixed function
+  (`asid ^ (asid<<5)`, refolded `>> 9`) rather than a bare XOR.
+- **US 7,430,643**, Sun, priority **2004-12-30** — context as a **tag only**,
+  which is prior art for the arrangement J4 had *before* Phase 2.
+
+**Random replacement between the ways of a set (Phase 2 victim LFSR).**
+Ubiquitous well before the cutoff — A. J. Smith, *"Cache Memories"*, ACM
+Computing Surveys 14(3), 1982; Hennessy & Patterson (any edition ≤4th); the
+replacement policy of essentially every ARM core of the era.
+
+**Set-associative placement with a set in one aligned block.** PowerPC HTAB
+`PTEG` (601/603/604, 1993–94): eight candidate entries in one aligned group,
+read as a unit, with a software fallback — the same "all candidates in one
+read" property that lets J4's software filler see both tags before it writes.
+
+**Partitioning a shared indexed structure per trust domain** — the actual
+isolation mechanism, as distinct from the hardening above. J. Liedtke,
+H. Härtig & M. Hohmuth, *"OS-Controlled Cache Predictability for Real-Time
+Systems"*, **RTAS 1997, pp. 213–224**. The rejected-as-costly alternative,
+flush-on-switch, is C. Percival, *"Cache Missing for Fun and Profit"*,
+**BSDCan 2005**.
+
+**Not available to this project, recorded so it is not re-proposed.** A keyed
+or per-context index mapping originates with **RPcache — Z. Wang & R. B. Lee,
+ISCA 2007, pp. 494–505**, past the 2006 cutoff; there is **no pre-2006 TLB
+index randomization at all**. Periodic re-keying is CEASER (MICRO 2018) and
+its successors. And a boot-time secret *constant* XOR'd into the index is
+useless rather than merely weak: it cancels in the collision condition, because
+conflict attacks turn on relative placement, never absolute. See
+`docs/mmu/hardware-spec.md` §2.8b.
+
+*Publication or grant before 2006 is evidence of prior art. It is not a
+patent-clearance opinion.*
 
 **SuperH / SH-4 lineage.** The privileged architecture J4 implements (MD mode,
 banked registers, the SPC/SSR exception model, `MMUCR`/`PTEH`/`PTEL`, a

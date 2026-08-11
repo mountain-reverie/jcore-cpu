@@ -124,8 +124,9 @@ kmain:
         mov.l   k_hit_cnt,     r0 ; mov #0, r1 ; mov.l r1, @r0
         mov.l   k_miss_cnt,    r0 ; mov #0, r1 ; mov.l r1, @r0
 
-        ! ---- Zero the 4096-byte (256-slot) boot TSB (JCORE_BOOT_TSB_SIZE_LOG
-        ! is baked into jcore_mmu_enable as 8 -> 16 << 8 = 4096 bytes). ----
+        ! ---- Zero the 8192-byte (256-SET, 2-way) boot TSB
+        ! (JCORE_BOOT_TSB_SIZE_LOG is baked into jcore_mmu_enable as 8, and
+        ! TSB_SIZE_LOG now counts SETS of 32 bytes -> 32 << 8 = 8192). ----
         mov.l   k_tsb, r0
         mov.l   k_tsb_words, r2
         mov     #0, r1
@@ -148,7 +149,7 @@ kmain:
         nop
 
         ! ================= call the REAL jcore_mmu_enable =================
-        mov.l   k_tsb, r4               ! r4 = boot-TSB P1 base (4096-aligned)
+        mov.l   k_tsb, r4               ! r4 = boot-TSB P1 base (8192-aligned)
         mov.l   p_mmu_enable, r0
         jsr     @r0
          nop
@@ -221,8 +222,8 @@ k_install_cnt:  .long 0x80090100
 k_hit_cnt:      .long 0x80090104
 k_miss_cnt:     .long 0x80090108
 
-k_tsb:          .long 0x80060000       ! 4096-byte, 4096-aligned boot TSB
-k_tsb_words:    .long 1024             ! 4096 bytes / 4
+k_tsb:          .long 0x80060000       ! 8192-byte, 8192-aligned boot TSB
+k_tsb_words:    .long 2048             ! 8192 bytes / 4
 
 k_backing_a:    .long 0x80071000       ! P1 alias of backing PA 0x00071000
 v_seed_a:       .long 0xC0FFEE00

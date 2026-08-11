@@ -44,8 +44,8 @@
 ! Setup mirrors the proven-correct mmuwalkhit.S (RB clear / VBR / identity code
 ! page / TSBBR=0x00010006 / TSBCFG=0x00000061). Slot arithmetic uses mmutsb.S's
 ! documented hash, which keys on the VA:
-!   VA 0x00042000 -> vpn 0x42, hash 0x42^(0x42>>6)=0x43, idx 0x03 -> 0x00010030
-!   VA 0x00043000 -> vpn 0x43, hash 0x43^(0x43>>6)=0x42, idx 0x02 -> 0x00010020
+!   VA 0x00042000 -> vpn 0x42, hash 0x42^(0x42>>6)=0x43, idx 0x03 -> 0x00010060
+!   VA 0x00043000 -> vpn 0x43, hash 0x43^(0x43>>6)=0x42, idx 0x02 -> 0x00010040
 !
 ! Result codes:
 !   1  sub-test A: the store never landed at its PA (write lost across the walk)
@@ -253,8 +253,8 @@ p_tsbbr_addr:   .long 0xFF000014
 p_tsbbr_val:    .long 0x00010006        ! base=0x00010000, TSB_SIZE_LOG=6
 p_tsbcfg_addr:  .long 0xFF000018
 p_tsbcfg_val:   .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
-p_tsb_slot_a:   .long 0x00010030        ! hash(VA 0x00042000) -- see header
-p_tsb_slot_b:   .long 0x00010020        ! hash(VA 0x00043000) -- see header
+p_tsb_slot_a:   .long 0x00010060        ! hash(VA 0x00042000) -- see header
+p_tsb_slot_b:   .long 0x00010040        ! hash(VA 0x00043000) -- see header
 p_vpn_a:        .long 0x00042000
 p_vpn_b:        .long 0x00043000
 p_ptel_a:       .long 0x000440E9        ! VA 0x00042000 -> PA 0x00044000, W|X|U|C|V

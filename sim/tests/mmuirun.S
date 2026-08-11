@@ -93,6 +93,7 @@ kmain:
         ! ---- Zero the 16-entry TSB (64 words). ----
         mov.l   k_tsb,  r0             ! 0x80002C00
         mov     #64, r2
+        shll    r2                      ! 2-way sets: 32 B/set => 128 words
         mov     #0,  r1
 1:      mov.l   r1, @r0
         add     #4, r0
@@ -271,7 +272,7 @@ u_code_img:
         jmp     @r0                    ! return to P1 kernel
         nop
         .align 2
-9:      .long   0x80002D10            ! P1 addr of ctl block {flag,sent,src,res,ret}
+9:      .long   0x80002E10            ! P1 addr of ctl block {flag,sent,src,res,ret}
 u_code_end:
 
         .align 2
@@ -289,20 +290,20 @@ k_tsb:     .long 0x80002C00
 k_img:     .long 0x80000000 + u_code_img
 k_imgend:  .long 0x80000000 + u_code_end
 k_bk:      .long 0x00100000           ! identity backing == workload VA (copy direct, AT off)
-k_ranf:    .long 0x80002D08
-k_ranf2:   .long 0x80002D0C
-k_ranf3:   .long 0x80002D2C
+k_ranf:    .long 0x80002E08
+k_ranf2:   .long 0x80002E0C
+k_ranf3:   .long 0x80002E2C
 v_sentinel:.long 0xC0DE0001
 v_sent2:   .long 0xC0DE0002
 v_sent3:   .long 0xC0DE0003
-k_ctl0:    .long 0x80002D10           ! stub control block {flag,sent,src,res,ret} (D10..D20)
-k_scratch: .long 0x80002D28           ! P1 scratch (cold/warm legs' load+store target)
-k_mixedval:.long 0x80002D24           ! mixed-leg translated-load result
+k_ctl0:    .long 0x80002E10           ! stub control block {flag,sent,src,res,ret} (E10..E20)
+k_scratch: .long 0x80002E28           ! P1 scratch (cold/warm legs' load+store target)
+k_mixedval:.long 0x80002E24           ! mixed-leg translated-load result
 p_after:   .long 0x80000000 + _after_ifetch
 p_after2:  .long 0x80000000 + _after_ifetch2
 p_after3:  .long 0x80000000 + _after_ifetch3
 k_wcnt:    .long 0x80010D00   ! must match WALKER_CALLS in tlbwalk.c
-k_hcnt:    .long 0x80002D04
+k_hcnt:    .long 0x80002E04
 k_walkcnt: .long 0xABCD0F00   ! cpu.vhd P2 debug word: [31:16]=cnt_walks [15:0]=cnt_hits
 k_mask16:  .long 0x0000FFFF
 k_vbr:     .long 0x80000000 + _vbase
@@ -392,7 +393,7 @@ _h_realfault:
         nop
 
         .align 2
-H_hcnt:   .long 0x80002D04
+H_hcnt:   .long 0x80002E04
 H_pgd:    .long 0x80002000
 H_walk:   .long 0x80000000 + ___jcore_tlb_walk  ! P1 alias: walker runs untranslated
 H_mmucr:  .long 0xFF000010

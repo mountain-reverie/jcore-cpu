@@ -15,14 +15,14 @@
 !   vpn  = VA >> 12
 !   hash = (vpn xor (vpn >> HASH_SHIFT)) xor amix(ASID)   [amix(0) == 0]
 !   idx  = hash and ((1 << TSB_SIZE_LOG) - 1)
-!   slot = (TSBBR and not 0xF) or (idx << 4)
+!   set  = (TSBBR and not 0x1F) or (idx << 5)   [32-byte 2-way set]
 !
 ! Result codes:
-!   1  VA 0x00042000 -> expected 0x00010030 (cross-checked against
+!   1  VA 0x00042000 -> expected 0x00010060 (cross-checked against
 !      mmuwalkmiss.S/mmuwalkhit.S's own independently-derived expectation)
-!   2  VA 0x00001000 -> expected 0x00010010
-!   3  VA 0x0004F000 -> expected 0x000100E0
-!   4  VA 0x12345000 -> expected 0x00010080
+!   2  VA 0x00001000 -> expected 0x00010020
+!   3  VA 0x0004F000 -> expected 0x000101C0
+!   4  VA 0x12345000 -> expected 0x00010100
 !   5  VA 0xFFFFF000 -> expected 0x00010000
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -120,13 +120,13 @@ p_tsbcfg_val:  .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
 p_slot_reg:    .long 0xFF000048        ! core/datapath.vhm P4_TSBSLOT
 
 p_va1:  .long 0x00042000
-p_exp1: .long 0x00010030
+p_exp1: .long 0x00010060
 p_va2:  .long 0x00001000
-p_exp2: .long 0x00010010
+p_exp2: .long 0x00010020
 p_va3:  .long 0x0004F000
-p_exp3: .long 0x000100E0
+p_exp3: .long 0x000101C0
 p_va4:  .long 0x12345000
-p_exp4: .long 0x00010080
+p_exp4: .long 0x00010100
 p_va5:  .long 0xFFFFF000
 p_exp5: .long 0x00010000
 #endif

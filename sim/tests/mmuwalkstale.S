@@ -16,7 +16,7 @@
 !
 ! Uses the same TSBBR/TSBCFG identity-mapped-code-page setup as the
 ! proven-correct mmuwalkhit.S. Sub-test A hashes VA 0x00042000 to TSBPTR
-! 0x00010030 (same arithmetic as mmuwalkhit/mmuwalkmiss); sub-test B uses
+! 0x00010060 (same arithmetic as mmuwalkhit/mmuwalkmiss); sub-test B uses
 ! VA 0x00000000, which hashes to TSBPTR 0x00010000 (VPN 0 in the base slot).
 !
 ! Result codes:
@@ -178,7 +178,7 @@ p_tsbbr_addr:   .long 0xFF000014
 p_tsbbr_val:    .long 0x00010006        ! base=0x00010000, TSB_SIZE_LOG=6
 p_tsbcfg_addr:  .long 0xFF000018
 p_tsbcfg_val:   .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
-p_tsb_slot_a:   .long 0x00010030        ! hash(0x00042000) -- see mmutsb.S header
+p_tsb_slot_a:   .long 0x00010060        ! hash(0x00042000) -- see mmutsb.S header
 p_vpn_a:        .long 0x00042000
 p_testva_a:     .long 0x00042000
 p_tsb_slot_b:   .long 0x00010000        ! hash(0x00000000) -- base slot, VPN 0

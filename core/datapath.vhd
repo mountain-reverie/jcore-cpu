@@ -1351,13 +1351,13 @@ end generate;
               this.tlb_restore_pend := this.ma_autoupd;
             end if;
             -- TSB pointer assist (hardware-spec §2.8): compute the address of
-            -- the TSB slot for the faulting VPN and latch it into TSBPTR (read-
+            -- the TSB SET for the faulting VPN and latch it into TSBPTR (read-
             -- only via STC TSBPTR / MMIO 0xFF00001C).
             -- vpn = faulting_VA[31:12] (4 KB page number)
             -- hash = (HASH_MODE=1 ? vpn xor (vpn >> HASH_SHIFT) : vpn)
             -- xor amix(ASID) -- see tsb_ptr() in datapath_pkg
             -- mask = (1 << TSB_SIZE_LOG) - 1
-            -- TSBPTR = (TSBBR and not 0xF) or ((hash and mask) << 4)
+            -- TSBPTR = (TSBBR and not 0x1F) or ((hash and mask) << 5)
             -- TSBBR[N+3:4] are reserved-0 so clearing the low nibble and ORing
             -- the 16-byte-scaled index suffices (no variable base mask needed).
             this.mmu.tsbptr := tsb_ptr(tlb_fault_va, this.mmu.tsbcfg, this.mmu.tsbbr,
@@ -1685,6 +1685,20 @@ end generate;
                 -- jcore_tsb_slot_addr() uses this instead of mirroring the
                 -- hash in C.
                 elsif ma_ad(7 downto 0) = x"48" then p4_sel_v := P4_TSBSLOT;
+                -- TSB victim selector (Phase-2 Task 4 Part B).
+                -- 0x4C TSBVSEED: WRITE-ONLY seed for the victim LFSR. It has
+                -- no read case below, so a read returns the `others`
+                -- hard zero -- deliberately, not by omission: if software
+                -- could read the seed back so could an attacker, and the
+                -- whole point of taking the seed from the OS is that the
+                -- victim sequence must not be reconstructible from
+                -- anything public (this core's sources included).
+                -- 0x50 TSBVICT: READ-ONLY 1-bit way nomination. The read
+                -- advances the LFSR, so each read consumes one bit and
+                -- no two reads see the same nomination state. Only the
+                -- nomination is exposed; the state itself never is.
+                elsif ma_ad(7 downto 0) = x"4C" then p4_sel_v := P4_TSBVSEED;
+                elsif ma_ad(7 downto 0) = x"50" then p4_sel_v := P4_TSBVICT;
                 end if;
               end if;
               if PRIV_ARCH and seg_v = SEG_P4 then
@@ -1705,6 +1719,10 @@ end generate;
                     when P4_TSBCFG => this.mmu.tsbcfg := ma_dw;
                     when P4_TRA => this.priv.tra := ma_dw(9 downto 0);
                     when P4_TSBSLOT => this.mmu.tsbslot_va := ma_dw;
+                    -- Seed the victim LFSR. Write-only: there is no matching
+                    -- read case. tsb_lfsr_next() self-heals an all-zero seed,
+                    -- so writing 0 does not lock the selector to way 0.
+                    when P4_TSBVSEED => this.mmu.vlfsr := ma_dw(15 downto 0);
                     -- P4_TSBPTR / P4_EXPEVT / P4_INTEVT / P4_MMUFSR are
                     -- read-only: a write is silently ignored.
                     when others => null;
@@ -1726,6 +1744,17 @@ end generate;
                                                 this.mmu.tsbcfg,
                                                 this.mmu.tsbbr,
                                                 this.mmu.asidr(15 downto 0));
+                    when P4_TSBVICT =>
+                      -- Advance, then publish ONLY bit 0 of the new state as
+                      -- the way nomination. The rest of the state is dropped
+                      -- on the floor here and is not reachable from any other
+                      -- read case; that is what makes the sequence
+                      -- unobservable to software beyond the bits it consumes.
+                      this.mmu.vlfsr := tsb_lfsr_next(this.mmu.vlfsr);
+                      this.m_dr_next := x"0000000" & "000"
+                                        & this.mmu.vlfsr(0);
+                    -- P4_TSBVSEED is WRITE-ONLY: no read case, so it falls to
+                    -- `others` and reads back a hard zero. See the decode.
                     when others => this.m_dr_next := (others => '0');
                   end case;
                   this.m_en := '1';

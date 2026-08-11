@@ -102,6 +102,12 @@ package cpu2j0_components_pack is
     -- written VA is stored; the index function is evaluated on the read, so
     -- there is exactly one implementation of it (tsb_ptr in datapath_pkg).
     tsbslot_va : std_logic_vector(31 downto 0);
+    -- TSB victim selector state (Phase-2 Task 4). Seeded WRITE-ONLY through
+    -- P4 0xFF00004C (TSBVSEED); advanced one step on every read of P4
+    -- 0xFF000050 (TSBVICT), which returns only the 1-bit way nomination. This
+    -- field is never routed to a read path -- neither the seed nor the state
+    -- is observable by software. See tsb_lfsr_next() in datapath_pkg.
+    vlfsr : std_logic_vector(15 downto 0);
     -- MMUFSR (M-fsr, hardware-spec §2.11): fault-status snapshot latched on
     -- every TLB exception, read-only MMIO 0xFF000028. [12]=VALID [11:8]=KIND
     -- [7:5]=rsvd(0) [4]=USER [3]=PROT [2]=ITLB [1]=INITIAL(0) [0]=WRITE.

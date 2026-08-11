@@ -2,13 +2,17 @@
 !
 ! Provides:
 !   PASS / FAILn  macros writing TEST_RESULT_ADDRESS then spinning
-!   tsb_fill      macro: write a TSB slot in TODAY's format
+!   tsb_fill / tsb_fill_way  macros: write one way of a 32-byte TSB set
 !   Lresult / Lmmucr / Ltsbbr / Ltsbcfg literal pool
 !
-! TSB slot format this phase (unchanged from master):
-!   +0 tag_hi = VPN (VA & PAGE_MASK)
-!   +4 tag_lo = ASID_TAG
-!   +8 data   = PTEL
+! TSB SET format (Phase-2 Task 4): one 32-byte line, two 16-byte ways.
+!   way 0: +0  tag_hi = VPN (VA & PAGE_MASK)
+!          +4  tag_lo = ASID_TAG
+!          +8  data   = PTEL
+!          +12 reserved
+!   way 1: +16 / +20 / +24 / +28, same order
+! tsb_ptr() (core/datapath_pkg.vhd) now returns the 32-byte-aligned SET
+! address, and TSB_SIZE_LOG counts SETS.
 !
 ! NOTE: this file emits NO code -- only macro definitions. `mmuwalk_pool` emits
 ! the literal pool the PASS/FAIL macros reference; invoke it AFTER their last
@@ -30,13 +34,23 @@
         nop
         .endm
 
-        ! tsb_fill rslot, rvpn, rasid, rptel
-        ! Writes data first, tag_lo second, tag_hi LAST. tag_hi is the commit
-        ! point because the walker compares it first (design spec section 6.2).
+        ! tsb_fill_way rset, woff, rvpn, rasid, rptel
+        ! \woff is the WAY BYTE OFFSET inside the 32-byte set: 0 for way 0,
+        ! 16 for way 1. Writes data first, tag_lo second, tag_hi LAST. tag_hi
+        ! is the commit point because the walker compares it first (design
+        ! spec section 6.2), so a walker landing mid-sequence must never see a
+        ! matching tag over a half-written entry.
+        .macro  tsb_fill_way rset, woff, rvpn, rasid, rptel
+        mov.l   \rptel, @(\woff + 8, \rset)
+        mov.l   \rasid, @(\woff + 4, \rset)
+        mov.l   \rvpn,  @(\woff + 0, \rset)
+        .endm
+
+        ! tsb_fill rset, rvpn, rasid, rptel -- way 0 of the set. Kept as the
+        ! short form because most guards only care that SOME way holds the
+        ! entry, and the walker probes way 0 first.
         .macro  tsb_fill rslot, rvpn, rasid, rptel
-        mov.l   \rptel, @(8, \rslot)
-        mov.l   \rasid, @(4, \rslot)
-        mov.l   \rvpn,  @(0, \rslot)
+        tsb_fill_way \rslot, 0, \rvpn, \rasid, \rptel
         .endm
 
         .macro  mmuwalk_pool

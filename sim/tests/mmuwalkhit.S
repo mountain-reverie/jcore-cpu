@@ -17,7 +17,7 @@
 !
 ! Setup mirrors mmutsb.S (proven-correct RB-clear / VBR / identity code-page
 ! mapping / TSBBR+TSBCFG config): same TSBBR=0x00010006, TSBCFG=0x00000061,
-! and the same fault VA 0x00042000, which hashes to TSBPTR 0x00010030
+! and the same fault VA 0x00042000, which hashes to TSBPTR 0x00010060
 ! (see mmutsb.S's header comment for the arithmetic). This guard additionally
 ! fills that TSB slot with a valid entry (mmuwalk_common.inc's tsb_fill)
 ! before AT is enabled, so the walker can resolve the miss instead of a
@@ -183,7 +183,7 @@ p_pteh_code:    .long start
 p_ptel_code:    .long start + 0x000000C8 ! identity: PPN=start, U cleared (SMEP)
 p_data_pa:      .long 0x00042000
 p_expect:       .long 0xA5A5A5A5
-p_tsb_slot:     .long 0x00010030        ! hash(0x00042000, TSBCFG, TSBBR) -- see header
+p_tsb_slot:     .long 0x00010060        ! hash(0x00042000, TSBCFG, TSBBR) -- see header
 p_vpn:          .long 0x00042000
 p_asid:         .long 0x00000000
 p_ptel_data:    .long 0x000420E9        ! PA 0x00042000 | V|C|U|X|W (0xE9)

@@ -15,7 +15,7 @@
 ! whole class of "target never executed" misreadings.)
 !
 ! Slot arithmetic, using mmutsb.S's documented hash:
-!   VA 0x00008000 -> vpn 0x08, hash 0x08^(0x08>>6)=0x08, idx 0x08 -> 0x00010080
+!   VA 0x00008000 -> vpn 0x08, hash 0x08^(0x08>>6)=0x08, idx 0x08 -> 0x00010100
 !
 ! The PTEL clears U (bit 5): a kernel fetch of a U=1 page is an SMEP violation
 ! (tlb.vhd I-lookup), which would present as a protection fault rather than a
@@ -116,7 +116,7 @@ p_tsbbr_addr:   .long 0xFF000014
 p_tsbbr_val:    .long 0x00010006        ! base=0x00010000, TSB_SIZE_LOG=6
 p_tsbcfg_addr:  .long 0xFF000018
 p_tsbcfg_val:   .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
-p_tsb_slot:     .long 0x00010080        ! hash(0x00008000) -- see header
+p_tsb_slot:     .long 0x00010100        ! hash(0x00008000) -- see header
 p_vpn:          .long 0x00008000
 p_asid:         .long 0x00000000
 p_ptel_x:       .long 0x000080C9        ! PA 0x00008000 | W|X|C|V, U=0 (SMEP)

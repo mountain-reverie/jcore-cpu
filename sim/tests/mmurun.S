@@ -90,9 +90,10 @@ kmain:
         mov.l   k_pteC, r0 ; mov.l v_pteC, r1 ; mov.l r1, @r0
         mov.l   k_pteD, r0 ; mov.l v_pteD, r1 ; mov.l r1, @r0
 
-        ! ---- Zero the 16-entry TSB (64 words). ----
+        ! ---- Zero the 16-SET, 2-way TSB (32 bytes/set => 128 words). ----
         mov.l   k_tsb,  r0             ! 0x80002C00
         mov     #64, r2
+        shll    r2                      ! 2-way sets: 32 B/set => 128 words
         mov     #0,  r1
 1:      mov.l   r1, @r0
         add     #4, r0
@@ -179,7 +180,7 @@ v_seedC:   .long 0xA5A50003
 sv_B:      .long 0x5B5B0002
 sv_D:      .long 0x5B5B0004
 k_wcnt:    .long 0x80010D00   ! must match WALKER_CALLS in tlbwalk.c
-k_hcnt:    .long 0x80002D04
+k_hcnt:    .long 0x80002E04
 k_walkcnt: .long 0xABCD0F00   ! cpu.vhd P2 debug word: [31:16]=cnt_walks [15:0]=cnt_hits
 k_mask16:  .long 0x0000FFFF
 k_vbr:     .long 0x80000000 + _vbase
@@ -272,7 +273,7 @@ _h_realfault:
         nop
 
         .align 2
-H_hcnt:   .long 0x80002D04
+H_hcnt:   .long 0x80002E04
 H_pgd:    .long 0x80002000
 H_walk:   .long 0x80000000 + ___jcore_tlb_walk  ! P1 alias: walker must run untranslated (AT on during handler)
 H_mmucr:  .long 0xFF000010

@@ -7,7 +7,7 @@
 ! walker just probed and rejected.
 !
 ! Uses the same TSBBR/TSBCFG/VA/slot arithmetic as the proven-correct
-! mmuwalkhit.S (VA 0x00042000 -> TSBPTR 0x00010030) rather than re-deriving
+! mmuwalkhit.S (VA 0x00042000 -> TSBPTR 0x00010060) rather than re-deriving
 ! the hash by hand.
 !
 ! Result codes:
@@ -140,7 +140,7 @@ p_expevt:       .long 0xFF000024
 p_exp_dmiss_r:  .long 0x00000060
 p_tea:          .long 0xFF00000C
 p_tsbptr:       .long 0xFF00001C
-p_expect_slot:  .long 0x00010030        ! hash(0x00042000) -- see mmutsb.S header
+p_expect_slot:  .long 0x00010060        ! hash(0x00042000) -- see mmutsb.S header
 p_walkcnt:      .long 0xABCD0F00
 
 #else

@@ -342,6 +342,7 @@ mmutsb.elf: mmutsb.o
 mmuwalkhit.elf: mmuwalkhit.o
 mmuwalkmiss.elf: mmuwalkmiss.o
 mmuwalkstale.elf: mmuwalkstale.o
+mmuwalktorn.elf: mmuwalktorn.o
 mmuwalkdside.elf: mmuwalkdside.o
 mmuwalkorder.elf: mmuwalkorder.o
 # mmuwalkiside needs code at a VA absent from the TLB, so it links with its own

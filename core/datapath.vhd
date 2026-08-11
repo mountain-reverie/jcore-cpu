@@ -1660,13 +1660,13 @@ end generate;
                 -- PTEH/PTEL/ASIDR are P4-MMIO selected for READS ONLY (Phase 3
                 -- Task 1); the LDC write path remains their only write path.
                 p4_sel_v := P4_NONE;
-                -- PTEH/PTEL/ASIDR read-only aliases (Phase 3 Task 1): stock
-                -- SH-4 offsets for PTEH/PTEL, J-core-chosen 0x38 for ASIDR
-                -- (0x34 stays reserved for the proposed PTEU). These retire
-                -- `STC PTEH,Rn` / `STC PTEL,Rn` / `STC ASIDR,Rn`, but the STC
-                -- forms are NOT removed yet -- both answer simultaneously
-                -- until a later task migrates every caller. Writes are not
-                -- decoded here: LDC remains the only write path (design D7).
+                -- PTEH/PTEL/ASIDR read-only aliases (Phase 3): stock SH-4
+                -- offsets for PTEH/PTEL, J-core-chosen 0x38 for ASIDR
+                -- (0x34 stays reserved for the proposed PTEU). These are now
+                -- the ONLY way to read the three registers -- `STC PTEH,Rn`,
+                -- `STC PTEL,Rn` and `STC ASIDR,Rn` were retired and decode to
+                -- General Illegal. Writes are not decoded here: LDC remains
+                -- the only write path (design D7).
                 if ma_ad(7 downto 0) = x"00" then p4_sel_v := P4_PTEH;
                 elsif ma_ad(7 downto 0) = x"04" then p4_sel_v := P4_PTEL;
                 elsif ma_ad(7 downto 0) = x"38" then p4_sel_v := P4_ASIDR;

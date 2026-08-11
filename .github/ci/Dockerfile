@@ -4,8 +4,9 @@
 # decode/gen-go/regression.sh:
 #   - sh2-elf-gcc 14.2.0 (+ binutils from the mountain-reverie/binutils-gdb
 #     "jcore" fork, pinned by commit -- bare-metal SH-2 cross, with native
-#     understanding of the J4 privileged mnemonics (stc tsbptr/pteh/ptel/
-#     asidr/expevt/intevt/tra, ldtlb.rn, etc). See BINUTILS_JCORE_COMMIT below.
+#     understanding of the J4 privileged mnemonics (ldc Rm,pteh/ptel/asidr,
+#     stc expevt/intevt/tra, ldtlb, ldtlb.rn, etc). See BINUTILS_JCORE_COMMIT
+#     below.
 #   - GHDL 6.0.0 (libghdl exported, needed by ghdl-yosys-plugin)
 #   - yosys 0.44
 #   - ghdl-yosys-plugin @ 07a30ed (newer commits break against GHDL 6.0.0
@@ -38,12 +39,16 @@ ARG GHDL_YOSYS_PLUGIN_COMMIT=07a30ed
 # bump: `git ls-remote https://github.com/mountain-reverie/binutils-gdb jcore`
 # and update both the SHA and the comment below.
 ARG BINUTILS_JCORE_REPO=https://github.com/mountain-reverie/binutils-gdb.git
-# jcore branch head as of 2026-08-07 -- "sh: J2 implements shad/shld, add
-# arch_j2_up to those opcodes", which makes --isa=sh-j2 accept the dynamic
-# shifts shad/shld (needed by testrom/tests/testshift.s; J2 really does
-# implement them, see sim/tests/shldshadguard.S). Previous pin was cf1e4755
-# (stc expevt/intevt/tra,Rn on top of the existing J4 mnemonics).
-ARG BINUTILS_JCORE_COMMIT=ec91b2cf87c0bf7048f574f218a8cccbc3242042
+# Branch mmu/retire-seven -- "sh: retire the seven MMU read encodings from the
+# assembler": removes stc {pteh,ptel,asidr,tsbptr},Rn, cmp/eq {pteh,asidr},Rn
+# and ldtlb.rn Rm, which the J4 decoder no longer accepts (they are General
+# Illegal now).  ldtlb, parameterless ldtlb.rn and ldc Rm,{pteh,ptel,asidr}
+# are kept.  Previous pin was ec91b2cf87c (shad/shld arch_j2_up).
+#
+# NOTE: this is a Docker ARG.  Bumping it here does NOT refresh the CI image on
+# a branch push -- the image must be rebuilt via a `build-ci-image` workflow
+# dispatch, which only a human can trigger.
+ARG BINUTILS_JCORE_COMMIT=9fd8b08c71f3eb65443f606c08896903f79beeaf
 ARG SH2_GCC_VERSION=14.2.0
 ARG GO_VERSION=1.26.2
 # OpenSTA is not packaged for Ubuntu; built from source below. OpenSTA requires

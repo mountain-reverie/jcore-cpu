@@ -80,8 +80,10 @@ package datapath_pack is
   -- different triple per bit.
   --
   -- Applied in BOTH hash modes: HASH_MODE selects the VPN xor-fold only. A
-  -- mode that silently disabled the ASID fold would be a way to switch the
-  -- protection off.
+  -- mode that silently disabled the ASID fold would be a way to switch this
+  -- hardening off. Hardening, not a boundary: the fold is a constant XOR per
+  -- ASID and so is separable and brute-forceable -- it raises the cost of a
+  -- targeted eviction, it does not bound it.
   --
   -- Note the fold is a constant XOR for a fixed ASID, hence a bijection on the
   -- set index: within one address space the conflict distribution is

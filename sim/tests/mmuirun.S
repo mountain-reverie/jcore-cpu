@@ -13,12 +13,12 @@
 ! exception at all -- the §4.1 software hot path these used to exercise is
 ! unreachable by design once the walker is mandatory (it only runs from the
 ! miss-exception vector). This guard checks the walker's own cnt_hits counter
-! (P2 debug word 0xABCD0F00, bits 15:0) instead of the software tsb_hits
+! (P4 counter word 0xFF000054, bits 15:0) instead of the software tsb_hits
 ! counter for that reason.
 !
 ! Overlay .word encodings (assembler does not know these J4 forms):
-!   STC TSBPTR,r0 =0x004B   STC PTEH,r2 =0x028B   STC ASIDR,r2 =0x02BB
-!   STC PTEH,r5   =0x058B   STC TSBPTR,r6=0x064B
+!   (PTEH 0xFF000000  PTEL 0xFF000004  TSBPTR 0xFF00001C  ASIDR 0xFF000038
+!    are read through their read-only P4 aliases, not STC)
 !   LDC r0,ASIDR  =0x407E   LDC r0,PTEL =0x406E    LDC r3,PTEL =0x436E
 !   LDC r0,VBR    =0x402E   LDTLB.RN     =0x0078
 
@@ -158,7 +158,7 @@ kmain:
         ! happens and we never reach _after_ifetch; the sim times out (RED).
 
 ENTRY(_after_ifetch)
-        ! ---- Snapshot the walker's cnt_hits (0xABCD0F00[15:0]) baseline
+        ! ---- Snapshot the walker's cnt_hits (0xFF000054[15:0]) baseline
         ! ---- before the warm + mixed phases below: those two code refetches
         ! ---- must be served by the hardware walker now, not software. ----
         mov.l   k_walkcnt, r0 ; mov.l @r0, r13
@@ -304,7 +304,7 @@ p_after2:  .long 0x80000000 + _after_ifetch2
 p_after3:  .long 0x80000000 + _after_ifetch3
 k_wcnt:    .long 0x80010D00   ! must match WALKER_CALLS in tlbwalk.c
 k_hcnt:    .long 0x80002E04
-k_walkcnt: .long 0xABCD0F00   ! cpu.vhd P2 debug word: [31:16]=cnt_walks [15:0]=cnt_hits
+k_walkcnt: .long 0xFF000054   ! P4 walker counters: [31:16]=cnt_walks [15:0]=cnt_hits
 k_mask16:  .long 0x0000FFFF
 k_vbr:     .long 0x80000000 + _vbase
 k_tsbbr_a: .long 0xFF000014
@@ -348,13 +348,16 @@ _v_tlb:                                 ! _vbase + 0x400  (all TLB faults)
 
         ! ---- §4.1 hot path (bank-1 scratch; AT stays ON). ----
 _h_common:
-        .word   0x004B                  ! STC TSBPTR, r0
+        mov.l   H_tsbptr_a, r0
+        mov.l   @r0, r0                 ! r0 = TSBPTR (P4 alias)
         mov.l   @r0+, r1                ! tag_hi (expected VPN)
-        .word   0x028B                  ! STC PTEH, r2
+        mov.l   H_pteh_a, r2
+        mov.l   @r2, r2                 ! r2 = PTEH (P4 alias)
         cmp/eq  r1, r2
         bf      _h_slow
         mov.l   @r0+, r1                ! tag_lo (expected ASID_TAG)
-        .word   0x02BB                  ! STC ASIDR, r2
+        mov.l   H_asidr_a, r2
+        mov.l   @r2, r2                 ! r2 = ASIDR (P4 alias)
         cmp/eq  r1, r2
         bf      _h_slow
         mov.l   @r0, r3                 ! TTE Data (PTEL image)
@@ -370,8 +373,10 @@ _h_common:
 _h_slow:
         sts.l   pr, @-r15
         mov.l   H_pgd, r4               ! r4 = pgd (P1)
-        .word   0x058B                  ! STC PTEH, r5   (faulting page VA)
-        .word   0x064B                  ! STC TSBPTR, r6 (TSB slot ptr)
+        mov.l   H_pteh_a, r5
+        mov.l   @r5, r5                 ! r5 = PTEH (faulting page VA)
+        mov.l   H_tsbptr_a, r6
+        mov.l   @r6, r6                 ! r6 = TSBPTR (TSB slot ptr)
         mov.l   H_walk, r7
         jsr     @r7
          nop
@@ -397,5 +402,8 @@ H_hcnt:   .long 0x80002E04
 H_pgd:    .long 0x80002000
 H_walk:   .long 0x80000000 + ___jcore_tlb_walk  ! P1 alias: walker runs untranslated
 H_mmucr:  .long 0xFF000010
+H_pteh_a:   .long 0xFF000000
+H_tsbptr_a: .long 0xFF00001C
+H_asidr_a:  .long 0xFF000038
 H_result: .long TEST_RESULT_ADDRESS
 #endif

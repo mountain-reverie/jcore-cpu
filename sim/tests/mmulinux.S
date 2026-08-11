@@ -360,9 +360,10 @@ kmain:
         ! slot address it reads back from TSBPTR (jcore_read_tsbptr()), i.e.
         ! TSB_base + hash(VPN) -- NOT necessarily slot 0. For va_A this is
         ! k_tsb+0x40, so read the entry through TSBPTR (still holding va_A's
-        ! slot -- no fault has occurred since). AT is off, but STC TSBPTR
-        ! reads the MMU register regardless. Keep the slot ptr in r3. ----
-        stc     tsbptr, r3
+        ! slot -- no fault has occurred since). AT is off, and the P4
+        ! TSBPTR alias is untranslated regardless. Keep the slot ptr in r3. ----
+        mov.l   k_tsbptr_a, r3
+        mov.l   @r3, r3None
 
         mov.l   @r3, r2                 ! tag_hi (VPN)
         mov.l   va_A, r1
@@ -474,7 +475,8 @@ s4_assert:
         mov.l   va_B, r2
         cmp/eq  r2, r1 ; mov #11, r9 ; bf _fail             ! captured address != VA_B
 
-        stc     tsbptr, r3
+        mov.l   k_tsbptr_a, r3
+        mov.l   @r3, r3None
         mov.l   @r3, r2                 ! tag_hi at VA_B's TSB slot
         mov.l   va_B, r1
         cmp/eq  r1, r2 ; mov #12, r9 ; bt _fail             ! translation WAS installed
@@ -513,7 +515,8 @@ s5_assert:
         mov.l   va_C, r2
         cmp/eq  r2, r1 ; mov #14, r9 ; bf _fail             ! captured address != VA_C
 
-        stc     tsbptr, r3
+        mov.l   k_tsbptr_a, r3
+        mov.l   @r3, r3None
         mov.l   @r3, r2                 ! tag_hi at VA_C's TSB slot
         mov.l   va_C, r1
         cmp/eq  r1, r2 ; mov #15, r9 ; bt _fail             ! translation WAS installed
@@ -576,7 +579,8 @@ s5_assert:
         cmp/eq  r4, r5 ; mov #17, r9 ; bt _fail
                                  ! walker did NOT re-run for the new generation
 
-        stc     tsbptr, r3
+        mov.l   k_tsbptr_a, r3
+        mov.l   @r3, r3None
         mov.l   @(4, r3), r2            ! tag_lo (ASID_TAG) at VA_D's TSB slot
         mov.l   k_asidr_gen1, r1
         cmp/eq  r1, r2 ; mov #16, r9 ; bf _fail
@@ -756,6 +760,7 @@ k_mmucr:        .long 0xFF000010        ! MMUCR
 va_A:           .long 0x00100000
 v_ptel_expect:  .long 0x000401B9        ! PFN(0x00040000)|PageMask(16K,0x100)|V|C|U|W|D
 k_wcnt:         .long 0x80029000        ! walker_calls counter (past TSB/before stack)
+k_tsbptr_a:     .long 0xFF00001C        ! read-only P4 TSBPTR alias
 v_accessed_clr: .long 0xFFFFFEFF        ! ~_PAGE_ACCESSED (0x100), see pgtable-bits-jcore.h
 
 ! ---- Scenario 4/5 scratch: extra ptes (same pgd[0]/pte-table range as

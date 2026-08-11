@@ -215,7 +215,7 @@ _t_exit_fail:
 
         .align 2
 t_sent_spc:     .long 0xDEADBE00
-t_walkcnt:      .long 0xABCD0F00
+t_walkcnt:      .long 0xFF000054
 t_mmucr:        .long 0xFF000010
 t_done:         .long _done
 t_fail:         .long _fail

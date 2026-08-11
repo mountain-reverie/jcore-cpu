@@ -193,7 +193,7 @@ ENTRY(start)
 
 ! ---- Fault handler. Read the walker counters FIRST. Nothing below may itself
 ! ---- miss: the handler and its literals sit on the identity code page, and
-! ---- 0xFF0000xx is P4 while 0xABCD0F00 is P2 -- both untranslated. ----
+! ---- 0xFF0000xx is P4, untranslated. ----
 _v_miss:
         mov.l   p_walkcnt, r0
         mov.l   @r0, r12
@@ -247,7 +247,7 @@ p_target:       .long 0x00050000        ! I side; slot 0x00010220, zeroed
 p_expevt:       .long 0xFF000024
 p_exp_dmiss_r:  .long 0x00000060        ! DMISS_R -- the OLDER fault
 p_tea:          .long 0xFF00000C
-p_walkcnt:      .long 0xABCD0F00        ! cnt_walks(31:16) : cnt_hits(15:0)
+p_walkcnt:      .long 0xFF000054        ! cnt_walks(31:16) : cnt_hits(15:0)
 
 #else
         bra     _done

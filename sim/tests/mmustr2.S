@@ -163,7 +163,8 @@ p_test_result_pass: .long   TEST_PASS_MAGIC
 _v_store:                               ! = VBR + 0x400
         ! HW captured PTEH = faulting page VPN (4 KB). Leave PTEH as-is (it is
         ! the LDTLB tag); just derive the identity PTEL from it.
-        .word   0x018B                  ! STC PTEH, r1   (faulting page VPN, 4KB)
+        mov.l   Hpteh_a, r1
+        mov.l   @r1, r1                 ! r1 = PTEH (P4 alias) -- HW-captured faulting VPN
         mov.l   Hpagemask, r0
         and     r0, r1                  ! r1 = page base
         mov.l   Hflags, r0
@@ -178,6 +179,7 @@ _h_fail_spin:
 
         .align 2
 Hpagemask:      .long 0xFFFFF000
+Hpteh_a:        .long 0xFF000000
 Hflags:         .long 0x000000E8
 
         ! ---- Two unmapped identity fault pages (seed 0). ----

@@ -266,9 +266,10 @@ kmain:
         mov.l   @r0, r8                 ! load -> TLB miss -> walker installs
                                          ! the 64 KB huge entry from k_pte_h1
 
-        stc     tsbptr, r3              ! capture VA_H1's TSB slot ptr NOW
-                                         ! (still AT-on; STC reads the MMU
-                                         ! register regardless)
+        mov.l   k_tsbptr_a, r3
+        mov.l   @r3, r3              ! capture VA_H1's TSB slot ptr NOW
+                                         ! (still AT-on; the P4 alias is
+                                         ! untranslated regardless)
         mov.l   k_wcnt, r0 ; mov.l @r0, r4   ! wcnt baseline, post-base-walk
 
         mov.l   va_h1b, r0
@@ -300,7 +301,8 @@ kmain:
         mov.l   @r0, r8                 ! load -> TLB miss -> walker installs
                                          ! the 1 MB huge entry from k_pte_h2
 
-        stc     tsbptr, r3
+        mov.l   k_tsbptr_a, r3
+        mov.l   @r3, r3None
         mov.l   k_wcnt, r0 ; mov.l @r0, r4
 
         mov.l   va_h2b, r0
@@ -331,7 +333,8 @@ kmain:
         mov.l   @r0, r8                 ! load -> TLB miss -> walker installs
                                          ! the 256 MB huge entry from k_pte_h3
 
-        stc     tsbptr, r3
+        mov.l   k_tsbptr_a, r3
+        mov.l   @r3, r3None
         mov.l   k_wcnt, r0 ; mov.l @r0, r4
 
         mov.l   va_h3b, r0
@@ -362,6 +365,7 @@ k_pgd:          .long 0x80020000
 k_ptetbl:       .long 0x80024000
 k_tsb:          .long 0x80028000
 k_wcnt:         .long 0x80029000
+k_tsbptr_a:     .long 0xFF00001C        ! read-only P4 TSBPTR alias
 k_faultcnt:     .long 0x80029004
 k_faultaddr:    .long 0x80029008
 k_fault_target: .long 0x8002900C

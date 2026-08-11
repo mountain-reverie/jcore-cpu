@@ -236,7 +236,7 @@ p_testva:       .long 0x00042000
 p_sent_spc:     .long 0xDEADBE00
 p_sent_ssr:     .long 0x40000000
 p_expevt:       .long 0xFF000024
-p_walkcnt:      .long 0xABCD0F00        ! cpu.vhd-local walker counter window (P2)
+p_walkcnt:      .long 0xFF000054        ! walker counter window (P4, RO)
 p_vseed_reg:    .long 0xFF00004C        ! TSBVSEED (write-only)
 p_seed_a:       .long 0x13579BDF
 p_seed_b:       .long 0x2468ACE0

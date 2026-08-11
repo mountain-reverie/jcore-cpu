@@ -19,7 +19,7 @@
 ! mismatch, VALID data, not garbage), then way 1 (match), install, and
 ! replay -- no exception.
 !
-! cnt_hits (P2 0xABCD0F00[15:0]) is asserted as a DELTA across the walk, not
+! cnt_hits (0xFF000054[15:0]) is asserted as a DELTA across the walk, not
 ! an absolute -- an absolute is satisfied by hits earlier in the run.
 !
 ! Mutation-verify: force tsb_ways back to 1 (core/cpu.vhd) and rebuild
@@ -223,7 +223,7 @@ p_testva:       .long 0x00042000
 p_sent_spc:     .long 0xDEADBE00
 p_sent_ssr:     .long 0x40000000
 p_expevt:       .long 0xFF000024
-p_walkcnt:      .long 0xABCD0F00        ! cpu.vhd-local walker counter window (P2)
+p_walkcnt:      .long 0xFF000054        ! walker counter window (P4, RO)
 p_mask16:       .long 0x0000FFFF
 
 #else

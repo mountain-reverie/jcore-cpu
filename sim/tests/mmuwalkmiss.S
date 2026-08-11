@@ -141,7 +141,7 @@ p_exp_dmiss_r:  .long 0x00000060
 p_tea:          .long 0xFF00000C
 p_tsbptr:       .long 0xFF00001C
 p_expect_slot:  .long 0x00010060        ! hash(0x00042000) -- see mmutsb.S header
-p_walkcnt:      .long 0xABCD0F00
+p_walkcnt:      .long 0xFF000054
 
 #else
         bra     _done

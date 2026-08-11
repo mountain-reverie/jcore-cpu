@@ -409,7 +409,8 @@ p_test_result_pass: .long TEST_PASS_MAGIC
 	.space 0x400, 0
 	.balign 4
 _v_pc:
-	.word	0x018B			! STC PTEH, r1
+        mov.l   Hpteh_a, r1
+        mov.l   @r1, r1                 ! r1 = PTEH (P4 alias) -- HW-captured faulting VPN
 	mov.l	Hpagemask, r0
 	and	r0, r1			! r1 = page base
 	mov.l	Hdbase, r0
@@ -433,6 +434,7 @@ _h_fail_spin:
 	nop
 	.align 2
 Hpagemask:	.long 0xFFFFF000
+Hpteh_a:        .long 0xFF000000
 Hflags:		.long 0x000000E8
 Hcflags:	.long 0x000000C8
 Hdbase:		.long _dpage_0

@@ -1,6 +1,6 @@
 ! MMU register round-trip test (J4).
 ! Covers PTEH/PTEL/ASIDR individual round-trips (two distinct patterns each)
-! plus an independence check: write three distinct values then STC each back
+! plus an independence check: write three distinct values then read each back
 ! to prove no cross-clobber (the bug: LDC Rm,PTEL wrote PTEH instead).
 !
 ! result 0 = pass; nonzero = failure code:
@@ -18,11 +18,12 @@
 ! LDC/STC MMU regs are privileged; assembler doesn't know these overlay opcodes.
 !
 ! LDC r0,PTEH  = 0100 0000 0101 1110 = 0x405E
-! STC PTEH,r1  = 0000 0001 1000 1011 = 0x018B
 ! LDC r0,PTEL  = 0100 0000 0110 1110 = 0x406E
-! STC PTEL,r1  = 0000 0001 1001 1011 = 0x019B
 ! LDC r0,ASIDR = 0100 0000 0111 1110 = 0x407E
-! STC ASIDR,r1 = 0000 0001 1011 1011 = 0x01BB
+!
+! The read side is no longer an STC: PTEH/PTEL/ASIDR are read back through the
+! read-only P4 aliases 0xFF000000 / 0xFF000004 / 0xFF000038.  The LDC write
+! side is unchanged (it is kept deliberately -- design D7).
 
 !
 ! ---- _fail integrity net ----
@@ -58,7 +59,8 @@ ENTRY(start)
         ! Pattern A: 0xA5A5A5A5
         mov.l   p_patA, r0
         .word   0x405E             ! LDC r0,PTEH
-        .word   0x018B             ! STC PTEH,r1
+        mov.l   p_pteh_a, r2
+        mov.l   @r2, r1            ! r1 = PTEH  (P4 alias read)
         cmp/eq  r0, r1
         mov     #1, r9             ! code 1 = PTEH pattern A mismatch
         bf      _fail
@@ -66,7 +68,8 @@ ENTRY(start)
         ! Pattern B: 0x5A5A5A5A
         mov.l   p_patB, r0
         .word   0x405E             ! LDC r0,PTEH
-        .word   0x018B             ! STC PTEH,r1
+        mov.l   p_pteh_a, r2
+        mov.l   @r2, r1            ! r1 = PTEH  (P4 alias read)
         cmp/eq  r0, r1
         mov     #2, r9             ! code 2 = PTEH pattern B mismatch
         bf      _fail
@@ -75,7 +78,8 @@ ENTRY(start)
         ! Pattern A: 0xA5A5A5A5
         mov.l   p_patA, r0
         .word   0x406E             ! LDC r0,PTEL
-        .word   0x019B             ! STC PTEL,r1
+        mov.l   p_ptel_a, r2
+        mov.l   @r2, r1            ! r1 = PTEL  (P4 alias read)
         cmp/eq  r0, r1
         mov     #3, r9             ! code 3 = PTEL pattern A mismatch
         bf      _fail
@@ -83,7 +87,8 @@ ENTRY(start)
         ! Pattern B: 0x5A5A5A5A
         mov.l   p_patB, r0
         .word   0x406E             ! LDC r0,PTEL
-        .word   0x019B             ! STC PTEL,r1
+        mov.l   p_ptel_a, r2
+        mov.l   @r2, r1            ! r1 = PTEL  (P4 alias read)
         cmp/eq  r0, r1
         mov     #4, r9             ! code 4 = PTEL pattern B mismatch
         bf      _fail
@@ -92,7 +97,8 @@ ENTRY(start)
         ! Pattern A: 0xA5A5A5A5
         mov.l   p_patA, r0
         .word   0x407E             ! LDC r0,ASIDR
-        .word   0x01BB             ! STC ASIDR,r1
+        mov.l   p_asidr_a, r2
+        mov.l   @r2, r1            ! r1 = ASIDR (P4 alias read)
         cmp/eq  r0, r1
         mov     #5, r9             ! code 5 = ASIDR pattern A mismatch
         bf      _fail
@@ -100,7 +106,8 @@ ENTRY(start)
         ! Pattern B: 0x5A5A5A5A
         mov.l   p_patB, r0
         .word   0x407E             ! LDC r0,ASIDR
-        .word   0x01BB             ! STC ASIDR,r1
+        mov.l   p_asidr_a, r2
+        mov.l   @r2, r1            ! r1 = ASIDR (P4 alias read)
         cmp/eq  r0, r1
         mov     #6, r9             ! code 6 = ASIDR pattern B mismatch
         bf      _fail
@@ -114,22 +121,25 @@ ENTRY(start)
         mov.l   p_ind3, r0
         .word   0x407E             ! LDC r0,ASIDR
 
-        ! STC PTEH -> r1, verify == 0xDEAD0001
-        .word   0x018B             ! STC PTEH,r1
+        ! read PTEH -> r1, verify == 0xDEAD0001
+        mov.l   p_pteh_a, r3
+        mov.l   @r3, r1            ! r1 = PTEH  (P4 alias read)
         mov.l   p_ind1, r2
         cmp/eq  r1, r2
         mov     #7, r9             ! code 7 = PTEH clobbered
         bf      _fail
 
-        ! STC PTEL -> r1, verify == 0xDEAD0002
-        .word   0x019B             ! STC PTEL,r1
+        ! read PTEL -> r1, verify == 0xDEAD0002
+        mov.l   p_ptel_a, r3
+        mov.l   @r3, r1            ! r1 = PTEL  (P4 alias read)
         mov.l   p_ind2, r2
         cmp/eq  r1, r2
         mov     #8, r9             ! code 8 = PTEL clobbered
         bf      _fail
 
-        ! STC ASIDR -> r1, verify == 0xDEAD0003
-        .word   0x01BB             ! STC ASIDR,r1
+        ! read ASIDR -> r1, verify == 0xDEAD0003
+        mov.l   p_asidr_a, r3
+        mov.l   @r3, r1            ! r1 = ASIDR (P4 alias read)
         mov.l   p_ind3, r2
         cmp/eq  r1, r2
         mov     #9, r9             ! code 9 = ASIDR clobbered
@@ -144,6 +154,9 @@ p_patB: .long 0x5A5A5A5A
 p_ind1: .long 0xDEAD0001
 p_ind2: .long 0xDEAD0002
 p_ind3: .long 0xDEAD0003
+p_pteh_a:  .long 0xFF000000
+p_ptel_a:  .long 0xFF000004
+p_asidr_a: .long 0xFF000038
 #else
         ! J2: MMU regs not present -> skip-pass (negative test is Task 9)
         bra     _done

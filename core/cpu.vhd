@@ -184,10 +184,17 @@ architecture stru of cpu is
   signal walk_d_miss  : std_logic;
   signal walk_i_miss  : std_logic;
   signal d_fault_held : std_logic;
-  signal walk_install : std_logic;
-  signal walk_ptel    : std_logic_vector(31 downto 0);
-  signal walk_bus_a   : std_logic_vector(31 downto 0);
-  signal walk_bus_en  : std_logic;
+  -- UNGATED restatement of the I-side miss condition, and "an I-side walk is
+  -- being armed this cycle", used ONLY by the older-instruction-first ordering
+  -- assertion below. Deliberately NOT derived from walk_i_miss: an assertion
+  -- written in terms of the gated signal is tautological and cannot fire when
+  -- the gate is removed.
+  signal walk_i_miss_raw : std_logic;
+  signal walk_i_arm_raw  : std_logic;
+  signal walk_install    : std_logic;
+  signal walk_ptel       : std_logic_vector(31 downto 0);
+  signal walk_bus_a      : std_logic_vector(31 downto 0);
+  signal walk_bus_en     : std_logic;
   -- '1' while the walk in progress is an I-SIDE walk. Registered at the arming
   -- cycle, when walk_i_miss/walk_d_miss are live and mutually exclusive.
   signal walk_side_i    : std_logic;
@@ -555,6 +562,50 @@ begin
                             and tlb_i_multihit = '0' and tlb_i_hit = '0'
                             and sig_db_o.en = '0' and d_fault_held = '0' else
                    '0';
+
+    -- ---- Ordering invariant, permanently asserted --------------------
+    -- The gate on walk_i_miss above is the ONLY thing enforcing
+    -- older-instruction-first walk ordering, and its sole software-visible
+    -- consequence is a replayed external bus transaction -- invisible on the
+    -- plain SRAM the guard suite runs on. Deleting it therefore leaves the
+    -- entire guard suite green (measured; see
+    -- .superpowers/sdd/2026-08-09-tsb-walker-phase1/task-7-8-report.md). This
+    -- assertion is the protection instead: it re-states the invariant from the
+    -- RAW conditions, so removing the gate makes it fire in EVERY simulation.
+    -- Simulation-only; assertions have no synthesis effect.
+    walk_i_miss_raw <= '1' when i_at_translated = '1' and sig_inst_o.en = '1'
+                                and tlb_i_multihit = '0' and tlb_i_hit = '0' else
+                       '0';
+
+    -- An I-SIDE walk is being armed this cycle iff the walker arms (walk_arm,
+    -- combinational, the single arming pulse) while the raw I-side miss holds
+    -- and walk_va does NOT select the D side. walk_va prefers D whenever
+    -- walk_d_miss is true, so "not walk_d_miss" is exactly "the VA taken is the
+    -- I-side VA". This is the arming cycle itself; walk_side_i registers the
+    -- same decision one edge later, so it must not be used here.
+    walk_i_arm_raw <= walk_arm and walk_i_miss_raw and not walk_d_miss;
+
+    -- Sampled at the edge that ENDS the arming cycle, so the operands are the
+    -- settled combinational values of that cycle (same sampling as
+    -- p_walk_side), not mid-cycle transients.
+    p_walk_order_assert : process (clk) is
+    begin
+
+      if rising_edge(clk) then
+        assert not (rst = '0' and walk_i_arm_raw = '1'
+                    and (sig_db_o.en = '1' or d_fault_held = '1'))
+          -- The cosim's line reader truncates a report at roughly 110
+          -- characters including its own prefix, so the crux must come FIRST;
+          -- the full rationale is in the comment above, which the reported
+          -- cpu.vhd line number points at.
+          report "WALK ORDER VIOLATED: I-side TSB walk armed while an older "
+                 & "D access is live or its fault is held. Restore the gate "
+                 & "'and sig_db_o.en = ''0'' and d_fault_held = ''0''' on "
+                 & "walk_i_miss; see p_walk_order_assert in core/cpu.vhd."
+          severity failure;
+      end if;
+
+    end process p_walk_order_assert;
 
     walk_req <= '1' when priv_arch and mmu_walker and dp_sr.rb = '0'
                          and (walk_d_miss = '1' or walk_i_miss = '1') else

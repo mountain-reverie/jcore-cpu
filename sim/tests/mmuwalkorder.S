@@ -5,6 +5,12 @@
 ! file is a REGRESSION LOCK with an anti-vacuity assertion, not a differential
 ! ordering test, and that is a measured conclusion rather than a shortcut.
 !
+! The ORDERING INVARIANT ITSELF is not checked here -- no software can check it
+! (see "WHAT THIS GUARD CANNOT DO" below). It is checked by a permanent RTL
+! assertion, `p_walk_order_assert' in core/cpu.vhd, which is live in every
+! simulation and fires if the gate on walk_i_miss is removed. See "WHERE THE
+! REAL ORDERING CHECK LIVES" at the end of this header.
+!
 ! ---- the gap ---------------------------------------------------------------
 ! The machine's rule is that the EARLIEST instruction in program order has its
 ! fault processed first. A D-side access is in MA and is therefore OLDER than
@@ -79,6 +85,23 @@
 ! rather than a counter pattern it cannot justify. Making walker ordering
 ! properly differential would need a translated MMIO or TAS target that a
 ! replayed transaction perturbs; there is none in this suite today.
+!
+! ---- WHERE THE REAL ORDERING CHECK LIVES: an RTL assertion ------------------
+! Because software cannot observe it, the ordering gate is instead protected by
+! a permanent RTL assertion -- `p_walk_order_assert' in core/cpu.vhd, inside
+! the g_tlb_walk generate (so PRIV_ARCH/MMU_WALKER-gated, and inert in J1/J2
+! and in synthesis). It re-states the invariant from the RAW, UNGATED miss
+! conditions (walk_i_miss_raw / walk_i_arm_raw), deliberately NOT from
+! walk_i_miss, so it is not tautological: deleting the gate makes it fire.
+!
+! It is active in EVERY simulation, not just this guard. VERIFIED: with the
+! gate deleted (mutation 3 above) it fires with severity FAILURE at
+! cpu.vhd:594 and the harness reports the affected guard FAILED --
+! `m8_dsdslot_0' is the first image in the suite to reach the violating cycle.
+! So mutation 3 no longer leaves the suite green.
+!
+! If you are extending walker ordering, change the assertion together with the
+! gate; if you tripped it, read the comment above p_walk_order_assert.
 !
 ! ---- FINDING recorded here so it is not rediscovered -----------------------
 ! At the moment this guard reaches the vector the counters read 1 walk /

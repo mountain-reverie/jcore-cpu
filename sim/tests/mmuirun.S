@@ -8,6 +8,14 @@
 ! PASS proves execution RESUMED inside the translated page (ran_flag written by
 ! an instruction fetched through translation) and walker_calls==1.
 !
+! The warm-TSB re-fetches (after each TLB flush below) are now resolved by the
+! HARDWARE TSB walker (core/tlb_walk.vhd) stalling-and-walking with no
+! exception at all -- the §4.1 software hot path these used to exercise is
+! unreachable by design once the walker is mandatory (it only runs from the
+! miss-exception vector). This guard checks the walker's own cnt_hits counter
+! (P2 debug word 0xABCD0F00, bits 15:0) instead of the software tsb_hits
+! counter for that reason.
+!
 ! Overlay .word encodings (assembler does not know these J4 forms):
 !   STC TSBPTR,r0 =0x004B   STC PTEH,r2 =0x028B   STC ASIDR,r2 =0x02BB
 !   STC PTEH,r5   =0x058B   STC TSBPTR,r6=0x064B
@@ -149,6 +157,12 @@ kmain:
         ! happens and we never reach _after_ifetch; the sim times out (RED).
 
 ENTRY(_after_ifetch)
+        ! ---- Snapshot the walker's cnt_hits (0xABCD0F00[15:0]) baseline
+        ! ---- before the warm + mixed phases below: those two code refetches
+        ! ---- must be served by the hardware walker now, not software. ----
+        mov.l   k_walkcnt, r0 ; mov.l @r0, r13
+        mov.l   k_mask16,  r1 ; and    r1, r13
+
         ! Cold leg resumed inside the translated page (proves the translated
         ! fetch ran). Keep AT ON. Re-arm the stub for a SECOND invocation by
         ! re-pointing its control block at ran_flag2 / sentinel2 /
@@ -209,8 +223,10 @@ ENTRY(_after_ifetch3)
         mov.l   k_mixedval, r0 ; mov.l @r0, r2
         mov.l   v_seedData, r3 ; cmp/eq r3, r2 ; mov #11, r9 ; bf _fail
 
-        ! tsb_hits == 2 (warm code fetch + mixed code fetch took the hot path).
-        mov.l   k_hcnt, r0 ; mov.l @r0, r2 ; mov #2, r3 ; cmp/eq r3, r2 ; mov #9, r9 ; bf _fail
+        ! Walker cnt_hits advanced by exactly 2 (warm code fetch + mixed code
+        ! fetch), proving the hardware walker -- not software -- served them.
+        mov.l   k_walkcnt, r0 ; mov.l @r0, r2 ; mov.l k_mask16, r3 ; and r3, r2
+        sub     r13, r2 ; mov #2, r3 ; cmp/eq r3, r2 ; mov #9, r9 ; bf _fail
 
         ! walker_calls == 2 (cold code fetch + mixed cold data load).
         mov.l   k_wcnt, r0 ; mov.l @r0, r2 ; mov #2, r3 ; cmp/eq r3, r2 ; mov #8, r9 ; bf _fail
@@ -287,6 +303,8 @@ p_after2:  .long 0x80000000 + _after_ifetch2
 p_after3:  .long 0x80000000 + _after_ifetch3
 k_wcnt:    .long 0x80010D00   ! must match WALKER_CALLS in tlbwalk.c
 k_hcnt:    .long 0x80002D04
+k_walkcnt: .long 0xABCD0F00   ! cpu.vhd P2 debug word: [31:16]=cnt_walks [15:0]=cnt_hits
+k_mask16:  .long 0x0000FFFF
 k_vbr:     .long 0x80000000 + _vbase
 k_tsbbr_a: .long 0xFF000014
 v_tsbbr:   .long 0x80002C04

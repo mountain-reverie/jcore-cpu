@@ -167,9 +167,9 @@ ENTRY(_after_ifetch)
         ! fetch ran). Keep AT ON. Re-arm the stub for a SECOND invocation by
         ! re-pointing its control block at ran_flag2 / sentinel2 /
         ! _after_ifetch2, then flush the TLB (TI|AT) leaving the TSB warm and
-        ! re-jump into the page. The second IMISS must hit the §4.1 asm hot path
-        ! (PTEH/ASIDR match against the warm TSB) -> tsb_hits++ and LDTLB.RN, with
-        ! NO second walker call.
+        ! re-jump into the page. The second IMISS is resolved by the HARDWARE
+        ! walker stalling-and-walking against the warm TSB (cnt_hits++), with
+        ! no exception and no software §4.1 hot path involvement.
         mov.l   k_ranf2, r0 ; mov #0, r1 ; mov.l r1, @r0        ! ran_flag2 = 0
         mov.l   k_ctl0, r0
         mov.l   k_ranf2, r1 ; mov.l r1, @r0                     ! ctl[0] = ran_flag2
@@ -186,9 +186,9 @@ ENTRY(_after_ifetch2)
         ! Warm leg resumed inside the page. Now run the MIXED I+D leg: re-arm the
         ! stub control block so its load reads a TRANSLATED data page
         ! (VA 0x00102000) and stores the value to mixed_val. Keep AT ON and flush
-        ! the TLB (TI|AT, TSB warm) so the code-page fetch is a §4.1 hot-path hit
-        ! (tsb_hits++) while the never-touched data page is a cold DMISS_R that
-        ! goes to the walker (walker_calls++). The stub's load instruction is thus
+        ! the TLB (TI|AT, TSB warm) so the code-page fetch is a warm hardware-
+        ! walker hit (cnt_hits++) while the never-touched data page is a cold
+        ! DMISS_R that goes to the walker (walker_calls++). The stub's load instruction is thus
         ! fetched through the I-TLB and has its operand fetched through the D-TLB.
         mov.l   k_ranf3, r0 ; mov #0, r1 ; mov.l r1, @r0        ! ran_flag3 = 0
         mov.l   k_mixedval, r0 ; mov #0, r1 ; mov.l r1, @r0     ! mixed_val = 0

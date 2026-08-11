@@ -34,7 +34,11 @@
 !      -- belt and braces -- SPC no longer matches its seeded sentinel)
 !   3  SSR changed  -> an exception was taken
 !   4  EXPEVT changed -> an exception was taken
-!   5  walk counter did not advance -> the walker never ran
+!   5  walk counter did not advance -> the walker never ran. UNREACHABLE BY
+!      CONSTRUCTION: any defect that stops the hit install leaves the miss
+!      condition true, which fires the miss-exception vector (caught by codes
+!      2-4 above) before this check ever executes. Kept as belt-and-braces
+!      only -- it names no coverage codes 2-4 do not already provide.
 !
 #include "sim_instr.h"
 #include "mmuwalk_common.inc"
@@ -149,7 +153,8 @@ ENTRY(start)
         mov     #4, r9
         bf      _fail_at
 
-        ! ---- 5: did the walker actually run? ----
+        ! ---- 5: did the walker actually run? UNREACHABLE BY CONSTRUCTION --
+        ! see the result-codes comment in the header. Kept as belt-and-braces. ----
         mov.l   p_walkcnt, r0
         mov.l   @r0, r1
         tst     r1, r1

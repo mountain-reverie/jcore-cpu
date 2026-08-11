@@ -56,10 +56,17 @@ entity tlb_walk is
     install_ptel : out   std_logic_vector(31 downto 0);
     -- The VA this walk was started for, LATCHED at st_idle. cpu.vhd drives the
     -- TLB's pteh_vpn from this on an install. It must NOT use the live req_va:
-    -- that is a combinational selection over the I- and D-side miss conditions
-    -- and can change under a walk in progress (the I-fetch is not stalled by
-    -- busy), which would install the PTEL fetched for one VA under the VPN of
-    -- another. Same reason the tag compare below uses va_reg.
+    -- that is cpu.vhd's combinational mux (walk_va) selecting between the D-
+    -- and I-side VAs on walk_d_miss, fed by sig_db_o/tlb_d_hit/tlb_d_multihit --
+    -- signals this entity has no authority over and does not hold stable
+    -- itself. (The I-fetch IS now stalled for the duration of an I-side walk,
+    -- via dp_inst_i.ack <= inst_i.ack and not walk_supp_i in cpu.vhd -- see
+    -- a9c2658 -- so that is no longer the risk.) The risk this latch actually
+    -- guards is a D-side walk: were the walk to re-read live req_va at
+    -- st_install instead of the value latched on arming, any cycle-to-cycle
+    -- change in walk_va's selector while the walk is in flight would install
+    -- the PTEL fetched for one VA under the VPN of another. Same reason the
+    -- tag compare below uses va_reg.
     va_r : out   std_logic_vector(31 downto 0);
 
     -- High for the whole walk. cpu.vhd uses it to withhold ack, take the bus,

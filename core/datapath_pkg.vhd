@@ -45,16 +45,44 @@ package datapath_pack is
   -- (D-side / MULTI_HIT) one and the deferred I-fetch one, which sources the VA
   -- from the faulting instruction's own if_pc instead of the live tlb_fault_va.
   --   vpn    = va[31:12]                       (4 KB page number)
-  --   hash   = HASH_MODE=1 ? vpn xor (vpn >> HASH_SHIFT) : vpn
+  --   a1     = asid xor (asid << 5)
+  --   amix   = a1 xor (a1 >> 9)
+  --   hash   = (HASH_MODE=1 ? vpn xor (vpn >> HASH_SHIFT) : vpn) xor amix
   --   mask   = (1 << TSB_SIZE_LOG) - 1
   --   TSBPTR = (TSBBR and not 0xF) or ((hash and mask) << 4)
   -- TSBBR[N+3:4] are reserved-0 so clearing the low nibble and ORing the
   -- 16-byte-scaled index suffices (no variable base mask needed).
+  --
+  -- ASID is folded into the INDEX, not just the tag. Without it the same VA in
+  -- two address spaces always lands in the same set, and since a TSB hit is
+  -- ~11x cheaper than a miss that gives an attacker a deterministic, targeted
+  -- eviction primitive: to evict a victim's entry for VA X, touch VA X. With
+  -- the fold the attacker must first search for a colliding VA, not knowing
+  -- the victim's ASID.
+  --
+  -- The fold is NOT a bare `vpn xor asid`. US 5,899,994 records that XORing a
+  -- narrow process id straight into the index distributes badly. The naive
+  -- `asid << 7` spreading term is worse than useless here: for the common
+  -- TSB_SIZE_LOG <= 7 it lands entirely ABOVE the index and contributes
+  -- nothing, degenerating to the bare XOR. Instead `asid << 5` spreads, and
+  -- the `>> 9` refold brings that spread back DOWN so that every index bit,
+  -- at any TSB size, is a function of three different ASID bits with a
+  -- different triple per bit.
+  --
+  -- Applied in BOTH hash modes: HASH_MODE selects the VPN xor-fold only. A
+  -- mode that silently disabled the ASID fold would be a way to switch the
+  -- protection off.
+  --
+  -- Note the fold is a constant XOR for a fixed ASID, hence a bijection on the
+  -- set index: within one address space the conflict distribution is
+  -- bit-for-bit what it was before the fold, so this cannot introduce
+  -- thrashing in a single-ASID workload.
 
   function tsb_ptr (
     va     : std_logic_vector(31 downto 0);
     tsbcfg : std_logic_vector(31 downto 0);
-    tsbbr  : std_logic_vector(31 downto 0)
+    tsbbr  : std_logic_vector(31 downto 0);
+    asid   : std_logic_vector(15 downto 0)
   ) return std_logic_vector;
 
   component datapath is
@@ -161,10 +189,14 @@ package body datapath_pack is
   function tsb_ptr (
     va     : std_logic_vector(31 downto 0);
     tsbcfg : std_logic_vector(31 downto 0);
-    tsbbr  : std_logic_vector(31 downto 0)
+    tsbbr  : std_logic_vector(31 downto 0);
+    asid   : std_logic_vector(15 downto 0)
   ) return std_logic_vector is
 
     variable v_vpn   : unsigned(31 downto 0);
+    variable v_asid  : unsigned(31 downto 0);
+    variable v_a1    : unsigned(31 downto 0);
+    variable v_amix  : unsigned(31 downto 0);
     variable v_hash  : unsigned(31 downto 0);
     variable v_mask  : unsigned(31 downto 0);
     variable v_idx   : unsigned(31 downto 0);
@@ -174,14 +206,22 @@ package body datapath_pack is
   begin
 
     v_vpn   := x"000" & unsigned(va(31 downto 12));
+    v_asid  := x"0000" & unsigned(asid);
     v_shift := to_integer(unsigned(tsbcfg(7 downto 4)));
     v_size  := to_integer(unsigned(tsbbr(3 downto 0)));
+
+    -- Spread ASID across the VPN's width, then refold it back down so its
+    -- bits reach the low index bits too (see the header comment).
+    v_a1   := v_asid xor shift_left(v_asid, 5);
+    v_amix := v_a1 xor shift_right(v_a1, 9);
 
     if (tsbcfg(3 downto 0) = x"1") then
       v_hash := v_vpn xor shift_right(v_vpn, v_shift);
     else
       v_hash := v_vpn;
     end if;
+
+    v_hash := v_hash xor v_amix;
 
     v_mask := shift_left(to_unsigned(1, 32), v_size) - 1;
     v_idx  := (v_hash and v_mask);

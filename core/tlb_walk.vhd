@@ -182,7 +182,7 @@ begin
             if (req = '0') then
               tried <= '0';
             elsif (tried = '0') then
-              set_addr <= tsb_ptr(req_va, tsbcfg, tsbbr);
+              set_addr <= tsb_ptr(req_va, tsbcfg, tsbbr, asidr);
               va_reg   <= req_va;
               way      <= 0;
               timeout  <= 0;

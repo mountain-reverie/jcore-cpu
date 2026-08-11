@@ -800,7 +800,7 @@ instructions against the instruction's start address.
 | **G (global)** | PTE bit making an entry match regardless of `ASID_TAG`. For kernel-shared pages only. |
 | **IMISS / IPROT** | Instruction-fetch TLB miss (`0x040`) / protection violation (`0x0A0`). |
 | **LDTLB** | The TLB-install instruction (`0x0038`): latches `{ASIDR, PTEH.VPN, PTEL}` into an NRU-chosen entry. |
-| **LDTLB.RN** | Fused *load-TLB-and-return* (`0x0078`): an atomic `LDTLB`+`RTE` with **no** delay slot, used by the miss handler to install and resume in one step. `LDTLB.RN Rm` (`0x?FB`) is the hot-path variant that sources `PTEL` from a GPR. |
+| **LDTLB.RN** | Fused *load-TLB-and-return* (`0x0078`): an atomic `LDTLB`+`RTE` with **no** delay slot, used by the miss handler to install and resume in one step. (A hot-path variant `LDTLB.RN Rm` at `0x?FB`, sourcing `PTEL` from a GPR, existed until the hardware TSB walker made the software fast path it served obsolete; it has been retired.) |
 | **MD** | `SR.MD`, the mode bit: `1` = privileged (kernel), `0` = user. Gates the `U` permission check and access to privileged registers/instructions. |
 | **MMUCR** | MMU Control Register (P4 MMIO `0xFF00_0010`): `AT` (bit 0) enables translation, `TI` (bit 2) flushes the TLB. |
 | **MMUFSR** | MMU Fault Status Register (P4 MMIO `0xFF00002C`): read-only latch of the last fault. `[12] VALID`, `[11:8] KIND`, `[7:5] reserved`, `[4] USER`, `[3] PROT`, `[2] ITLB`, `[1] INITIAL` (always 0), `[0] WRITE`. KIND values: 1=IMISS, 2=DMISS_R, 3=DMISS_W, 4=IPROT, 5=DPROT_R, 6=DPROT_W, 7=MULTI_HIT, 0=none. Low byte is a Linux `FAULT_CODE_*` image. Latched on first fault cycle alongside TEA/PTEH; overwritten by next fault. |

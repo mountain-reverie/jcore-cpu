@@ -712,6 +712,22 @@ begin
     -- still belongs to the core's in-flight access, and its ack (which the core
     -- itself is not allowed to see) would otherwise be latched by the walker as
     -- a TSB word -- it would compare the core's own load data against the tag.
+    --
+    -- walk_own is REGISTERED (p_walk_own below), so it is still '0' on the
+    -- very first walk_busy cycle. For an I-SIDE walk that first cycle is the
+    -- one bounded gap in the bus-takeover story: db_o in g_dstore_squash below
+    -- still carries whatever sig_db_o the core itself presents that cycle, not
+    -- the walker's bus_a/bus_en, because the `walk_own = '1'` mux arm has not
+    -- fired yet. If an OLDER, already-in-flight D-side store happened to be the
+    -- access on the bus in that exact cycle, it commits externally and is then
+    -- replayed once ack is restored after the walk -- it is NOT demoted, since
+    -- d_store_faulting only demotes a D-side TLB fault, not this ordering case.
+    -- Harmless on plain SRAM (idempotent replay); not necessarily harmless on
+    -- MMIO or TAS, same class as the walk_i_miss ordering caveat above. The
+    -- window is bounded to exactly this one cycle (walk_own is '1' from the
+    -- next cycle on for the rest of the walk). It is UNVERIFIED whether the
+    -- pipeline can actually have a D access in flight on that specific cycle
+    -- of an I-side walk's arming -- not fixed here, only recorded.
     walk_bus_ack <= db_i.ack and walk_own;
 
     -- Bus ownership handshake for the takeover. On the cycle the walk starts,
@@ -740,23 +756,25 @@ begin
   end generate g_tlb_walk;
 
   g_no_tlb_walk : if not (PRIV_ARCH and MMU_WALKER) generate
-    walk_busy    <= '0';
-    walk_arm     <= '0';
-    walk_supp_i  <= '0';
-    walk_supp_d  <= '0';
-    walk_side_i  <= '0';
-    walk_own     <= '0';
-    walk_bus_ack <= '0';
-    walk_req     <= '0';
-    walk_d_miss  <= '0';
-    walk_i_miss  <= '0';
-    walk_va      <= (others => '0');
-    walk_va_r    <= (others => '0');
-    d_fault_held <= '0';
-    walk_install <= '0';
-    walk_bus_en  <= '0';
-    walk_bus_a   <= (others => '0');
-    walk_ptel    <= (others => '0');
+    walk_busy       <= '0';
+    walk_arm        <= '0';
+    walk_supp_i     <= '0';
+    walk_supp_d     <= '0';
+    walk_side_i     <= '0';
+    walk_own        <= '0';
+    walk_bus_ack    <= '0';
+    walk_req        <= '0';
+    walk_d_miss     <= '0';
+    walk_i_miss     <= '0';
+    walk_va         <= (others => '0');
+    walk_va_r       <= (others => '0');
+    d_fault_held    <= '0';
+    walk_install    <= '0';
+    walk_bus_en     <= '0';
+    walk_bus_a      <= (others => '0');
+    walk_ptel       <= (others => '0');
+    walk_i_miss_raw <= '0';
+    walk_i_arm_raw  <= '0';
   end generate g_no_tlb_walk;
 
   g_dstore_squash : if PRIV_ARCH generate

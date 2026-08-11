@@ -115,14 +115,18 @@ kmain:
         mov.l   k_mmucr, r0 ; mov #1, r1 ; mov.l r1, @r0
 
         ! ================= FIRST TOUCHES (4 walker installs) =================
+! Phase brackets for sim/bench_tlb_hotpath.sh (labels only; no code emitted).
+ENTRY(_bench_cold_start)
         mov.l   va_A, r0 ; mov.l @r0, r8
         mov.l   va_C, r0 ; mov.l @r0, r10
         mov.l   va_B, r0 ; mov.l sv_B, r1 ; mov.l r1, @r0
         mov.l   va_D, r0 ; mov.l sv_D, r1 ; mov.l r1, @r0
 
+ENTRY(_bench_cold_end)
         ! ---- Flush the TLB, keep AT on (TI|AT). TSB stays warm. ----
         mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0
 
+ENTRY(_bench_warm_start)
         ! ================= SECOND TOUCHES (4 TSB hot-path hits) ==============
         ! B is a STORE on purpose, so the hit set covers DMISS_W (EXPEVT
         ! 0x080) and not just DMISS_R (0x060). It also proves stores reach the
@@ -135,6 +139,7 @@ kmain:
         mov.l   va_D, r0 ; mov.l @r0, r11
         mov.l   va_B, r0 ; mov.l @r0, r12                    ! read back (TLB now warm)
 
+ENTRY(_bench_warm_end)
         ! ---- Disable AT before touching the sim result register. ----
         mov.l   k_mmucr, r0 ; mov #0, r1 ; mov.l r1, @r0
 

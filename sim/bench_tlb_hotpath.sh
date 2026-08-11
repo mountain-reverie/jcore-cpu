@@ -157,7 +157,51 @@
 #      overestimated this by ~3x; measure hot-path changes, don't model them.)
 #
 # ------------------------------------------------------------------------------
+# WALKER MODE (BENCH_MODE=walker) -- READ THIS BEFORE TRUSTING THE DEFAULT MODE
+# ON A BUILD WITH THE HARDWARE TSB WALKER ENABLED (core/tlb_walk.vhd).
+#
+# The default mode above brackets on the HANDLER PC range [_h_common,_h_slow)
+# and then splits the visits it finds into halves, calling the first half cold
+# and the second half TSB-hit. With the walker on, a TSB hit is resolved as a
+# PIPELINE STALL: there is no exception, no vector fetch and NO HANDLER PC IN
+# THE TRACE AT ALL. So mmubench's 8 misses produce only its 4 COLD handler
+# visits, the halving splits those 4 cold visits into "2 cold, 2 hit", and the
+# script reports the cold path twice -- once labelled TSB-HIT (measured: 81 cyc
+# "TSB-HIT", i.e. 3.5x the real 23-cycle software number). It does not fail; it
+# lies. Nor can the bracket be rescued by keying on "faulting PC seen -> seen
+# again": on a hit the PC never changes, so there is no second edge.
+#
+# BENCH_MODE=walker measures the only thing that survives: a bracket between two
+# FIXED PROGRAM ADDRESSES enclosing a known number of misses, compared between a
+# walker-ON and a walker-OFF build of the SAME guard binary. Whatever the
+# assembler puts inside the bracket is byte-identical in both legs and cancels
+# in the delta -- which is what makes this immune to the alignment-pad failure
+# recorded under HISTORICAL CORRECTION above. It also prints the walk-FSM
+# windows (walk_busy / walk_install) so a hit can be told from a failed probe.
+#
+#   MEASURED (2026-08-10, mmu/tsb-hw-walker):
+#     guard      phase  misses  walker-OFF  walker-ON   delta
+#     mmubench   cold      4       254         272      +18  (+4.5/miss)
+#     mmubench   warm      4       130          66      -64  (-16/miss)
+#     mmubenchi  cold      1       106         111       +5
+#     mmubenchi  warm      1        53          39      -14
+#
+#   Anchored on the software baseline this same script reproduces on a
+#   walker-OFF build (DMISS 23 / IMISS 22 warm, 75 / 74 cold):
+#     DMISS warm  23 -> 7    IMISS warm  22 -> 8
+#     DMISS cold  75 -> 79.5 IMISS cold  74 -> 79
+#   A warm walk is 8 busy cycles (3 TSB reads + install); a FAILED probe is 4
+#   (it aborts after the first tag word), which is the whole cold regression.
+#   Caveat: every TSB read here acks in one cycle because the C walker just
+#   wrote those lines. A cold D-cache TSB read would add fill latency.
+#
+# To produce the walker-OFF leg, flip `mmu_walker` in core/cpu.vhd's generic
+# defaults and REBUILD (never -n). sim/profile_tlb_hotpath.py cannot attribute a
+# walker hit -- it shares the handler bracket -- so use the walk-window dump here.
+#
+# ------------------------------------------------------------------------------
 # Usage:  sim/bench_tlb_hotpath.sh
+#         BENCH_MODE=walker BENCH_GUARD=mmubench sim/bench_tlb_hotpath.sh
 # Env:    JCORE_SOC (default: sibling ../jcore-soc), NM (default: sh2-elf-nm).
 set -uo pipefail
 cd "$(dirname "$0")/.."                       # jcore-cpu root
@@ -198,9 +242,102 @@ HC=$((P1 + 0x$hc)); HS=$((P1 + 0x$hs)); VB=$((P1 + 0x$vb))
 printf 'bench: fast-path range [_h_common 0x%08x .. _h_slow 0x%08x); user code below _vbase 0x%08x\n' "$HC" "$HS" "$VB"
 
 # --- run the guard under the J4 overlay with a VCD dump ---
+# Delete first: mmu_sim.sh's failures are swallowed by `|| true`, so without this
+# a STALE VCD from a previous run passes the -s check and the whole bench
+# "succeeds" in a second against hardware that was never built. Observed.
+rm -f "$VCD"
 echo "bench: running $GUARD under the J4 overlay (VCD -> $VCD) ..."
 MMU_VCD="$VCD" sim/mmu_sim.sh "$GUARD" >/dev/null 2>&1 || true
 [ -s "$VCD" ] || { echo "bench: no VCD produced" >&2; exit 1; }
+
+# --- walker mode: phase brackets + walk-FSM windows (see header) -------------
+if [ "${BENCH_MODE:-}" = "walker" ]; then
+  GUARD="$GUARD" VCD="$VCD" NM="$NM" python3 - <<'PY'
+import os, re, subprocess, sys
+P1 = 0x80000000
+guard, vcd, NM = os.environ['GUARD'], os.environ['VCD'], os.environ['NM']
+elf = os.path.join('sim', 'tests', guard + '.elf')
+syms = {}
+for line in subprocess.run([NM, elf], capture_output=True, text=True).stdout.splitlines():
+    f = line.split()
+    if len(f) == 3:
+        syms[f[2]] = int(f[0], 16)
+want = {'pc[31:0]': 'pc', 'walk_busy': 'busy', 'walk_side_i': 'side_i',
+        'walk_install': 'inst'}
+ids, ev, t = {}, [], 0
+for line in open(vcd):
+    line = line.rstrip('\n')
+    if not line:
+        continue
+    m = re.match(r'\$var \w+ \d+ (\S+) (\S+) \$end', line)
+    if m and m.group(2) in want:
+        ids[m.group(1)] = want[m.group(2)]
+        continue
+    if line[0] == '#':
+        t = int(line[1:]); continue
+    if line[0] == 'b':
+        p = line.split()
+        if len(p) == 2 and p[1] in ids:
+            try: ev.append((t, ids[p[1]], int(p[0][1:], 2)))
+            except ValueError: pass
+    elif line[0] in '01' and line[1:] in ids:
+        ev.append((t, ids[line[1:]], int(line[0])))
+pc = [(t, v) for t, n, v in ev if n == 'pc']
+stamps = sorted({t for t, _ in pc if t > 0})
+if len(stamps) < 2:
+    sys.exit('bench: no pc transitions in VCD')
+PER = stamps[1] - stamps[0]
+print(f'bench: walker mode, clock period {PER/1e6:.1f} ns')
+
+def first_at(addr, after=0):
+    for t, v in pc:
+        if t >= after and v == addr:
+            return t
+    return None
+
+# Phase brackets. mmubench delimits both phases with its own labels; mmubenchi's
+# legs end where execution resumes in the translated page, which its pre-existing
+# _after_ifetch/_after_ifetch2 entry points already mark.
+ends = {'mmubench': ('_bench_cold_end', '_bench_warm_end')}.get(
+    guard, ('_after_ifetch', '_after_ifetch2'))
+for label, a, b in (('cold', '_bench_cold_start', ends[0]),
+                    ('warm', '_bench_warm_start', ends[1])):
+    if a not in syms or b not in syms:
+        print(f'bench:   {label}: {a}/{b} not in {elf} -- guard has no phase labels')
+        continue
+    ta = first_at(P1 + syms[a])
+    tb = first_at(P1 + syms[b], ta + PER) if ta is not None else None
+    if ta is None or tb is None:
+        print(f'bench:   {label}: bracket [{a}..{b}) never completed')
+        continue
+    print(f'bench:   {label} [{a} .. {b}) = {(tb-ta)//PER} cyc')
+
+busy = [(t, v) for t, n, v in ev if n == 'busy']
+side = [(t, v) for t, n, v in ev if n == 'side_i']
+inst = [(t, v) for t, n, v in ev if n == 'inst']
+wins, st = [], None
+for t, v in busy:
+    if v and st is None: st = t
+    elif not v and st is not None: wins.append((st, t)); st = None
+if not wins:
+    print('bench:   no walk_busy windows -- this is a WALKER-OFF build '
+          '(that is the reference leg; compare its bracket numbers)')
+else:
+    def sig_at(lst, tt):
+        v = 0
+        for a, b in lst:
+            if a <= tt: v = b
+            else: break
+        return v
+    print(f'bench:   {len(wins)} walk windows')
+    for i, (a, b) in enumerate(wins):
+        hit = any(v and a <= tt <= b for tt, v in inst)
+        print(f'bench:     walk{i}: side={"I" if sig_at(side,a) else "D"} '
+              f'busy={(b-a)//PER} cyc  {"INSTALL (TSB hit)" if hit else "FAIL (-> sw handler)"}')
+PY
+  echo "bench: done (walker mode). Compare against a walker-OFF rebuild; see header."
+  exit 0
+fi
 
 # --- trace pc[31:0]; report cold-probe / TSB-hit dwell + one fault->resume ---
 HC=$HC HS=$HS VB=$VB VCD="$VCD" GUARD="$GUARD" python3 - <<'PY'

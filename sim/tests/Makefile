@@ -340,3 +340,5 @@ clean:
 .PHONY: clean j4-guards
 mmutsb.elf: mmutsb.o
 mmuwalkhit.elf: mmuwalkhit.o
+mmuwalkmiss.elf: mmuwalkmiss.o
+mmuwalkstale.elf: mmuwalkstale.o

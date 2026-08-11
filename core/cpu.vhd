@@ -13,9 +13,6 @@ entity cpu is
     copro_decode : boolean := true;
     priv_arch    : boolean := false;
     sh2a_arch    : boolean := false; -- SH-2A extensions (inert plumbing only)
-    -- Hardware TSB walker (core/tlb_walk.vhd). Bring-up scaffolding for A/B
-    -- against the software TLB-miss path; removed in Phase 3.
-    mmu_walker : boolean := true;
     -- Elaboration tag: distinguishes two cpu instances that share this entity/
     -- arch/generics but whose nested register-file architecture is bound
     -- differently per instance by the enclosing cpus configuration (e.g. core0=
@@ -510,7 +507,7 @@ begin
                                and (tlb_d_hit = '0' or tlb_d_prot = '1') else
                       '0';
 
-  g_tlb_walk : if PRIV_ARCH and MMU_WALKER generate
+  g_tlb_walk : if PRIV_ARCH generate
   begin
 
     -- ---- Walk eligibility ----------------------------------------------
@@ -584,7 +581,7 @@ begin
 
     end process p_walk_order_assert;
 
-    walk_req <= '1' when priv_arch and mmu_walker and dp_sr.rb = '0'
+    walk_req <= '1' when priv_arch and dp_sr.rb = '0'
                          and (walk_d_miss = '1' or walk_i_miss = '1') else
                 '0';
 
@@ -732,7 +729,7 @@ begin
 
   end generate g_tlb_walk;
 
-  g_no_tlb_walk : if not (PRIV_ARCH and MMU_WALKER) generate
+  g_no_tlb_walk : if not PRIV_ARCH generate
     walk_busy       <= '0';
     walk_arm        <= '0';
     walk_supp_i     <= '0';

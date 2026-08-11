@@ -32,7 +32,7 @@ package datapath_pack is
 
   type p4_sel_t is (
     p4_none, p4_mmucr, p4_ttb, p4_tea, p4_tsbbr, p4_tsbcfg, p4_tsbptr, p4_mmufsr,
-    p4_tra, p4_expevt, p4_intevt
+    p4_tra, p4_expevt, p4_intevt, p4_tsbslot
   );
 
   function seg_decode (

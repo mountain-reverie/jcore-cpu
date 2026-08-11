@@ -96,6 +96,12 @@ package cpu2j0_components_pack is
     tsbbr  : std_logic_vector(31 downto 0);
     tsbcfg : std_logic_vector(31 downto 0);
     tsbptr : std_logic_vector(31 downto 0);
+    -- TSBSLOT helper (P4 MMIO 0xFF000048, docs/soc/p4-mmio-map.md): software
+    -- writes a VA here and reads the same address back to get tsb_ptr(VA), the
+    -- slot address the hardware walker and TSBPTR-on-fault use. Only the
+    -- written VA is stored; the index function is evaluated on the read, so
+    -- there is exactly one implementation of it (tsb_ptr in datapath_pkg).
+    tsbslot_va : std_logic_vector(31 downto 0);
     -- MMUFSR (M-fsr, hardware-spec §2.11): fault-status snapshot latched on
     -- every TLB exception, read-only MMIO 0xFF000028. [12]=VALID [11:8]=KIND
     -- [7:5]=rsvd(0) [4]=USER [3]=PROT [2]=ITLB [1]=INITIAL(0) [0]=WRITE.

@@ -1713,6 +1713,13 @@ end generate;
                 -- is SH-4's INTEVT (see above), and the two collided until this
                 -- was moved to 0x2C -- which SH-4 and SH-4A both leave free.
                 elsif ma_ad(7 downto 0) = x"2C" then p4_sel_v := P4_MMUFSR;
+                -- TSBSLOT: write a VA, read the same address back to get
+                -- tsb_ptr(VA). Read/write like TSBBR/TSBCFG above; the read
+                -- evaluates tsb_ptr() on the latched VA so the TSB index
+                -- function has exactly one implementation. Linux's
+                -- jcore_tsb_slot_addr() uses this instead of mirroring the
+                -- hash in C.
+                elsif ma_ad(7 downto 0) = x"48" then p4_sel_v := P4_TSBSLOT;
                 end if;
               end if;
               if PRIV_ARCH and seg_v = SEG_P4 then
@@ -1732,6 +1739,7 @@ end generate;
                     when P4_TSBBR  => this.mmu.tsbbr  := ma_dw;
                     when P4_TSBCFG => this.mmu.tsbcfg := ma_dw;
                     when P4_TRA    => this.priv.tra    := ma_dw(9 downto 0);
+                    when P4_TSBSLOT => this.mmu.tsbslot_va := ma_dw;
                     -- P4_TSBPTR / P4_EXPEVT / P4_INTEVT / P4_MMUFSR are
                     -- read-only: a write is silently ignored.
                     when others   => null;
@@ -1748,6 +1756,10 @@ end generate;
                     when P4_EXPEVT => this.m_dr_next := x"00000" & this.priv.expevt;
                     when P4_INTEVT => this.m_dr_next := x"00000" & this.priv.intevt;
                     when P4_MMUFSR => this.m_dr_next := this.mmu.fsr;
+                    when P4_TSBSLOT =>
+                      this.m_dr_next := tsb_ptr(this.mmu.tsbslot_va,
+                                                this.mmu.tsbcfg,
+                                                this.mmu.tsbbr);
                     when others    => this.m_dr_next := (others => '0');
                   end case;
                   this.m_en := '1';

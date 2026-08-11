@@ -129,7 +129,7 @@ else
   for t in exctest trapatest pm3vec pm3guard privmode banktest excguard \
            rteredir mmureg mmuguard mmuxlate mmurte mmustore mmuimiss mmuimiss_illegal \
            mmusr mmufault mmufsr mmudslot mmuidslot mmuldtlbr mmutsb mmuwalkhit mmuwalkmiss mmuwalkstale mmuwalktorn mmuwalkdside mmuwalkiside mmuwalkorder mmutsbslot mmuwalkasid mmutsbvictim mmuwalkway1 mmup4alias mmuidx mmustres mmustr2 mmuimissrest mmushadowld mmushadowst mmurestartpc \
-           mmustale mmuasid mmuglobal mmumultihit mmudblflt mmunest_trapa mmunest_slotill mmunest mmuremap mmucmpcsr mmuvecsplit mmurun mmubench mmubenchi mmuirun mmuainc mmuainc2 mmusmep j4_illegal_trap; do
+           mmustale mmuasid mmuasidsh mmuglobal mmumultihit mmudblflt mmunest_trapa mmunest_slotill mmunest mmuremap mmucmpcsr mmuvecsplit mmurun mmubench mmubenchi mmuirun mmuainc mmuainc2 mmusmep j4_illegal_trap; do
     run_guard "$t"
   done
   run_guard mmufaultage "" 60us

@@ -184,25 +184,28 @@ package datapath_pack is
       cop_o              : out   cop_o_t;
       priv_o             : out   cpu_priv_o_t := NULL_PRIV_O;
       mmu_regs_o         : out   mmu_reg_t := MMU_REG_RESET;
-      sr_o               : out   sr_t;
-      tlb_squash_o       : out   std_logic := '0';
-      tlb_exc_pend       : in    std_logic := '0';
-      tlb_fault_va       : in    std_logic_vector(31 downto 0) := (others => '0');
-      tlb_exc_expevt     : in    std_logic_vector(11 downto 0) := (others => '0');
-      tlb_exc_fsr        : in    std_logic_vector(12 downto 0) := (others => '0');
-      delay_slot         : in    std_logic := '0';
-      tlb_exc_is_i       : in    std_logic := '0';
-      inst_fault         : in    std_logic := '0';
-      inst_fault_prot    : in    std_logic := '0';
-      if_fault_o         : out   std_logic;
-      if_fault_prot_o    : out   std_logic;
-      id_delay_slot      : in    std_logic := '0';
-      if_fault_cap       : in    std_logic := '0';
-      tlb_exc_ifetch     : in    std_logic := '0';
-      if_pc              : out   std_logic_vector(31 downto 0);
-      ex_if_pc           : in    std_logic_vector(31 downto 0) := (others => '0');
-      walk_cnt_walks_i   : in    std_logic_vector(15 downto 0) := (others => '0');
-      walk_cnt_hits_i    : in    std_logic_vector(15 downto 0) := (others => '0')
+      -- Zero-skew placement replica of mmu_regs_o.asidr(15 downto 0) for the
+      -- TLB lookup compare only (Phase 4a); see core/datapath.vhm.
+      asidr_tlb_o      : out   std_logic_vector(15 downto 0) := (others => '0');
+      sr_o             : out   sr_t;
+      tlb_squash_o     : out   std_logic := '0';
+      tlb_exc_pend     : in    std_logic := '0';
+      tlb_fault_va     : in    std_logic_vector(31 downto 0) := (others => '0');
+      tlb_exc_expevt   : in    std_logic_vector(11 downto 0) := (others => '0');
+      tlb_exc_fsr      : in    std_logic_vector(12 downto 0) := (others => '0');
+      delay_slot       : in    std_logic := '0';
+      tlb_exc_is_i     : in    std_logic := '0';
+      inst_fault       : in    std_logic := '0';
+      inst_fault_prot  : in    std_logic := '0';
+      if_fault_o       : out   std_logic;
+      if_fault_prot_o  : out   std_logic;
+      id_delay_slot    : in    std_logic := '0';
+      if_fault_cap     : in    std_logic := '0';
+      tlb_exc_ifetch   : in    std_logic := '0';
+      if_pc            : out   std_logic_vector(31 downto 0);
+      ex_if_pc         : in    std_logic_vector(31 downto 0) := (others => '0');
+      walk_cnt_walks_i : in    std_logic_vector(15 downto 0) := (others => '0');
+      walk_cnt_hits_i  : in    std_logic_vector(15 downto 0) := (others => '0')
     );
   end component datapath;
 

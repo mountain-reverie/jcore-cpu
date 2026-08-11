@@ -163,7 +163,11 @@ architecture stru of cpu is
   -- replays once the translation is installed.
   signal dp_db_i : cpu_data_i_t;
   -- Hardware TSB walker (core/tlb_walk.vhd) interface.
-  signal walk_busy      : std_logic;
+  signal walk_busy : std_logic;
+  signal walk_arm  : std_logic;
+  -- Per-side miss-exception suppression. See tlb_walk.vhd's `arm` comment.
+  signal walk_supp_i    : std_logic;
+  signal walk_supp_d    : std_logic;
   signal walk_own       : std_logic;
   signal walk_bus_ack   : std_logic;
   signal walk_req       : std_logic;
@@ -178,6 +182,11 @@ architecture stru of cpu is
   signal walk_bus_en    : std_logic;
   signal walk_cnt_walks : unsigned(15 downto 0);
   signal walk_cnt_hits  : unsigned(15 downto 0);
+  -- Walker counter readback at 0xFF000F00. Debug scaffolding for the
+  -- anti-vacuity guards; removed with MMU_WALKER in Phase 3. Decoded here
+  -- rather than in datapath.vhm so no new datapath port is needed.
+  signal walk_cnt_sel  : std_logic;
+  signal walk_cnt_word : std_logic_vector(31 downto 0);
   -- TLB install-port muxes: LDTLB (decoder) or hardware walker.
   signal tlb_wr_any  : std_logic;
   signal tlb_ptel_mx : std_logic_vector(31 downto 0);
@@ -448,8 +457,31 @@ begin
   -- sig_db_o.en asserted, so the faulting access is held stable and replays
   -- when ack is restored. Data is passed through unconditionally; only the
   -- handshake is gated.
-  dp_db_i.d   <= db_i.d;
-  dp_db_i.ack <= db_i.ack and not walk_busy;
+  -- Walker counter readback. Debug scaffolding for the anti-vacuity guards;
+  -- removed with MMU_WALKER in Phase 3.
+  --
+  -- The brief placed this in the MMU block's reserved P4 range, but P4 is not
+  -- reachable from here: datapath.vhm absorbs the WHOLE of SEG_P4 internally
+  -- ("no bus transaction is issued") and injects its own read result, so a P4
+  -- address never appears on sig_db_o at all and an unmatched one reads back a
+  -- hard zero. Exposing the counters at a P4 address therefore needs a new
+  -- datapath port and a wider p4_sel_t -- exactly what the brief wanted to
+  -- avoid. So the window sits in P2 instead (untranslated, uncached, and it
+  -- DOES go out on the data bus, which is how the sim result MMIO at
+  -- 0xBCDE0010 works). cpu.vhd decodes it, supplies the data and the ack, and
+  -- withholds db_o.en so the memory model never sees an address it cannot
+  -- decode.
+  walk_cnt_sel <= '1' when priv_arch and mmu_walker
+                           and sig_db_o.en = '1' and sig_db_o.rd = '1'
+                           and sig_db_o.a = x"ABCD0F00" else
+                  '0';
+
+  walk_cnt_word <= std_logic_vector(walk_cnt_walks) &
+                   std_logic_vector(walk_cnt_hits);
+
+  dp_db_i.d   <= walk_cnt_word when walk_cnt_sel = '1' else
+                 db_i.d;
+  dp_db_i.ack <= (db_i.ack or walk_cnt_sel) and not walk_busy;
 
   -- D-store TLB-fault write suppression (J4). A store that misses or
   -- violates the TLB must not mutate memory, but a write acks and commits in the
@@ -569,9 +601,16 @@ begin
         install_ptel => walk_ptel,
         va_r         => walk_va_r,
         busy         => walk_busy,
+        arm          => walk_arm,
         cnt_walks    => walk_cnt_walks,
         cnt_hits     => walk_cnt_hits
       );
+
+    -- Miss-exception suppression. A walk suppresses the miss arms for its
+    -- whole duration, INCLUDING the arming cycle -- see tlb_walk.vhd's `arm`
+    -- comment for why the arming cycle is not optional.
+    walk_supp_i <= walk_busy or walk_arm;
+    walk_supp_d <= walk_busy or walk_arm;
 
     -- The walker may only consume an ack it caused. Until walk_own rises the bus
     -- still belongs to the core's in-flight access, and its ack (which the core
@@ -606,6 +645,9 @@ begin
 
   g_no_tlb_walk : if not (PRIV_ARCH and MMU_WALKER) generate
     walk_busy    <= '0';
+    walk_arm     <= '0';
+    walk_supp_i  <= '0';
+    walk_supp_d  <= '0';
     walk_own     <= '0';
     walk_bus_ack <= '0';
     walk_req     <= '0';
@@ -624,7 +666,7 @@ begin
 
     process (sig_db_o, d_store_faulting, d_at_translated, tlb_d_hit,
              tlb_d_pa, tlb_d_pa12, tlb_d_page_mask,
-             walk_own, walk_bus_a, walk_bus_en) is
+             walk_own, walk_bus_a, walk_bus_en, walk_cnt_sel) is
 
       variable offm   : std_logic_vector(15 downto 0);
       variable ppn_lo : std_logic_vector(15 downto 0);
@@ -650,6 +692,14 @@ begin
         ppn_lo               := tlb_d_pa & tlb_d_pa12;   -- PPN[27:12]: bit15=PPN[27] .. bit0=PPN[12]
         db_o.a(31 downto 28) <= "0000";
         db_o.a(27 downto 12) <= (ppn_lo and not offm) or (sig_db_o.a(27 downto 12) and offm);
+      end if;
+
+      -- The walker-counter debug window is served entirely inside cpu.vhd
+      -- (data and ack, above). Keep it off the external bus so the memory
+      -- model is never asked to decode it.
+      if (walk_cnt_sel = '1') then
+        db_o.en <= '0';
+        db_o.rd <= '0';
       end if;
 
       -- Walker bus takeover. MUST be last and MUST be on the external db_o:
@@ -798,7 +848,7 @@ begin
              sig_inst_o, sig_db_o,
              tlb_i_hit, tlb_i_prot, tlb_i_multihit,
              tlb_d_hit, tlb_d_prot, tlb_d_multihit,
-             i_va_32, d_va_32, dp_sr, walk_busy) is
+             i_va_32, d_va_32, dp_sr, walk_supp_i, walk_supp_d) is
 
       variable exc_en   : std_logic;
       variable exc_kind : tlb_exc_kind_t;
@@ -842,7 +892,7 @@ begin
           exc_kind := MULTI_HIT;
           fva      := i_va_32;
         elsif (tlb_i_hit = '0') then
-          if (walk_busy = '0') then
+          if (walk_supp_i = '0') then
             exc_en   := '1';
             exc_kind := IMISS;
             fva      := i_va_32;
@@ -868,7 +918,7 @@ begin
           fva      := d_va_32;
         elsif (tlb_d_hit = '0') then
           -- Miss arm only -- see the I-side comment above.
-          if (walk_busy = '0') then
+          if (walk_supp_d = '0') then
             if (sig_db_o.wr = '1') then
               exc_en   := '1';
               exc_kind := DMISS_W;

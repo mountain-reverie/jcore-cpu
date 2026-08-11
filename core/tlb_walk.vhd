@@ -66,6 +66,28 @@ entity tlb_walk is
     -- and suppress the miss exception.
     busy : out   std_logic;
 
+    -- '1' on the ARMING cycle only: the walk has been accepted and starts on
+    -- the next rising edge, but `state` is still st_idle so `busy` is still
+    -- '0'. cpu.vhd must suppress the miss exception on this cycle too.
+    --
+    -- Without it the walker cannot work at all. `req` is combinational over
+    -- the live TLB miss signals, and so is cpu.vhd's exception process: both
+    -- see the miss in the SAME cycle, and the exception wins because `busy`
+    -- has not risen yet. The walk then installs into a machine that already
+    -- vectored to VBR+0x400. (Measured: exception at 800 ns, install at
+    -- 880 ns, on sim/tests/mmuwalkhit.S.)
+    --
+    -- This is NOT a "walk failed" wire: it says "a walk is being armed", never
+    -- "a walk finished and lost". `tried` keeps the give-up path intact --
+    -- once a walk has given up, req stays high but tried is set, so both arm
+    -- and busy are low and the miss exception fires by itself exactly as
+    -- before. It is deliberately separate from `busy` rather than folded into
+    -- it, because cpu.vhd must apply it ONLY to the side actually being armed:
+    -- an I-side miss and a D-side miss can be live in the same cycle, D wins
+    -- the walk, and the I-side exception must still fire on schedule
+    -- (older-instruction-first; guard mmuidorder).
+    arm : out   std_logic;
+
     -- Anti-vacuity counters (design spec section 8). Read via the debug
     -- interface; not architectural.
     cnt_walks : out   unsigned(15 downto 0);
@@ -109,6 +131,8 @@ begin
 
   busy         <= '0' when state = st_idle else
                   '1';
+  arm          <= '1' when state = st_idle and req = '1' and tried = '0' else
+                  '0';
   install      <= '1' when state = st_install else
                   '0';
   install_ptel <= ptel_r;

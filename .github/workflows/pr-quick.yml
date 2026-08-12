@@ -78,6 +78,87 @@ jobs:
           repository: j-core/jcore-soc
           path: jcore-soc
 
+      # Sparse/shallow checkout: the assemble-only gate below only needs the
+      # kernel headers under arch/sh/include (mmulinux.S / mmuhuge.S / etc.
+      # pull in linux@jcore's SH uapi/asm headers via -I); it does NOT need a
+      # kbuild build, so this is far cheaper than full-regression's full
+      # checkout + kbuild step. Same repo/ref as full-regression.yml's
+      # "Checkout linux@jcore" step -- keep them in sync.
+      - name: Checkout linux@jcore (headers only, for the assemble-only gate)
+        uses: actions/checkout@v4
+        with:
+          repository: mountain-reverie/linux
+          ref: jcore
+          path: linux
+          sparse-checkout: |
+            arch/sh/include
+          sparse-checkout-cone-mode: false
+
+      # WHY THIS STEP EXISTS: commit d14d723 left a literal `mov.l @r3, r3None`
+      # in sim/tests/mmulinux.S and mmuhuge.S -- a Python str(None) leaked by an
+      # ad-hoc migration script. gas rejected it, so both guards became
+      # UNASSEMBLABLE and silently dropped out of CI for an entire phase of
+      # work, hiding three further real defects behind the missing results.
+      # Those four guards (mmulinux, mmuhuge, mmuboot, mmulinuxexc) only run in
+      # full-regression.yml / sim/linux_sim.sh, which pr-quick intentionally
+      # skips (they need kbuild objects) -- so without a dedicated check,
+      # pr-quick has NO signal at all that a guard source stopped assembling.
+      # This step is a cheap syntax-only substitute: it assembles every
+      # sim/tests/*.S to a .o (no link, no kbuild objects needed -- see
+      # sim/tests/Makefile's %.o rules) and greps for the exact typo shape a
+      # bulk str()-based migration produces. It costs seconds and runs before
+      # every other (expensive) step so a broken guard source fails fast.
+      # If you are tempted to delete this step because it looks redundant with
+      # Steps 1-7 below: it is not -- none of those steps touch sim/tests/*.S
+      # syntax at all.
+      - name: Assemble-only syntax gate for sim/tests/*.S
+        working-directory: jcore-cpu
+        env:
+          LINUX_SRC: ${{ github.workspace }}/linux
+          J4GAS: /usr/local/bin/sh2-elf-as
+        run: |
+          set -euo pipefail
+
+          # Catch the d14d723 typo class directly: a register operand
+          # immediately followed by trailing letters (e.g. `r3None`) is the
+          # fingerprint of a str(None)/similar bulk-substitution migration
+          # script gone wrong. This is near-free and independent of whether
+          # gas happens to reject the specific garbage token.
+          echo "==> grep for r<N><word> typo class (d14d723 fingerprint)"
+          if grep -nE '\br[0-9]+[A-Za-z][A-Za-z0-9_]*' sim/tests/*.S; then
+            echo "::error::Found a register name immediately followed by trailing letters (e.g. 'r3None') in sim/tests/*.S." >&2
+            echo "This is the exact shape commit d14d723 introduced: a Python str(None) (or similar)" >&2
+            echo "leaked by a bulk migration/sed script into a register operand, e.g. 'mov.l @r3, r3None'." >&2
+            echo "It silently made mmulinux.S/mmuhuge.S UNASSEMBLABLE and vanished from CI for a whole phase" >&2
+            echo "of work. Fix the offending operand(s) above." >&2
+            exit 1
+          fi
+          echo "    clean."
+
+          # Assemble every guard source to a .o (syntax-only; no linking, no
+          # kbuild objects). sim/tests/Makefile's %.o rules need only J4GAS
+          # and, for the four linux-handler harnesses (mmulinux/mmulinuxexc/
+          # mmuhuge/mmuboot), -I$(LINUX_SRC)/arch/sh/include -- both provided
+          # above, matching full-regression.yml's J4GAS.
+          echo "==> assemble-only pass over sim/tests/*.S"
+          fail=0
+          for f in sim/tests/*.S; do
+            name="$(basename "$f" .S)"
+            rm -f "sim/tests/$name.o"
+            log="$(mktemp)"
+            if ! make -C sim/tests CPU_VARIANT=j4 LINUX_SRC="$LINUX_SRC" J4GAS="$J4GAS" "$name.o" >"$log" 2>&1; then
+              echo "FAIL: sim/tests/$f does not assemble" >&2
+              cat "$log" >&2
+              fail=1
+            fi
+            rm -f "$log" "sim/tests/$name.o"
+          done
+          if [ "$fail" != 0 ]; then
+            echo "::error::One or more sim/tests/*.S guard sources failed to assemble -- see FAIL lines above." >&2
+            exit 1
+          fi
+          echo "==> all sim/tests/*.S guard sources assemble cleanly"
+
       - name: Show toolchain versions
         run: |
           # No pipefail here: `<tool> --version | head` SIGPIPEs (exit 141) once

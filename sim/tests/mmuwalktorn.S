@@ -104,15 +104,6 @@ ENTRY(start)
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
-        ! ---- Map the code page identity (W+X+U+C, V forced by LDTLB). ----
-        mov.l   p_pteh_code, r0
-        .word   0x405E                  ! LDC r0, PTEH
-        mov.l   p_ptel_code, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
-
         ! ---- Seed the two distinguishable data pages (AT off, direct
         ! ---- physical writes). PA_NEW == VA_NEW (identity); PA_OLD is a
         ! ---- different page entirely. ----
@@ -148,6 +139,25 @@ ENTRY(start)
         mov.l   p_asid, r1
         mov.l   r1, @(4, r0)            ! tag_lo := ASID 0 (unchanged)
                                          ! tag_hi left at VPN_OLD -- NOT committed
+
+        ! ---- Code page: the identity mapping that LDTLB used to install is
+        ! ---- now a GLOBAL TSB entry that the walker installs on the first
+        ! ---- instruction fetch after AT goes on. GLOBAL so no ASID change can
+        ! ---- perturb it; U=0 (SMEP). The set address is asked of the P4 slot
+        ! ---- helper (0xFF000048 -- the single tsb_ptr() implementation the
+        ! ---- walker and TSBPTR also use), never hand-computed. WAY 1, so it
+        ! ---- cannot displace the entries this guard places in way 0. ----
+        mov.l   p_tsbslot_reg, r12
+        mov.l   p_pteh_code, r6         ! VA = PA = start (4 KB-aligned)
+        mov     #0, r7
+        mov     r7, r0
+        .word   0x407E                  ! LDC r0, ASIDR
+        nop
+        nop
+        mov.l   p_ptel_code, r8
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! r10 = 32-byte-aligned SET address
+        tsb_fill_way r10, 16, r6, r7, r8
 
         ! ---- Enable AT. ----
         mov.l   p_mmucr, r0
@@ -251,7 +261,8 @@ p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_fault - 0x400
 p_mmucr:        .long 0xFF000010
 p_pteh_code:    .long start
-p_ptel_code:    .long start + 0x000000C8 ! identity: PPN=start, U cleared (SMEP)
+p_ptel_code:    .long start + 0x000000CD ! identity: PPN=start, U cleared (SMEP)
+p_tsbslot_reg:  .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
 p_data_pa_new:  .long 0x00042000
 p_expect_new:   .long 0xA5A5A5A5
 p_data_pa_old:  .long 0x00043000

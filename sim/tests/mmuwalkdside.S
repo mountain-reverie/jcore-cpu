@@ -55,7 +55,9 @@
 !      damage from a demote keyed on the global fault signal)
 !   4  sub-test B: the YOUNGER, faulting store was lost
 !   5  an exception was taken (SPC moved) -- the walker did not resolve it
-!   6  the walk counters do not read 2 walks / 2 hits
+!   6  the walk counters do not read 4 walks / 4 hits (2 for this guard's own
+!      data accesses, 2 for the code page -- I-side fetch and D-side literal
+!      load, which are separate arrays under walker-only install)
 !   7  a TSB tag was overwritten -- the walker's own probe address leaked onto
 !      the demoted store's write
 !
@@ -94,15 +96,6 @@ ENTRY(start)
         ! ---- VBR = _v_fault - 0x400 ----
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
-
-        ! ---- Map the code page identity (W+X+C, U cleared for SMEP). ----
-        mov.l   p_pteh_code, r0
-        .word   0x405E                  ! LDC r0, PTEH
-        mov.l   p_ptel_code, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
 
         ! ---- Pre-seed BOTH ends of both mappings (AT off, direct physical
         ! ---- writes) with a "not yet stored" value. ----
@@ -144,6 +137,25 @@ ENTRY(start)
         ! ---- Seed the SPC sentinel, then enable AT. ----
         mov.l   p_sent_spc, r0
         .word   0x404E                  ! LDC r0, SPC
+
+        ! ---- Code page: the identity mapping that LDTLB used to install is
+        ! ---- now a GLOBAL TSB entry that the walker installs on the first
+        ! ---- instruction fetch after AT goes on. GLOBAL so no ASID change can
+        ! ---- perturb it; U=0 (SMEP). The set address is asked of the P4 slot
+        ! ---- helper (0xFF000048 -- the single tsb_ptr() implementation the
+        ! ---- walker and TSBPTR also use), never hand-computed. WAY 1, so it
+        ! ---- cannot displace the entries this guard places in way 0. ----
+        mov.l   p_tsbslot_reg, r12
+        mov.l   p_pteh_code, r6         ! VA = PA = start (4 KB-aligned)
+        mov     #0, r7
+        mov     r7, r0
+        .word   0x407E                  ! LDC r0, ASIDR
+        nop
+        nop
+        mov.l   p_ptel_code, r8
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! r10 = 32-byte-aligned SET address
+        tsb_fill_way r10, 16, r6, r7, r8
 
         mov.l   p_mmucr, r0
         mov     #1, r1
@@ -219,7 +231,16 @@ ENTRY(start)
         mov     #5, r9
         bf      _fail
 
-        ! ---- 6: exactly two walks, both hits.
+        ! ---- 6: exactly FOUR walks, all four hits.
+        ! ---- This constant moved from 2/2 to 4/4 when the code page stopped
+        ! ---- being installed by LDTLB. It is +2, not +1, and the reason is
+        ! ---- load-bearing: LDTLB's sr.tlb_wr wrote BOTH TLB arrays, so one
+        ! ---- software install covered the code page for instruction fetch AND
+        ! ---- for the PC-relative literal loads out of that same page. The
+        ! ---- walker installs demand-driven into ONE array (walk_side_i), so
+        ! ---- the code page is now walked twice: once I-side for the fetch and
+        ! ---- once D-side for the first literal-pool load. The guard's own two
+        ! ---- data walks are unchanged. Measured, not assumed: 0x00040004.
         mov.l   p_walkcnt, r0
         mov.l   @r0, r1
         mov.l   p_expect_cnt, r2
@@ -248,7 +269,8 @@ p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_fault - 0x400
 p_mmucr:        .long 0xFF000010
 p_pteh_code:    .long start
-p_ptel_code:    .long start + 0x000000C8 ! identity: PPN=start, U cleared (SMEP)
+p_ptel_code:    .long start + 0x000000CD ! identity: PPN=start, U cleared (SMEP)
+p_tsbslot_reg:  .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
 p_tsbbr_addr:   .long 0xFF000014
 p_tsbbr_val:    .long 0x00010006        ! base=0x00010000, TSB_SIZE_LOG=6
 p_tsbcfg_addr:  .long 0xFF000018
@@ -272,7 +294,7 @@ p_pat_b:        .long 0x7E7E7E7E
 p_notyet:       .long 0x11111111
 p_sent_spc:     .long 0xDEADBE00
 p_walkcnt:      .long 0xFF000054        ! cnt_walks(31:16) : cnt_hits(15:0)
-p_expect_cnt:   .long 0x00020002
+p_expect_cnt:   .long 0x00040004
 
 #else
         bra     _done

@@ -10,8 +10,8 @@
 ! apart. This guard can.
 !
 ! THE OBSERVABLE. A HARDWARE-WALKER install is the only side-selective write
-! into the TLBs (cpu.vhd routes it by walk_side_i; LDTLB deliberately writes
-! BOTH). So: make one side fault a VA in, then touch the SAME VA from the other
+! into the TLBs now that LDTLB is retired, and cpu.vhd routes it by
+! walk_side_i, so every install is side-selective. So: make one side fault a VA in, then touch the SAME VA from the other
 ! side and require that the other side ALSO has to walk. Under a shared array
 ! the second access hits and no walk occurs. The walker's own cnt_walks counter
 ! (0xFF000054[31:16]) is the witness, so the check is a positive count, never an
@@ -85,18 +85,6 @@ ENTRY(start)
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
-        ! ---- Map the code page identity (W+X+C, U cleared for SMEP). This is
-        ! ---- an LDTLB, so it lands in BOTH arrays -- which is exactly what
-        ! ---- this code needs, since it both executes from and PC-relative-
-        ! ---- loads out of that page.
-        mov.l   p_pteh_code, r0
-        .word   0x405E                  ! LDC r0, PTEH
-        mov.l   p_ptel_code, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
-
         ! ---- Configure the TSB. ----
         mov.l   p_tsbbr_addr, r0
         mov.l   p_tsbbr_val, r1
@@ -117,6 +105,30 @@ ENTRY(start)
         ! ---- Seed the SPC sentinel, then enable AT. ----
         mov.l   p_sent_spc, r0
         .word   0x404E                  ! LDC r0, SPC
+
+        ! ---- Code page: the identity mapping that LDTLB used to install is
+        ! ---- now a GLOBAL TSB entry that the walker installs on the first
+        ! ---- instruction fetch after AT goes on. GLOBAL so no ASID change can
+        ! ---- perturb it; U=0 (SMEP). The set address is asked of the P4 slot
+        ! ---- helper (0xFF000048 -- the single tsb_ptr() implementation the
+        ! ---- walker and TSBPTR also use), never hand-computed. WAY 1, so it
+        ! ---- cannot displace the entries this guard places in way 0.
+        ! ---- NOTE: unlike LDTLB, ONE walker install covers ONE side. This
+        ! ---- page is both executed from and PC-relative-loaded out of, so it
+        ! ---- costs two walks (one I-side, one D-side) rather than one LDTLB.
+        ! ---- Every count this guard checks is a DELTA across a specific
+        ! ---- access, so those extra walks do not enter any expected value. ----
+        mov.l   p_tsbslot_reg, r12
+        mov.l   p_pteh_code, r6         ! VA = PA = start (4 KB-aligned)
+        mov     #0, r7
+        mov     r7, r0
+        .word   0x407E                  ! LDC r0, ASIDR
+        nop
+        nop
+        mov.l   p_ptel_code, r8
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! r10 = 32-byte-aligned SET address
+        tsb_fill_way r10, 16, r6, r7, r8
 
         mov.l   p_mmucr, r0
         mov     #1, r1
@@ -168,7 +180,8 @@ p_vbr_val:      .long _v_fault - 0x400
 p_mmucr:        .long 0xFF000010
 p_walkcnt:      .long 0xFF000054        ! [31:16]=cnt_walks [15:0]=cnt_hits
 p_pteh_code:    .long start
-p_ptel_code:    .long start + 0x000000C8 ! identity: PPN=start, U cleared (SMEP)
+p_ptel_code:    .long start + 0x000000CD ! identity: PPN=start, U cleared (SMEP)
+p_tsbslot_reg:  .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
 p_tsbbr_addr:   .long 0xFF000014
 p_tsbbr_val:    .long 0x00010006        ! base=0x00010000, TSB_SIZE_LOG=6
 p_tsbcfg_addr:  .long 0xFF000018

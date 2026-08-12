@@ -97,16 +97,6 @@ ENTRY(start)
         mov     #4, r9
         bf      _fail_at
 
-        ! ---- Drive one real walk: same TSB setup as mmuwalkhit.S. ----
-        ! Map the code page identity (SMEP-safe: U cleared).
-        mov.l   p_pteh_code, r0
-        .word   0x405E                  ! LDC r0, PTEH
-        mov.l   p_ptel_code, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
-
         mov.l   p_data_pa, r2
         mov.l   p_expect, r3
         mov.l   r3, @r2                 ! [0x00042000] = 0xA5A5A5A5
@@ -124,9 +114,37 @@ ENTRY(start)
         mov.l   p_ptel_data, r3
         tsb_fill r0, r1, r2, r3
 
+        ! ---- Code page: the identity mapping LDTLB used to install is now a
+        ! ---- GLOBAL TSB entry the walker installs on the first fetch after AT
+        ! ---- goes on. Set address from the P4 slot helper, way 1. The
+        ! ---- `LDC r0, PTEH` below is KEPT: check 6 requires that a PTEH write
+        ! ---- really happened during setup so it can prove the P4 PTEH alias
+        ! ---- is live rather than a latched snapshot. It is now only a register
+        ! ---- write -- it installs nothing. ----
+        mov.l   p_pteh_code, r0
+        .word   0x405E                  ! LDC r0, PTEH
+        mov.l   p_tsbslot_reg, r12
+        mov.l   p_pteh_code, r6         ! VA = PA = start (4 KB-aligned)
+        mov     #0, r7
+        mov     r7, r0
+        .word   0x407E                  ! LDC r0, ASIDR
+        nop
+        nop
+        mov.l   p_ptel_code, r8
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! r10 = 32-byte-aligned SET address
+        tsb_fill_way r10, 16, r6, r7, r8
+
         mov.l   p_mmucr, r0
         mov     #1, r1
         mov.l   r1, @r0                 ! AT on
+
+        ! Snapshot cnt_hits first: the code page is now itself resolved by a
+        ! walk, so "the counter is non-zero" no longer says anything about THIS
+        ! access -- check 5 needs a delta. r11 is unbanked.
+        mov.l   p_walkcnt_p4, r0
+        mov.l   @r0, r11
+        extu.w  r11, r11                ! r11 = cnt_hits before
 
         mov.l   p_testva, r0
         mov.l   @r0, r4                 ! take the walk-hit miss
@@ -136,11 +154,12 @@ ENTRY(start)
         mov.l   r1, @r0                 ! AT off
 
         ! ================= 5: the walk must have actually run =============
-        ! The counter alias is the only reader; a still-zero word means no walk
+        ! cnt_hits must have advanced ACROSS the access above
         ! happened, which would make check 4 vacuous.
         mov.l   p_walkcnt_p4, r0
         mov.l   @r0, r1
-        tst     r1, r1
+        extu.w  r1, r1                  ! cnt_hits now
+        cmp/eq  r11, r1
         mov     #5, r9
         bt      _fail_at
 
@@ -174,7 +193,8 @@ p_asidr_val:     .long 0x000000AB
 p_asidr_alias:   .long 0xFF000038
 p_walkcnt_p4:    .long 0xFF000054
 p_pteh_code:     .long start
-p_ptel_code:     .long start + 0x000000C8 ! identity: PPN=start, U cleared (SMEP)
+p_ptel_code:     .long start + 0x000000CD ! identity: PPN=start, U cleared (SMEP)
+p_tsbslot_reg:   .long 0xFF000048       ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
 p_data_pa:       .long 0x00042000
 p_expect:        .long 0xA5A5A5A5
 p_tsb_set:       .long 0x00010060        ! set for VA 0x00042000 (proven, mmuwalkhit.S)

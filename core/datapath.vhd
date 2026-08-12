@@ -72,23 +72,6 @@ entity datapath is
        cop_o : out cop_o_t;
        priv_o : out cpu_priv_o_t := NULL_PRIV_O; -- SH-4 EXPEVT/INTEVT/TRA (J4)
        mmu_regs_o : out mmu_reg_t := MMU_REG_RESET; -- MMU CSRs for TLB (J4)
-       -- PLACEMENT REPLICA of mmu_regs_o.asidr(15 downto 0), for the TLB's
-       -- combinational lookup compare ONLY (u_tlb.asid). The master asidr
-       -- has three consumers (P4 readback, tlb_walk, TLB lookup) so the
-       -- placer parks its single flop at their centroid -- measured as a
-       -- 3.7 ns routing hop from the datapath to the TLB, the largest item
-       -- on the j4c critical path (Phase 4a). A copy whose ONLY consumer is
-       -- the TLB can be placed beside it. Cost: 16 flops.
-       --
-       -- ZERO-SKEW, NOT A PIPELINE STAGE. It is clocked from this_c
-       -- (the SAME next-state value this_r samples) on the SAME edge
-       -- with the SAME unconditional enable, so it is bit-identical to the
-       -- master in every cycle. Sampling this_r.mmu.asidr instead
-       -- would lag by one cycle and make a translated access in the shadow
-       -- of LDC Rm,ASIDR look up under the PREVIOUS ASID -- a wrong hit or
-       -- wrong miss with no exception and no diagnostic. Guard: mmuasidsh.
-       -- Constant-0 on a non-PRIV_ARCH build (J1/J2 bit-identical).
-       asidr_tlb_o : out std_logic_vector(15 downto 0) := (others => '0');
        sr_o : out sr_t; -- committed SR for TLB md bit
        -- Accumulate-squash export: the registered tlb_squash (armed on the
        -- first fault cycle, held until handler entry SR.RB='1') gates the MAC
@@ -2025,25 +2008,6 @@ end generate;
  priv_o.tra <= priv_regs.tra when PRIV_ARCH else (others => '0');
  -- Export MMU CSRs and committed SR for TLB use in cpu.vhd (PRIV_ARCH).
  mmu_regs_o <= mmu_regs;
- -- ASIDR placement replica for the TLB lookup compare (Phase 4a). See the
- -- asidr_tlb_o port declaration for why this exists and why it MUST be
- -- driven from this_c rather than this_r.
- g_asidr_tlb : if PRIV_ARCH generate
- begin
-   process(clk, rst)
-   begin
-     if rst = '1' then
-       asidr_tlb_o <= (others => '0');
-     elsif clk = '1' and clk'event then
-       -- Same edge, same source, same (unconditional) enable as the
-       -- this_r.mmu.asidr master. A true register duplicate.
-       asidr_tlb_o <= this_c.mmu.asidr(15 downto 0);
-     end if;
-   end process;
- end generate;
- g_asidr_tlb_off : if not PRIV_ARCH generate
-   asidr_tlb_o <= (others => '0');
- end generate;
  sr_o <= sr;
  tlb_squash_r <= this_r.tlb_squash when PRIV_ARCH else '0';
  -- SINGLE SOURCE OF TRUTH for "the precise-exception squash arms on this

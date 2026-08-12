@@ -82,13 +82,6 @@ architecture stru of cpu is
   signal sig_inst_o : cpu_instruction_o_t;
   -- Datapath MMU state exported for TLB (PRIV_ARCH only; tied-off otherwise).
   signal dp_mmu_regs : mmu_reg_t;
-  -- Zero-skew placement replica of dp_mmu_regs.asidr(15 downto 0), driven by a
-  -- duplicate flop inside the datapath (Phase 4a). Its ONLY legal consumer is
-  -- u_tlb's lookup-compare input below -- that sole-consumer property is the
-  -- whole point (it lets the placer put the flop beside the TLB instead of at
-  -- the master's three-way centroid). Do NOT wire it to the walker, the P4
-  -- readback, or the LDTLB install value: those stay on dp_mmu_regs.
-  signal dp_asidr_tlb : std_logic_vector(15 downto 0);
   signal dp_sr       : sr_t;
   -- TLB output signals (Task 8 will consume hit/prot; mmu_o carries PA tags out).
   signal tlb_i_hit      : std_logic;
@@ -449,7 +442,6 @@ begin
       cop_o              => cop_o,
       priv_o             => priv_o,
       mmu_regs_o         => dp_mmu_regs,
-      asidr_tlb_o        => dp_asidr_tlb,
       sr_o               => dp_sr,
       tlb_squash_o       => dp_tlb_squash,
       tlb_exc_pend       => tlb_exc_pend,
@@ -910,11 +902,7 @@ begin
         d_hit       => tlb_d_hit,
         d_prot      => tlb_d_prot,
         d_multihit  => tlb_d_multihit,
-        -- Placement replica, bit-identical to dp_mmu_regs.asidr(15 downto 0)
-        -- every cycle (zero skew -- see core/datapath.vhm). This is the ONLY
-        -- consumer; u_tlb.asidr (install), u_tlb_walk and the P4 readback all
-        -- stay on the master.
-        asid        => dp_asidr_tlb,
+        asid        => dp_mmu_regs.asidr(15 downto 0),
         md          => dp_sr.md,
         at          => dp_mmu_regs.mmucr(0),
         tlb_wr      => tlb_wr_any,

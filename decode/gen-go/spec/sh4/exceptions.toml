@@ -622,3 +622,65 @@
     if_issue = "YES"
     pc = "INC"
   [[instr.slots]]
+
+# ---- TLB IREPLAY (Phase-4 T2c; NOT DISPATCHED YET) ----
+# A pure fetch redirect for the walk-success replay path. Once the I-fetch ack
+# gate (core/cpu.vhd's `dp_inst_i.ack <= inst_i.ack and not walk_supp_i`) is
+# deleted, an I-side TSB walk stops being a STALL and becomes a
+# SQUASH-AND-REPLAY: the faulting fetch must be re-issued at its own PC when the
+# walk installs. `this.pc` is written in exactly ONE place (datapath.vhm's
+# pc_ctrl.wr_z / zbus write), so every redirect must be a decoder-dispatched
+# microcode op -- hence this entry.
+#
+# A walk that SUCCEEDS must stay ARCHITECTURALLY INVISIBLE, exactly as
+# stall-and-walk is today. So, unlike TLB IMISS/IPROT above, this entry:
+#   * does NOT write SPC or SSR,
+#   * does NOT set sr = "EXCEPTION+EXPEVT" (no MD/RB/BL change, no bank switch,
+#     no EXPEVT write),
+#   * does NOT vector off VBR,
+#   * leaves TEA/PTEH/MMUFSR alone (those are datapath side-effects of fault
+#     DETECTION, not of this op).
+# It is three slots: write the restart PC onto zbus/PC, re-issue the fetch from
+# zbus, dispatch. That is the IMISS tail (its slots 3-5) with the vector
+# computation replaced by the restart PC and the whole exception-state prologue
+# removed.
+#
+# xbus = TLBPC: the datapath's captured I-side restart PC (delay-slot aware:
+# if_pc, or if_pc-2 when the faulting fetch is a delay slot), read with
+# alu_y=0/ADD so PC = TLBPC exactly -- the same source and adjustment TLB IMISS
+# uses for SPC. This reuses an EXISTING xbus mux input, so this entry adds no
+# datapath logic. NOTE for T2a/T2d: tlb_exc_pc is captured in the deferred
+# I-fetch fault block, which also writes TEA/PTEH/MMUFSR; when the I-fault
+# dispatch is held during a live walk, that capture must either still run for
+# the replay PC, or if_pc must be exported as its own xbus source. That is a
+# T2a/T2d decision -- it does not change this entry's shape, only which xbus
+# literal its first slot names.
+#
+# NOTHING DISPATCHES THIS OP. decode_core.vhm has no next_op arm for
+# TLB_IREPLAY, so the microcode is unreachable and this commit is INERT by
+# construction; the arm arrives with T2d.
+[[instr]]
+  name = "TLB IREPLAY"
+  format = "d8"
+  # Nibble 0x4: free in system_instr_codes (used: 0-3, 6-D). Bit 11 = 0 for the
+  # same reason as Interrupt above -- these nibbles share bits[10:8] with the
+  # base exceptions, so a don't-care here would alias.
+  opcode = "---- 0100 dddd dddd"
+  operation = "PC<-TLBPC (I-fetch restart PC, delay-slot aware); no SPC/SSR/EXPEVT/SR change"
+  plane = "system"
+  [[instr.slots]]
+    alu_y = "0"
+    arith = "ADD"
+    pc = "HOLD"
+    xbus = "TLBPC"
+    zbus = "PC"
+    zbus_sel = "ARITH"
+  [[instr.slots]]
+    if_addy = "ZBUS"
+    if_issue = "YES"
+    pc = "HOLD"
+  [[instr.slots]]
+    dispatch = "YES"
+    if_issue = "YES"
+    pc = "INC"
+  [[instr.slots]]

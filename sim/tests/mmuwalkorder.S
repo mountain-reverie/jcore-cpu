@@ -95,10 +95,16 @@
 ! walk_i_miss, so it is not tautological: deleting the gate makes it fire.
 !
 ! It is active in EVERY simulation, not just this guard. VERIFIED: with the
-! gate deleted (mutation 3 above) it fires with severity FAILURE at
-! cpu.vhd:594 and the harness reports the affected guard FAILED --
-! `m8_dsdslot_0' is the first image in the suite to reach the violating cycle.
-! So mutation 3 no longer leaves the suite green.
+! gate deleted (mutation 3 above) it fires with severity FAILURE and the
+! harness reports the affected guard FAILED.
+!
+! For a long time the ONLY image that reached the violating cycle was
+! `m8_dsdslot_0' -- a GENERATED fault-permutation axis that crosses it by
+! accident, twice in 29 cases. That is not coverage: reshape or skip that case
+! and the invariant goes unguarded. `mmuwalkorderhit.S' now builds the window
+! ON PURPOSE (a stream of back-to-back HITTING stores draining across a page
+! boundary into an unmapped page), and is the guard to keep in step with the
+! gate. Read its header before touching either.
 !
 ! If you are extending walker ordering, change the assertion together with the
 ! gate; if you tripped it, read the comment above p_walk_order_assert.

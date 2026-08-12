@@ -23,6 +23,12 @@
 !   LDC r0,VBR    =0x402E   LDTLB.RN     =0x0078
 
 !
+! Result codes (r9 at _fail): 1/10/12 leg sentinels, 11 mixed-leg data,
+! 9 cnt_hits delta (total), 8 walker_calls, 7 unexpected walker fault,
+! 13 SPC moved across the warm leg (an exception was taken where the hardware
+! walker should have resolved the fetch), 14/16 the software hot path ran,
+! 15 cnt_hits did not advance by 1 across the warm leg.
+!
 ! ---- _fail integrity net ----
 ! _fail writes r9 verbatim to TEST_RESULT_ADDRESS; sim/cpu_ctb.c's test_result()
 ! treats any 4-byte write of 0 as PASS. Since the per-sub-test fail-code globals
@@ -164,6 +170,24 @@ ENTRY(_after_ifetch)
         mov.l   k_walkcnt, r0 ; mov.l @r0, r13
         mov.l   k_mask16,  r1 ; and    r1, r13
 
+        ! ---- Seed an SPC sentinel for the WARM leg's "no exception" assert.
+        ! WHY THIS IS HERE (do not drop it): the MMU emits PA tags and does NOT
+        ! relocate the instruction bus, and every page this guard maps is
+        ! IDENTITY (VA 0x00100000 -> PA 0x00100000). An UNTRANSLATED fetch of
+        ! the workload therefore returns the SAME instruction word as a
+        ! translated one, so "the workload ran and wrote its sentinel" does not
+        ! prove the fast path was taken. Measured: mutating cpu.vhd's
+        ! `dp_inst_i.ack <= inst_i.ack and not walk_supp_i` to
+        ! `dp_inst_i.ack <= inst_i.ack` -- which makes the fetch complete
+        ! untranslated and take a spurious IMISS exception instead of a
+        ! hardware walk -- left this guard GREEN on every check it had.
+        ! Only "no exception was taken" catches an inert/bypassed walker
+        ! (same lesson as mmuwalkiside.S's Result=2). SPC is written by
+        ! exception entry and by nothing else, so a surviving sentinel is that
+        ! proof. Checked at _after_ifetch2 as code 13.
+        mov.l   v_sent_spc, r0
+        .word   0x404E                 ! LDC r0, SPC
+
         ! Cold leg resumed inside the translated page (proves the translated
         ! fetch ran). Keep AT ON. Re-arm the stub for a SECOND invocation by
         ! re-pointing its control block at ran_flag2 / sentinel2 /
@@ -184,6 +208,27 @@ ENTRY(_after_ifetch)
         nop
 
 ENTRY(_after_ifetch2)
+        ! ---- 13: SPC still holds the sentinel seeded before the warm jmp, so
+        ! the warm code-page fetch entered NO exception vector at all -- it was
+        ! resolved by the hardware walker stalling and walking. This is the
+        ! anti-vacuity assert for the whole I-side fast path; see the seeding
+        ! site above for why the sentinel checks are load-bearing.
+        .word   0x0042                 ! STC SPC, r0
+        mov.l   v_sent_spc, r1
+        cmp/eq  r0, r1 ; mov #13, r9 ; bf _fail
+
+        ! ---- 14: the SOFTWARE §4.1 hot path in the vector did not run either
+        ! (it is the only writer of tsb_hits). Independent of 13: 13 would also
+        ! be satisfied by an exception that somehow left SPC alone.
+        mov.l   k_hcnt, r0 ; mov.l @r0, r2
+        tst     r2, r2 ; mov #14, r9 ; bf _fail
+
+        ! ---- 15: and the walker's OWN cnt_hits advanced by exactly 1 for the
+        ! warm fetch -- the positive half, so 13/14 cannot pass by the fetch
+        ! never happening.
+        mov.l   k_walkcnt, r0 ; mov.l @r0, r2 ; mov.l k_mask16, r3 ; and r3, r2
+        sub     r13, r2 ; mov #1, r3 ; cmp/eq r3, r2 ; mov #15, r9 ; bf _fail
+
         ! Warm leg resumed inside the page. Now run the MIXED I+D leg: re-arm the
         ! stub control block so its load reads a TRANSLATED data page
         ! (VA 0x00102000) and stores the value to mixed_val. Keep AT ON and flush
@@ -231,6 +276,14 @@ ENTRY(_after_ifetch3)
 
         ! walker_calls == 2 (cold code fetch + mixed cold data load).
         mov.l   k_wcnt, r0 ; mov.l @r0, r2 ; mov #2, r3 ; cmp/eq r3, r2 ; mov #8, r9 ; bf _fail
+
+        ! ---- 16: the software §4.1 hot path ran for NO leg. The mixed leg's
+        ! cold data DMISS_R does enter the vector, but it misses the TSB and
+        ! falls through to _h_slow (walker_calls, checked above), so tsb_hits
+        ! must still be 0 for the whole test. Any code fetch that took an
+        ! exception instead of being walked would land on the hot path and
+        ! bump it.
+        mov.l   k_hcnt, r0 ; mov.l @r0, r2 ; tst r2, r2 ; mov #16, r9 ; bf _fail
 
         mov     #0, r9
         bra     _done
@@ -296,6 +349,7 @@ k_ranf3:   .long 0x80002E2C
 v_sentinel:.long 0xC0DE0001
 v_sent2:   .long 0xC0DE0002
 v_sent3:   .long 0xC0DE0003
+v_sent_spc:.long 0xDEADBE10           ! SPC "no exception was taken" sentinel
 k_ctl0:    .long 0x80002E10           ! stub control block {flag,sent,src,res,ret} (E10..E20)
 k_scratch: .long 0x80002E28           ! P1 scratch (cold/warm legs' load+store target)
 k_mixedval:.long 0x80002E24           ! mixed-leg translated-load result

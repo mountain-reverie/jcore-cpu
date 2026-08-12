@@ -162,6 +162,7 @@ mmuidslot.elf: mmuidslot.o
 mmufaultage.elf: mmufaultage.o
 mmumhorder.elf: mmumhorder.o
 mmuidorder.elf: mmuidorder.o
+mmuwalkorderhit.elf: mmuwalkorderhit.o
 mmurte.elf: mmurte.o
 mmustore.elf: mmustore.o
 mmuimiss.elf: mmuimiss.o

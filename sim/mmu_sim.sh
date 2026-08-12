@@ -693,6 +693,16 @@ else
   # never delivered at all. All four checks are asserted, including that the
   # older access lands its value -- nothing is lost once delivery is ordered.
   run_guard mmuidorder "" 100us
+  # COVERAGE for the walker's older-instruction-first ordering gate. Measured:
+  # deleting `and sig_db_o.en = '0' and d_fault_held = '0'' from walk_i_miss in
+  # core/cpu.vhd left EVERY ordering guard above green and fired
+  # p_walk_order_assert in exactly one image -- m8_dsdslot_0, a generated
+  # fault-permutation axis that crosses the window by accident. mmuwalkorderhit
+  # builds the window on purpose: an older D access that HITS the TLB (so
+  # walk_d_miss stays '0', which is what excludes mmuidorder/mmumhorder) live
+  # on the bus while a younger delay-slot I-fetch misses. Read its header
+  # before reshaping it.
+  run_guard mmuwalkorderhit "" 100us
 fi
 
 if [ "$fail" = 0 ]; then echo "==> all guards PASSED"; else echo "==> FAILURES above" >&2; exit 1; fi

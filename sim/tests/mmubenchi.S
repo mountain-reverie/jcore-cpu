@@ -15,6 +15,12 @@
 ! Fast-path proof without a counter: walker_calls must be 1, not 2. Two would
 ! mean the warm IMISS missed the TSB and re-entered the walker.
 !
+! Result codes (r9 at _fail): 1/10 leg sentinels, 8 walker_calls (also the
+! unexpected-prot code written directly by the vector), 7 unexpected walker
+! fault, 13 SPC moved across the warm leg (an exception was taken where the
+! hardware walker should have resolved the fetch), 15 the walker's cnt_hits did
+! not advance by exactly 1 across the warm leg.
+!
 ! Overlay .word encodings (assembler does not know these J4 forms):
 !   (PTEH 0xFF000000  PTEL 0xFF000004  TSBPTR 0xFF00001C  ASIDR 0xFF000038
 !    are read through their read-only P4 aliases, not STC)
@@ -160,6 +166,29 @@ ENTRY(_after_ifetch)
         mov.l   k_scratch, r1 ; mov.l r1, @(12,r0)            ! ctl[3] = result=scratch
         mov.l   p_after2, r1 ; mov.l r1, @(16,r0)             ! ctl[4] = _after_ifetch2
         mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0        ! flush TLB, AT+TSB warm
+
+        ! ---- Anti-vacuity seeding for the warm leg (OUTSIDE the measured
+        ! [_bench_warm_start, _after_ifetch2) window on purpose -- it must not
+        ! perturb the number sim/bench_tlb_hotpath.sh reports).
+        !
+        ! WHY: the MMU emits PA tags and does NOT relocate the instruction bus,
+        ! and this guard's workload page is IDENTITY-mapped (VA 0x00100000 ->
+        ! PA 0x00100000). An UNTRANSLATED fetch returns the same instruction
+        ! word as a translated one, so the sentinel/walker_calls checks below
+        ! all hold even when the fetch bypasses translation entirely. Measured:
+        ! mutating cpu.vhd's `dp_inst_i.ack <= inst_i.ack and not walk_supp_i'
+        ! to `dp_inst_i.ack <= inst_i.ack' -- the fetch completes untranslated
+        ! and takes a spurious IMISS instead of a hardware walk -- left this
+        ! guard GREEN. Only "no exception was taken" catches that, the same
+        ! lesson mmuwalkiside.S's Result=2 encodes.
+        !
+        ! SPC is written by exception entry and nothing else, so a surviving
+        ! sentinel proves the warm IMISS was answered by the hardware walker.
+        ! r13 snapshots the walker's own cnt_hits as the positive half.
+        mov.l   k_walkcnt, r0 ; mov.l @r0, r13
+        mov.l   k_mask16,  r1 ; and    r1, r13
+        mov.l   v_sent_spc, r0
+        .word   0x404E                 ! LDC r0, SPC
 ENTRY(_bench_warm_start)
         mov.l   va_code, r0
         jmp     @r0                                            ! warm IMISS -> hot path
@@ -169,6 +198,19 @@ ENTRY(_after_ifetch2)
         ! Warm leg resumed inside the page: that second IMISS was a TSB HIT and
         ! ran the vector-inlined fast path. Disable AT and verify.
         mov.l   k_mmucr, r0 ; mov #0, r1 ; mov.l r1, @r0
+
+        ! ---- 13: SPC still holds the sentinel -> the warm code-page fetch
+        ! entered NO exception vector; the hardware walker resolved it. See the
+        ! seeding site above for why this is the only non-vacuous I-side check.
+        .word   0x0042                 ! STC SPC, r0
+        mov.l   v_sent_spc, r1
+        cmp/eq  r0, r1 ; mov #13, r9 ; bf _fail
+
+        ! ---- 15: the walker's own cnt_hits advanced by exactly 1 for that
+        ! fetch -- the positive half, so 13 cannot pass by the fetch never
+        ! happening at all.
+        mov.l   k_walkcnt, r0 ; mov.l @r0, r2 ; mov.l k_mask16, r3 ; and r3, r2
+        sub     r13, r2 ; mov #1, r3 ; cmp/eq r3, r2 ; mov #15, r9 ; bf _fail
 
         ! Cold sentinel still present.
         mov.l   k_ranf, r0 ; mov.l @r0, r2
@@ -239,6 +281,9 @@ k_ranf:    .long 0x80002E08
 k_ranf2:   .long 0x80002E0C
 v_sentinel:.long 0xC0DE0001
 v_sent2:   .long 0xC0DE0002
+v_sent_spc:.long 0xDEADBE10           ! SPC "no exception was taken" sentinel
+k_walkcnt: .long 0xFF000054   ! P4 walker counters: [31:16]=cnt_walks [15:0]=cnt_hits
+k_mask16:  .long 0x0000FFFF
 k_ctl0:    .long 0x80002E10           ! stub control block {flag,sent,src,res,ret} (E10..E20)
 k_scratch: .long 0x80002E28           ! P1 scratch (cold/warm legs' load+store target)
 p_after:   .long 0x80000000 + _after_ifetch

@@ -324,6 +324,13 @@ jobs:
           run_guard m8_multihit_ifetch "" 100us
           run_guard mmumhorder "" 100us
           run_guard mmuidorder "" 100us
+          #   mmuwalkorderhit  COVERAGE for the walker's older-instruction-first
+          #                    ordering gate: an older D access that HITS live on
+          #                    the bus while a younger delay-slot I-fetch misses.
+          #                    Deleting the gate on walk_i_miss in core/cpu.vhd
+          #                    otherwise fires p_walk_order_assert only in
+          #                    m8_dsdslot_0, by accident.
+          run_guard mmuwalkorderhit "" 100us
 
           # SP2: mmulinux links the REAL linux@jcore MMU TLB-miss handler
           # objects (built by kbuild above, via the WIP J4 gas/ld) against a

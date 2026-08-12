@@ -159,6 +159,12 @@ else
   run_guard mmupcprobe   "" 200us
   run_guard mmudspcprobe "" 200us
   echo "== cache guards (cpu_cache_tb) =="
+  # mmuwalkdside under the CACHED top as well as cpu_tb. It is the only guard
+  # that resolves a faulting D-store entirely via the HARDWARE WALKER (no LDTLB)
+  # through a non-identity mapping (VA 0x42000 -> PA 0x44000) with a
+  # walker-installed code page, so it is the one that covers
+  # "walker install + cache + store". Verified passing 2026-08-12.
+  run_guard mmuwalkdside cpu_cache_tb 300us
   run_guard mmuicolor  cpu_cache_tb 400us
   run_guard mmudcbit   cpu_cache_tb 200us
   run_guard mmureloc   cpu_cache_tb 200us

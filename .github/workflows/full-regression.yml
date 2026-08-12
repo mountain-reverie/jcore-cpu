@@ -262,6 +262,12 @@ jobs:
           # I-side cacheability: instruction fetches run through the live I-cache
           # (cpu_cache_tb); proves a C=0 translated page bypasses the icache (fresh
           # self-modified code) vs a C=1 page caches (stale). 400us to complete.
+          # Covers "walker install + cache + store": mmuwalkdside is the only
+          # guard resolving a faulting D-store purely via the HARDWARE WALKER
+          # (no LDTLB) through a non-identity mapping, with a walker-installed
+          # code page. It already runs under cpu_tb above; this adds the CACHED
+          # top. Verified passing 2026-08-12.
+          run_guard mmuwalkdside cpu_cache_tb 300us
           run_guard mmuicolor cpu_cache_tb 400us
           # D-side: a translated C=1 page caches a data read (stale after a P2
           # self-modify) vs a C=0 page bypasses (fresh). 200us to complete.

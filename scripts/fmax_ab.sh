@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # fmax_ab.sh <label> -- full-rebuild ECP5 Fmax measurement for j4c (CPU+MMU+cache).
 #
+# Reports a SEED SWEEP (mean/median/range over FMAX_AB_SEEDS place-and-route
+# runs, default 6), NOT a single number. Placement variance on this design is
+# ~1.5-3 MHz; single-seed A/Bs have produced sign errors. See the sweep block
+# below before trusting or changing this.
+#
 # ALWAYS a full rebuild. Do not add a skip-build flag: a stale build silently
 # measures the previous RTL, which is the dominant failure mode for this kind
 # of A/B (see CLAUDE.md on sim/mmu_sim.sh -n).
@@ -135,8 +140,55 @@ SYNTH_VARIANT=j4c synth/cpu_synth.sh timing > "build/synth-$LABEL.log" 2>&1
 
 check_synth_log "build/synth-$LABEL.log"
 
-nextpnr-ecp5 --85k --package CABGA381 --json build/cpu_timing.json \
-  --lpf synth/ulx3s_cpu.lpf --lpf-allow-unconstrained --timing-allow-fail \
-  --textcfg build/cpu_timing.config > "build/nextpnr-$LABEL.log" 2>&1
+# ---------------------------------------------------------------------------
+# SEED SWEEP. Synthesis is deterministic; PLACEMENT is not, and on this design
+# the seed-to-seed Fmax band is ~1.5-3 MHz -- WIDER than any effect this project
+# has ever tried to measure. A single-seed A/B therefore resolves nothing.
+#
+# This is not hypothetical. On 2026-08-12 a single-seed measurement reported a
+# change as +1.31 MHz and that number justified an entire multi-task
+# optimisation program; a 6-seed sweep showed the true effect was -1.26 MHz --
+# the OPPOSITE SIGN. 27.86 had been a bad draw and 29.17 a good one.
+#
+# So: synthesize ONCE, place-and-route N times, report the distribution.
+# Compare arms by MEAN, and treat any difference smaller than the observed
+# range as UNRESOLVED rather than real.
+# ---------------------------------------------------------------------------
+SEEDS="${FMAX_AB_SEEDS:-6}"
+mkdir -p build/pnr-$LABEL
+fmax_vals=()
 
-parse_logs "$LABEL" "build/synth-$LABEL.log" "build/nextpnr-$LABEL.log"
+for seed in $(seq 1 "$SEEDS"); do
+  seed_log="build/pnr-$LABEL/nextpnr_seed$seed.log"
+  nextpnr-ecp5 --85k --package CABGA381 --json build/cpu_timing.json \
+    --lpf synth/ulx3s_cpu.lpf --lpf-allow-unconstrained --timing-allow-fail \
+    --seed "$seed" \
+    --textcfg "build/pnr-$LABEL/cpu_timing_seed$seed.config" > "$seed_log" 2>&1
+  v=$(grep -oE "Max frequency for clock '[^']*': [0-9.]+ MHz" "$seed_log" \
+        | tail -1 | grep -oE '[0-9.]+' | head -1)
+  if [ -n "$v" ]; then
+    fmax_vals+=("$v")
+    echo "  seed $seed: $v MHz"
+  else
+    echo "  seed $seed: PARSE FAILED (see $seed_log)" >&2
+  fi
+done
+
+[ "${#fmax_vals[@]}" -gt 0 ] || { echo "ERROR: no seed produced an Fmax" >&2; exit 1; }
+
+# Keep the single-seed artefacts the old interface promised, so callers and the
+# FMAX_AB_PARSE_ONLY hook still find build/nextpnr-<label>.log.
+cp "build/pnr-$LABEL/nextpnr_seed1.log" "build/nextpnr-$LABEL.log"
+
+printf '%s\n' "${fmax_vals[@]}" | sort -g | awk -v label="$LABEL" -v n="${#fmax_vals[@]}" '
+  { v[NR]=$1; sum+=$1 }
+  END {
+    mean = sum/NR
+    median = (NR%2) ? v[(NR+1)/2] : (v[NR/2]+v[NR/2+1])/2
+    for (i=1;i<=NR;i++) { d=v[i]-mean; ss+=d*d }
+    sd = (NR>1) ? sqrt(ss/(NR-1)) : 0
+    printf "%s  n=%d  mean=%.2f  median=%.2f  min=%.2f  max=%.2f  range=%.2f  sd=%.2f MHz\n", \
+           label, NR, mean, median, v[1], v[NR], v[NR]-v[1], sd
+    printf "NOTE: compare arms by MEAN. A difference smaller than range (%.2f MHz)\n", v[NR]-v[1]
+    printf "      is NOT resolved by this sample -- increase FMAX_AB_SEEDS.\n"
+  }' | tee "build/fmax-$LABEL.txt"

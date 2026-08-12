@@ -363,7 +363,22 @@ kmain:
         ! slot -- no fault has occurred since). AT is off, and the P4
         ! TSBPTR alias is untranslated regardless. Keep the slot ptr in r3. ----
         mov.l   k_tsbptr_a, r3
-        mov.l   @r3, r3None
+        mov.l   @r3, r3
+
+        ! ---- 2-way TSB: TSBPTR returns a 32-byte SET, and Linux's
+        ! ---- jcore_tsb_pick_way() writes whichever way the hardware victim
+        ! ---- selector nominated -- way 1 here, because this bare-metal
+        ! ---- harness never calls jcore_tsb_victim_seed_init() and the LFSR
+        ! ---- sits at its self-heal constant. Select the way by matching
+        ! ---- tag_hi, exactly as jcore_tsb_pick_way() does; do NOT assume way
+        ! ---- 0 and do NOT hardcode way 1. If neither way matches, r3 is left
+        ! ---- on way 1 and the tag check below still fails with its own code.
+        mov.l   va_A, r1
+        mov.l   @r3, r2
+        cmp/eq  r1, r2
+        bt      1f
+        add     #16, r3
+1:
 
         mov.l   @r3, r2                 ! tag_hi (VPN)
         mov.l   va_A, r1
@@ -476,9 +491,15 @@ s4_assert:
         cmp/eq  r2, r1 ; mov #11, r9 ; bf _fail             ! captured address != VA_B
 
         mov.l   k_tsbptr_a, r3
-        mov.l   @r3, r3None
-        mov.l   @r3, r2                 ! tag_hi at VA_B's TSB slot
+        mov.l   @r3, r3
+        ! ---- "not installed" must be proved over BOTH ways of the set. A
+        ! ---- way-0-only check passes vacuously now that the victim selector
+        ! ---- puts fresh entries in way 1: it could not observe the very
+        ! ---- wrong-install this assertion exists to catch. ----
         mov.l   va_B, r1
+        mov.l   @r3, r2                 ! tag_hi, way 0
+        cmp/eq  r1, r2 ; mov #12, r9 ; bt _fail             ! translation WAS installed
+        mov.l   @(16, r3), r2           ! tag_hi, way 1
         cmp/eq  r1, r2 ; mov #12, r9 ; bt _fail             ! translation WAS installed
 
         ! ================= SCENARIO 5: STALE pte =============================
@@ -516,9 +537,12 @@ s5_assert:
         cmp/eq  r2, r1 ; mov #14, r9 ; bf _fail             ! captured address != VA_C
 
         mov.l   k_tsbptr_a, r3
-        mov.l   @r3, r3None
-        mov.l   @r3, r2                 ! tag_hi at VA_C's TSB slot
+        mov.l   @r3, r3
+        ! ---- Both ways; see scenario 4's note. ----
         mov.l   va_C, r1
+        mov.l   @r3, r2                 ! tag_hi, way 0
+        cmp/eq  r1, r2 ; mov #15, r9 ; bt _fail             ! translation WAS installed
+        mov.l   @(16, r3), r2           ! tag_hi, way 1
         cmp/eq  r1, r2 ; mov #15, r9 ; bt _fail             ! translation WAS installed
 
         ! ================= SCENARIO 6: ASID generation tagging (S-I3) ========
@@ -580,7 +604,23 @@ s5_assert:
                                  ! walker did NOT re-run for the new generation
 
         mov.l   k_tsbptr_a, r3
-        mov.l   @r3, r3None
+        mov.l   @r3, r3
+
+        ! ---- 2-way TSB: TSBPTR returns a 32-byte SET, and Linux's
+        ! ---- jcore_tsb_pick_way() writes whichever way the hardware victim
+        ! ---- selector nominated -- way 1 here, because this bare-metal
+        ! ---- harness never calls jcore_tsb_victim_seed_init() and the LFSR
+        ! ---- sits at its self-heal constant. Select the way by matching
+        ! ---- tag_hi, exactly as jcore_tsb_pick_way() does; do NOT assume way
+        ! ---- 0 and do NOT hardcode way 1. If neither way matches, r3 is left
+        ! ---- on way 1 and the tag check below still fails with its own code.
+        mov.l   va_D, r1
+        mov.l   @r3, r2
+        cmp/eq  r1, r2
+        bt      1f
+        add     #16, r3
+1:
+
         mov.l   @(4, r3), r2            ! tag_lo (ASID_TAG) at VA_D's TSB slot
         mov.l   k_asidr_gen1, r1
         cmp/eq  r1, r2 ; mov #16, r9 ; bf _fail
@@ -735,7 +775,7 @@ s8_ep2:
 
         .align 2
 s8_k_pte_f:       .long 0x80024114      ! == k_pte_f  (duplicated: mov.l is
-s8_k_fault_target:.long 0x8002900C      ! == k_fault_target   PC-relative
+s8_k_fault_target:.long 0x8002A00C      ! == k_fault_target   PC-relative
 s8_ep2_ptr:       .long s8_ep2          !                     forward-only)
 s8_p_lfta:        .long local_flush_tlb_all
 s8_va_F:          .long 0x00114000      ! == va_F
@@ -759,7 +799,14 @@ v_tsbcfg:       .long 0x00000061
 k_mmucr:        .long 0xFF000010        ! MMUCR
 va_A:           .long 0x00100000
 v_ptel_expect:  .long 0x000401B9        ! PFN(0x00040000)|PageMask(16K,0x100)|V|C|U|W|D
-k_wcnt:         .long 0x80029000        ! walker_calls counter (past TSB/before stack)
+k_wcnt:         .long 0x8002A000        ! walker_calls counter (past TSB/before stack)
+! ---- The scratch globals below MUST start at or above 0x8002A000. They sat
+! ---- at 0x80029000 until the TSB went 2-way: JCORE_BOOT_TSB_BYTES is
+! ---- JCORE_TSB_SET_BYTES << 8, and Phase 2 doubled JCORE_TSB_SET_BYTES from
+! ---- 16 to 32, so the array local_flush_tlb_all() memsets grew 4096 -> 8192
+! ---- and swallowed this block. Scenario 8 calls the REAL
+! ---- local_flush_tlb_all(), so the flush silently zeroed k_faultcnt and
+! ---- friends mid-test. The stack is at 0x80030F00, so there is room. ----
 k_tsbptr_a:     .long 0xFF00001C        ! read-only P4 TSBPTR alias
 v_accessed_clr: .long 0xFFFFFEFF        ! ~_PAGE_ACCESSED (0x100), see pgtable-bits-jcore.h
 
@@ -773,11 +820,11 @@ v_pte_b:        .long 0x00000000        ! not present (_PAGE_VALID clear)
 va_C:           .long 0x00108000        ! pte_index 0x42 -> k_ptetbl+0x108
 k_pte_c:        .long 0x80024108
 v_pte_c:        .long 0x000400BB        ! PFN(0x00040000)|V|C|U|W|D|STALE (0xB9|_PAGE_STALE(0x2))
-k_faultcnt:     .long 0x80029004        ! do_page_fault-recorded fault count
-k_faultaddr:    .long 0x80029008        ! do_page_fault-recorded faulting address
-k_fault_target: .long 0x8002900C        ! address do_page_fault jumps to next
-k_saved_sp:     .long 0x80029010        ! r15 snapshot restored by do_page_fault
-k_faultcode:    .long 0x80029014        ! do_page_fault-recorded error_code (r5)
+k_faultcnt:     .long 0x8002A004        ! do_page_fault-recorded fault count
+k_faultaddr:    .long 0x8002A008        ! do_page_fault-recorded faulting address
+k_fault_target: .long 0x8002A00C        ! address do_page_fault jumps to next
+k_saved_sp:     .long 0x8002A010        ! r15 snapshot restored by do_page_fault
+k_faultcode:    .long 0x8002A014        ! do_page_fault-recorded error_code (r5)
 unexpected_fault_ptr: .long unexpected_fault
 
 ! ---- Scenario 6 scratch: a fresh mapped VA_D (present+valid, own backing
@@ -882,12 +929,12 @@ ENTRY(do_page_fault)
         jmp     @r0
         nop
         .align 2
-dpf_faultcnt:   .long 0x80029004        ! == k_faultcnt
-dpf_faultaddr:  .long 0x80029008        ! == k_faultaddr
+dpf_faultcnt:   .long 0x8002A004        ! == k_faultcnt
+dpf_faultaddr:  .long 0x8002A008        ! == k_faultaddr
 dpf_rbclear:    .long 0xDFFFFFFF        ! == p_rbclear (duplicated: forward-only pc-rel)
-dpf_saved_sp:   .long 0x80029010        ! == k_saved_sp
-dpf_target:     .long 0x8002900C        ! == k_fault_target
-dpf_faultcode:  .long 0x80029014        ! == k_faultcode
+dpf_saved_sp:   .long 0x8002A010        ! == k_saved_sp
+dpf_target:     .long 0x8002A00C        ! == k_fault_target
+dpf_faultcode:  .long 0x8002A014        ! == k_faultcode
 
 ! unexpected_fault -- scenarios 1-3 point k_fault_target here (they expect
 ! zero faults). Same behavior the original Task-1 do_page_fault stub had:
@@ -941,14 +988,14 @@ ENTRY(arch_local_save_flags)
 ! invalidation is a no-op here and scenario 8 would pass vacuously. Defined
 ! as an absolute symbol at k_tsb's address rather than a .bss array so
 ! there is exactly one TSB and the equality is stated, not hoped for. The
-! kernel memsets JCORE_BOOT_TSB_BYTES (4096) from it; 0x80028000..0x80029000
+! kernel memsets JCORE_BOOT_TSB_BYTES (4096) from it; 0x80028000..0x8002A000
 ! is reserved for that and ends exactly where the scratch globals (k_wcnt)
 ! begin.
         .globl  jcore_boot_tsb
 jcore_boot_tsb = 0x80028000
 
 ! r4=s, r5=c, r6=n; returns s in r0 (SH memset ABI). Word-store fast path
-! for the aligned case: the kernel's TSB memset is 4096 bytes and a
+! for the aligned case: the kernel's TSB memset is 8192 bytes and a
 ! byte-at-a-time loop costs ~25k cycles inside the 200us guard budget.
 ENTRY(memset)
         mov     r4, r3                  ! save s
@@ -1000,7 +1047,7 @@ ENTRY(jcore_tlb_walk_mark_accessed)
         rts
         nop
         .align 2
-p_wcnt: .long 0x80029000               ! same address as k_wcnt below --
+p_wcnt: .long 0x8002A000               ! same address as k_wcnt below --
                                         ! duplicated locally because mov.l
                                         ! is PC-relative-forward-only and
                                         ! k_wcnt's data-section slot is

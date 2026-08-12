@@ -43,7 +43,8 @@
 !   3  va_A's installed TSB slot tag_lo != 0 (ASID_TAG)
 !   4  va_A's installed TSB slot data != expected PTEL image
 !   5  install_cnt != 1 after the first (miss+install) touch
-!   6  hit_cnt != 1 after the second (TLB-flushed, TSB-warm) touch
+!   6  the hardware walker's cnt_hits did not advance by exactly 1
+!      across the second (TLB-flushed, TSB-warm) touch
 !   7  install_cnt changed on the warm-hit touch (walker/install re-ran)
 !   8  second touch's readback != seeded PA value
 !   9  miss_cnt != 1 after touching the unmapped VA
@@ -181,12 +182,26 @@ kmain:
         cmp/eq  r1, r2 ; mov #5, r9 ; bf _fail
 
         ! ================= touch #2: TI-flush TLB (TSB warm), re-touch ====
+        ! ---- Snapshot the HARDWARE walker's cnt_hits (P4 counter word
+        ! ---- 0xFF000054, bits 15:0) before the warm-TSB re-touch. This guard
+        ! ---- used to assert its own software hit_cnt, incremented in
+        ! ---- _h_common -- but with a mandatory TSB walker a warm-TSB TLB miss
+        ! ---- is resolved as a stall with NO exception, so _h_common is
+        ! ---- unreachable here by construction and hit_cnt can never leave 0.
+        ! ---- The premise was obsolete, not the machine; same retarget as
+        ! ---- mmurun/mmuirun in 3cdd247. A DELTA, not an absolute, so earlier
+        ! ---- walks cannot satisfy it. ----
+        mov.l   k_walkcnt, r0 ; mov.l @r0, r13
+        mov.l   k_mask16,  r1 ; and    r1, r13
+
         mov.l   k_mmucr, r0 ; mov #5, r1 ; mov.l r1, @r0   ! AT|TI
         mov.l   k_va_a, r0
-        mov.l   @r0, r10                ! -> miss -> _h_common TSB HIT ->
-                                         ! LDTLB.RN, install_cnt untouched
+        mov.l   @r0, r10                ! -> TLB miss -> hardware TSB walk
+                                         ! HITS and installs, no exception,
+                                         ! install_cnt untouched
 
-        mov.l   k_hit_cnt, r0 ; mov.l @r0, r2 ; mov #1, r1
+        mov.l   k_walkcnt, r0 ; mov.l @r0, r2 ; mov.l k_mask16, r3 ; and r3, r2
+        sub     r13, r2 ; mov #1, r1
         cmp/eq  r1, r2 ; mov #6, r9 ; bf _fail
         mov.l   k_install_cnt, r0 ; mov.l @r0, r2 ; mov #1, r1
         cmp/eq  r1, r2 ; mov #7, r9 ; bf _fail
@@ -218,6 +233,9 @@ after_miss:
 p_rbclear:      .long 0xDFFFFFFF
 p_rbset:        .long 0x20000000
 p_mmu_enable:   .long jcore_mmu_enable
+
+k_walkcnt:      .long 0xFF000054   ! P4 walker counters: [31:16]=cnt_walks [15:0]=cnt_hits
+k_mask16:       .long 0x0000FFFF
 
 k_install_cnt:  .long 0x80090100
 k_hit_cnt:      .long 0x80090104

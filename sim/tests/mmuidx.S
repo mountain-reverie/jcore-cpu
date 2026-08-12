@@ -38,10 +38,18 @@
 !   ---- Case C: P0-identity vs P1 computed read inside handler -----------------
 !   8   C: @(R0,Rn) computed read of P0-identity wrong inside handler
 !   9   C: @(R0,Rn) computed read of P1-alias wrong inside handler
+!   10  a fault reached the handler BEFORE the intended one was armed -- a
+!       setup error, typically the code-page TSB row failing to walk in
 !
 ! J4 overlay opcodes:
 !   LDC r0,PTEH=0x405E  LDC r0,PTEL=0x406E  LDC r0,ASIDR=0x407E
-!   LDTLB=0x0038        LDC r0,VBR=0x402E   LDC r0,SPC=0x404E
+!   LDC r0,VBR=0x402E   LDC r0,SPC=0x404E
+!
+! WALKER-INSTALL VERSION (L2 of "retire LDTLB"): both setup mappings are now
+! TSB rows the hardware walker pulls in on demand instead of LDTLB installs.
+! The defect under test is a register-file bank-remap bug on the R0-index read
+! port and has nothing to do with how the mapping got installed, so the
+! scenario is unchanged.
 
 !
 ! ---- _fail integrity net ----
@@ -53,6 +61,7 @@
 ! globals below use loud sentinels (_g_exp_* = 0xFFFFFFFF, _g_bad_* = small
 ! distinct values) so an early exit still names its cause.
 #include "sim_instr.h"
+#include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
 
         .section .vect
@@ -99,23 +108,40 @@ ENTRY(start)
         mov.l   p_val_idx, r3
         mov.l   r3, @(r0,r2)           ! [0x00010400] = 0xBB22BB22
 
-        ! ---- Map page 0 of code (VA 0x0000): identity, W+X+U+C = 0xE8. ----
-        mov     #0, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN=0)
-        mov.l   p_ptel_page0, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        ! ---- Configure the TSB: base 0x00004000, TSB_SIZE_LOG=6 (64 sets x
+        ! ---- 32 bytes = 0x4000..0x47FF), HASH_SHIFT=6, HASH_MODE=1. That range
+        ! ---- is clear of the code page, the data page (0x00010000) and the
+        ! ---- fault page (0x00100000), and RAM is zero-filled by the loader, so
+        ! ---- the TSB starts empty and the fill loop is the only thing that
+        ! ---- populates it. ----
+        mov.l   p_tsbbr_addr, r0
+        mov.l   p_tsbbr_val, r1
+        mov.l   r1, @r0
+        mov.l   p_tsbcfg_addr, r0
+        mov.l   p_tsbcfg_val, r1
+        mov.l   r1, @r0
 
-        ! ---- Map data page 0x00010000: identity, full access. ----
-        mov.l   p_data_pteh, r0         ! VPN for 0x00010000
-        .word   0x405E                  ! LDC r0, PTEH
-        mov.l   p_data_ptel, r0         ! PPN(0x00010000) | 0xE8
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
+        ! ---- Both mappings LDTLB used to install now come from the
+        ! ---- (VA, ASID, PTEL) table below, pulled in by the walker on demand.
+        ! ---- The set address per row is asked of the P4 slot helper
+        ! ---- (0xFF000048); nothing hand-computes the hash. AT is off, so these
+        ! ---- are plain P0 stores. NOTE the code page must be GLOBAL and the
+        ! ---- table rows carry V -- the walker rejects V=0 as "no entry". ----
+        mov.l   p_tsbslot, r12
+        mov.l   p_tab, r14
+        mov.l   p_tab_end, r5
+1:      mov.l   @r14+, r6               ! VA
+        mov.l   @r14+, r7               ! ASID
+        mov.l   @r14+, r8               ! PTEL
+        mov     r7, r0
         .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        nop
+        nop
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! r10 = 32-byte-aligned SET address
+        tsb_fill r10, r6, r7, r8
+        cmp/hs  r5, r14
+        bf      1b
 
         ! ---- Enable AT. ----
         mov.l   p_mmucr, r0
@@ -154,6 +180,17 @@ ENTRY(start)
         ! Case B/C: take a DMISS_R on VA 0x00100000 (bit 20 set, unmapped).
         ! The handler (VBR+0x400) performs the computed reads.
         ! ==============================================================
+        ! ---- ARM the handler. The handler runs cases B and C and then RTEs
+        ! ---- to _done, so it is a PASS path: a fault taken BEFORE the intended
+        ! ---- one enters it and reports a spurious pass. That became reachable
+        ! ---- when the code page stopped being LDTLB-installed -- MEASURED on
+        ! ---- this guard: clearing V on the code-page row printed "Test
+        ! ---- Passed". The flag is set with AT already on, from the code page,
+        ! ---- immediately before the faulting load.
+        mov.l   p_armed_p, r0
+        mov     #1, r1
+        mov.l   r1, @r0
+
         mov     #4, r9                  ! sentinel: handler not reached -> 4
         mov.l   p_fault_va, r2
         mov.l   @r2, r3                 ! FAULTS -> _v_load (DMISS_R)
@@ -178,7 +215,15 @@ _fail_at:
 p_rbclear:    .long 0xDFFFFFFF
 p_vbr_val:    .long _v_load - 0x400
 p_mmucr:      .long 0xFF000010
-p_ptel_page0: .long 0x000000C8        ! U cleared: kernel code, SMEP
+p_ptel_page0: .long 0x000000CD        ! W|X|C|G|V, U cleared (kernel code, SMEP)
+p_tsbbr_addr: .long 0xFF000014
+p_tsbbr_val:  .long 0x00004006        ! base=0x00004000, TSB_SIZE_LOG=6
+p_tsbcfg_addr: .long 0xFF000018
+p_tsbcfg_val: .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
+p_tsbslot:    .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
+p_armed_p:    .long _g_armed
+p_tab:        .long _tsb_tab
+p_tab_end:    .long _tsb_tab_end
 p_data_base:  .long 0x00010000
 p_idx:        .long 0x00000400
 p_val_plain:  .long 0xAA11AA11
@@ -186,7 +231,16 @@ p_val_idx:    .long 0xBB22BB22
 p_fault_va:   .long 0x00100000
 ! data page 0x00010000 -> VPN field (PA & ~0xFFF), PPN field (PA & 0xFFFFFC00)|0xE8
 p_data_pteh:  .long 0x00010000
-p_data_ptel:  .long 0x000100E8
+p_data_ptel:  .long 0x000100E9        ! PA 0x00010000 | W|X|U|C|V
+
+        ! ---- One row per covered 4 KB VPN; the walker's tag compare is EXACT
+        ! ---- on the 4 KB VPN. The code page is GLOBAL so nothing in the test
+        ! ---- can unmap the executing page.
+        .balign 4
+_tsb_tab:
+        .long 0x00000000, 0x00000000, 0x000000CD  ! code page 0, W|X|C|G|V
+        .long 0x00010000, 0x00000000, 0x000100E9  ! data page, W|X|U|C|V
+_tsb_tab_end:
 p_pcrel_val:  .long 0x12345678
         .balign 4
 pcrel_marker: .long 0x12345678
@@ -226,6 +280,16 @@ p_test_result_pass: .long   TEST_PASS_MAGIC
         ! ================================================================
         .balign 4
 _v_load:                                ! = VBR + 0x400
+        ! --- Was this the armed fault? An unarmed one is a setup error (most
+        ! --- likely the code page failing to walk in) -> code 10. ---
+        mov.l   H_armed, r0
+        mov.l   @r0, r0
+        tst     r0, r0
+        bf      1f
+        mov     #10, r9
+        bra     _h_fail
+        nop
+1:
         ! --- B.1: plain @Rn of data page (sanity; should be clean) ---
         mov.l   H_data_base, r2
         mov.l   @r2, r5
@@ -299,6 +363,10 @@ H_resume:       .long _done
 H_fail:         .long _fail
         .balign 4
 Hpcrel_marker:  .long 0x12345678
+H_armed:        .long _g_armed
+
+        .balign 4
+_g_armed:       .long 0
 
         ! fault page padding: VA 0x00010000 region already RAM; fault page
         ! 0x00100000 is unmapped in the TLB but IS within RAM so the bus does

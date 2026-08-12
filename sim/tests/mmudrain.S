@@ -106,10 +106,10 @@
 !  1. Do NOT extend the identity-map range down to VA 0.  A VPN==0 entry makes
 !     the very first D-side miss hang (the handler is never even entered); map
 !     from `start`'s page instead.  `start` is .balign PAGE_SZ for that reason.
-!  2. The handler must install STUB (instruction) pages with U=0.  0xE8 sets U,
+!  2. The handler must install STUB (instruction) pages with U=0.  0xE9 sets U,
 !     and a kernel instruction fetch from a U=1 page is blocked by SMEP, so an
-!     IMISS installed with 0xE8 re-faults forever.  The handler picks 0xC8 for
-!     any VA below the data pool and 0xE8 inside it -- which is why the layout
+!     IMISS installed with 0xE9 re-faults forever.  The handler picks 0xC9 for
+!     any VA below the data pool and 0xE9 inside it -- which is why the layout
 !     contract below puts ALL the stub pages (A, C, D0..D9, the leg-D
 !     trampoline) BELOW the first data page.
 !  3. Nothing on the leg-D chain may touch r10.  r10 carries leg D's
@@ -118,32 +118,66 @@
 !     legs A and C keep their snapshot in r11 instead).  Clobbering it makes
 !     the non-vacuity check report garbage and sent this file's own bring-up
 !     chasing a phantom.
-!  4. FLUSH_TLB drops AT first.  Pulsing MMUCR.TI with AT=1 invalidates the
-!     page the CPU is currently executing from, so the very next fetch IMISSes
-!     into a handler whose own page is also gone -- an unrecoverable double
-!     fault.  With AT=0 the flush and the code re-map run untranslated, exactly
-!     like the preamble, and AT goes back on only once the map is rebuilt.
+!  4. FLUSH_TLB drops AT first.  This mattered absolutely under LDTLB (pulsing
+!     TI with AT=1 unmapped the executing page AND the handler's page, and the
+!     next fetch double-faulted with no way back).  Under the walker the
+!     re-fetch would merely stall and re-walk, so the hazard is gone -- but AT
+!     is still dropped around the TI pulse, both because the flush should not
+!     race a translated fetch and because nothing is gained by relying on the
+!     walker to rescue an avoidable window.
 !
 ! Layout contract: [ code | _code_end | stub pages | data pages ].  Everything
 ! below _code_end is identity-mapped by the preamble (and re-mapped by
 ! FLUSH_TLB) and must never fault; everything above it is unmapped so it faults
 ! on first touch.
 !
-! TLB budget: the TLB has 32 entries (core/tlb.vhd).  FLUSH_TLB runs at the leg
+! ---- WALKER-INSTALL VERSION (L1 pilot of "retire LDTLB") -------------------
+! No LDTLB / LDTLB.RN anywhere. Every TLB entry here is installed by the
+! hardware TSB walker. What changed, and what deliberately did NOT:
+!
+!   * The preamble no longer LDTLBs the code pages; it writes a TSB ROW for
+!     each and lets the walker pull them in on first touch, as a stall. Same
+!     for FLUSH_TLB, which is now just the MMUCR.TI pulse -- the TSB survives
+!     a TLB flush, so the code map rebuilds itself.
+!   * The handler no longer ends in LDTLB.RN. It writes the faulting page's
+!     TSB row and RTEs; the restarted access re-walks, hits that row, and the
+!     walker installs it. So the FAULT TRAIN IS UNCHANGED -- one fault per
+!     first touch, exactly as before -- and every check in this file (the
+!     exactly-once base arithmetic, the page read-backs, the leg-D r12
+!     advance, the fault counts) means precisely what it meant before.
+!     MEASURED: the counts did not move. Legs A and C still take N+1 faults
+!     and leg D still takes 2N+1, unchanged from the LDTLB version; no
+!     expected constant in this file was touched.
+!   * The one real semantic difference is the PRIZE: LDTLB.RN wrote BOTH TLB
+!     arrays, so leg A/C/D's ten pure DATA pages each consumed an ITLB entry
+!     they could never legally use. A walker install is routed by side
+!     (core/cpu.vhd walk_side_i), so those pages now land in the DTLB ONLY.
+!     That is what unblocks the 8+16 / 8+8 capacity sweep.
+!
+! TLB budget: 32 entries per array (core/tlb.vhd). FLUSH_TLB runs at the leg
 ! boundaries (never inside a measured window) so no leg's live set has to share
-! with another's.  The largest leg is D: code pages + 10 stubs + trampoline +
-! 10 data pages.
+! with another's. The largest leg is D: 10 stubs + trampoline + code pages in
+! the ITLB, and 10 data pages + the code pages the verifier reads through in
+! the DTLB -- comfortably inside 32 each now that the two no longer share.
+!
+! TSB: _tsb_base (32 KB-aligned, at the end of the image), TSB_SIZE_LOG=10
+! (1024 sets x 32 bytes), HASH_SHIFT=6, HASH_MODE=1. Set addresses come from
+! the P4 TSB-slot helper (0xFF000048), never from a hand-computed hash. The
+! handler inserts 2-way (way 0 unless it holds a valid entry) because ~45
+! distinct pages pass through the TSB over the three legs and two live pages
+! can hash to one set; a blind way-0 write would evict a live row and add an
+! unaccounted refault to a measured count.
 !
 ! Overlay .word encodings (the assembler does not know these J4 forms):
-!   LDC r0,VBR  = 0x402E   LDC r0,PTEH  = 0x405E   (PTEH is READ via the
+!   LDC r0,VBR  = 0x402E   LDC r0,ASIDR = 0x407E   (PTEH is READ via the
 !   read-only P4 alias 0xFF000000, not STC)
-!   LDC r0,PTEL = 0x406E   LDC r0,ASIDR= 0x407E   LDTLB = 0x0038  LDTLB.RN = 0x0078
 !
 ! ---- _fail integrity net ----
 ! _fail writes r9 verbatim to TEST_RESULT_ADDRESS; sim/cpu_ctb.c's
 ! test_result() requires TEST_PASS_MAGIC for PASS; _fail still clamps r9==0
 ! to 0x7F.
 #include "sim_instr.h"
+#include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
 
 #define N_FAULTS 10
@@ -182,27 +216,11 @@ _sim_instr_end: .long 0
         mov     #0, r1
         mov.l   r1, @r0                 ! AT off: translation bypassed
         mov     #4, r1
-        mov.l   r1, @r0                 ! TI: invalidate all 32 entries
+        mov.l   r1, @r0                 ! TI: invalidate all TLB entries
         mov     #0, r1
         mov.l   r1, @r0                 ! TI released
-        mov.l   \pfx\()code_start, r2
-        mov.l   \pfx\()code_end, r3
-1:      mov     r2, r0
-        .word   0x405E                  ! LDC r0, PTEH
-        mov     r2, r0
-        mov.l   \pfx\()code_flags, r1
-        or      r1, r0                  ! PTEL = page | 0xC8 (kernel code, U clear)
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
-        mov.l   \pfx\()page_sz, r0
-        add     r0, r2
-        cmp/hs  r3, r2
-        bf      1b
-        mov.l   \pfx\()mmucr, r0
         mov     #1, r1
-        mov.l   r1, @r0                 ! AT on
+        mov.l   r1, @r0                 ! AT on -- the code pages re-walk in
         .endm
 
         .ifne N_FAULTS - 10
@@ -229,21 +247,37 @@ ENTRY(start)
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
-        ! ---- Identity-map every code page: start .. _code_end. ----
-        ! The body is larger than one page, so all of it (preamble, handler,
-        ! verifier, literal pools) must be mapped BEFORE AT goes on -- otherwise
-        ! the first fault's own handler fetch IMISSes and double-faults.
-        mov.l   p_code_start, r2
-        mov.l   p_code_end, r3
-1:      mov     r2, r0
-        .word   0x405E                  ! LDC r0, PTEH
-        mov     r2, r0
-        mov.l   p_code_flags, r1
-        or      r1, r0                  ! PTEL = page | 0xC8 (kernel code, U clear)
-        .word   0x406E                  ! LDC r0, PTEL
+        ! ---- TSB configuration, then ASIDR = 0. ----
+        mov.l   p_tsbbr_addr, r0
+        mov.l   p_tsbbr_val, r1
+        mov.l   r1, @r0
+        mov.l   p_tsbcfg_addr, r0
+        mov.l   p_tsbcfg_val, r1
+        mov.l   r1, @r0
         mov     #0, r0
         .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        nop
+        nop
+
+        ! ---- Give every code page a TSB row: start .. _code_end. ----
+        ! The body is larger than one page, so all of it (preamble, handler,
+        ! verifier, literal pools) must be reachable BEFORE AT goes on. Note
+        ! these rows are not installs: the walker pulls each page in on its
+        ! first touch, as a STALL, and no exception is taken -- which is why
+        ! the handler's own page is always resolvable and the "handler fetch
+        ! double-faults" hazard of the LDTLB version cannot arise. The set
+        ! address comes from the P4 TSB-slot helper (0xFF000048), never from a
+        ! hand-computed hash. AT is off, so these are plain P0 stores.
+        mov.l   p_tsbslot, r12
+        mov.l   p_code_flags, r6
+        mov.l   p_code_start, r2
+        mov.l   p_code_end, r3
+1:      mov.l   r2, @r12
+        mov.l   @r12, r10               ! r10 = 32-byte-aligned SET address
+        mov     r2, r7
+        or      r6, r7                  ! PTEL = page | 0xC9 (kernel code, U clear)
+        mov     #0, r1
+        tsb_fill r10, r2, r1, r7
         mov.l   p_page_sz, r0
         add     r0, r2
         cmp/hs  r3, r2
@@ -290,8 +324,13 @@ p_vbr_val:      .long _v_drain - 0x400
 p_mmucr:        .long 0xFF000010
 p_code_start:   .long start
 p_code_end:     .long _code_end
-p_code_flags:   .long 0x000000C8
+p_code_flags:   .long 0x000000C9        ! W|X|C|V (V required by the walker)
 p_page_sz:      .long PAGE_SZ
+p_tsbbr_addr:   .long 0xFF000014
+p_tsbbr_val:    .long _tsb_base + 10    ! TSB_SIZE_LOG=10 -> 1024 sets x 32 B
+p_tsbcfg_addr:  .long 0xFF000018
+p_tsbcfg_val:   .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
+p_tsbslot:      .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
 pA_fc:          .long _fault_count
 pA_stub:        .long _stub_A
 pA_d0:          .long _dpage_A0
@@ -430,10 +469,6 @@ ENTRY(_leg_C)
 
         .align 2
 pC_mmucr:       .long 0xFF000010
-pC_code_start:  .long start
-pC_code_end:    .long _code_end
-pC_code_flags:  .long 0x000000C8
-pC_page_sz:     .long PAGE_SZ
 pC_fc:          .long _fault_count
 pC_stub:        .long _stub_C
 pC_sval:        .long 0xB00BC0DE
@@ -565,10 +600,6 @@ ENTRY(_leg_D)
 
         .align 2
 pD_mmucr:       .long 0xFF000010
-pD_code_start:  .long start
-pD_code_end:    .long _code_end
-pD_code_flags:  .long 0x000000C8
-pD_page_sz:     .long PAGE_SZ
 pD_fc:          .long _fault_count
 pD_sval:        .long 0xB00BD0DE
 pD_stride:      .long PAGE_SZ
@@ -717,34 +748,57 @@ _v_drain:
         and     r0, r1                  ! r1 = page base
         ! Pick the PTEL flags from the layout contract: ALL the stub pages (A,
         ! C, D0..D9 and the leg-D trampoline) sit BELOW the first data page, so
-        ! a fault under _dpage_A0 is an I-side stub fetch and must be installed
-        ! with U=0 -- installing 0xE8 (U=1) there makes the kernel fetch fault
-        ! forever under SMEP.
+        ! a fault under _dpage_A0 is an I-side stub fetch and must be given
+        ! U=0 -- 0xE9 (U=1) there makes the kernel fetch fault forever under
+        ! SMEP.
         mov.l   Hdbase, r0              ! _dpage_A0: start of the data pool
         cmp/hs  r0, r1                  ! T = (page >= first data page)
         bt      1f
-        mov.l   Hcflags, r0             ! stub page: 0xC8 (kernel code, U clear)
+        mov.l   Hcflags, r0             ! stub page: 0xC9 (kernel code, U clear)
         bra     2f
         nop
-1:      mov.l   Hflags, r0              ! data page: 0xE8
+1:      mov.l   Hflags, r0              ! data page: 0xE9
 2:      or      r1, r0                  ! PTEL = page | flags
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
+        mov     r0, r3                  ! r3 = PTEL
+        ! ---- Write the TSB row for this page, then simply return: the
+        ! ---- restarted access re-walks, hits the row we just wrote, and the
+        ! ---- walker installs it -- into the ITLB for a fetch and the DTLB for
+        ! ---- a data access, by side, which is the whole point of the
+        ! ---- migration (LDTLB.RN wrote BOTH arrays). Only bank-1 scratch
+        ! ---- (r0..r4) is touched: r10 carries leg D's fault-count snapshot
+        ! ---- and r11..r14 carry the legs' state.
+        mov.l   Hslot, r2
+        mov.l   r1, @r2                 ! ask the P4 helper for this VA's set
+        mov.l   @r2, r2
+        mov.l   Hp1, r0
+        or      r0, r2                  ! P1 alias: the TSB is untranslated
+        ! 2-way insert. The handler runs ~45 pages through a 1024-set TSB over
+        ! the three legs, so two live pages CAN hash to one set; blindly using
+        ! way 0 would evict a still-live row and add an unaccounted refault.
+        ! Way 0 unless it already holds a valid entry (data word bit 0 = V).
+        mov.l   @(8, r2), r0
+        tst     #1, r0
+        bt      3f
+        add     #16, r2                 ! way 1
+3:      mov     #0, r0                  ! ASID_TAG = 0
+        tsb_fill r2, r1, r0, r3
         mov.l   Hcount, r0              ! non-vacuity: count this fault
-        mov.l   @r0, r1
-        add     #1, r1
-        mov.l   r1, @r0
-        .word   0x0078                  ! LDTLB.RN -- install + return atomically
+        mov.l   @r0, r4
+        add     #1, r4
+        mov.l   r4, @r0
+        rte
+        nop
 _h_fail_spin:
         bra     _h_fail_spin
         nop
         .align 2
 Hpagemask:      .long 0xFFFFF000
 Hpteh_a:        .long 0xFF000000
-Hflags:         .long 0x000000E8
-Hcflags:        .long 0x000000C8
+Hflags:         .long 0x000000E9        ! data page: W|X|U|C|V
+Hcflags:        .long 0x000000C9        ! stub/code page: W|X|C|V (U clear, SMEP)
 Hdbase:         .long _dpage_A0
+Hslot:          .long 0xFF000048        ! P4_TSBSLOT
+Hp1:            .long 0x80000000        ! P1 alias -- TSB writes bypass the MMU
 Hcount:         .long _fault_count
 
         .balign 4
@@ -921,5 +975,12 @@ _dpage_D8:  .long 0xC1000008
             .space PAGE_SZ - 4, 0
 _dpage_D9:  .long 0xC1000009
             .space PAGE_SZ - 4, 0
+
+! ---- The TSB itself. 1024 sets x 32 bytes = 32 KB, 32 KB-aligned so that
+! tsb_ptr()'s (base and not 0x1F) or (idx << 5) is a clean concatenation.
+! Zero-filled by the image, so every row in it was written by this guard.
+        .balign 0x8000
+_tsb_base:
+        .space 0x8000, 0
 
 #endif

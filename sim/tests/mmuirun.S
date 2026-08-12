@@ -223,11 +223,19 @@ ENTRY(_after_ifetch2)
         mov.l   k_hcnt, r0 ; mov.l @r0, r2
         tst     r2, r2 ; mov #14, r9 ; bf _fail
 
-        ! ---- 15: and the walker's OWN cnt_hits advanced by exactly 1 for the
+        ! ---- 15: and the walker's OWN cnt_hits advanced by exactly 2 for the
         ! warm fetch -- the positive half, so 13/14 cannot pass by the fetch
         ! never happening.
+        ! WHY 2 AND NOT 1 (was 1 before the ITLB/DTLB split): the ITLB and the
+        ! DTLB are separate arrays, so the code page needs an entry in EACH.
+        ! The TI flush before the warm jmp empties both; the jmp takes an I-miss
+        ! walked into the ITLB (hit #1), and the stub's very first instruction
+        ! is `mov.l 9f, r3` -- a PC-RELATIVE LOAD, i.e. a D-side access to that
+        ! same code page -- which takes a D-miss walked into the DTLB (hit #2).
+        ! Under the old unified TLB the I-side install served the literal load
+        ! too. Both are warm TSB hits, which is what this check asserts.
         mov.l   k_walkcnt, r0 ; mov.l @r0, r2 ; mov.l k_mask16, r3 ; and r3, r2
-        sub     r13, r2 ; mov #1, r3 ; cmp/eq r3, r2 ; mov #15, r9 ; bf _fail
+        sub     r13, r2 ; mov #2, r3 ; cmp/eq r3, r2 ; mov #15, r9 ; bf _fail
 
         ! Warm leg resumed inside the page. Now run the MIXED I+D leg: re-arm the
         ! stub control block so its load reads a TRANSLATED data page
@@ -269,10 +277,15 @@ ENTRY(_after_ifetch3)
         mov.l   k_mixedval, r0 ; mov.l @r0, r2
         mov.l   v_seedData, r3 ; cmp/eq r3, r2 ; mov #11, r9 ; bf _fail
 
-        ! Walker cnt_hits advanced by exactly 2 (warm code fetch + mixed code
-        ! fetch), proving the hardware walker -- not software -- served them.
+        ! Walker cnt_hits advanced by exactly 4 over the warm + mixed legs,
+        ! proving the hardware walker -- not software -- served them. Two per
+        ! leg since the ITLB/DTLB split: each leg's TI flush empties both
+        ! arrays, so the code page is walked once for the I-fetch and once for
+        ! the stub's PC-relative literal load (see check 15). It was 2 under the
+        ! unified TLB. The mixed leg's translated data page at 0x00102000 is a
+        ! cold TSB MISS and so contributes to walker_calls (check 8), not here.
         mov.l   k_walkcnt, r0 ; mov.l @r0, r2 ; mov.l k_mask16, r3 ; and r3, r2
-        sub     r13, r2 ; mov #2, r3 ; cmp/eq r3, r2 ; mov #9, r9 ; bf _fail
+        sub     r13, r2 ; mov #4, r3 ; cmp/eq r3, r2 ; mov #9, r9 ; bf _fail
 
         ! walker_calls == 2 (cold code fetch + mixed cold data load).
         mov.l   k_wcnt, r0 ; mov.l @r0, r2 ; mov #2, r3 ; cmp/eq r3, r2 ; mov #8, r9 ; bf _fail

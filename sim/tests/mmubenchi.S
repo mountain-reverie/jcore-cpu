@@ -19,7 +19,8 @@
 ! unexpected-prot code written directly by the vector), 7 unexpected walker
 ! fault, 13 SPC moved across the warm leg (an exception was taken where the
 ! hardware walker should have resolved the fetch), 15 the walker's cnt_hits did
-! not advance by exactly 1 across the warm leg.
+! not advance by exactly 2 across the warm leg (one walk per array since the
+! ITLB/DTLB split -- see the check itself for why 2 and not 1).
 !
 ! Overlay .word encodings (assembler does not know these J4 forms):
 !   (PTEH 0xFF000000  PTEL 0xFF000004  TSBPTR 0xFF00001C  ASIDR 0xFF000038
@@ -206,11 +207,20 @@ ENTRY(_after_ifetch2)
         mov.l   v_sent_spc, r1
         cmp/eq  r0, r1 ; mov #13, r9 ; bf _fail
 
-        ! ---- 15: the walker's own cnt_hits advanced by exactly 1 for that
+        ! ---- 15: the walker's own cnt_hits advanced by exactly 2 for that
         ! fetch -- the positive half, so 13 cannot pass by the fetch never
         ! happening at all.
+        ! WHY 2 AND NOT 1 (was 1 before the ITLB/DTLB split): the ITLB and the
+        ! DTLB are separate arrays, so the code page needs an entry in EACH.
+        ! The warm leg's TI flush empties both; the jmp takes an I-miss walked
+        ! into the ITLB (hit #1), and the stub's very first instruction is
+        ! `mov.l 9f, r3` -- a PC-RELATIVE LOAD, i.e. a D-side access to the same
+        ! code page -- which takes a D-miss walked into the DTLB (hit #2).
+        ! Under the old unified TLB the I-side install served that literal load
+        ! too, so one hit covered both. Both walks are warm TSB hits, which is
+        ! precisely what this check is asserting.
         mov.l   k_walkcnt, r0 ; mov.l @r0, r2 ; mov.l k_mask16, r3 ; and r3, r2
-        sub     r13, r2 ; mov #1, r3 ; cmp/eq r3, r2 ; mov #15, r9 ; bf _fail
+        sub     r13, r2 ; mov #2, r3 ; cmp/eq r3, r2 ; mov #15, r9 ; bf _fail
 
         ! Cold sentinel still present.
         mov.l   k_ranf, r0 ; mov.l @r0, r2

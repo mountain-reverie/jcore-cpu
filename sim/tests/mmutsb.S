@@ -73,17 +73,6 @@ ENTRY(start)
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
-        ! ---- Map the code page identity (W+X+U+C = 0xE8). ----
-        ! `start` is forced 4 KB-aligned (the .balign 0x1000 on _fault_page
-        ! raises the .text section alignment), so all code lives in one page.
-        mov.l   p_pteh_code, r0
-        .word   0x405E                  ! LDC r0, PTEH
-        mov.l   p_ptel_code, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
-
         ! ---- Configure the TSB via MMIO (cold-path config registers). ----
         mov.l   p_tsbbr_addr, r0
         mov.l   p_tsbbr_val, r1
@@ -91,6 +80,27 @@ ENTRY(start)
         mov.l   p_tsbcfg_addr, r0
         mov.l   p_tsbcfg_val, r1
         mov.l   r1, @r0                 ! TSBCFG = 0x00000061
+
+        ! ---- Code page: the identity mapping that LDTLB used to install is
+        ! ---- now a GLOBAL TSB entry that the walker installs on the first
+        ! ---- instruction fetch after AT goes on. GLOBAL so no ASID change can
+        ! ---- perturb it; U=0 (SMEP). The set address is asked of the P4 slot
+        ! ---- helper (0xFF000048 -- the single tsb_ptr() implementation the
+        ! ---- walker and TSBPTR also use), never hand-computed. WAY 1, so it
+        ! ---- cannot displace the entries this guard places in way 0. ----
+        mov.l   p_tsbslot_reg, r12
+        mov.l   p_pteh_code, r6         ! VA = PA = start (4 KB-aligned)
+        mov     #0, r7
+        mov     r7, r0
+        .word   0x407E                  ! LDC r0, ASIDR
+        nop
+        nop
+        mov.l   p_ptel_code, r8
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! r10 = 32-byte-aligned SET address
+        mov.l   r8, @(24, r10)          ! way 1 data = PTEL
+        mov.l   r7, @(20, r10)          ! way 1 tag_lo = ASID_TAG
+        mov.l   r6, @(16, r10)          ! way 1 tag_hi = VPN (commit point)
 
         ! ---- Enable AT (MMUCR.AT=1 at P4 0xFF000010). ----
         mov.l   p_mmucr, r0
@@ -109,7 +119,8 @@ ENTRY(start)
 p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_load - 0x400
 p_pteh_code:    .long start
-p_ptel_code:    .long start + 0x000000C8        ! U cleared: kernel code, SMEP
+p_ptel_code:    .long start + 0x000000CD        ! U cleared: kernel code, SMEP
+p_tsbslot_reg:  .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
 p_mmucr:        .long 0xFF000010
 p_tsbbr_addr:   .long 0xFF000014
 p_tsbbr_val:    .long 0x00010006

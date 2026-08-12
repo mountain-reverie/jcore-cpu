@@ -15,13 +15,25 @@
 ! that never runs at all cannot pass quietly just because the load data
 ! happens to look right.
 !
-! Setup mirrors mmutsb.S (proven-correct RB-clear / VBR / identity code-page
-! mapping / TSBBR+TSBCFG config): same TSBBR=0x00010006, TSBCFG=0x00000061,
-! and the same fault VA 0x00042000, which hashes to TSBPTR 0x00010060
-! (see mmutsb.S's header comment for the arithmetic). This guard additionally
-! fills that TSB slot with a valid entry (mmuwalk_common.inc's tsb_fill)
-! before AT is enabled, so the walker can resolve the miss instead of a
-! software handler ever running.
+! WALKER-INSTALL VERSION (L2 of "retire LDTLB"). The identity code-page
+! mapping used to be installed with LDTLB; it is now a GLOBAL TSB entry that
+! the walker installs on the first instruction fetch after AT goes on, with
+! its set address asked of the P4 slot helper (0xFF000048) rather than
+! hand-computed, and written to WAY 1 so it cannot collide with the data entry
+! in way 0. The data entry's slot is now asked of the same helper, so this
+! guard no longer hand-computes a hash anywhere. The scenario under test is
+! UNCHANGED --
+! a D-side TSB hit resolving with no exception -- but check 5 had to be
+! strengthened: the code page is now itself resolved by a walk, so "the walk
+! counter is non-zero" would be satisfied by the code-page walk alone. It now
+! requires a cnt_hits DELTA across the access under test, which makes it a
+! genuine positive witness rather than belt-and-braces.
+!
+! Setup mirrors mmutsb.S (proven-correct RB-clear / VBR / TSBBR+TSBCFG
+! config): same TSBBR=0x00010006, TSBCFG=0x00000061, and the same fault
+! VA 0x00042000. This guard additionally fills that VA's TSB set with a valid
+! entry (mmuwalk_common.inc's tsb_fill) before AT is enabled, so the walker can
+! resolve the miss instead of a software handler ever running.
 !
 ! If translation truly is not resolved (walker AND software both absent /
 ! broken), the miss exception fires for real and control diverts to the
@@ -34,11 +46,8 @@
 !      -- belt and braces -- SPC no longer matches its seeded sentinel)
 !   3  SSR changed  -> an exception was taken
 !   4  EXPEVT changed -> an exception was taken
-!   5  walk counter did not advance -> the walker never ran. UNREACHABLE BY
-!      CONSTRUCTION: any defect that stops the hit install leaves the miss
-!      condition true, which fires the miss-exception vector (caught by codes
-!      2-4 above) before this check ever executes. Kept as belt-and-braces
-!      only -- it names no coverage codes 2-4 do not already provide.
+!   5  cnt_hits did not advance across the access -> the walker did not
+!      resolve THIS access from the TSB (the data came from somewhere else)
 !
 #include "sim_instr.h"
 #include "mmuwalk_common.inc"
@@ -77,27 +86,13 @@ ENTRY(start)
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
-        ! ---- Map the code page identity (W+X+U+C = 0xE8; V forced by
-        ! ---- LDTLB). `start` is forced 4 KB-aligned by the .balign 0x1000
-        ! on _pad_page below (which raises the .text section's alignment),
-        ! so PTEH/PTEL must use the `start` symbol (its PPN), exactly as
-        ! mmutsb.S does. ----
-        mov.l   p_pteh_code, r0
-        .word   0x405E                  ! LDC r0, PTEH
-        mov.l   p_ptel_code, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
-
         ! ---- Seed the data page (AT off, direct physical write). Identity:
         ! ---- PA == VA == the fault address used below. ----
         mov.l   p_data_pa, r2
         mov.l   p_expect, r3
         mov.l   r3, @r2                 ! [0x00042000] = 0xA5A5A5A5
 
-        ! ---- Configure the TSB via MMIO (cold-path config registers) and
-        ! ---- fill the slot the walker will hash to for VA 0x00042000. ----
+        ! ---- Configure the TSB via MMIO (cold-path config registers). ----
         mov.l   p_tsbbr_addr, r0
         mov.l   p_tsbbr_val, r1
         mov.l   r1, @r0                 ! TSBBR  = 0x00010006
@@ -105,11 +100,42 @@ ENTRY(start)
         mov.l   p_tsbcfg_val, r1
         mov.l   r1, @r0                 ! TSBCFG = 0x00000061
 
-        mov.l   p_tsb_slot, r0
+        ! ---- Data entry, way 0. The set address is asked of the P4 slot
+        ! ---- helper (0xFF000048 -- the single tsb_ptr() implementation the
+        ! ---- walker and TSBPTR also use) rather than hand-computed, so the
+        ! ---- guard cannot drift out of agreement with the hash. ----
+        mov.l   p_tsbslot_reg, r12
         mov.l   p_vpn,  r1
         mov.l   p_asid, r2
         mov.l   p_ptel_data, r3
+        mov     r2, r0
+        .word   0x407E                  ! LDC r0, ASIDR
+        nop
+        nop
+        mov.l   r1, @r12                ! write VA -> helper
+        mov.l   @r12, r0                ! r0 = 32-byte-aligned SET address
         tsb_fill r0, r1, r2, r3
+
+        ! ---- Code page: the identity mapping that used to be installed with
+        ! ---- LDTLB is now a TSB entry the walker installs on the first
+        ! ---- instruction fetch after AT goes on. It is GLOBAL (G) so no ASID
+        ! ---- change can perturb it, and U=0 (SMEP). The set address comes
+        ! ---- from the P4 slot helper (0xFF000048 -- the single tsb_ptr()
+        ! ---- implementation the walker and TSBPTR also use); nothing here
+        ! ---- hand-computes the hash. It is written to WAY 1 so that it cannot
+        ! ---- collide with the hand-addressed data slot above, which is in
+        ! ---- way 0. ----
+        mov.l   p_tsbslot_reg, r12
+        mov.l   p_pteh_code, r6         ! VA = PA = start (4 KB-aligned)
+        mov     #0, r7                  ! ASID 0 (entry is GLOBAL anyway)
+        mov     r7, r0
+        .word   0x407E                  ! LDC r0, ASIDR
+        nop
+        nop
+        mov.l   p_ptel_code, r8
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! r10 = 32-byte-aligned SET address
+        tsb_fill_way r10, 16, r6, r7, r8
 
         ! ---- Enable AT (MMUCR.AT=1 at P4 0xFF000010). ----
         mov.l   p_mmucr, r0
@@ -121,6 +147,14 @@ ENTRY(start)
         .word   0x404E                  ! LDC r0, SPC
         mov.l   p_sent_ssr, r0
         .word   0x403E                  ! LDC r0, SSR
+
+        ! ---- Snapshot cnt_hits BEFORE the access. The code page is now itself
+        ! ---- resolved by a walk, so "the counter is non-zero" no longer says
+        ! ---- anything about THIS access -- a delta is required. r11 is
+        ! ---- unbanked. ----
+        mov.l   p_walkcnt, r0
+        mov.l   @r0, r11
+        extu.w  r11, r11                ! r11 = cnt_hits before
 
         ! ---- Take the miss: walker must resolve it with NO exception. ----
         mov.l   p_testva, r0
@@ -153,11 +187,12 @@ ENTRY(start)
         mov     #4, r9
         bf      _fail_at
 
-        ! ---- 5: did the walker actually run? UNREACHABLE BY CONSTRUCTION --
-        ! see the result-codes comment in the header. Kept as belt-and-braces. ----
+        ! ---- 5: did the walker actually resolve THIS access? cnt_hits must
+        ! ---- have advanced past the snapshot taken immediately before it. ----
         mov.l   p_walkcnt, r0
         mov.l   @r0, r1
-        tst     r1, r1
+        extu.w  r1, r1                  ! cnt_hits now
+        cmp/eq  r11, r1
         mov     #5, r9
         bt      _fail_at
 
@@ -180,10 +215,10 @@ p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_fault - 0x400
 p_mmucr:        .long 0xFF000010
 p_pteh_code:    .long start
-p_ptel_code:    .long start + 0x000000C8 ! identity: PPN=start, U cleared (SMEP)
+p_ptel_code:    .long start + 0x000000CD ! identity: PPN=start, W|X|C|G|V, U=0 (SMEP)
+p_tsbslot_reg:  .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
 p_data_pa:      .long 0x00042000
 p_expect:       .long 0xA5A5A5A5
-p_tsb_slot:     .long 0x00010060        ! hash(0x00042000, TSBCFG, TSBBR) -- see header
 p_vpn:          .long 0x00042000
 p_asid:         .long 0x00000000
 p_ptel_data:    .long 0x000420E9        ! PA 0x00042000 | V|C|U|X|W (0xE9)

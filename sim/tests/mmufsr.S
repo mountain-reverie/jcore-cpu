@@ -102,6 +102,7 @@
 ! globals below use loud sentinels (_g_exp_* = 0xFFFFFFFF, _g_bad_* = small
 ! distinct values) so an early exit still names its cause.
 #include "sim_instr.h"
+#include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
 
         .section .vect
@@ -136,40 +137,81 @@ ENTRY(start)
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
-        ! ---- Map the guard's own code page: identity, W+X+C = 0xC8 (U=0). ----
-        ! VPN is computed at RUNTIME from &start rather than hardcoded to 0,
-        ! since this test image links start at VA 0x1000, not 0x0000 (the
-        ! .vect header occupies the page before it) -- see mmufault.S history.
-        mov.l   p_start_addr, r0
+        ! ---- Configure the TSB: base 0x00018000, TSB_SIZE_LOG=8 (256 sets x
+        ! ---- 32 bytes = 0x18000..0x19FFF), HASH_SHIFT=6, HASH_MODE=1. Clear of
+        ! ---- every page this guard maps (0x1000..0xBFFF) and inside the image,
+        ! ---- so it is zero-filled and the fill loop is all that is in it. ----
+        mov.l   p_tsbbr_addr, r0
+        mov.l   p_tsbbr_val, r1
+        mov.l   r1, @r0
+        mov.l   p_tsbcfg_addr, r0
+        mov.l   p_tsbcfg_val, r1
+        mov.l   r1, @r0
+
+        ! ---- Every mapping this guard used to LDTLB is now a TSB ROW that the
+        ! ---- hardware walker pulls in on demand, at the moment of the access
+        ! ---- that needs it. That ordering change is invisible to sub-tests A-F:
+        ! ---- a permission fault still needs the entry resident, so the walker
+        ! ---- installs it from the row and the permission check then fires on
+        ! ---- the replay, with the same EXPEVT and the same MMUFSR. The rows for
+        ! ---- pages 3, tramp_b and tramp_f are hoisted here from the sub-tests
+        ! ---- that used to LDTLB them individually; a row is inert until touched,
+        ! ---- so hoisting cannot make a sub-test fire early.
+        ! ----
+        ! ---- The rows whose VA is a link-time label (the code page and the two
+        ! ---- user trampolines) are patched at RUNTIME below, because their VPN
+        ! ---- is only known at link time -- the same reason the LDTLB version
+        ! ---- computed PTEH from &start.
+        ! ----
+        ! ---- Set addresses come from the P4 slot helper (0xFF000048) under each
+        ! ---- row's own ASID; nothing hand-computes the hash. ----
         mov.l   p_pagemask, r1
-        and     r1, r0
-        .word   0x405E                  ! LDC r0, PTEH  (VPN = start's page, ASID=0)
+
+        mov.l   p_tab_code, r2          ! code page row: VA and PPN from &start
         mov.l   p_start_addr, r0
         and     r1, r0
-        mov.l   p_ptel_page0, r2
-        or      r2, r0
-        .word   0x406E                  ! LDC r0, PTEL = (start & pagemask) | W|X|C
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        mov.l   r0, @r2                 ! row VA
+        mov.l   p_ptel_page0, r3
+        or      r3, r0
+        mov.l   r0, @(8, r2)            ! row PTEL = (start & mask) | W|X|C|G|V
 
-        ! ---- Map page 2 (VA 0x2000): read-only, X|U|C = 0x68 (W=0). ----
-        mov.l   c_page2_pteh, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN=2, ASID=0)
-        mov.l   p_ptel_ro, r0
-        .word   0x406E                  ! LDC r0, PTEL = 0x68
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        mov.l   p_tab_trampb, r2        ! tramp_b row
+        mov.l   p_tramp_b_addr, r0
+        and     r1, r0
+        mov.l   r0, @r2
+        mov.l   p_ptel_tramp, r3
+        or      r3, r0
+        mov.l   r0, @(8, r2)
 
-        ! ---- Map page 4 (VA 0x4000): supervisor-only, W|X|C = 0xC8 (U=0). ----
-        mov.l   c_page4_pteh, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN=4, ASID=0)
-        mov.l   p_ptel_super, r0
-        .word   0x406E                  ! LDC r0, PTEL = 0xC8
-        mov     #0, r0
+        mov.l   p_tab_trampf, r2        ! tramp_f row
+        mov.l   p_tramp_f_addr, r0
+        and     r1, r0
+        mov.l   r0, @r2
+        mov.l   p_ptel_tramp, r3
+        or      r3, r0
+        mov.l   r0, @(8, r2)
+
+        ! ---- Fill loop. AT is off, so these are plain P0 stores. ----
+        mov.l   p_tsbslot, r12
+        mov.l   p_tab, r14
+        mov.l   p_tab_end, r5
+1:      mov.l   @r14+, r6               ! VA
+        mov.l   @r14+, r7               ! ASID
+        mov.l   @r14+, r8               ! PTEL
+        mov     r7, r0
         .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        nop
+        nop
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! r10 = 32-byte-aligned SET address
+        tsb_fill r10, r6, r7, r8
+        cmp/hs  r5, r14
+        bf      1b
+
+        mov     #0, r0
+        .word   0x407E                  ! LDC r0, ASIDR (back to ASID 0)
+        nop
+        nop
 
         ! ==============================================================
         ! Assert MMUFSR reads 0 before any fault has occurred. Done here,
@@ -259,18 +301,8 @@ ENTRY(after_a)
         ! validated in mmufault.S/mmusmep.S. The trampoline's own PTEH is
         ! computed at RUNTIME from its own link address (masked to a page
         ! boundary) rather than hardcoded.
-        mov.l   p_tramp_b_addr, r0
-        mov.l   p_pagemask, r1
-        and     r1, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN = tramp_b's page)
-        mov.l   p_tramp_b_addr, r0
-        and     r1, r0
-        mov.l   p_ptel_tramp, r2
-        or      r2, r0
-        .word   0x406E                  ! LDC r0, PTEL = (tramp_b & mask) | W|X|U|C
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        ! (tramp_b's mapping is a TSB row filled in setup; the walker installs
+        ! it on the first fetch after the RTE below drops to user mode.)
 
         mov.l   p_tramp_b_addr, r0
         .word   0x404E                  ! LDC r0, SPC (target = &_user_tramp_b)
@@ -385,13 +417,8 @@ ENTRY(after_e)
         ! Sub-test F: IPROT -- user-mode JUMP to page 3 (X=0, PTEL 0xA8).
         ! Fault sequence copied verbatim from mmufault.S sub-test E.
         ! ==============================================================
-        mov.l   c_page3_pteh, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN=3, ASID=0)
-        mov.l   p_ptel_nx, r0
-        .word   0x406E                  ! LDC r0, PTEL = 0xA8
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        ! (page 3's no-execute mapping is a TSB row filled in setup; the walker
+        ! installs it on the faulting fetch, and IPROT then fires on the replay.)
 
         mov.l   p_mmucr, r0
         mov     #1, r1
@@ -416,18 +443,7 @@ ENTRY(after_e)
         ! Own page (page 0) is now U=0/kernel-only; see p_ptel_page0 note.
         ! Install a separate U=1 trampoline page and drop to user mode via
         ! RTE (see the sub-test B comment above and mmufault.S/mmusmep.S).
-        mov.l   p_tramp_f_addr, r0
-        mov.l   p_pagemask, r1
-        and     r1, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN = tramp_f's page)
-        mov.l   p_tramp_f_addr, r0
-        and     r1, r0
-        mov.l   p_ptel_tramp, r2
-        or      r2, r0
-        .word   0x406E                  ! LDC r0, PTEL = (tramp_f & mask) | W|X|U|C
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        ! (tramp_f's mapping is a TSB row filled in setup.)
 
         mov.l   p_tramp_f_addr, r0
         .word   0x404E                  ! LDC r0, SPC (target = &_user_tramp_f)
@@ -465,33 +481,62 @@ ENTRY(after_f)
         mov.l   p_vbr_gi_val, r0
         .word   0x402E                  ! LDC r0, VBR (so VBR+0x100 = _v_gi)
 
-        mov.l   p_pteh_p8, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN=0x8, ASID=0)
-        mov.l   p_ptel_p8_small, r0     ! PA 0x8000 | pageMask=0 (4KB) | W|C
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
-
-        mov.l   p_pteh_p9, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN=0x9, ASID=0)
-        mov.l   p_ptel_p9_small, r0     ! PA 0x9000 | pageMask=0 (4KB) | W|C
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
-
-        mov.l   p_pteh_p8, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN=0x8, ASID=0)
-        mov.l   p_ptel_p8_big, r0       ! PA 0x8000 | pageMask=1 (16KB, covers
-        .word   0x406E                  ! LDC r0, PTEL              ! VPN 8..B) | W|C -- evicts
-        mov     #0, r0                                              ! VPN 0x8's slot in place,
-        .word   0x407E                  ! LDC r0, ASIDR             ! VPN 0x9's slot survives
-        .word   0x0038                  ! LDTLB
-
+        ! ---- The three installs are now three WALKER installs. The walker only
+        ! ---- installs on a MISS, so the third one -- re-installing VPN 0x8 as a
+        ! ---- superpage while it is already resident -- cannot be provoked by
+        ! ---- touching VA 0x8000 again: that would HIT. ASID is what makes it
+        ! ---- miss, exactly as in the migrated mmumultihit.S:
+        ! ----
+        ! ----   1. under ASID A, touch VA 0x8000 -> walker installs the 4 KB
+        ! ----      NON-GLOBAL entry from the row hashed for (0x8000, A);
+        ! ----   2. under ASID A, touch VA 0x9000 -> installs the 4 KB entry for
+        ! ----      VPN 0x9, which does not overlap VPN 0x8's page;
+        ! ----   3. switch to ASID B and touch VA 0x8000. The resident VPN 0x8
+        ! ----      entry is non-global with asid_tag=A, so this MISSES, and the
+        ! ----      walker reads the row hashed for (0x8000, B) -- a GLOBAL 16 KB
+        ! ----      entry covering VPN 0x8..0xB. Its install runs the same
+        ! ----      overlap-dedup scan as LDTLB did (the scan is on the shared
+        ! ----      install port, core/tlb.vhd): ptel(2)='1' makes the
+        ! ----      global-or-ASID predicate true for every resident entry, so it
+        ! ----      evicts the FIRST overlapping slot it scans -- VPN 0x8's --
+        ! ----      and never reaches VPN 0x9's, which also overlaps and survives;
+        ! ----   4. switch back to ASID A and load VA 0x9000. The surviving VPN
+        ! ----      0x9 entry matches on asid_tag=A, and the global superpage
+        ! ----      matches because it is global. Two entries, one lookup: a
+        ! ----      genuine MULTI_HIT.
+        ! ----
+        ! ---- The ORDERING DEPENDENCY is unchanged and still documented: "first
+        ! ---- match" is the lowest slot index, so this relies on NRU giving VPN
+        ! ---- 0x8 a lower slot than VPN 0x9. They are installed in that order
+        ! ---- with no MMUCR.TI flush between them. Do not insert one. If it ever
+        ! ---- breaks, the sub-test fails cleanly with 20/21 rather than passing
+        ! ---- for the wrong reason.
         mov.l   p_mmucr, r0
         mov     #1, r1
-        mov.l   r1, @r0                 ! re-enable AT
+        mov.l   r1, @r0                 ! AT on -- the touches below must translate
+
+        mov.l   c_asid_a, r0
+        .word   0x407E                  ! LDC r0, ASIDR (= A)
+        nop
+        nop
+        mov.l   p_pteh_p8, r2
+        mov.l   @r2, r3                 ! step 1: install VPN 0x8, 4 KB, ASID A
+        mov.l   p_pteh_p9, r2
+        mov.l   @r2, r3                 ! step 2: install VPN 0x9, 4 KB, ASID A
+
+        mov.l   c_asid_b, r0
+        .word   0x407E                  ! LDC r0, ASIDR (= B)
+        nop
+        nop
+        mov.l   p_pteh_p8, r2
+        mov.l   @r2, r3                 ! step 3: MISS -> install the GLOBAL 16 KB
+                                        ! superpage; dedup evicts VPN 0x8's slot
+                                        ! only, VPN 0x9's survives
+
+        mov.l   c_asid_a, r0
+        .word   0x407E                  ! LDC r0, ASIDR (back to A)
+        nop
+        nop
 
         mov.l   p_g_exp_fsr, r0
         mov.l   c_fsr_multihit, r1
@@ -523,15 +568,32 @@ p_mdclear:          .long 0xBFFFFFFF   ! clear SR.MD (bit 30)
 p_vbr_val:          .long _vbase
 p_vbr_gi_val:       .long _v_gi - 0x100
 p_start_addr:       .long start
-p_ptel_page0:       .long 0x000000C8   ! W|X|C, kernel-only own page (U=0: with AT
+p_ptel_page0:       .long 0x000000CD   ! W|X|C|G|V, kernel-only own page. GLOBAL:
+                                        ! sub-test G switches ASIDR, and a
+                                        ! non-global code page would stop
+                                        ! matching the moment it did. V because
+                                        ! the walker rejects a V=0 row as "no
+                                        ! entry". (U=0: with AT
                                         ! enabled the guard keeps executing from
                                         ! this page in supervisor mode, so U=1
                                         ! here would SMEP-fault immediately --
                                         ! see mmusmep.S/mmufault.S history)
-p_ptel_ro:          .long 0x00000068   ! X|U|C  (W=0 -> DPROT_W)
-p_ptel_nx:          .long 0x000000A8   ! W|U|C  (X=0 -> IPROT)
-p_ptel_super:       .long 0x000000C8   ! W|X|C  (U=0 -> DPROT_R)
+p_ptel_ro:          .long 0x00000069   ! X|U|C|V  (W=0 -> DPROT_W)
+p_ptel_nx:          .long 0x000000A9   ! W|U|C|V  (X=0 -> IPROT)
+p_ptel_super:       .long 0x000000C9   ! W|X|C|V  (U=0 -> DPROT_R)
 p_mmucr:            .long 0xFF000010
+p_tsbbr_addr:       .long 0xFF000014
+p_tsbbr_val:        .long 0x00018008   ! base=0x00018000, TSB_SIZE_LOG=8
+p_tsbcfg_addr:      .long 0xFF000018
+p_tsbcfg_val:       .long 0x00000061   ! HASH_SHIFT=6, HASH_MODE=1
+p_tsbslot:          .long 0xFF000048   ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
+p_tab:              .long _tsb_tab
+p_tab_end:          .long _tsb_tab_end
+p_tab_code:         .long _tsb_row_code
+p_tab_trampb:       .long _tsb_row_trampb
+p_tab_trampf:       .long _tsb_row_trampf
+c_asid_a:           .long 0x00000001
+c_asid_b:           .long 0x00000002
 p_fsr_addr:         .long 0xFF00002C
 p_g_exp_fsr:        .long _g_exp_fsr
 p_g_exp_expevt:     .long _g_exp_expevt
@@ -553,6 +615,30 @@ c_page1_va:         .long 0x00002000
 c_page2_va:         .long 0x00003000
 c_page3_va:         .long 0x00004000
 c_page4_va:         .long 0x00005000
+        ! ---- TSB rows: (VA, ASID_TAG, PTEL), one 12-byte row each. The three
+        ! ---- rows whose VA depends on a link-time label are patched at runtime
+        ! ---- in the setup above; their placeholders here are 0.
+        ! ---- Sub-test G's three rows are what make a genuine MULTI_HIT
+        ! ---- constructible under walker-only install -- see the sub-test G
+        ! ---- comment block for why ASID, not page size, is the lever.
+        .balign 4
+_tsb_tab:
+_tsb_row_code:
+        .long 0x00000000, 0x00000000, 0x00000000  ! code page (patched: VA|PTEL)
+        .long 0x00003000, 0x00000000, 0x00003069  ! page 2 read-only  -> DPROT_W
+        .long 0x00004000, 0x00000000, 0x000040A9  ! page 3 no-execute -> IPROT
+        .long 0x00005000, 0x00000000, 0x000050C9  ! page 4 super-only -> DPROT_R
+_tsb_row_trampb:
+        .long 0x00000000, 0x00000000, 0x00000000  ! tramp_b (patched)
+_tsb_row_trampf:
+        .long 0x00000000, 0x00000000, 0x00000000  ! tramp_f (patched)
+        .long 0x00008000, 0x00000001, 0x000080C9  ! G step 1: VPN 8, 4K, ASID A
+        .long 0x00009000, 0x00000001, 0x000090C9  ! G step 2: VPN 9, 4K, ASID A
+        .long 0x00008000, 0x00000002, 0x000081CD  ! G step 3: VPN 8, 16K, GLOBAL,
+                                                  ! hashed under ASID B so that
+                                                  ! step 3's miss finds it
+_tsb_tab_end:
+
 c_page2_pteh:       .long 0x00003000
 c_page3_pteh:       .long 0x00004000
 c_page4_pteh:       .long 0x00005000
@@ -574,16 +660,18 @@ c_expevt_iprot:      .long 0x000000A0
 ! resident entry, so a superpage installed AFTER two disjoint 4KB pages
 ! evicts only one of them, leaving a genuine overlap for lookup to hit.
 p_pteh_p8:           .long 0x00008000   ! VPN 0x8, ASID 0
-p_ptel_p8_small:     .long 0x000080C8   ! PA 0x8000 | pageMask=0 (4KB) | W|C
-p_ptel_p8_big:       .long 0x000081C8   ! PA 0x8000 | pageMask=1 (16KB, covers VPN 8..B) | W|C
+p_ptel_p8_small:     .long 0x000080C9   ! PA 0x8000 | pageMask=0 (4KB) | W|C|V
+p_ptel_p8_big:       .long 0x000081CD   ! PA 0x8000 | pageMask=1 (16KB, covers VPN 8..B) | W|C|G|V
+                                        ! GLOBAL so its install's dedup predicate is true
+                                        ! against the resident ASID-A entries
 p_pteh_p9:           .long 0x00009000   ! VPN 0x9, ASID 0
-p_ptel_p9_small:     .long 0x000090C8   ! PA 0x9000 | pageMask=0 (4KB) | W|C -- disjoint from VPN 0x8
+p_ptel_p9_small:     .long 0x000090C9   ! PA 0x9000 | pageMask=0 (4KB) | W|C|V -- disjoint from VPN 0x8
 c_va_p9:             .long 0x00009000   ! load target: VPN 0x9, inside the VPN 0x8 superpage's range
 ! Trampoline-page literals for sub-tests B/F (see comments at each site).
 p_pagemask:          .long 0xFFFFF000
 p_tramp_b_addr:      .long _user_tramp_b
 p_tramp_f_addr:      .long _user_tramp_f
-p_ptel_tramp:        .long 0x000000E8   ! W|X|U|C, trampoline pages
+p_ptel_tramp:       .long 0x000000E9   ! W|X|U|C|V (user trampoline page)
 
 #endif  ! CONFIG_PRIV_ARCH
 
@@ -764,7 +852,18 @@ c_gi_expevt:    .long 0x00000180
         ! inside page 0.
         ! ================================================================
 _fault_pages:
-        .space 0xC000, 0
+        ! Backing for the mapped pages (0x2000..0xBFFF) AND for the TSB at
+        ! PA 0x18000..0x19FFF. Zero-filled, so the TSB starts empty.
+        !
+        ! THIS PADDING IS LOAD-BEARING, NOT COSMETIC. The cosim only backs SRAM
+        ! within the loaded image extent: a PA past the end of the image is
+        ! backed by nothing, and an access to it neither faults nor stores --
+        ! it simply goes nowhere ("SRAM: invalid write addr" in the cosim log).
+        ! The hardware walker reads the TSB by physical address, so a TSB placed
+        ! past the image end reads as garbage-that-is-never-there and every walk
+        ! silently misses. Any guard whose TSB (or whose P0/P2 alias readback)
+        ! sits above the image must extend the image to cover it.
+        .space 0x1A000, 0
 
         ! ================================================================
         ! User-mode trampoline pages for sub-tests B and F. Own page (page 0)

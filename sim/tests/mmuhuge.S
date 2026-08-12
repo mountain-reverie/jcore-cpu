@@ -270,6 +270,20 @@ kmain:
         mov.l   @r3, r3              ! capture VA_H1's TSB slot ptr NOW
                                          ! (still AT-on; the P4 alias is
                                          ! untranslated regardless)
+
+        ! ---- 2-way TSB: TSBPTR returns a 32-byte SET and Linux's
+        ! ---- jcore_tsb_pick_way() writes the way the hardware victim selector
+        ! ---- nominated (way 1 in this unseeded-LFSR harness). Select the way
+        ! ---- by matching tag_hi -- __jcore_tlb_walk() stores `addr & PAGE_MASK`
+        ! ---- as tag_hi, and every va_h* here is already 16 KB aligned, so that
+        ! ---- is the VA itself. Selecting by tag_hi (not by the PTEL the check
+        ! ---- below asserts) keeps the assertion non-circular. ----
+        mov.l   va_h1, r1
+        mov.l   @r3, r2
+        cmp/eq  r1, r2
+        bt      11f
+        add     #16, r3
+11:
         mov.l   k_wcnt, r0 ; mov.l @r0, r4   ! wcnt baseline, post-base-walk
 
         mov.l   va_h1b, r0
@@ -302,7 +316,21 @@ kmain:
                                          ! the 1 MB huge entry from k_pte_h2
 
         mov.l   k_tsbptr_a, r3
-        mov.l   @r3, r3None
+        mov.l   @r3, r3
+
+        ! ---- 2-way TSB: TSBPTR returns a 32-byte SET and Linux's
+        ! ---- jcore_tsb_pick_way() writes the way the hardware victim selector
+        ! ---- nominated (way 1 in this unseeded-LFSR harness). Select the way
+        ! ---- by matching tag_hi -- __jcore_tlb_walk() stores `addr & PAGE_MASK`
+        ! ---- as tag_hi, and every va_h* here is already 16 KB aligned, so that
+        ! ---- is the VA itself. Selecting by tag_hi (not by the PTEL the check
+        ! ---- below asserts) keeps the assertion non-circular. ----
+        mov.l   va_h2, r1
+        mov.l   @r3, r2
+        cmp/eq  r1, r2
+        bt      12f
+        add     #16, r3
+12:
         mov.l   k_wcnt, r0 ; mov.l @r0, r4
 
         mov.l   va_h2b, r0
@@ -334,7 +362,21 @@ kmain:
                                          ! the 256 MB huge entry from k_pte_h3
 
         mov.l   k_tsbptr_a, r3
-        mov.l   @r3, r3None
+        mov.l   @r3, r3
+
+        ! ---- 2-way TSB: TSBPTR returns a 32-byte SET and Linux's
+        ! ---- jcore_tsb_pick_way() writes the way the hardware victim selector
+        ! ---- nominated (way 1 in this unseeded-LFSR harness). Select the way
+        ! ---- by matching tag_hi -- __jcore_tlb_walk() stores `addr & PAGE_MASK`
+        ! ---- as tag_hi, and every va_h* here is already 16 KB aligned, so that
+        ! ---- is the VA itself. Selecting by tag_hi (not by the PTEL the check
+        ! ---- below asserts) keeps the assertion non-circular. ----
+        mov.l   va_h3, r1
+        mov.l   @r3, r2
+        cmp/eq  r1, r2
+        bt      13f
+        add     #16, r3
+13:
         mov.l   k_wcnt, r0 ; mov.l @r0, r4
 
         mov.l   va_h3b, r0

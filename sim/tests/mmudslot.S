@@ -24,7 +24,8 @@
 !   0  PASS  (branch taken after fault serviced)
 !   1  no exception fired (page 1 was reachable without faulting -- setup bug)
 !   2  FAIL  (fell through the branch -- the handover bug)
-!   3  the delay-slot load was SKIPPED on the restart (r3 kept its sentinel)
+!   3  the delay-slot load was SKIPPED on the restart, or it re-translated to
+!      the wrong page (r3 != the SENTINEL seeded at PA 0x1000)
 !   4  the handler did not service EXACTLY ONE fault -- 0 means the delay-slot
 !      access never missed, so the scenario was never constructed at all; >1
 !      means the handler failed to make progress
@@ -106,6 +107,13 @@ ENTRY(start)
         mov.l   @r12, r10               ! r10 = 32-byte-aligned SET address
         tsb_fill r10, r6, r7, r8
 
+        ! ---- Seed PA 0x1000 with the SENTINEL through the P1 alias, while AT
+        ! ---- is still off. The delay-slot load below must read this back after
+        ! ---- the handler makes page 1 resolvable. ----
+        mov.l   c_p1_page1, r2
+        mov.l   c_sentinel_val, r3
+        mov.l   r3, @r2
+
         ! ---- Enable AT (MMUCR.AT=1 at P4 0xFF000010). ----
         mov.l   p_mmucr, r0
         mov     #1, r1
@@ -121,10 +129,10 @@ ENTRY(start)
         ! at a mapped VA still passed (measured, on the pre-migration file too).
         ! The handler now counts its entries and taken_target requires exactly
         ! one, which is a positive witness rather than an absence.
-        mov     #0x5A, r3               ! sentinel: delay-slot load must overwrite this with 0
+        mov     #0x5A, r3               ! sentinel: the delay-slot load must overwrite it
         mov.l   c_page1_va, r2          ! r2 = 0x1000 (page 1, unmapped)
         bra     taken_target
-        mov.l   @r2, r3                 ! DELAY SLOT: DMISS_R -> _v_load (loads 0 from page 1)
+        mov.l   @r2, r3                 ! DELAY SLOT: DMISS_R -> _v_load, then reloads SENTINEL
 
         ! Fall-through path (BUGGY landing): branch was skipped.
         mov     #2, r9
@@ -133,12 +141,23 @@ ENTRY(start)
 
 ENTRY(taken_target)
         ! CORRECT landing: branch was taken after the fault was serviced.
-        ! Also verify the delay-slot LOAD actually executed: r3 must be 0 (loaded
-        ! from zero-filled page 1), not the 0x5A sentinel. If r3==0x5A the delay
-        ! slot was SKIPPED on the restart -> result 3.
-        mov     #0x5A, r0
+        ! Also verify the delay-slot LOAD actually executed AND re-translated to
+        ! the right physical page. r3 must equal the SENTINEL seeded into PA
+        ! 0x1000 through the P1 alias before AT came on.
+        !
+        ! This check used to be "r3 must be 0, loaded from zero-filled page 1",
+        ! which a load that returned nothing at all would also satisfy. It is a
+        ! nonzero sentinel now because it inherited the one property of the
+        ! deleted mmuldtlbr.S that survives retiring LDTLB.RN: that a handler
+        ! which returns with AT STILL ON causes the restarted access to be
+        ! genuinely RE-TRANSLATED against the newly-available mapping and to read
+        ! the correct data. mmuldtlbr's other three assertions -- the fused
+        ! install, the fused return, and the absence of a delay slot -- were all
+        ! properties of the instruction itself and die with it. mmurte.S does not
+        ! cover this: it disables AT inside its handler.
+        mov.l   c_sentinel_val, r0
         cmp/eq  r0, r3
-        bt      _dslot_skipped
+        bf      _dslot_skipped
         ! Exactly one fault must have been serviced. Zero means the delay-slot
         ! access never missed (the scenario was not constructed); more than one
         ! means the handler failed to make progress.
@@ -173,6 +192,8 @@ p_tsbcfg_addr:  .long 0xFF000018
 p_tsbcfg_val:   .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
 p_tsbslot_reg:  .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
 c_page1_va:     .long 0x00001000
+c_p1_page1:     .long 0x80001000        ! P1 alias of PA 0x1000 (untranslated)
+c_sentinel_val: .long 0x5A4D7011        ! inherited from the deleted mmuldtlbr.S
 c_fcount_p:     .long _g_fault_count
 
 #endif  ! CONFIG_PRIV_ARCH

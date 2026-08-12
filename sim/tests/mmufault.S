@@ -75,6 +75,7 @@
 ! globals below use loud sentinels (_g_exp_* = 0xFFFFFFFF, _g_bad_* = small
 ! distinct values) so an early exit still names its cause.
 #include "sim_instr.h"
+#include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
 
         .section .vect
@@ -115,18 +116,65 @@ ENTRY(start)
         ! `start` at VA 0x1000 (not VA 0), so a hardcoded VPN=0 mapping
         ! never actually covered the code that needs to keep fetching once
         ! AT is enabled. ----
-        mov.l   p_start_addr, r0
+        ! ---- Configure the TSB: base 0x00010000, TSB_SIZE_LOG=8 (256 sets x
+        ! ---- 32 bytes = 0x10000..0x11FFF). Clear of every page this guard maps
+        ! ---- (0x1000..0x5FFF) and INSIDE the image extent -- that second part
+        ! ---- is load-bearing, see the padding note at the bottom of the file.
+        mov.l   p_tsbbr_addr, r0
+        mov.l   p_tsbbr_val, r1
+        mov.l   r1, @r0
+        mov.l   p_tsbcfg_addr, r0
+        mov.l   p_tsbcfg_val, r1
+        mov.l   r1, @r0
+
+        ! ---- Every mapping LDTLB used to install is now a TSB ROW the walker
+        ! ---- pulls in on demand, at the access that needs it. Invisible to all
+        ! ---- six sub-tests: a protection fault still needs the entry resident,
+        ! ---- so the walker installs it from the row and the permission check
+        ! ---- fires on the replay -- same EXPEVT, same TEA. The rows for pages
+        ! ---- 2/3/4 and the trampoline are hoisted here from the sub-tests that
+        ! ---- used to LDTLB them one at a time; a row is inert until touched,
+        ! ---- so hoisting cannot make a sub-test fire early. The trampoline was
+        ! ---- installed TWICE (once for E, once for F) and is now one row.
+        ! ----
+        ! ---- The two rows whose VA is a link-time label (own code page and the
+        ! ---- trampoline) are patched at runtime, the same reason the LDTLB
+        ! ---- version computed PTEH from &start.
         mov.l   p_pagemask, r1
-        and     r1, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN = start's page, ASID=0)
+
+        mov.l   p_tab_code, r2
         mov.l   p_start_addr, r0
         and     r1, r0
-        mov.l   p_ptel_page0, r2
-        or      r2, r0
-        .word   0x406E                  ! LDC r0, PTEL = (start & pagemask) | W|X|C
-        mov     #0, r0
+        mov.l   r0, @r2                 ! row VA
+        mov.l   p_ptel_page0, r3
+        or      r3, r0
+        mov.l   r0, @(8, r2)            ! row PTEL
+
+        mov.l   p_tab_tramp, r2
+        mov.l   p_tramp_addr, r0
+        and     r1, r0
+        mov.l   r0, @r2
+        mov.l   p_ptel_tramp, r3
+        or      r3, r0
+        mov.l   r0, @(8, r2)
+
+        ! ---- Fill loop. AT is off, so these are plain P0 stores. Set addresses
+        ! ---- come from the P4 slot helper (0xFF000048); no hand-computed hash.
+        mov.l   p_tsbslot, r12
+        mov.l   p_tab, r14
+        mov.l   p_tab_end, r5
+1:      mov.l   @r14+, r6               ! VA
+        mov.l   @r14+, r7               ! ASID
+        mov.l   @r14+, r8               ! PTEL
+        mov     r7, r0
         .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        nop
+        nop
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! r10 = 32-byte-aligned SET address
+        tsb_fill r10, r6, r7, r8
+        cmp/hs  r5, r14
+        bf      1b
 
         ! ---- Enable AT (MMUCR.AT=1 at P4 0xFF000010). ----
         mov.l   p_mmucr, r0
@@ -234,13 +282,7 @@ ENTRY(after_c)
         ! Map page 2 (VA 0x2000) read-only (W=0, X|U|C = 0x68).
         ! Supervisor: d_we=1 AND w=0 fires DPROT_W (no user mode needed).
         ! ==============================================================
-        mov.l   c_page2_pteh, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN=2, ASID=0)
-        mov.l   p_ptel_ro, r0
-        .word   0x406E                  ! LDC r0, PTEL = 0x68
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        ! (page 2's read-only mapping is a TSB row filled in setup.)
 
         ! Handler disabled AT on entry; re-enable.
         mov.l   p_mmucr, r0
@@ -286,27 +328,11 @@ ENTRY(after_d)
         ! used by mmusmep.S's negative control, for the same reason a
         ! raw ldc-sr/jmp sequence has no safe timing window here.
         ! ==============================================================
-        mov.l   c_page3_pteh, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN=3, ASID=0)
-        mov.l   p_ptel_nx, r0
-        .word   0x406E                  ! LDC r0, PTEL = 0xA8
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        ! (page 3's no-execute mapping is a TSB row filled in setup.)
 
         ! Map the user-mode trampoline page: identity, X|U|C = 0x68.
-        mov.l   p_tramp_addr, r0
-        mov.l   p_pagemask, r1
-        and     r1, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN=tramp page, ASID=0)
-        mov.l   p_tramp_addr, r0
-        and     r1, r0
-        mov.l   p_ptel_tramp, r2
-        or      r2, r0
-        .word   0x406E                  ! LDC r0, PTEL = (tramp & mask) | X|U|C
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        ! (the trampoline page is a TSB row filled in setup -- one row now,
+        !  where LDTLB installed it once per sub-test.)
 
         mov.l   p_mmucr, r0
         mov     #1, r1
@@ -348,28 +374,12 @@ ENTRY(after_e)
         ! U=0) own page while MD=0, so it runs from the trampoline page
         ! (_user_tramp_f) instead, entered the same RTE way.
         ! ==============================================================
-        mov.l   c_page4_pteh, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN=4, ASID=0)
-        mov.l   p_ptel_super, r0
-        .word   0x406E                  ! LDC r0, PTEL = 0xC8
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        ! (page 4's supervisor-only mapping is a TSB row filled in setup.)
 
         ! Re-map the trampoline page (idempotent; guards against any TLB
         ! eviction since sub-test E installed it).
-        mov.l   p_tramp_addr, r0
-        mov.l   p_pagemask, r1
-        and     r1, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN=tramp page, ASID=0)
-        mov.l   p_tramp_addr, r0
-        and     r1, r0
-        mov.l   p_ptel_tramp, r2
-        or      r2, r0
-        .word   0x406E                  ! LDC r0, PTEL = (tramp & mask) | X|U|C
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        ! (the trampoline page is a TSB row filled in setup -- one row now,
+        !  where LDTLB installed it once per sub-test.)
 
         mov.l   p_mmucr, r0
         mov     #1, r1
@@ -414,14 +424,26 @@ p_rbclear:          .long 0xDFFFFFFF
 p_mdmask:           .long 0xBFFFFFFF
 p_vbr_val:          .long _vbase ! VBR so VBR+0x400 = _v_tlb
 p_mmucr:            .long 0xFF000010
-p_ptel_page0:       .long 0x000000C8   ! W|X|C -- U=0 (kernel-only): this is the
+p_ptel_page0:       .long 0x000000C9   ! W|X|C|V -- U=0 (kernel-only): this is the
                                        ! guard's OWN code page, always fetched in
                                        ! supervisor mode; U=1 here would trip SMEP
                                        ! on the very next fetch after AT is enabled.
-p_ptel_ro:          .long 0x00000068   ! X|U|C  (W=0 -> DPROT_W)
-p_ptel_nx:          .long 0x000000A8   ! W|U|C  (X=0 -> IPROT)
-p_ptel_super:       .long 0x000000C8   ! W|X|C  (U=0 -> DPROT_R)
-p_ptel_tramp:       .long 0x00000068   ! X|U|C  (trampoline page for E/F user code)
+p_ptel_ro:          .long 0x00000069   ! X|U|C|V  (W=0 -> DPROT_W)
+p_ptel_nx:          .long 0x000000A9   ! W|U|C|V  (X=0 -> IPROT)
+p_ptel_super:       .long 0x000000C9   ! W|X|C|V  (U=0 -> DPROT_R)
+p_ptel_tramp:       .long 0x00000069   ! X|U|C|V  (trampoline page for E/F user code)
+                                        ! V on every PTEL: the walker rejects a V=0 row
+                                        ! as "no entry", so the old 0xC8/0x68/0xA8
+                                        ! constants all gain bit 0.
+p_tsbbr_addr:       .long 0xFF000014
+p_tsbbr_val:        .long 0x00010008   ! base=0x00010000, TSB_SIZE_LOG=8
+p_tsbcfg_addr:      .long 0xFF000018
+p_tsbcfg_val:       .long 0x00000061   ! HASH_SHIFT=6, HASH_MODE=1
+p_tsbslot:          .long 0xFF000048   ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
+p_tab:              .long _tsb_tab
+p_tab_end:          .long _tsb_tab_end
+p_tab_code:         .long _tsb_row_code
+p_tab_tramp:        .long _tsb_row_tramp
 p_pagemask:         .long 0xFFFFF000
 p_start_addr:       .long start
 p_tramp_addr:       .long _user_tramp_e ! trampoline page anchor (E/F share one page)
@@ -454,6 +476,20 @@ c_page1_va:         .long 0x00002000
 c_page2_va:         .long 0x00003000
 c_page3_va:         .long 0x00004000
 c_page4_va:         .long 0x00005000
+        ! ---- TSB rows: (VA, ASID_TAG, PTEL), 12 bytes each. The two rows whose
+        ! ---- VA is a link-time label are patched at runtime in setup; their
+        ! ---- placeholders are 0.
+        .balign 4
+_tsb_tab:
+_tsb_row_code:
+        .long 0x00000000, 0x00000000, 0x00000000  ! own code page (patched)
+        .long 0x00003000, 0x00000000, 0x00003069  ! page 2 read-only  -> DPROT_W
+        .long 0x00004000, 0x00000000, 0x000040A9  ! page 3 no-execute -> IPROT
+        .long 0x00005000, 0x00000000, 0x000050C9  ! page 4 super-only -> DPROT_R
+_tsb_row_tramp:
+        .long 0x00000000, 0x00000000, 0x00000000  ! E/F trampoline (patched)
+_tsb_tab_end:
+
 c_page2_pteh:       .long 0x00003000
 c_page3_pteh:       .long 0x00004000
 c_page4_pteh:       .long 0x00005000
@@ -666,7 +702,13 @@ _g_bad_tea:     .long 0x5B              ! fault (before any sub-test runs) from 
         ! for them is recognized.
         ! ================================================================
 _fault_pages:
-        .space 0x8000, 0
+        ! Backing for the mapped/fault pages AND for the TSB at PA 0x10000.
+        !
+        ! THIS PADDING IS LOAD-BEARING. The cosim backs SRAM only within the
+        ! loaded image extent, and the hardware walker reads the TSB by PHYSICAL
+        ! address -- so a TSB placed past the image end reads as nothing, every
+        ! walk silently misses, and there is no fault and no data to say why.
+        .space 0x12000, 0
 
         ! ================================================================
         ! User-mode trampoline page for sub-tests E and F, placed AFTER

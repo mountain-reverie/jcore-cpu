@@ -24,6 +24,10 @@
 !   0  PASS  (branch taken after fault serviced)
 !   1  no exception fired (page 1 was reachable without faulting -- setup bug)
 !   2  FAIL  (fell through the branch -- the handover bug)
+!   3  the delay-slot load was SKIPPED on the restart (r3 kept its sentinel)
+!   4  the handler did not service EXACTLY ONE fault -- 0 means the delay-slot
+!      access never missed, so the scenario was never constructed at all; >1
+!      means the handler failed to make progress
 !
 ! J4 overlay opcodes:
 !   LDC r0,PTEH=0x405E  LDC r0,PTEL=0x406E  LDC r0,ASIDR=0x407E
@@ -39,6 +43,7 @@
 ! globals below use loud sentinels (_g_exp_* = 0xFFFFFFFF, _g_bad_* = small
 ! distinct values) so an early exit still names its cause.
 #include "sim_instr.h"
+#include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
 
         .section .vect
@@ -73,14 +78,33 @@ ENTRY(start)
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
-        ! ---- Map page 0 (VA 0x0000-0x0FFF): identity, W+X+U+C = 0xE8. ----
-        mov     #0, r0
-        .word   0x405E                  ! LDC r0, PTEH  (VPN=0, ASID=0)
-        mov.l   p_ptel_page0, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
+        ! ---- Configure the TSB: base 0x00004000, TSB_SIZE_LOG=6 (64 sets x
+        ! ---- 32 bytes = 0x4000..0x47FF), HASH_SHIFT=6, HASH_MODE=1. Clear of
+        ! ---- page 0 and the fault page at 0x1000. Zero-filled image, so the
+        ! ---- fill below is the only thing that populates it. ----
+        mov.l   p_tsbbr_addr, r0
+        mov.l   p_tsbbr_val, r1
+        mov.l   r1, @r0
+        mov.l   p_tsbcfg_addr, r0
+        mov.l   p_tsbcfg_val, r1
+        mov.l   r1, @r0
+
+        ! ---- Map page 0 (VA 0x0000-0x0FFF) identity, W|X|C|G|V, U=0 (SMEP).
+        ! ---- This used to be an LDTLB; it is now a TSB row the walker pulls in
+        ! ---- on demand -- I-side on the first fetch after AT goes on, D-side on
+        ! ---- the first literal load. GLOBAL, so no ASID change perturbs it.
+        ! ---- The set address is asked of the P4 slot helper (0xFF000048). ----
+        mov.l   p_tsbslot_reg, r12
+        mov     #0, r6                  ! VA 0x00000000
+        mov     #0, r7                  ! ASID 0
+        mov     r7, r0
         .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        nop
+        nop
+        mov.l   p_ptel_page0, r8
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! r10 = 32-byte-aligned SET address
+        tsb_fill r10, r6, r7, r8
 
         ! ---- Enable AT (MMUCR.AT=1 at P4 0xFF000010). ----
         mov.l   p_mmucr, r0
@@ -90,7 +114,13 @@ ENTRY(start)
         ! ==============================================================
         ! The faulting delay slot.
         ! ==============================================================
-        mov     #1, r9                  ! sentinel: no-exception = result 1
+        ! NOTE the `bra` below is UNCONDITIONAL, so both the faulting and the
+        ! non-faulting case land on taken_target. Result 1 therefore cannot be
+        ! reached by falling through, and until this was fixed nothing in the
+        ! guard checked that the delay-slot access faulted AT ALL: pointing it
+        ! at a mapped VA still passed (measured, on the pre-migration file too).
+        ! The handler now counts its entries and taken_target requires exactly
+        ! one, which is a positive witness rather than an absence.
         mov     #0x5A, r3               ! sentinel: delay-slot load must overwrite this with 0
         mov.l   c_page1_va, r2          ! r2 = 0x1000 (page 1, unmapped)
         bra     taken_target
@@ -109,8 +139,20 @@ ENTRY(taken_target)
         mov     #0x5A, r0
         cmp/eq  r0, r3
         bt      _dslot_skipped
+        ! Exactly one fault must have been serviced. Zero means the delay-slot
+        ! access never missed (the scenario was not constructed); more than one
+        ! means the handler failed to make progress.
+        mov.l   c_fcount_p, r0
+        mov.l   @r0, r0
+        mov     #1, r1
+        cmp/eq  r1, r0
+        bf      _bad_fault_count
         mov     #0, r9
         bra     _done
+        nop
+_bad_fault_count:
+        mov     #4, r9
+        bra     _fail
         nop
 _dslot_skipped:
         mov     #3, r9
@@ -124,8 +166,14 @@ _dslot_skipped:
 p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_load - 0x400
 p_mmucr:        .long 0xFF000010
-p_ptel_page0:   .long 0x000000C8        ! W|X|C (U cleared: kernel code, SMEP)
+p_ptel_page0:   .long 0x000000CD        ! identity PPN 0 | W|X|C|G|V, U=0
+p_tsbbr_addr:   .long 0xFF000014
+p_tsbbr_val:    .long 0x00004006        ! base=0x00004000, TSB_SIZE_LOG=6
+p_tsbcfg_addr:  .long 0xFF000018
+p_tsbcfg_val:   .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
+p_tsbslot_reg:  .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
 c_page1_va:     .long 0x00001000
+c_fcount_p:     .long _g_fault_count
 
 #endif  ! CONFIG_PRIV_ARCH
 
@@ -157,26 +205,48 @@ p_test_result_pass:  .long   TEST_PASS_MAGIC
         ! ================================================================
         .balign 4
 _v_load:                                ! = VBR + 0x400
-        mov.l   Hpteh1, r0
-        .word   0x405E                  ! LDC r0, PTEH  (VPN=1, ASID=0)
-        mov.l   Hptel1, r0
-        .word   0x406E                  ! LDC r0, PTEL  = 0xE8 (full access)
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        ! The handler no longer ends in LDTLB. It writes page 1's TSB ROW and
+        ! RTEs; the restarted access re-walks, hits that row, and the walker
+        ! installs it -- into the DTLB for a data access and the ITLB for a
+        ! fetch, by side. The fault train is unchanged: still exactly one fault
+        ! for page 1's first touch. AT is still ON in here, so the TSB write
+        ! must go through the P1 alias (0x8xxxxxxx), which bypasses the MMU;
+        ! a P0 store would itself fault on the unmapped TSB page.
+        mov.l   Hpteh1, r1              ! r1 = VA 0x00001000 (page 1 base)
+        mov.l   Hslot, r2
+        mov.l   r1, @r2                 ! ask the P4 helper for this VA's set
+        mov.l   @r2, r2
+        mov.l   Hp1, r0
+        or      r0, r2                  ! P1 alias -- untranslated
+        mov.l   Hptel1, r3
+        mov     #0, r0                  ! ASID_TAG = 0
+        tsb_fill r2, r1, r0, r3
+        ! Non-vacuity: count this fault. taken_target requires exactly one.
+        ! The TSB row above is already committed, so this store is ordinary
+        ! P1-alias scratch and cannot perturb the walk.
+        mov.l   Hfcount, r0
+        mov.l   @r0, r1
+        add     #1, r1
+        mov.l   r1, @r0
         rte                             ! PC <- SPC (hardware value)
         nop
 
         .balign 4
 Hpteh1:         .long 0x00001000        ! VPN = 1
-Hptel1:         .long 0x000010E8        ! PA 0x1000 (identity) | W|X|U|C
+Hptel1:         .long 0x000010E9        ! PA 0x1000 (identity) | W|X|U|C|V
+Hslot:          .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
+Hp1:            .long 0x80000000        ! P1 alias -- TSB writes bypass the MMU
+Hfcount:        .long 0x80000000 + _g_fault_count
 
         ! ================================================================
         ! Fault-page padding: VA 0x1000-0x1FFF (page 1, zero-filled so the
         ! bus does not fault before the TLB exception fires).
         ! ================================================================
         .balign 4
+_g_fault_count: .long 0
+
+        .balign 4
 _fault_pages:
-        .space 0x1000, 0
+        .space 0x4000, 0
 
 #endif  ! CONFIG_PRIV_ARCH

@@ -50,6 +50,7 @@
 ! globals below use loud sentinels (_g_exp_* = 0xFFFFFFFF, _g_bad_* = small
 ! distinct values) so an early exit still names its cause.
 #include "sim_instr.h"
+#include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
 
         .section .vect
@@ -86,14 +87,33 @@ ENTRY(start)
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
-        ! ---- Map page 0 (VA 0x0000-0x0FFF): identity, W+X+U+C = 0xE8. ----
-        mov     #0, r0
-        .word   0x405E                  ! LDC r0, PTEH  (VPN=0, ASID=0)
-        mov.l   p_ptel_page0, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
+        ! ---- Configure the TSB: base 0x00004000, TSB_SIZE_LOG=6 (64 sets x
+        ! ---- 32 bytes = 0x4000..0x47FF), HASH_SHIFT=6, HASH_MODE=1. Clear of
+        ! ---- page 0 and the fault page at 0x1000. Zero-filled image, so the
+        ! ---- fill below is the only thing that populates it. ----
+        mov.l   p_tsbbr_addr, r0
+        mov.l   p_tsbbr_val, r1
+        mov.l   r1, @r0
+        mov.l   p_tsbcfg_addr, r0
+        mov.l   p_tsbcfg_val, r1
+        mov.l   r1, @r0
+
+        ! ---- Map page 0 (VA 0x0000-0x0FFF) identity, W|X|C|G|V, U=0 (SMEP).
+        ! ---- Was an LDTLB; now a TSB row the walker pulls in on demand,
+        ! ---- I-side on the first fetch after AT goes on and D-side on the
+        ! ---- first literal load. GLOBAL. Set address from the P4 slot helper
+        ! ---- (0xFF000048); nothing hand-computes the hash. ----
+        mov.l   p_tsbslot_reg, r12
+        mov     #0, r6                  ! VA 0x00000000
+        mov     #0, r7                  ! ASID 0
+        mov     r7, r0
         .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        nop
+        nop
+        mov.l   p_ptel_page0, r8
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! r10 = 32-byte-aligned SET address
+        tsb_fill r10, r6, r7, r8
 
         ! ---- Page 1 (VA 0x1000-0x1FFF) is left UNMAPPED: the delay-slot fetch
         !      at 0x1000 misses -> IMISS. (X=0 no-execute does NOT fault in
@@ -123,7 +143,12 @@ ENTRY(start)
 p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_imiss - 0x400
 p_mmucr:        .long 0xFF000010
-p_ptel_page0:   .long 0x000000C8        ! W|X|C (U cleared: kernel code, SMEP)
+p_ptel_page0:   .long 0x000000CD        ! identity PPN 0 | W|X|C|G|V, U=0
+p_tsbbr_addr:   .long 0xFF000014
+p_tsbbr_val:    .long 0x00004006        ! base=0x00004000, TSB_SIZE_LOG=6
+p_tsbcfg_addr:  .long 0xFF000018
+p_tsbcfg_val:   .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
+p_tsbslot_reg:  .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
 p_pteh_page1:   .long 0x00001000        ! VPN = 1
 p_ptel_nx:      .long 0x000000A8        ! W|U|C  (X=0 -> IPROT on fetch)
 p_pio:          .long 0xABCD0000        ! PIO/LED marker port
@@ -166,19 +191,29 @@ _v_imiss:                               ! = VBR + 0x400
         .word   0x4019                  ! shlr8 r0
         mov     r0, r13
         mov.b   r13, @r14               ! emit SPC[15:8]: 0x10 => 0x10xx, 0x0F => 0x0Fxx
-        mov.l   Hpteh1, r0
-        .word   0x405E                  ! LDC r0, PTEH  (VPN=1, ASID=0)
-        mov.l   Hptel1, r0
-        .word   0x406E                  ! LDC r0, PTEL  = 0xE8 (full access)
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        ! The handler no longer ends in an LDTLB. It writes page 1's TSB ROW;
+        ! the restarted FETCH re-walks, hits that row, and the walker installs
+        ! it into the ITLB (by side -- this is an I-side miss). The fault train
+        ! is unchanged: one fault for page 1's first touch. AT is still ON in
+        ! here, so the TSB write goes through the P1 alias (0x8xxxxxxx), which
+        ! bypasses the MMU; a P0 store would itself fault on the unmapped TSB.
+        mov.l   Hpteh1, r1              ! r1 = VA 0x00001000 (page 1 base)
+        mov.l   Hslot, r2
+        mov.l   r1, @r2                 ! ask the P4 helper for this VA's set
+        mov.l   @r2, r2
+        mov.l   Hp1, r0
+        or      r0, r2                  ! P1 alias -- untranslated
+        mov.l   Hptel1, r3
+        mov     #0, r0                  ! ASID_TAG = 0
+        tsb_fill r2, r1, r0, r3
         rte                             ! PC <- SPC (hardware value)
         nop
 
         .balign 4
 Hpteh1:         .long 0x00001000        ! VPN = 1
-Hptel1:         .long 0x000010C8        ! PA 0x1000 (identity) | W|X|C (kernel-fetched delay slot, SMEP)
+Hptel1:         .long 0x000010C9        ! PA 0x1000 (identity) | W|X|C|V (kernel-fetched delay slot, SMEP)
+Hslot:          .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
+Hp1:            .long 0x80000000        ! P1 alias -- TSB writes bypass the MMU
 
         ! CORRECT landing: the branch target, on PAGE 0 (always mapped). Reached
         ! only if the branch is (re-)taken after the delay-slot fault is serviced.

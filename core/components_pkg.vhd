@@ -154,7 +154,12 @@ package cpu2j0_components_pack is
     stale     => '0'
   );
 
-  type tlb_array_t is array(0 to 31) of tlb_entry_t;
+  -- Unconstrained TLB storage array. core/tlb.vhd constrains it from its
+  -- `entries` generic, so the ITLB and DTLB can be sized independently.
+
+  type tlb_ram_t is array(natural range <>) of tlb_entry_t;
+
+  subtype tlb_array_t is tlb_ram_t(0 to 31);
 
   -- multi_hit: S-I5 -- >1 valid TLB entries matched the same VPN+(global|ASID)
   -- on a single lookup (duplicate install, kernel bug). Non-recoverable: takes

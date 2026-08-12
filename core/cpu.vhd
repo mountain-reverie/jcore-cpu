@@ -196,8 +196,11 @@ architecture stru of cpu is
   signal walk_side_i    : std_logic;
   signal walk_cnt_walks : unsigned(15 downto 0);
   signal walk_cnt_hits  : unsigned(15 downto 0);
-  -- TLB install-port muxes: LDTLB (decoder) or hardware walker.
-  signal tlb_wr_any  : std_logic;
+  -- TLB install-port muxes: LDTLB (decoder) or hardware walker. The write
+  -- enable is PER ARRAY since the split (LDTLB writes both, a walker install
+  -- only the faulting side); the data/VPN muxes are shared by both arrays.
+  signal itlb_wr     : std_logic;
+  signal dtlb_wr     : std_logic;
   signal tlb_ptel_mx : std_logic_vector(31 downto 0);
   signal tlb_vpn_mx  : std_logic_vector(19 downto 0);
   -- Dynamic delay-slot flag (decode->datapath): lets a delay-slot D-side TLB
@@ -869,8 +872,8 @@ begin
                                                  (seg_decode(d_va_32) = SEG_P0 or seg_decode(d_va_32) = SEG_P3) else
                        '0';
 
-    -- TLB install port: LDTLB (decoder) or the hardware walker.
-    tlb_wr_any  <= sr.tlb_wr or walk_install;
+    -- TLB install port: LDTLB (decoder) or the hardware walker. The per-array
+    -- write enables are derived at the instantiations below.
     tlb_ptel_mx <= walk_ptel when walk_install = '1' else
                    dp_mmu_regs.ptel;
     -- On a walker install PTEH has NOT been written (no exception was taken),
@@ -882,36 +885,76 @@ begin
     tlb_vpn_mx <= walk_va_r(31 downto 12) when walk_install = '1' else
                   dp_mmu_regs.pteh(31 downto 12);
 
-    u_tlb : entity work.tlb
+    -- Split ITLB/DTLB (S1). Two independent single-port arrays replace the one
+    -- dual-ported 32-entry block, so each can be placed beside the cache it
+    -- serves instead of straddling both. Behaviour per array is identical to
+    -- the old shared block; the only cross-array rules are the install routing
+    -- below and the fact that multi-hit is PER ARRAY (the same page resident in
+    -- both is not a multi-hit).
+    --
+    -- INSTALL ROUTING. A HARDWARE-WALKER install goes to the faulting side only
+    -- -- walk_side_i names it, and installing into the other array would be
+    -- pure pollution. A SOFTWARE install (LDTLB, sr.tlb_wr) writes BOTH: it is
+    -- rare, the ISA gives no side selector, and software that LDTLBs a page
+    -- then both fetches and loads from it must keep working.
+    itlb_wr <= sr.tlb_wr or (walk_install and walk_side_i);
+    dtlb_wr <= sr.tlb_wr or (walk_install and not walk_side_i);
+
+    u_itlb : entity work.tlb
+      generic map (
+        entries   => 32,
+        side_is_i => true
+      )
       port map (
-        clk         => clk,
-        i_va        => i_va_32,
-        i_pa_tag    => tlb_i_pa,
-        i_pa12      => tlb_i_pa12,
-        i_page_mask => tlb_i_page_mask,
-        i_c         => tlb_i_c,
-        i_hit       => tlb_i_hit,
-        i_prot      => tlb_i_prot,
-        i_multihit  => tlb_i_multihit,
-        d_va        => d_va_32,
-        d_we        => sig_db_o.wr,
-        d_pa_tag    => tlb_d_pa,
-        d_pa12      => tlb_d_pa12,
-        d_page_mask => tlb_d_page_mask,
-        d_c         => tlb_d_c,
-        d_hit       => tlb_d_hit,
-        d_prot      => tlb_d_prot,
-        d_multihit  => tlb_d_multihit,
-        asid        => dp_mmu_regs.asidr(15 downto 0),
-        md          => dp_sr.md,
-        at          => dp_mmu_regs.mmucr(0),
-        tlb_wr      => tlb_wr_any,
-        pteh_vpn    => tlb_vpn_mx,
+        clk => clk,
+        va  => i_va_32,
+        -- An instruction fetch is never a store, so the W-permission check the
+        -- D side makes on `we` has no I-side counterpart (the I side checks X /
+        -- SMEP instead; see tlb.vhd's lookup process).
+        we        => '0',
+        pa_tag    => tlb_i_pa,
+        pa12      => tlb_i_pa12,
+        page_mask => tlb_i_page_mask,
+        c         => tlb_i_c,
+        hit       => tlb_i_hit,
+        prot      => tlb_i_prot,
+        multihit  => tlb_i_multihit,
+        asid      => dp_mmu_regs.asidr(15 downto 0),
+        md        => dp_sr.md,
+        at        => dp_mmu_regs.mmucr(0),
+        tlb_wr    => itlb_wr,
+        pteh_vpn  => tlb_vpn_mx,
         -- Install data, not the CSR: LDTLB.RN Rm drives this from XBUS so it
         -- does not need a separate slot to stage PTEL := Rm first.
         ptel  => tlb_ptel_mx,
         asidr => dp_mmu_regs.asidr(15 downto 0),
         ti    => dp_mmu_regs.mmucr(2)
+      );
+
+    u_dtlb : entity work.tlb
+      generic map (
+        entries   => 32,
+        side_is_i => false
+      )
+      port map (
+        clk       => clk,
+        va        => d_va_32,
+        we        => sig_db_o.wr,
+        pa_tag    => tlb_d_pa,
+        pa12      => tlb_d_pa12,
+        page_mask => tlb_d_page_mask,
+        c         => tlb_d_c,
+        hit       => tlb_d_hit,
+        prot      => tlb_d_prot,
+        multihit  => tlb_d_multihit,
+        asid      => dp_mmu_regs.asidr(15 downto 0),
+        md        => dp_sr.md,
+        at        => dp_mmu_regs.mmucr(0),
+        tlb_wr    => dtlb_wr,
+        pteh_vpn  => tlb_vpn_mx,
+        ptel      => tlb_ptel_mx,
+        asidr     => dp_mmu_regs.asidr(15 downto 0),
+        ti        => dp_mmu_regs.mmucr(2)
       );
 
     mmu_o.i_pa_tag <= tlb_i_pa;

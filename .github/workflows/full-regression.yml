@@ -255,7 +255,7 @@ jobs:
           # priv-arch + MMU guards run on the default cpu_tb top.
           for t in exctest trapatest pm3vec pm3guard privmode banktest excguard \
                    rteredir mmureg mmuguard mmuxlate mmurte mmustore mmuimiss \
-                   mmusr mmufault mmufsr mmuldtlbr mmutsb mmuwalkhit mmuwalkmiss mmuwalkstale mmuwalktorn mmuwalkdside mmuwalkiside mmuwalkorder mmutsbslot mmuwalkasid mmutsbvictim mmuwalkway1 mmup4alias mmuidx mmustres mmustr2 \
+                   mmusr mmufault mmufsr mmuldtlbr mmutsb mmuwalkhit mmuwalkmiss mmuwalkstale mmuwalktorn mmuwalkdside mmuwalkiside mmusplit mmuwalkorder mmutsbslot mmuwalkasid mmutsbvictim mmuwalkway1 mmup4alias mmuidx mmustres mmustr2 \
                    mmustale mmuasid mmuasidsh mmuvecsplit mmurun mmubench mmubenchi mmuirun mmuainc mmuainc2 mmusmep; do
             run_guard "$t"
           done

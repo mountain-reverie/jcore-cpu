@@ -9,9 +9,11 @@
 ! locality the split was made for. Nothing else in the suite can tell the two
 ! apart. This guard can.
 !
-! THE OBSERVABLE. A HARDWARE-WALKER install is the only side-selective write
-! into the TLBs now that LDTLB is retired, and cpu.vhd routes it by
-! walk_side_i, so every install is side-selective. So: make one side fault a VA in, then touch the SAME VA from the other
+! THE OBSERVABLE. Every TLB entry this guard installs comes from the HARDWARE
+! WALKER, and cpu.vhd routes a walker install by walk_side_i, so every install
+! reaches exactly ONE side's array. (The software install path wrote BOTH, which
+! is why this guard could not be built on it.)
+! So: make one side fault a VA in, then touch the SAME VA from the other
 ! side and require that the other side ALSO has to walk. Under a shared array
 ! the second access hits and no walk occurs. The walker's own cnt_walks counter
 ! (0xFF000054[31:16]) is the witness, so the check is a positive count, never an

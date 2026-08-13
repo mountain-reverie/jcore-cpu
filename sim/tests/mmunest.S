@@ -6,7 +6,7 @@
 ! Mechanism under test (core/cpu.vhd, tlb_exc process): every TLB-exception
 ! dispatch arm is gated on `dp_sr.rb = '0'` (I-side ~line 493, D-side ~line
 ! 509). SR.RB=1 is this design's "in a handler" indicator (entry sets RB=1,
-! LDTLB.R/RTE restores it). So a miss/prot condition that occurs while RB=1 is
+! RTE restores it). So a miss/prot condition that occurs while RB=1 is
 ! deliberately SUPPRESSED -- no second exception entry re-saves SSR<-SR over
 ! the first exception's still-live context. (Handlers reach memory through P1
 ! aliases, which the segment decode leaves untranslated regardless of AT; this

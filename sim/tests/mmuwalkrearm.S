@@ -24,12 +24,13 @@
 ! denied.
 !
 ! ---- why this needed a purpose-built guard ---------------------------------
-! The defect is SOFTWARE-INVISIBLE while LDTLB still exists. A denied walk just
-! falls through to the software miss handler, which installs the entry itself:
-! same architectural result, more cycles. So no guard that asserts "the right
-! value came back" can ever see it, and indeed the entire 103-guard suite
-! passed identically with the fix reverted. It becomes a permanent fault loop
-! only once the software LDTLB path is retired.
+! The defect was SOFTWARE-INVISIBLE for as long as guards still installed TLB
+! entries themselves: a denied walk simply fell through to a software miss
+! handler that ended in LDTLB.RN -- same architectural result, more cycles. So
+! no guard that asserts "the right value came back" could ever see it, and
+! indeed the entire 103-guard suite passed identically with the fix reverted.
+! Now that the guards install via the walker alone, a denied walk that is never
+! re-armed is a permanent fault loop rather than a slow path.
 !
 ! What must be asserted is therefore not the VALUE but WHO RESOLVED IT: the
 ! re-armed D-side miss must be resolved BY THE WALKER, not by a software fault.

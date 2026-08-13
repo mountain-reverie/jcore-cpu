@@ -109,15 +109,25 @@
 ! If you are extending walker ordering, change the assertion together with the
 ! gate; if you tripped it, read the comment above p_walk_order_assert.
 !
-! ---- FINDING recorded here so it is not rediscovered -----------------------
-! At the moment this guard reaches the vector the counters read 1 walk /
-! 0 hits: the failed I-side walk POISONS the D-side miss that follows it.
-! tlb_walk.vhd's `tried' one-shot clears only when `req' falls, and `req' is
-! the OR of both sides' miss terms, so it stays high across the I->D handover
-! and the D-side miss never gets a walk of its own. It is fail-OPEN (the
-! software handler resolves it, exactly as before the walker existed), so it is
-! a performance defect and not a correctness one -- which is why this guard
-! does NOT encode 1/0 as an expectation. It asserts only cnt_walks >= 1.
+! ---- HISTORY recorded here so it is not rediscovered -----------------------
+! This guard's I->D handover once exposed a walker defect: the failed I-side
+! walk POISONED the D-side miss that followed it, because tlb_walk.vhd's
+! `tried' one-shot cleared only when `req' fell, and `req' is the OR of both
+! sides' miss terms, so it stayed high across the handover and the D-side miss
+! never got a walk of its own. At the time that was fail-OPEN (the software
+! miss handler resolved it), so it was written off here as a performance
+! defect and this guard deliberately did not encode a counter pattern.
+!
+! That defect is FIXED (commit e6ee313: the one-shot is per-REQUEST, not per-
+! `req'-LEVEL) and LOCKED by `sim/tests/mmuwalkrearm.S', which builds this same
+! handover on purpose and requires the re-armed D-side miss to be resolved BY
+! THE WALKER. Read that header before touching walker re-arm; the behaviour
+! this paragraph used to describe as expected is what mmuwalkrearm now forbids.
+!
+! This guard still asserts only cnt_walks >= 1 -- not because the poisoning is
+! tolerated, but because its subject is fault DISPATCH ORDER, and both of its
+! probed TSB slots are deliberately zeroed, so every walk here fails open by
+! construction and the exact count is not the property under test.
 !
 ! Result codes:
 !   1  no exception at all -- neither side faulted (the scenario did not run)

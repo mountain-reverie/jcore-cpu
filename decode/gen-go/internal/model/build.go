@@ -785,7 +785,4 @@ var csvInstrOrder = []string{
 	"TLB IPROT",
 	"TLB DPROT R",
 	"TLB DPROT W",
-	// Phase-4 T2c: appended at the END so every existing ROM address is
-	// unchanged (addresses are assigned in this list's order).
-	"TLB IREPLAY",
 }

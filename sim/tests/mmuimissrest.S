@@ -133,6 +133,11 @@ ENTRY(start)
         mov     r0, r8
         mov     #0, r7                  ! ASID_TAG = 0
         tsb_fill r10, r2, r7, r8
+        mov.l   p_page_sz, r0
+        add     r0, r2
+        cmp/hs  r3, r2
+        bf      1b
+
         ! ---- Enable AT. ----
         mov.l   p_mmucr, r0
         mov     #1, r1

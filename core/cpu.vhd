@@ -104,6 +104,11 @@ architecture stru of cpu is
   signal tlb_d_page_mask : std_logic_vector(3 downto 0);
   signal tlb_i_c         : std_logic;
   signal tlb_d_c         : std_logic;
+  -- Cacheability actually handed to the D-cache wrapper. Readable internally
+  -- (mmu_o is an out port, and VHDL-93 forbids reading it) so the R1 assert
+  -- below can check it.
+  signal mmu_d_at_i : std_logic;
+  signal mmu_d_c_i  : std_logic;
   -- TLB exception detection outputs (fed to decode and datapath).
   signal tlb_exc_en   : std_logic;
   signal tlb_exc_kind : tlb_exc_kind_t;
@@ -967,8 +972,87 @@ begin
     -- fetch carrying pa_tag=0 and commit a tag+valid for it.
     mmu_o.i_hit    <= tlb_i_hit;
     mmu_o.d_pa_tag <= tlb_d_pa;
-    mmu_o.d_at     <= d_at_translated;
-    mmu_o.d_c      <= tlb_d_c;
+
+    -- TSB COHERENCY POLICY: walker TSB reads are CACHEABLE, decided by region
+    -- decode on the walker's own (physical) address -- never by a TLB lookup.
+    --
+    -- g_dstore_squash replaces db_o.a wholesale with the walker's TSB PHYSICAL
+    -- address during walk_own, but tlb_d_* here is the lookup of d_va_32 =
+    -- sig_db_o.a, which is the core's unrelated (and for an I-side walk, IDLE,
+    -- i.e. VA 0) address. dcache_cacheable_mux computes
+    -- is_cacheable_mmu(db_o.a, d_at, d_c), so leaving d_at/d_c on that lookup
+    -- made the walker's cacheable-vs-bypass routing a function of whether some
+    -- unrelated page happened to be mapped -- measured flipping between the two
+    -- across guards. Whichever way it landed was luck, and the bypass case is
+    -- not coherent with dirty dcache lines holding TSB writes.
+    --
+    -- The fix states the truth about the access: the walker drives a PHYSICAL
+    -- address, so it is by definition untranslated (at='0'), and cacheability
+    -- falls to region decode on the address actually on the bus. Linux writes
+    -- TSB entries with plain cacheable stores through the P1 alias
+    -- (arch/sh/mm/tlb-jcore.c jcore_tsb_write_entry(); TSBBR holds a P1 kernel
+    -- VA -- arch/sh/kernel/head_32.S), and P1 folds to P0 here, so region decode
+    -- returns CACHEABLE: the walker reads through the very cache those stores
+    -- go through. No flush and no uncached mapping is required of the OS, so
+    -- this costs linux@jcore nothing. A TSBBR deliberately placed in P2 still
+    -- decodes uncached, which is also correct.
+    --
+    -- WHY CACHEABLE RATHER THAN ALWAYS-BYPASS. Both are coherent TODAY, and it
+    -- is worth being exact about why, because the obvious argument for
+    -- CACHEABLE is wrong: this D-cache is WRITE-THROUGH, not write-back. Every
+    -- store is pushed out as CACHE_DCMD_WRITESGL_SL (cache/dcache_ccl.vhm) and
+    -- there is no dirty bit or writeback path anywhere under cache/ -- so a TSB
+    -- row can never sit dirty in cache over stale memory, and a bypassing
+    -- walker would in fact still see software's stores. (dcache_cacheable_mux
+    -- .vhd's header comment claiming "write-back" and "dirty-line writeback" is
+    -- simply wrong; it is corrected there.) CACHEABLE is chosen anyway because:
+    --   * it is a statement of what the access IS, not a special case bolted
+    --     onto the mux, so there is nothing to keep in sync;
+    --   * TSB rows are hot and re-probed, so routing them through the cache is
+    --     a latency win rather than a cost;
+    --   * it is the arm that stays correct if the D-cache ever becomes
+    --     write-back. Under always-bypass that change would silently
+    --     reintroduce exactly the stale-PTE corruption this class of bug
+    --     threatens, with no fault and no diagnostic.
+    -- The one thing that is NOT acceptable either way is the previous
+    -- behaviour: a routing decision that varies with an unrelated page's
+    -- mapping. That is what the assert below pins.
+    mmu_d_at_i <= '0' when walk_own = '1' else
+                  d_at_translated;
+    mmu_d_c_i  <= '0' when walk_own = '1' else
+                  tlb_d_c;
+
+    mmu_o.d_at <= mmu_d_at_i;
+    mmu_o.d_c  <= mmu_d_c_i;
+
+    -- R1 REGRESSION LOCK. The routing this enforces is NOT observable from
+    -- software -- the D-cache is write-through, so a bypassing walker and a
+    -- cache-routed walker return the same data and no guard can tell them
+    -- apart (see sim/tests/mmutsbcoh.S). An unobservable invariant needs an
+    -- RTL assert, or the regression is silent. This one fires the moment
+    -- anything routes the walker's cacheability back through the TLB lookup.
+    -- CLOCKED, not concurrent. As a concurrent assert this fires spuriously:
+    -- walk_own is registered and mmu_d_at_i is combinational from it, so on the
+    -- cycle walk_own rises there is a delta in which walk_own is already '1'
+    -- while mmu_d_at_i still carries its pre-edge value. Sampling on the clock
+    -- edge sees only settled values. (Measured -- the concurrent form failed 81
+    -- of 103 guards.)
+    p_r1_assert : process (clk) is
+    begin
+
+      if rising_edge(clk) then
+        if (rst = '0') then
+          assert not (walk_own = '1' and mmu_d_at_i = '1')
+            report "R1: walker TSB access presented to the D-cache as "
+                   & "AT-translated. Its cacheability is then decided by the TLB "
+                   & "lookup of an UNRELATED address (core/cpu.vhd d_va_32), "
+                   & "making cacheable-vs-bypass routing depend on whether some "
+                   & "other page happens to be mapped."
+            severity failure;
+        end if;
+      end if;
+
+    end process p_r1_assert;
 
     -- TLB exception detection: priority I-side > D-side; miss > prot.
     -- tlb_exc_en is combinatorial (no register); it is sampled by decode_core
@@ -1193,6 +1277,8 @@ begin
 
   g_no_mmu : if not PRIV_ARCH generate
     mmu_o           <= NULL_MMU_O;
+    mmu_d_at_i      <= '0';
+    mmu_d_c_i       <= '0';
     tlb_exc_en      <= '0';
     tlb_exc_kind    <= IMISS;
     tlb_exc_pend    <= '0';

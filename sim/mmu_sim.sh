@@ -709,6 +709,15 @@ else
   # on the bus while a younger delay-slot I-fetch misses. Read its header
   # before reshaping it.
   run_guard mmuwalkorderhit "" 100us
+  # TSB COHERENCY (R1). Software writes a TSB row over a different, valid entry
+  # for the same VA with ordinary cacheable stores -- Linux's exact path -- and
+  # the walker must install the row software LAST wrote. Run under BOTH tops on
+  # purpose: only cpu_cache_tb puts a D-cache in the walker's path, and that is
+  # the configuration whose routing R1 was about. Read its header before
+  # reshaping it -- the window between the good store and the test load must
+  # stay free of every cacheable data access, literal-pool loads included.
+  run_guard mmutsbcoh "" 100us
+  run_guard mmutsbcoh cpu_cache_tb 200us
 fi
 
 if [ "$fail" = 0 ]; then echo "==> all guards PASSED"; else echo "==> FAILURES above" >&2; exit 1; fi

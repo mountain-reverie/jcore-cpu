@@ -965,11 +965,13 @@ begin
     mmu_o.i_pa_tag <= tlb_i_pa;
     mmu_o.i_at     <= i_at_translated;
     mmu_o.i_c      <= tlb_i_c;
-    -- Export the I-side hit so the cache can refuse to start a line fill for a
-    -- fetch whose translation is not yet known (ITLB miss being walked). The
-    -- core keeps inst_o.en asserted across that window (dp_inst_i.ack is
-    -- withheld, not the request), so without this the PIPT icache would see a
-    -- fetch carrying pa_tag=0 and commit a tag+valid for it.
+    -- Export the I-side hit so the cache side can refuse to SERVICE a fetch
+    -- whose translation is not yet known (ITLB miss being walked). The core
+    -- keeps inst_o.en asserted across that window (dp_inst_i.ack is withheld,
+    -- not the request). Such a fetch never reaches the icache -- with at='1'
+    -- and c undefined it routes uncacheable -- it reaches the UNCACHED BYPASS,
+    -- which would read the raw untranslated VA off the bus and ack the fetch
+    -- mid-walk. See cache/icache_cacheable_mux.vhd.
     mmu_o.i_hit    <= tlb_i_hit;
     mmu_o.d_pa_tag <= tlb_d_pa;
 

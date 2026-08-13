@@ -50,12 +50,17 @@ begin
   -- a_mmu.c are both undefined, and the core deliberately keeps inst_o.en
   -- asserted across the whole walk (core/cpu.vhd withholds dp_inst_i.ack, not
   -- the request) so the fetch replays against the installed entry afterwards.
-  -- That fetch must not be allowed to reach either the icache or the bypass:
-  -- the PIPT icache commits a tag and a valid bit for it at the START of the
-  -- resulting line fill (icache_ccl MISS1) and nothing ever invalidates a line
-  -- whose fill is superseded, so a later fetch can hit that line and execute
-  -- whatever the data RAM holds -- silently, with no exception taken. Hold the
-  -- fetch out entirely until its translation exists.
+  -- The half that actually matters is the BYPASS. `cacheable` above is
+  -- is_cacheable_mmu(.., a_mmu.at, a_mmu.c); on an ITLB miss at='1' and c is
+  -- undefined, and the untranslated fetch is routed uncacheable -- so it never
+  -- reaches the icache in the first place, and no line fill and no tag commit
+  -- is at stake. It reaches the BYPASS, which happily issues a bus read for the
+  -- raw, UNTRANSLATED VA and acks the fetch with whatever came back. The core
+  -- is mid-walk and expects no ack at all; it gets one, carrying data from an
+  -- address that was never translated. Hold the fetch out of BOTH arms until
+  -- its translation exists -- gating only the bypass would leave a
+  -- cacheable-looking miss free to do the same thing the day the routing
+  -- changes, and gating both is the same one signal.
   translated <= (a_mmu.at = '0') or (a_mmu.hit = '1');
 
   g_ibus_o <= ibus_o when translated else

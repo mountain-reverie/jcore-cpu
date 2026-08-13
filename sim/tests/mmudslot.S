@@ -32,7 +32,7 @@
 !
 ! J4 overlay opcodes:
 !   LDC r0,PTEH=0x405E  LDC r0,PTEL=0x406E  LDC r0,ASIDR=0x407E
-!   LDTLB=0x0038        LDC r0,VBR=0x402E
+!   LDC r0,VBR=0x402E
 
 !
 ! ---- _fail integrity net ----

@@ -61,7 +61,7 @@
 !
 ! J4 overlay opcodes:
 !   LDC r0,PTEH=0x405E  LDC r0,PTEL=0x406E  LDC r0,ASIDR=0x407E
-!   LDTLB=0x0038        LDC r0,VBR=0x402E
+!   LDC r0,VBR=0x402E
 !   STC EXPEVT,r0=0x0052
 !   STC SPC,r0=0x0042   LDC r0,SPC=0x404E
 
@@ -659,7 +659,7 @@ _h_resume:
         mov.l   @r0, r0               ! r0 = resume label address
         ! Force return to supervisor (SSR.MD=1): user-mode sub-tests (E/F)
         ! fault with SSR=user SR; without this the RTE resumes in user mode and
-        ! the next sub-test's privileged LDC/LDTLB traps. MD bit = 0x40000000.
+        ! the next sub-test's privileged LDC traps. MD bit = 0x40000000.
         .word   0x0132                 ! STC SSR, r1
         mov.l   Pmd_bit, r2
         or      r2, r1

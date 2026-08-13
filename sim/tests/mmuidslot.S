@@ -20,7 +20,8 @@
 !
 ! HARNESS REQUIREMENTS (learned the hard way):
 !  * MUST run with the J4 overlay decoder active (via sim/mmu_sim.sh, or a manual
-!    `make -C decode generate-j4`). A base-decoder run makes LDTLB/PTEH no-ops ->
+!    `make -C decode generate-j4`). A base-decoder run makes the MMU control
+!    register ops (LDC PTEH/PTEL/ASIDR) no-ops ->
 !    AT never enables -> no fault.
 !  * MUST keep SR.RB=0: the I-side TLB fault path is gated on dp_sr.rb='0'
 !    (core/cpu.vhd). With RB=1 (reset default) I-fetches bypass the TLB.
@@ -38,7 +39,7 @@
 !
 ! J4 overlay opcodes:
 !   LDC r0,PTEH=0x405E  LDC r0,PTEL=0x406E  LDC r0,ASIDR=0x407E
-!   LDTLB=0x0038        LDC r0,VBR=0x402E
+!   LDC r0,VBR=0x402E
 
 !
 ! ---- _fail integrity net ----

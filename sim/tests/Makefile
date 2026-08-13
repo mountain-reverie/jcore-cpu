@@ -348,6 +348,7 @@ mmuwalkstale.elf: mmuwalkstale.o
 mmuwalktorn.elf: mmuwalktorn.o
 mmuwalkdside.elf: mmuwalkdside.o
 mmuwalkorder.elf: mmuwalkorder.o
+mmuwalkrearm.elf: mmuwalkrearm.o
 mmutsbslot.elf: mmutsbslot.o
 mmuwalkasid.elf: mmuwalkasid.o
 mmutsbvictim.elf: mmutsbvictim.o

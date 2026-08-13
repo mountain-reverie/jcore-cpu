@@ -337,7 +337,19 @@ jobs:
           #                    otherwise fires p_walk_order_assert only in
           #                    m8_dsdslot_0, by accident.
           run_guard mmuwalkorderhit "" 100us
-          #   mmutsbcoh        TSB COHERENCY (R1). Software overwrites a TSB row
+          #   mmuwalkrearm     REGRESSION LOCK for the walker's per-REQUEST
+          #                    one-shot (e6ee313, core/tlb_walk.vhd). One
+          #                    continuous `req' level spans a younger I-side
+          #                    fetch miss that gives up and the OLDER
+          #                    instruction's D-side miss; keying `tried' on the
+          #                    level denied that second miss a walk. Invisible
+          #                    while LDTLB exists, so the guard asserts WHO
+          #                    resolved the access: with the fix the D side is
+          #                    walked and installed and the only surviving
+          #                    fault is the younger IMISS. Reverting
+          #                    core/tlb_walk.vhd to e6ee313^ gives Result=2.
+          run_guard mmuwalkrearm "" 100us
+          #   mmutsbcoh       TSB COHERENCY (R1). Software overwrites a TSB row
           #                    that already held a different, valid entry for the
           #                    same VA, using ordinary cacheable stores -- Linux's
           #                    exact jcore_tsb_write_entry() path -- and the walker

@@ -32,8 +32,10 @@ package cache_pack is
     c      : std_logic; -- PTE C-bit (cacheable); meaningful only when at='1'
     -- '1' iff the TLB lookup for THIS access hit. Meaningful only when at='1'.
     -- pa_tag/c are undefined on a miss, so a fetch presented with at='1' and
-    -- hit='0' carries no translation and must not be allowed to start a cache
-    -- line fill (see icache_cacheable_mux).
+    -- hit='0' carries no translation and must not be SERVICED at all -- in
+    -- particular not by the uncached bypass, which is where such a fetch
+    -- actually lands (see icache_cacheable_mux). I side only; the D side has
+    -- no equivalent hold-off and its producers tie this '1'.
     hit : std_logic;
   end record mmu_cache_i_t;
 

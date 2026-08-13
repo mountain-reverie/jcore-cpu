@@ -65,8 +65,7 @@
 !   TSBPTR/ASIDR     0xFF00001C / 0xFF000038   (read-only P4 aliases)
 !
 ! Overlay .word encodings (assembler does not know these J4 forms):
-!   LDC r0,ASIDR  =0x407E   LDC r0,PTEL =0x406E    LDC r3,PTEL =0x436E
-!   LDC r0,VBR    =0x402E   LDTLB.RN     =0x0078
+!   LDC r0,ASIDR  =0x407E   LDC r0,VBR   =0x402E
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
@@ -355,35 +354,39 @@ _v_store:                               ! _vbase + 0x440  (DMISS_W)
         bra     _h_common
         nop
 
-        ! ---- §4.1 hot path (bank-1 scratch; AT stays ON). ----
+        ! ---- TLB-miss handler (bank-1 scratch; AT stays ON). ----
+        !
+        ! WALKER-ONLY INSTALL (L2 of "retire LDTLB"). The §4.1 SOFTWARE FAST
+        ! PATH THAT USED TO SIT HERE IS DELETED, and not merely ported: it was
+        ! a TSB probe (compare TSBPTR's tag_hi/tag_lo against PTEH/ASIDR, then
+        ! LDTLB.RN the TTE) and the HARDWARE walker now does exactly that,
+        ! before any exception is raised. A valid matching TSB row is therefore
+        ! resolved without the handler ever running, so the fast path had
+        ! become unreachable by construction -- keeping a ported copy would
+        ! have been dead code that looked like coverage.
+        !
+        ! What remains is the case the hardware walker CANNOT serve: no valid
+        ! row for this VA. The handler calls the C walker, which fills the page
+        ! tables and writes the TSB row, and then returns with a plain RTE. The
+        ! faulting access retries, misses again, and this time the hardware
+        ! walker finds the freshly-written row and installs it.
+        !
+        ! NOTE (this is why an earlier attempt at this migration was reverted):
+        ! that retry only works because the walker's give-up is per-REQUEST and
+        ! not per-req-LEVEL -- fixed in e6ee313 and locked by mmuwalkrearm.
+        ! With the older one-shot, an I-side give-up blocked the D-side miss
+        ! queued behind it, the row was never installed, and the access faulted
+        ! forever.
 _h_common:
-        ! M8_FCNT++ -- placed BEFORE the fast/slow split so it counts every
-        ! fault regardless of which path services it. r4/r5 are bank-1 scratch
-        ! here (hardware sets RB=1 on exception entry) and the fast path below
-        ! only uses r0-r3, so clobbering them is safe; _h_slow reloads r4-r7
-        ! itself before the walker call.
+        ! M8_FCNT++ -- every fault that reaches the handler is counted; cases
+        ! assert on this to prove a fault really fired (see the _m8_flush note).
         mov.l   H_fcnt, r4
         mov.l   @r4, r5
         add     #1, r5
         mov.l   r5, @r4
-        mov.l   H_tsbptr_a, r0
-        mov.l   @r0, r0                 ! TSBPTR (P4 alias)
-        mov.l   @r0+, r1                ! tag_hi (expected VPN)
-        mov.l   H_pteh_a, r2
-        mov.l   @r2, r2                 ! PTEH (P4 alias)
-        cmp/eq  r1, r2
-        bf      _h_slow
-        mov.l   @r0+, r1                ! tag_lo (expected ASID_TAG)
-        mov.l   H_asidr_a, r2
-        mov.l   @r2, r2                 ! ASIDR (P4 alias)
-        cmp/eq  r1, r2
-        bf      _h_slow
-        mov.l   @r0, r3                 ! TTE Data (PTEL image)
-        .word   0x436E                  ! LDC r3, PTEL
-        .word   0x0078                  ! LDTLB.RN  (install + return atomically)
 
-        ! ---- Slow path: call the C walker. ----
-_h_slow:
+        ! ---- Call the C walker, then RTE and let the hardware walker install
+        ! ---- from the row it just wrote. ----
         sts.l   pr, @-r15
         mov.l   H_pgd, r4               ! r4 = pgd (P1)
         mov.l   H_pteh_a, r5
@@ -396,8 +399,8 @@ _h_slow:
         tst     r0, r0
         bt      _h_realfault            ! r0==0 -> walker fault
         lds.l   @r15+, pr
-        .word   0x406E                  ! LDC r0, PTEL
-        .word   0x0078                  ! LDTLB.RN
+        rte
+        nop
 
 _h_realfault:
         lds.l   @r15+, pr
@@ -418,5 +421,4 @@ H_mmucr:  .long 0xFF000010
 H_result: .long TEST_RESULT_ADDRESS
 H_pteh_a:   .long 0xFF000000
 H_tsbptr_a: .long 0xFF00001C
-H_asidr_a:  .long 0xFF000038
 #endif

@@ -1261,7 +1261,7 @@ end generate;
             this.mmu.tea                := tlb_fault_va;
             -- PTEH captures the 4 KB-granular VPN on a miss: VA[31:12]. 4 KB is
             -- the finest supported page size (PageMask 0); the actual page size
-            -- is unknown at miss time and is resolved by software at LDTLB, which
+            -- is unknown at miss time and is resolved by the walker's install, which
             -- masks coarser if needed. A coarser capture (e.g. 16 KB, VA[31:14])
             -- aliases pages differing only in VA[13:12], so the walker installs
             -- the wrong page and the access re-faults forever; the TSB tag match
@@ -1288,7 +1288,7 @@ end generate;
             -- tlb_exc_is_d gates the xbus=PC substitution to the D-fault entry;
             -- I-fetch faults (EXPEVT 0x040 IMISS / 0x0A0 IPROT) keep the live PC.
             -- The D-fault entry slot reads tlb_exc_pc via SEL_TLBPC and subtracts
-            -- alu_y=4, so SPC = tlb_exc_pc - 4. The resume (LDTLB.R/RTE) re-enters
+            -- alu_y=4, so SPC = tlb_exc_pc - 4. The resume (RTE) re-enters
             -- exactly AT SPC -- NOT one slot ahead, as earlier revisions of this
             -- comment assumed; that mistaken belief was one of the two compounding
             -- -2 terms that put the D-side restart four bytes early. Captured for
@@ -1309,7 +1309,7 @@ end generate;
             -- MEASURED from cosim VCDs (sim/tests/mmupcprobe.S, a single PLAIN
             -- faulting load at 0x104e; and mmurestartpc.S, a single @Rn+ load at
             -- 0x1054):
-            --   * the resume (LDTLB.R/RTE) re-enters exactly AT SPC, NOT one
+            --   * the resume (RTE) re-enters exactly AT SPC, NOT one
             --     slot ahead as the old comment assumed: after the handler,
             --     ex_if_pc went 0x104a, 0x104c, 0x104e, i.e. straight to
             --     SPC = tlb_exc_pc - 4 = 0x104a.

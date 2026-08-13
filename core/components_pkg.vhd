@@ -245,7 +245,7 @@ package cpu2j0_components_pack is
     -- User SR captured at the first D-fault cycle, read onto ybus via SEL_TLBSR
     -- for the D-fault entry's SSR save. The shared SEL_EXCEPTION SSR slot reads
     -- the live SR, which under back-to-back faults can re-evaluate after this
-    -- entry already set RB=1 -> SSR.RB=1 -> the handler's LDTLB.R/RTE resumes in
+    -- entry already set RB=1 -> SSR.RB=1 -> the handler's RTE resumes in
     -- bank 1 and user code reads uninitialised bank-1 registers. The captured
     -- value is stable across the stalled slot's re-evaluations.
     tlb_exc_sr : sr_t;

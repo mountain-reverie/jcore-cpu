@@ -125,7 +125,7 @@ begin
     ) is
     begin
 
-      a_mmu <= (pa_tag => PA_TAG, at => at, c => '1');
+      a_mmu <= (pa_tag => PA_TAG, at => at, c => '1', hit => '1');
       cpu_o <= (en=> '1', a=> a, rd=> not wr, wr=> wr, we=> (others => wr), d=> d);
 
       loop
@@ -156,7 +156,7 @@ begin
     do_acc(x"00010000", '1', PAT, '1');
     -- mis-colored READ: VA index bit12 = 1 (set 1), same pa_tag -> miss -> fills
     -- from a different physical line -> stale (zero), NOT the pattern.
-    a_mmu <= (pa_tag => pa_tag, at => '1', c => '1');
+    a_mmu <= (pa_tag => pa_tag, at => '1', c => '1', hit => '1');
     cpu_o <= (en=> '1', a=> x"00011000", rd=> '1', wr=> '0', we=> "0000", d=> (others => '0'));
 
     loop
@@ -189,7 +189,7 @@ begin
       severity failure;
     -- C-bit override: a TRANSLATED (at='1') write to a cacheable region (P0) but
     -- with PTE C='0' must bypass straight to memory, NOT be cached/held dirty.
-    a_mmu <= (pa_tag => std_logic_vector(to_unsigned(9, 15)), at => '1', c => '0');
+    a_mmu <= (pa_tag => std_logic_vector(to_unsigned(9, 15)), at => '1', c => '0', hit => '1');
     cpu_o <= (en=> '1', a=> x"00012000", rd=> '0', wr=> '1', we=> "1111", d=> x"FEEDFACE");
 
     loop

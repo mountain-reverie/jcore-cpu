@@ -74,7 +74,9 @@ begin
 
     begin
 
-      a_mmu  <= (pa_tag => (others => '0'), at => at, c => c);
+      -- hit => '1': every fetch this tb drives is a TRANSLATED, HIT fetch; it
+      -- exercises cacheability routing, not the untranslated-fetch hold-off.
+      a_mmu  <= (pa_tag => (others => '0'), at => at, c => c, hit => '1');
       ibus_o <= (en => '1', a => a, jp => '0');
 
       loop

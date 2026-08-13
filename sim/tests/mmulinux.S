@@ -14,6 +14,15 @@
 !   - is itself assembled by the WIP J4 gas (binutils-gdb/build-sh2), so it
 !     can use the real MMU mnemonics (stc/ldc pteh,ptel,asidr,tsbptr,vbr;
 !     ldtlb.rn) directly instead of .word-encoding them;
+!
+!     NOTE (retire-LDTLB): this guard is the one DEFERRED case. Every other
+!     hand-written MMU guard now installs TLB entries via a TSB row plus the
+!     hardware walker and contains no LDTLB. This one deliberately does not,
+!     because the LDTLB.RN it exercises is inside the REAL linux@jcore
+!     handlers (ex.S / entry.S / tlb-jcore.c), not in this file -- the
+!     harness only drives them. Every LDTLB mention below describes what
+!     that KERNEL code does today; retiring it is a linux@jcore change that
+!     must land there first, and this guard then follows.
 !   - builds a REAL two-level Linux page table (pgd -> pte, 16 KB pages,
 !     arch/sh/include/asm/pgtable-2level.h layout) instead of the hand-rolled
 !     "PA|flags" PTE image mmurun.S uses, and drives it through MMU_TTB

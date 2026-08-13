@@ -20,8 +20,7 @@
 !   (PTEH 0xFF000000  PTEL 0xFF000004  TSBPTR 0xFF00001C  ASIDR 0xFF000038
 !    are read through their read-only P4 aliases, not STC)
 !   LDC r0,ASIDR  =0x407E   LDC r0,PTEL =0x406E    LDC r3,PTEL =0x436E
-!   LDC r0,VBR    =0x402E   LDTLB.RN     =0x0078
-
+!   LDC r0,VBR    =0x402E
 !
 ! Result codes (r9 at _fail): 1/10/12 leg sentinels, 11 mixed-leg data,
 ! 9 cnt_hits delta (total), 8 walker_calls, 7 unexpected walker fault,
@@ -37,6 +36,26 @@
 ! 0x7F before the store so 0 can never leave through the fail path. Fail-code
 ! globals below use loud sentinels (_g_exp_* = 0xFFFFFFFF, _g_bad_* = small
 ! distinct values) so an early exit still names its cause.
+!
+! ---- walker-install version (retire-LDTLB) --------------------------------
+! This guard's handler no longer installs a TLB entry. There is no software
+! install instruction left; the HARDWARE walker (core/tlb_walk.vhd) is the sole
+! installer. What changed inside the §4.2 handler, and nothing else:
+!
+!   * SLOW PATH: the C walker (tests/tlbwalk.c) already wrote the TSB row for
+!     the faulting VPN -- that was always its job. It now ends in a plain `rte`
+!     instead of `LDC PTEL / LDTLB.RN`. The faulting access re-executes, misses
+!     the TLB again, and this time the hardware walker finds the row the C
+!     walker just wrote and installs it. Same fault -> service -> resume path,
+!     reached the only way it can now be reached.
+!   * FAST PATH (§4.1): retired, and PROVABLY DEAD rather than merely unused. A
+!     TLB-miss exception is delivered only AFTER the hardware walker probed the
+!     TSB and missed, so a matching TSB row cannot be sitting here. The tag
+!     compares are kept and turned into that assertion: a match now writes
+!     TEST_RESULT = 29 instead of installing. STRONGER -- the old code would
+!     have silently installed and hidden a walker that skipped a live row.
+!
+! Everything the guard actually asserts is unchanged.
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:
 
@@ -277,15 +296,20 @@ ENTRY(_after_ifetch3)
         mov.l   k_mixedval, r0 ; mov.l @r0, r2
         mov.l   v_seedData, r3 ; cmp/eq r3, r2 ; mov #11, r9 ; bf _fail
 
-        ! Walker cnt_hits advanced by exactly 4 over the warm + mixed legs,
+        ! Walker cnt_hits advanced by exactly 5 over the warm + mixed legs,
         ! proving the hardware walker -- not software -- served them. Two per
         ! leg since the ITLB/DTLB split: each leg's TI flush empties both
         ! arrays, so the code page is walked once for the I-fetch and once for
         ! the stub's PC-relative literal load (see check 15). It was 2 under the
         ! unified TLB. The mixed leg's translated data page at 0x00102000 is a
-        ! cold TSB MISS and so contributes to walker_calls (check 8), not here.
+        ! cold TSB MISS and so contributes to walker_calls (check 8) -- and,
+        ! since retire-LDTLB, to ONE hit here as well: the handler no longer
+        ! installs, it writes the TSB row and RTEs, so the re-executed load
+        ! misses the TLB a second time and the hardware walker resolves it from
+        ! the row just written. 4 warm-leg hits + that 1 resume hit = 5. This is
+        ! MEASURED, not assumed: leaving the constant at 4 fails with result 9.
         mov.l   k_walkcnt, r0 ; mov.l @r0, r2 ; mov.l k_mask16, r3 ; and r3, r2
-        sub     r13, r2 ; mov #4, r3 ; cmp/eq r3, r2 ; mov #9, r9 ; bf _fail
+        sub     r13, r2 ; mov #5, r3 ; cmp/eq r3, r2 ; mov #9, r9 ; bf _fail
 
         ! walker_calls == 2 (cold code fetch + mixed cold data load).
         mov.l   k_wcnt, r0 ; mov.l @r0, r2 ; mov #2, r3 ; cmp/eq r3, r2 ; mov #8, r9 ; bf _fail
@@ -433,8 +457,16 @@ _h_common:
         mov.l   @r4, r5
         add     #1, r5
         mov.l   r5, @r4
-        .word   0x436E                  ! LDC r3, PTEL
-        .word   0x0078                  ! LDTLB.RN  (install + return atomically)
+        ! ---- The software §4.1 fast path is RETIRED (retire-LDTLB): there is
+        ! ---- no TLB-install instruction left, so it cannot install anything.
+        ! ---- It is also PROVABLY DEAD: a TLB-miss exception is only delivered
+        ! ---- after the HARDWARE walker (core/tlb_walk.vhd) probed the TSB and
+        ! ---- MISSED, so a matching row cannot be here. The compares above are
+        ! ---- kept and turned into that assertion -- if they DO match, the
+        ! ---- walker skipped a row it should have used and this guard's whole
+        ! ---- premise is broken. Result 29.
+        bra     _h_tsbhit
+        nop
 
         ! ---- Slow path: call the C walker. ----
 _h_slow:
@@ -450,8 +482,12 @@ _h_slow:
         tst     r0, r0
         bt      _h_realfault            ! r0==0 -> walker fault
         lds.l   @r15+, pr
-        .word   0x406E                  ! LDC r0, PTEL
-        .word   0x0078                  ! LDTLB.RN
+        ! ---- The C walker has written the TSB row. Plain RTE: the faulting
+        ! ---- access re-executes, misses the TLB again, and this time the
+        ! ---- HARDWARE walker finds the row and installs it. Same resume path,
+        ! ---- reached the only way it can now be reached.
+        rte
+        nop
 
 _h_realfault:
         lds.l   @r15+, pr
@@ -462,6 +498,17 @@ _h_realfault:
         mov     #7, r1
         mov.l   r1, @r0                 ! TEST_RESULT = 7 (unexpected walker fault)
 1:      bra     1b
+        nop
+
+_h_tsbhit:
+        ! Unreachable by construction -- see _h_common. Loud if it ever is.
+        mov.l   H_mmucr, r0
+        mov     #0, r1
+        mov.l   r1, @r0                 ! disable AT
+        mov.l   H_result, r0
+        mov     #29, r1
+        mov.l   r1, @r0                 ! TEST_RESULT = 29 (TSB row matched at
+1:      bra     1b                      ! the miss vector: impossible)
         nop
 
         .align 2

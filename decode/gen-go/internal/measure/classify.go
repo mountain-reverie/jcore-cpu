@@ -37,8 +37,6 @@ var handValues = map[string]struct {
 	"SLEEP":    {1, 3, "hand: halts the core; cannot run standalone"},
 	"TRAPA":    {2, 8, "hand: software exception entry; not standalone-runnable"},
 	"TAS.B":    {2, 4, "hand: read-modify-write test-and-set with bus lock semantics"},
-	"LDTLB":    {2, 2, "hand: MMU TLB reload; not standalone-runnable"},
-	"LDTLB.RN": {2, 2, "hand: MMU TLB reload; not standalone-runnable"},
 	// STC X,Rn (control-register read) and LDC.L @Rm+,X (control-register
 	// post-inc load) are curated for SR/GBR/VBR in timing/j2.toml +
 	// timing/j4.toml; reuse those numbers as the general hand value for

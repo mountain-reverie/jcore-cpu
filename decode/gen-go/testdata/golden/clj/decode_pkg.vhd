@@ -120,7 +120,6 @@ package decode_pack is
             ilevel : std_logic_vector(3 downto 0);
             mmu_reg_wr : std_logic;
             mmu_reg_sel : mmu_reg_sel_t;
-            tlb_wr : std_logic;
         end record;
     type pipeline_ex_stall_t is
         record
@@ -142,7 +141,6 @@ package decode_pack is
             macsel2 : macin2_sel_t;
             mmu_reg_wr : std_logic;
             mmu_reg_sel : mmu_reg_sel_t;
-            tlb_wr : std_logic;
         end record;
     type pipeline_ex_t is
         record

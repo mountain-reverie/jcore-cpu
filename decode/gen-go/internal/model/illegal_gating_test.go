@@ -13,14 +13,18 @@ import (
 //
 //   - 0x3211: SH-2A "MOV.L @(disp12,Rm),Rn" word1 (0011 nnnn mmmm 0001,
 //     n=2,m=1) -- real instruction on J2A, must trap as illegal elsewhere.
-//   - 0x0038: SH-4 LDTLB (0000 0000 0011 1000) -- real instruction on J4,
-//     must trap as illegal elsewhere.
+//   - 0x0038: SH-4 LDTLB (0000 0000 0011 1000) -- RETIRED. J-core has no
+//     software TLB install instruction (the hardware walker is the sole
+//     installer), so this must now trap as illegal on EVERY variant, J4
+//     included. Keeping it in the table pins that: a stale binary that still
+//     executes an LDTLB faults loudly instead of silently doing nothing.
 //   - 0x000B: RTS, 0x300C: ADD R0,R0 -- base J2 instructions, legal on
 //     every variant.
 func TestIllegalInstrPerVariant(t *testing.T) {
 	const (
 		sh2aWord1 = 0x3211 // SH-2A MOV.L @(disp12,Rm),Rn word1
-		sh4LDTLB  = 0x0038 // SH-4 LDTLB
+		sh4LDTLB  = 0x0038 // SH-4 LDTLB (retired on J-core)
+		ldtlbRN   = 0x0078 // J-core LDTLB.RN (retired)
 		rts       = 0x000B // base J2 RTS
 		addR0R0   = 0x300C // base J2 ADD Rm,Rn
 		ldcTBR    = 0x404A // SH-2A ldc Rm,TBR (0100 mmmm 0100 1010, m=0)
@@ -55,6 +59,7 @@ func TestIllegalInstrPerVariant(t *testing.T) {
 	}{
 		{"base", base, sh2aWord1, "sh2a disp12 word1", true},
 		{"base", base, sh4LDTLB, "sh4 LDTLB", true},
+		{"base", base, ldtlbRN, "LDTLB.RN", true},
 		{"base", base, rts, "RTS", false},
 		{"base", base, addR0R0, "ADD R0,R0", false},
 
@@ -69,7 +74,8 @@ func TestIllegalInstrPerVariant(t *testing.T) {
 		{"j2a", j2a, jsrnAtTBR, "jsr/n @@(disp8,TBR)", false},
 
 		{"j4", j4, sh2aWord1, "sh2a disp12 word1", true},
-		{"j4", j4, sh4LDTLB, "sh4 LDTLB", false},
+		{"j4", j4, sh4LDTLB, "sh4 LDTLB", true},
+		{"j4", j4, ldtlbRN, "LDTLB.RN", true},
 		{"j4", j4, ldcTBR, "ldc Rm,TBR", true},
 		{"j4", j4, stcTBR, "stc TBR,Rn", true},
 		{"j4", j4, jsrnAtTBR, "jsr/n @@(disp8,TBR)", true},

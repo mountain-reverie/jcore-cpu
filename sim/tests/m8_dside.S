@@ -28,8 +28,6 @@
 ! skipped: CMP /HI Rm, Rn has no D-side memory access
 ! skipped: CMP /HS Rm, Rn has no D-side memory access
 ! skipped: CMP /STR Rm, Rn has no D-side memory access
-! skipped: CMP/EQ ASIDR, Rn has no D-side memory access
-! skipped: CMP/EQ PTEH, Rn has no D-side memory access
 ! skipped: CMP/PL Rn has no D-side memory access
 ! skipped: CMP/PZ Rn has no D-side memory access
 ! skipped: CSTS CP0_COM, CP0_Rn has no D-side memory access
@@ -63,9 +61,6 @@
 ! skipped: LDS Rm, MACH has no D-side memory access
 ! skipped: LDS Rm, MACL has no D-side memory access
 ! skipped: LDS Rm, PR has no D-side memory access
-! skipped: LDTLB is Bespoke (dedicated guard)
-! skipped: LDTLB.RN is Bespoke (dedicated guard)
-! skipped: LDTLB.RN Rm has no D-side memory access
 ! skipped: MOV #imm, Rn has no D-side memory access
 ! skipped: MOV Rm, Rn has no D-side memory access
 ! skipped: MOV.B @(R0, Rm), Rn: effective address not modelled: indexed @(R0,...) implicit R0 collides with the fixed base register (EA off the mapped page)
@@ -115,18 +110,14 @@
 ! skipped: SHLR2 Rn has no D-side memory access
 ! skipped: SHLR8 Rn has no D-side memory access
 ! skipped: SLEEP is Bespoke (dedicated guard)
-! skipped: STC ASIDR, Rn has no D-side memory access
 ! skipped: STC EXPEVT, Rn has no D-side memory access
 ! skipped: STC GBR, Rn has no D-side memory access
 ! skipped: STC INTEVT, Rn has no D-side memory access
-! skipped: STC PTEH, Rn has no D-side memory access
-! skipped: STC PTEL, Rn has no D-side memory access
 ! skipped: STC Rm_BANK, Rn has no D-side memory access
 ! skipped: STC SPC, Rn has no D-side memory access
 ! skipped: STC SR, Rn has no D-side memory access
 ! skipped: STC SSR, Rn has no D-side memory access
 ! skipped: STC TRA, Rn has no D-side memory access
-! skipped: STC TSBPTR, Rn has no D-side memory access
 ! skipped: STC VBR, Rn has no D-side memory access
 ! skipped: STS CP0_COM, Rn has no D-side memory access
 ! skipped: STS CPI_COM, Rn has no D-side memory access
@@ -145,6 +136,7 @@
 ! skipped: TLB DPROT W has no D-side memory access
 ! skipped: TLB IMISS has no D-side memory access
 ! skipped: TLB IPROT has no D-side memory access
+! skipped: TLB IREPLAY has no D-side memory access
 ! skipped: TRAPA #imm has no D-side memory access
 ! skipped: TST #imm, R0 has no D-side memory access
 ! skipped: TST Rm, Rn has no D-side memory access

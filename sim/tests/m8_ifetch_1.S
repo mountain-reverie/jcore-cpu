@@ -16,8 +16,6 @@
 ! skipped: CLDS CP0_Rm, CP0_COM: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 ! skipped: CLDS CPI_Rm, CPI_COM: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 ! skipped: CLRMAC: clrmac microcoded as TEMP1^TEMP1 -> 'U'/'X' in sim (MAC snapshot not comparable)
-! skipped: CMP/EQ ASIDR, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
-! skipped: CMP/EQ PTEH, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 ! skipped: CSTS CP0_COM, CP0_Rn: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 ! skipped: CSTS CPI_COM, CPI_Rn: coprocessor instruction (CP0/CPI) not implemented by the J-core DUT
 ! skipped: Error is a microcode-only system entry (plane=system), not a fetchable instruction
@@ -43,9 +41,6 @@
 ! skipped: LDS.L @Rm+, MACH accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 ! skipped: LDS.L @Rm+, MACL accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 ! skipped: LDS.L @Rm+, PR accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
-! skipped: LDTLB is Bespoke (dedicated guard)
-! skipped: LDTLB.RN is Bespoke (dedicated guard)
-! skipped: LDTLB.RN Rm writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 ! skipped: MAC.L @Rm+, @Rn+ accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 ! skipped: MAC.W @Rm+, @Rn+ accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 ! skipped: MOV.B @(R0, Rm), Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
@@ -85,17 +80,13 @@
 ! skipped: RTS is Bespoke (dedicated guard)
 ! skipped: Reset CPU is a microcode-only system entry (plane=system), not a fetchable instruction
 ! skipped: SLEEP is Bespoke (dedicated guard)
-! skipped: STC ASIDR, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 ! skipped: STC EXPEVT, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 ! skipped: STC INTEVT, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
-! skipped: STC PTEH, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
-! skipped: STC PTEL, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 ! skipped: STC Rm_BANK, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 ! skipped: STC SPC, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 ! skipped: STC SR, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 ! skipped: STC SSR, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 ! skipped: STC TRA, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
-! skipped: STC TSBPTR, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 ! skipped: STC VBR, Rn writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 ! skipped: STC.L GBR, @-Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 ! skipped: STC.L SR, @-Rn accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
@@ -113,6 +104,7 @@
 ! skipped: TLB DPROT W is a microcode-only system entry (plane=system), not a fetchable instruction
 ! skipped: TLB IMISS is a microcode-only system entry (plane=system), not a fetchable instruction
 ! skipped: TLB IPROT is a microcode-only system entry (plane=system), not a fetchable instruction
+! skipped: TLB IREPLAY is a microcode-only system entry (plane=system), not a fetchable instruction
 ! skipped: TRAPA #imm writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 ! skipped: TST.B #imm, @(R0, GBR) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 ! skipped: XOR.B #imm, @(R0, GBR) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)

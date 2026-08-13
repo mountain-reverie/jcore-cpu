@@ -38,8 +38,8 @@
 ! Overlay .word encodings (assembler does not know these J4 forms):
 !   STC EXPEVT,r0 =0x0052   LDC r0,VBR =0x402E   LDC r0,SPC =0x404E
 !   LDC r0,ASIDR  =0x407E   LDC r0,PTEL=0x406E   LDC r0,PTEH=0x405E
-!   LDTLB         =0x0038
 #include "sim_instr.h"
+#include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
 
         .section .vect
@@ -88,15 +88,32 @@ kmain:
         mov.l   k_which, r0 ; mov #0, r1 ; mov.l r1, @r0
         mov.l   k_armed, r0 ; mov #0, r1 ; mov.l r1, @r0
 
-        ! ---- Install ONE read-only mapping for the protection sub-test.
-        ! VA 0x00200000 -> PA 0x00200000, flags X|U|C (W=0) so a store
-        ! raises DPROT_W while a load would hit. Installed directly with
-        ! LDTLB (no walker in this guard). ----
-        mov.l   va_ro, r0
-        .word   0x405E                  ! LDC r0, PTEH   (VPN)
-        mov.l   ptel_ro, r0
-        .word   0x406E                  ! LDC r0, PTEL   (PA | X|U|C, W=0)
-        .word   0x0038                  ! LDTLB
+        ! ---- Publish ONE read-only mapping for the protection sub-test.
+        ! VA 0x00200000 -> PA 0x00200000, flags X|U|C|V (W=0) so a store
+        ! raises DPROT_W while a load would hit. Under walker-only install the
+        ! row goes in the TSB and the store itself is what installs it: the
+        ! store misses, the walker installs the W=0 entry, the access re-runs
+        ! and NOW takes DPROT_W. Sub-test D therefore also pins the ordering
+        ! (install first, permission check after) that LDTLB pre-empted.
+        !
+        ! TSB: base 0x00014000, TSB_SIZE_LOG=8 (256 sets x 32 bytes),
+        ! HASH_SHIFT=6, HASH_MODE=1. The set address is asked of the P4 helper
+        ! at 0xFF000048 rather than hand-computed. All stores here are P1
+        ! (untranslated) and AT is still off, so the fill cannot fault.
+        mov.l   k_tsbbr_addr, r0
+        mov.l   k_tsbbr_val, r1
+        mov.l   r1, @r0
+        mov.l   k_tsbcfg_addr, r0
+        mov.l   k_tsbcfg_val, r1
+        mov.l   r1, @r0
+
+        mov.l   k_tsbslot, r12          ! r12 = 0xFF000048
+        mov.l   va_ro, r6               ! VA
+        mov     #0, r7                  ! ASID
+        mov.l   ptel_ro, r8             ! PTEL (PA | X|U|C|V, W=0)
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! r10 = 32-byte-aligned SET address
+        tsb_fill r10, r6, r7, r8
 
         ! ---- AT is enabled per sub-test below, not once here: the shared
         ! handler disables it so the faulting access can RETRY untranslated
@@ -163,7 +180,12 @@ k_exp:            .long 0x80002D08      ! expected EXPEVT for the armed sub-test
 k_resume:         .long 0x80002D0C      ! resume address for the I-fetch sub-test
 va_unmapped:      .long 0x00300000      ! never mapped
 va_ro:            .long 0x00200000
-ptel_ro:          .long 0x00200068      ! PA | X|U|C  (W=0 -> DPROT_W on store)
+ptel_ro:          .long 0x00200069      ! PA | X|U|C|V (W=0 -> DPROT_W on store)
+k_tsbbr_addr:     .long 0xFF000014
+k_tsbbr_val:      .long 0x00014008      ! base=0x00014000, TSB_SIZE_LOG=8
+k_tsbcfg_addr:    .long 0xFF000018
+k_tsbcfg_val:     .long 0x00000061      ! HASH_SHIFT=6, HASH_MODE=1
+k_tsbslot:        .long 0xFF000048      ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
 c_expevt_imiss:   .long 0x00000040
 c_expevt_dmiss_r: .long 0x00000060
 c_expevt_dmiss_w: .long 0x00000080
@@ -267,4 +289,11 @@ Hexp:     .long 0x80002D08
 Hresume:  .long 0x80002D0C
 Hmmucr:   .long 0xFF000010
 Hresult:  .long TEST_RESULT_ADDRESS
+
+        ! ---- Backing store for the TSB at PA 0x14000..0x15FFF. The walker
+        ! ---- reads the TSB by PHYSICAL address and physical aliases are
+        ! ---- backed by SRAM only within the loaded image extent, so the
+        ! ---- image must reach past the END of the TSB.
+_tsb_backing:
+        .space 0x16000, 0
 #endif

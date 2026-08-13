@@ -43,6 +43,20 @@
 ! at TWO cycles, which is the tightest any program can reach. The one-cycle
 ! case is defended by construction (this'comb) and by review, not by test.
 !
+! WALKER-INSTALL VERSION (L2 of "retire LDTLB"). The property, the legs and
+! the timing argument above are UNCHANGED -- only how VPN 0x4 becomes resident
+! changes. LDTLB could install an ASID-B entry while ASIDR held A; the walker
+! cannot, because it installs only on a MISS and only under the CURRENT ASID.
+! So the entry is made resident by a WARM-UP: ASIDR := B, let it settle, touch
+! VA 0x4000 once (that access misses, walks, and installs the B-tagged entry),
+! then ASIDR := A and settle again. Legs 1-3 then run exactly as before, with
+! the entry already resident and nothing between each LDC and its access.
+!
+! The warm-up is also the setup oracle: it must return the sentinel (fail 2),
+! so a red leg 1 can never be explained away as "the entry was never installed".
+! Verdict: SAME strength. Leg 1 still measures the two-cycle boundary, leg 3
+! still is the only pass path, and no assertion was dropped or loosened.
+!
 ! LEGS. A fault carries the leg marker at P1 0x80005000; the handler reports
 ! that marker as the fail code when the fault was not the expected one.
 !
@@ -65,6 +79,7 @@
 !   this'comb -> two-deep register chain  (2-cycle lag)  -> FAIL, code 3
 
 #include "sim_instr.h"
+#include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
 
 ! LDC Rm,ASIDR = 0100 mmmm 0111 1110 (decode/gen-go/spec/sh4/mmu.toml).
@@ -72,7 +87,6 @@
 #define LDC_R0_PTEH  .word 0x405E
 #define LDC_R0_PTEL  .word 0x406E
 #define LDC_R0_VBR   .word 0x402E
-#define LDTLB        .word 0x0038
 
         .section .vect
         .long start
@@ -116,25 +130,36 @@ ENTRY(start)
         mov     #0, r1
         mov.l   r1, @r2
 
-        ! ---- Map page 0 GLOBAL identity (code + handler): W|X|C|G, U cleared. ----
-        mov     #0, r0
-        LDC_R0_PTEH                     ! VPN 0
-        mov.l   p_ptel_page0, r0        ! 0x000000CC (W7 X6 C3 G2)
-        LDC_R0_PTEL
-        mov.l   p_asid_a, r0
-        LDC_R0_ASIDR                    ! global entries ignore ASID
-        LDTLB
+        ! ---- Configure the TSB (base 0x00014000, TSB_SIZE_LOG=8 -> 256 sets
+        ! ---- x 32 bytes; HASH_SHIFT=6, HASH_MODE=1 puts the ASID in the
+        ! ---- index, which is why each row is filled under its OWN ASID).
+        mov.l   p_tsbbr_addr, r0
+        mov.l   p_tsbbr_val, r1
+        mov.l   r1, @r0
+        mov.l   p_tsbcfg_addr, r0
+        mov.l   p_tsbcfg_val, r1
+        mov.l   r1, @r0
 
-        ! ---- Map VPN 0x4 (VA 0x4000 -> PA 0x4000) NON-global under ASID B. ----
-        mov.l   p_pteh_p4, r0           ! VPN 0x4
-        LDC_R0_PTEH
-        mov.l   p_ptel_p4, r0           ! 0x000040E8 (W|X|U|C, non-global)
-        LDC_R0_PTEL
-        mov.l   p_asid_b, r0
-        LDC_R0_ASIDR                    ! tag the entry with ASID B
-        LDTLB
+        ! ---- Fill the TSB from the (VA, ASID, PTEL) table; each row's set
+        ! ---- address is asked of the P4 helper (0xFF000048) UNDER THAT ROW'S
+        ! ---- ASID, so nothing hand-computes the hash. AT is off: P0 stores.
+        mov.l   p_tsbslot, r12
+        mov.l   p_tab, r14
+        mov.l   p_tab_end, r5
+1:      mov.l   @r14+, r6               ! VA
+        mov.l   @r14+, r7               ! ASID
+        mov.l   @r14+, r8               ! PTEL
+        mov     r7, r0
+        LDC_R0_ASIDR
+        nop
+        nop
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! 32-byte-aligned SET address
+        tsb_fill r10, r6, r7, r8
+        cmp/hs  r5, r14
+        bf      1b
 
-        ! ---- Back to ASID A, well before the measurement. ----
+        ! ---- ASIDR = A for the run. ----
         mov.l   p_asid_a, r0
         LDC_R0_ASIDR
         nop
@@ -146,6 +171,36 @@ ENTRY(start)
         mov.l   p_mmucr, r0
         mov     #1, r1
         mov.l   r1, @r0
+
+        ! ---- WARM-UP. Make VPN 0x4 resident and B-tagged. This access is the
+        ! ---- one that misses, walks and installs; every later leg runs
+        ! ---- against a resident entry. Marker 2, so a fault here reports the
+        ! ---- setup-error code rather than the shadow code.
+        mov.l   c_va4, r2
+        mov.l   p_sentinel, r4
+        mov.l   p_p1_leg, r5
+        mov     #2, r1
+        mov.l   r1, @r5
+        mov.l   p_asid_b, r0
+        LDC_R0_ASIDR
+        nop
+        nop
+        nop
+        nop
+        mov.l   @r2, r8                 ! miss -> walk -> install (ASID B)
+        cmp/eq  r8, r4
+        mov     #2, r9                  ! fail 2 = the mapping is wrong, not a skew
+        bt      1f
+        bra     _fail_at_off
+        nop
+1:
+        ! ---- Back to ASID A and let it settle, so leg 1 starts from A. ----
+        mov.l   p_asid_a, r0
+        LDC_R0_ASIDR
+        nop
+        nop
+        nop
+        nop
 
         ! ---- Preload everything the measured load needs, so the only thing
         ! ---- between the LDC and the translated access is the LDC itself.
@@ -162,8 +217,8 @@ ENTRY(start)
 
         cmp/eq  r8, r4
         mov     #1, r9                  ! fail 1 = shadow load did not see the new ASID
-        bt      1f                      ! bt-over-bra: _fail is outside bf's +/-256B
-        bra     _fail
+        bt      1f                      ! bt-over-bra: the stub is outside bf's +/-256B
+        bra     _fail_at_off
         nop
 1:
 
@@ -178,12 +233,16 @@ ENTRY(start)
         cmp/eq  r8, r4
         mov     #2, r9                  ! fail 2 = the mapping is wrong (not a skew)
         bt      2f
-        bra     _fail
+        bra     _fail_at_off
         nop
 2:
 
         ! ================= LEG 3: negative direction =============
-        mov.l   p_asid_a, r0
+        ! p_asid_a3 is a DELIBERATE duplicate of p_asid_a, used by leg 3 alone.
+        ! It gives leg 3 an expected constant of its own that can be corrupted
+        ! in isolation (set it to ASID B and leg 3 stays on B, the load hits,
+        ! and the guard must report fail 3) without disturbing the setup ASID.
+        mov.l   p_asid_a3, r0
         mov     #3, r1
         mov.l   r1, @r5                 ! leg marker 3
         LDC_R0_ASIDR                    ! ASID := A
@@ -191,6 +250,19 @@ ENTRY(start)
 
         ! Fell through: the entry was still usable under ASID A.
         mov     #3, r9                  ! fail 3 = replica did not follow ASIDR back
+        bra     _fail_at_off
+        nop
+
+        ! ---- Every in-body failure exits through here. AT is still ENABLED on
+        ! ---- the fall-through paths, and _fail's own store to
+        ! ---- TEST_RESULT_ADDRESS would then be translated, miss, and land in
+        ! ---- the handler -- which reports the LEG MARKER instead of the fail
+        ! ---- code that was just computed. Disabling AT first keeps each fail
+        ! ---- code its own.
+_fail_at_off:
+        mov.l   p_mmucr, r0
+        mov     #0, r1
+        mov.l   r1, @r0
         bra     _fail
         nop
 
@@ -198,15 +270,33 @@ ENTRY(start)
 p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_load - 0x400
 p_mmucr:        .long 0xFF000010
-p_ptel_page0:   .long 0x000000CC        ! W|X|C|G, U cleared (kernel global code)
-p_pteh_p4:      .long 0x00004000
-p_ptel_p4:      .long 0x000040E8        ! PA 0x4000 | W|X|U|C (non-global)
+p_tsbbr_addr:   .long 0xFF000014
+p_tsbbr_val:    .long 0x00014008        ! base=0x00014000, TSB_SIZE_LOG=8
+p_tsbcfg_addr:  .long 0xFF000018
+p_tsbcfg_val:   .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
+p_tsbslot:      .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
+p_tab:          .long _tsb_tab
+p_tab_end:      .long _tsb_tab_end
 p_asid_a:       .long 0x00000011
+p_asid_a3:      .long 0x00000011        ! leg 3's own copy -- see LEG 3
 p_asid_b:       .long 0x00000022
 p_sentinel:     .long 0xA51DA51D
 p_p1_4000:      .long 0x80004000
 p_p1_leg:       .long 0x80005000        ! P1 alias of PA 0x5000 (leg marker)
 c_va4:          .long 0x00004000
+
+        .balign 4
+_tsb_tab:
+        ! VA          ASID        PTEL
+        ! Code page 0 GLOBAL identity, W|X|C|G|V, U=0 (SMEP: a kernel fetch of
+        ! a U=1 page is a protection fault). Filed under ASID A because that is
+        ! the ASID in force when the first fetch walks; once installed, GLOBAL
+        ! makes it match under B as well, so it is never re-walked.
+        .long 0x00000000, 0x00000011, 0x000000CD
+        ! VPN 0x4 -> PA 0x4000, NON-global, tagged ASID B: the entry legs 1-3
+        ! measure. Filed under B, found only when ASIDR = B.
+        .long 0x00004000, 0x00000022, 0x000040E9
+_tsb_tab_end:
 
 #endif  ! CONFIG_PRIV_ARCH
 
@@ -271,8 +361,11 @@ Hresult:        .long TEST_RESULT_ADDRESS
 Hresult_pass:   .long   TEST_PASS_MAGIC
 Hleg:           .long 0x80005000        ! P1 alias of the leg marker
 
-        ! ---- Backing pages so VA/PA 0x4000 and 0x5000 exist in the image. ----
+        ! ---- Backing store: the mapped pages (PA 0x4000, 0x5000) and the TSB
+        ! ---- at PA 0x14000..0x15FFF. The walker reads the TSB by PHYSICAL
+        ! ---- address and physical aliases are backed by SRAM only within the
+        ! ---- loaded image extent, so the image must reach past the TSB end.
 _fault_pages:
-        .space 0x2000, 0
+        .space 0x16000, 0
 
 #endif  ! CONFIG_PRIV_ARCH

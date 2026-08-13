@@ -960,6 +960,12 @@ begin
     mmu_o.i_pa_tag <= tlb_i_pa;
     mmu_o.i_at     <= i_at_translated;
     mmu_o.i_c      <= tlb_i_c;
+    -- Export the I-side hit so the cache can refuse to start a line fill for a
+    -- fetch whose translation is not yet known (ITLB miss being walked). The
+    -- core keeps inst_o.en asserted across that window (dp_inst_i.ack is
+    -- withheld, not the request), so without this the PIPT icache would see a
+    -- fetch carrying pa_tag=0 and commit a tag+valid for it.
+    mmu_o.i_hit    <= tlb_i_hit;
     mmu_o.d_pa_tag <= tlb_d_pa;
     mmu_o.d_at     <= d_at_translated;
     mmu_o.d_c      <= tlb_d_c;

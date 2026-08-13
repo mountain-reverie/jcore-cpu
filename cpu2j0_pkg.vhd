@@ -49,6 +49,7 @@ package cpu2j0_pack is
     i_pa_tag : std_logic_vector(14 downto 0); -- PA[27:13], 15 b (matches CACHE_PA_TAG_WIDTH)
     i_at     : std_logic;
     i_c      : std_logic;                     -- I-side PTE C-bit
+    i_hit    : std_logic;                     -- I-side TLB lookup hit (at='1' only)
     d_pa_tag : std_logic_vector(14 downto 0);
     d_at     : std_logic;
     d_c      : std_logic;                     -- D-side PTE C-bit
@@ -59,6 +60,7 @@ package cpu2j0_pack is
     i_pa_tag => (others => '0'),
     i_at     => '0',
     i_c      => '0',
+    i_hit    => '0',
     d_pa_tag => (others => '0'),
     d_at     => '0',
     d_c      => '0'

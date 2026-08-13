@@ -225,7 +225,9 @@ begin
                      cop_o => copro_o, cop_i => copro_i,
                      mmu_o => cpu_mmu);
 
-  cpu_a_mmu <= (pa_tag => cpu_mmu.d_pa_tag, at => cpu_mmu.d_at, c => cpu_mmu.d_c);
+  -- hit is an I-SIDE gate only (icache_cacheable_mux); the D side has no
+  -- equivalent hold-off, so tie it '1' to keep dcache behaviour unchanged.
+  cpu_a_mmu <= (pa_tag => cpu_mmu.d_pa_tag, at => cpu_mmu.d_at, c => cpu_mmu.d_c, hit => '1');
 
   u_dmux : entity work.dcache_cacheable_mux
     port map (
@@ -243,7 +245,7 @@ begin
       mem_i     => data_master_i,
       mem_ack_r => data_master_i.ack);
 
-  cpu_i_mmu <= (pa_tag => cpu_mmu.i_pa_tag, at => cpu_mmu.i_at, c => cpu_mmu.i_c);
+  cpu_i_mmu <= (pa_tag => cpu_mmu.i_pa_tag, at => cpu_mmu.i_at, c => cpu_mmu.i_c, hit => cpu_mmu.i_hit);
 
   -- NOTE: u_imux's memory side (instr_mem_o/instr_mem_i) is wired to the
   -- instruction memory only in the CONFIG_PREFETCHER=0 (#else) router above.

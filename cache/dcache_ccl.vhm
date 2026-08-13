@@ -7,8 +7,6 @@ use work.cpu2j0_pack.all;
 use work.data_bus_pack.all;
 
 entity dcache_ccl is
-  generic (
-    PRIV_ARCH : boolean := false);
   port (
    clk    : in std_logic; -- cpu clock, 125MHz
    rst    : in std_logic;
@@ -253,12 +251,10 @@ begin
     -- --------------------------  |
     -- --------------------------  V
     vsel := this.ffv(vtoi(a.a(CACHE_INDEX_MSB downto 5)));
-    if PRIV_ARCH and this.a_prev_mmu.at = '1' then
-      tag_to_compare := this.a_prev_mmu.pa_tag;
-    else
-      tag_to_compare := (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
-                        & to_cache_tag(this.a_prev.a);
-    end if;
+    -- PIPT: cpu.vhd relocates the address upstream of the cache, so a.a is
+    -- already a PA; index and tag are both physical in every mode.
+    tag_to_compare := (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
+                      & to_cache_tag(this.a_prev.a);
     if(((this.aen_del1 = '1') and (ra.tag0 = tag_to_compare)) or
        ((this.aen_del1 = '0') and (this.c_hitstate = '1'))) and
       (vsel= '1') then                                 cachehit := '1';
@@ -291,10 +287,9 @@ begin
     -- ------------------------------------------------------------------------
     -- create hit check, (snoop)
     -- ------------------------------------------------------------------------
-    -- FIXME(PRIV_ARCH): snoop compare uses VA-based tag (15 bits). When AT=1,
-    -- stored tags are PA-based (15 bits); a VA snoop will not match.
-    -- Full snoop correctness under translation requires PA-based invalidation
-    -- (planned for a later MMU milestone, not M2 scope).
+    -- Snoop compares a PA: both the broadcast address (saout_al1, taken from
+    -- a.a) and the stored tag (from ma0, likewise a.a) come from the same
+    -- upstream-relocated physical address, so they match under AT=1 too.
     if(this.sa_al(CACHE_REGION_WIDTH-CACHE_LINE_WIDTH_BITS-1 downto
                   CACHE_INDEX_BITS)                  = ra.tag1(CACHE_TAG_WIDTH-1 downto 0) ) and
                                      -- if default param, 23 bit comparator
@@ -512,18 +507,12 @@ begin
     else                         nx.a_prev_v := this.a_prev_v; end if;
 
     if(a.en = '1') then          nx.a_prev := a;
-                                 nx.a_prev_mmu := a_mmu;
-    else                         nx.a_prev := this.a_prev;
-                                 nx.a_prev_mmu := this.a_prev_mmu; end if;
+    else                         nx.a_prev := this.a_prev; end if;
 
     if(nx.state = RMISS1) or
       (nx.state = WMISS1) or
-      (nx.state = RLOCK1) then   nx.ma0        := a.a(27 downto 0);
-                                 nx.ma0_at     := a_mmu.at;
-                                 nx.ma0_pa_tag := a_mmu.pa_tag;
-    else                         nx.ma0        := this.ma0;
-                                 nx.ma0_at     := this.ma0_at;
-                                 nx.ma0_pa_tag := this.ma0_pa_tag; end if;
+      (nx.state = RLOCK1) then   nx.ma0 := a.a(27 downto 0);
+    else                         nx.ma0 := this.ma0; end if;
   
     if(this.aenrd_del1 = '1') and (this.ry_en0 = '1') then
                                  nx.dw  :=   ra.d0;
@@ -580,11 +569,8 @@ begin
     this.dw          := nx.dw;
     this.pref_inc    := nx.pref_inc;
     this.ma0         := nx.ma0;
-    this.ma0_at      := nx.ma0_at;
-    this.ma0_pa_tag  := nx.ma0_pa_tag;
     this.a_prev      := nx.a_prev;
     this.a_prev_v    := nx.a_prev_v;
-    this.a_prev_mmu  := nx.a_prev_mmu;
     this.saout_al1   := nx.saout_al1;
     this.sabank_send := nx.sabank_send;
     this.sabank_rcv  := nx.sabank_rcv;
@@ -611,8 +597,7 @@ begin
 
   -- tag ram       control signals --------------------------------------------
   ry_ccl.ten0 <= '1';
-  ry_ccl.tag0 <= this'register.ma0_pa_tag when PRIV_ARCH and this'register.ma0_at = '1'
-                 else (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
-                      & this'register.ma0 (27 downto CACHE_LINE_WIDTH_BITS+CACHE_INDEX_BITS);
+  ry_ccl.tag0 <= (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
+                 & this'register.ma0 (27 downto CACHE_LINE_WIDTH_BITS+CACHE_INDEX_BITS);
 
 end beh;

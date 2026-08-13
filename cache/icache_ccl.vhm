@@ -5,8 +5,6 @@ use ieee.numeric_std.all;
 use work.cache_pack.all;
 
 entity icache_ccl is
-  generic (
-    PRIV_ARCH : boolean := false);
   port (
    clk    : in std_logic; -- cpu clock, 125MHz
    rst    : in std_logic;
@@ -209,12 +207,10 @@ begin
     -- --------------------------  |
     -- --------------------------  V
     vsel := this.ffv(vtoi(a.a(CACHE_INDEX_MSB downto 5)));
-    if PRIV_ARCH and this.a_prev.mmu.at = '1' then
-      tag_to_compare := this.a_prev.mmu.pa_tag;
-    else
-      tag_to_compare := (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
-                        & to_cache_tag(this.a_prev.a);
-    end if;
+    -- PIPT: cpu.vhd relocates the fetch address upstream of the cache, so a.a
+    -- is already a PA; index and tag are both physical in every mode.
+    tag_to_compare := (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
+                      & to_cache_tag(this.a_prev.a);
     if(((this.aen_del1 = '1') and (ra.tag = tag_to_compare)) or
        ((this.aen_del1 = '0') and (this.c_hitstate = '1'))) and
       (vsel= '1') then                                 cachehit := '1';
@@ -343,12 +339,8 @@ begin
     if(a.en = '1') then          nx.a_prev := a;
     else                         nx.a_prev := this.a_prev; end if;
 
-    if(nx.state = MISS1) then    nx.ma0        := a.a;
-                                 nx.ma0_at     := a.mmu.at;
-                                 nx.ma0_pa_tag := a.mmu.pa_tag;
-    else                         nx.ma0        := this.ma0;
-                                 nx.ma0_at     := this.ma0_at;
-                                 nx.ma0_pa_tag := this.ma0_pa_tag; end if;
+    if(nx.state = MISS1) then    nx.ma0 := a.a;
+    else                         nx.ma0 := this.ma0; end if;
   
     if(this.aen_del1 = '1') and (this.ry_en0 = '1') then
                                  nx.dw  :=   ra.d0;
@@ -379,8 +371,6 @@ begin
     this.dw          := nx.dw;
     this.pref_inc    := nx.pref_inc;
     this.ma0         := nx.ma0;
-    this.ma0_at      := nx.ma0_at;
-    this.ma0_pa_tag  := nx.ma0_pa_tag;
     this.a_prev      := nx.a_prev;
     this.a_prev_v    := nx.a_prev_v;
     this.ry_twr      := nx.ry_twr;
@@ -405,8 +395,7 @@ begin
 
   -- tag ram       control signals --------------------------------------------
   ry_ccl.ten <= '1';
-  ry_ccl.tag <= this'register.ma0_pa_tag when PRIV_ARCH and this'register.ma0_at = '1'
-                else (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
-                     & this'register.ma0 (27 downto CACHE_LINE_WIDTH_BITS+CACHE_INDEX_BITS);
+  ry_ccl.tag <= (CACHE_PA_TAG_WIDTH-CACHE_TAG_WIDTH-1 downto 0 => '0')
+                & this'register.ma0 (27 downto CACHE_LINE_WIDTH_BITS+CACHE_INDEX_BITS);
 
 end beh;

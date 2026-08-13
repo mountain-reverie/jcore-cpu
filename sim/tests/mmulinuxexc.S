@@ -73,8 +73,9 @@
 ! Overlay .word encodings (assembler does not know these J4 forms):
 !   STC EXPEVT,r0 =0x0052   STC TRA,r0 =0x0072   STC INTEVT,r0=0x0062
 !   LDC r0,VBR    =0x402E   LDC r0,PTEH=0x405E   LDC r0,PTEL =0x406E
-!   LDC r0,ASIDR  =0x407E   LDTLB      =0x0038
+!   LDC r0,ASIDR  =0x407E
 #include "sim_instr.h"
+#include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
 
         .section .vect,"a"
@@ -169,6 +170,42 @@ kmain:
         mov.l   k_faultva,  r0 ; mov #0, r1 ; mov.l r1, @r0
         mov.l   k_armed,    r0 ; mov #0, r1 ; mov.l r1, @r0
 
+        ! ---- TSB setup. Sub-test C needs one W=0 mapping resident. There is
+        ! ---- no software install instruction any more -- the hardware walker
+        ! ---- is the sole installer -- so the mapping is a TSB ROW that the
+        ! ---- walker pulls in on the very store that must then fault. The
+        ! ---- ordering change is invisible to the sub-test: a protection fault
+        ! ---- still needs the entry resident, so the walker installs it from
+        ! ---- the row and DPROT_W fires on the replay, same EXPEVT, same TEA.
+        ! ----
+        ! ---- Zero the TSB first (16 sets x 32 bytes = 128 words): every other
+        ! ---- set must miss, or an unrelated access under AT could install a
+        ! ---- garbage translation. Layout/registers mirror mmulinux.S, which
+        ! ---- shares this image's jcore_boot_tsb address. ----
+        mov.l   k_tsb,  r0
+        mov     #64, r2
+        shll    r2
+        mov     #0,  r1
+1:      mov.l   r1, @r0
+        add     #4, r0
+        dt      r2
+        bf      1b
+
+        mov.l   k_tsbbr_a,  r0 ; mov.l v_tsbbr,  r1 ; mov.l r1, @r0
+        mov.l   k_tsbcfg_a, r0 ; mov.l v_tsbcfg, r1 ; mov.l r1, @r0
+
+        ! ---- The one row: (va_ro, ASID 0) -> ptel_ro (X|U|C|V, W=0). The set
+        ! ---- address comes from the P4 slot helper (0xFF000048) under the
+        ! ---- current ASIDR, so nothing here hand-computes the hash. AT is
+        ! ---- still off, so these are plain P1 stores. ----
+        mov.l   k_tsbslot, r0
+        mov.l   va_ro, r6
+        mov.l   r6, @r0
+        mov.l   @r0, r10                ! r10 = 32-byte-aligned SET address
+        mov     #0, r7                  ! ASID_TAG = 0
+        mov.l   ptel_ro, r8
+        tsb_fill r10, r6, r7, r8
+
         ! ---- VBR = linux's REAL vector base. Everything below arrives at
         ! linux@jcore code, not at harness stubs: that is the whole point. ----
         mov.l   k_vbr, r0
@@ -222,18 +259,15 @@ _after_b:
         mov.l   c_expevt_illegal, r3 ; cmp/eq r3, r2 ; mov #7, r9 ; bf _fail
 
         ! ================= C: DPROT_W -> VBR+0x100 (vector split) ==========
-        ! Install a W=0 mapping and store to it. Since protection faults were
-        ! split off the miss vector, this must arrive at the SAME linux entry
-        ! as A and B -- not at the TLB fast path.
+        ! Store to a W=0 mapping. Since protection faults were split off the
+        ! miss vector, this must arrive at the SAME linux entry as A and B --
+        ! not at the TLB fast path. The mapping is the TSB row filled in setup;
+        ! the store below misses the TLB, the walker installs the W=0 entry
+        ! from that row, and the replay takes DPROT_W.
         mov.l   k_marker, r0 ; mov #0, r1 ; mov.l r1, @r0
         mov.l   k_armed, r0 ; mov #3, r1 ; mov.l r1, @r0
         mov.l   k_saved_sp, r0 ; mov.l r15, @r0
         mov.l   p_after_c, r0 ; mov.l k_resume_to, r1 ; mov.l r0, @r1
-        mov.l   va_ro, r0
-        .word   0x405E                  ! LDC r0, PTEH
-        mov.l   ptel_ro, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        .word   0x0038                  ! LDTLB
         mov.l   k_mmucr, r0 ; mov #1, r1 ; mov.l r1, @r0   ! AT on
         mov.l   va_ro, r2
         mov     #0, r3
@@ -307,7 +341,13 @@ va_ro:            .long 0x00200000
 ! mmulinux's own backing page is 0x00040000, so use that; PA 0x00200000 gets
 ! no ACK ("Rd did not see ACK for data sram") and the guard hangs instead of
 ! reporting a code. The VA above is free to be anything unmapped.
-ptel_ro:          .long 0x00040068      ! PA | X|U|C  (W=0 -> DPROT_W on store)
+ptel_ro:          .long 0x00040069      ! PA | X|U|C|V  (W=0 -> DPROT_W on store)
+k_tsb:            .long 0x80028000      ! == jcore_boot_tsb (equate below)
+k_tsbbr_a:        .long 0xFF000014      ! TSBBR
+v_tsbbr:          .long 0x80028004      ! jcore_boot_tsb | TSB_SIZE_LOG=4
+k_tsbcfg_a:       .long 0xFF000018      ! TSBCFG
+v_tsbcfg:         .long 0x00000061
+k_tsbslot:        .long 0xFF000048      ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
 p_a_trapa:        .long a_trapa
 p_after_a:        .long _after_a
 p_after_b:        .long _after_b

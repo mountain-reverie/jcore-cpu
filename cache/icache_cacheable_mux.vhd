@@ -30,19 +30,39 @@ end entity icache_cacheable_mux;
 architecture arch of icache_cacheable_mux is
 
   signal cacheable : boolean;
-  signal c_ibus_o  : cpu_instruction_o_t; -- to icache_adapter (idle when uncacheable)
-  signal c_ibus_i  : cpu_instruction_i_t; -- from icache_adapter
-  signal c_mem_o   : cpu_data_o_t;        -- icache_adapter dbus_o
-  signal c_ddrb    : std_logic;
-  signal b_ibus_i  : cpu_instruction_i_t; -- bypass reply
-  signal b_mem_o   : cpu_data_o_t;        -- bypass data request
+  -- '1' iff this fetch's translation is known this cycle (MMU off, or MMU on
+  -- and the ITLB lookup hit). See the comment on g_ibus_o below.
+  signal translated : boolean;
+  -- ibus_o, held idle while the translation is unknown.
+  signal g_ibus_o : cpu_instruction_o_t;
+  signal c_ibus_o : cpu_instruction_o_t; -- to icache_adapter (idle when uncacheable)
+  signal c_ibus_i : cpu_instruction_i_t; -- from icache_adapter
+  signal c_mem_o  : cpu_data_o_t;        -- icache_adapter dbus_o
+  signal c_ddrb   : std_logic;
+  signal b_ibus_i : cpu_instruction_i_t; -- bypass reply
+  signal b_mem_o  : cpu_data_o_t;        -- bypass data request
 
 begin
 
   cacheable <= is_cacheable_mmu(ibus_o.a & '0', a_mmu.at, a_mmu.c);
 
+  -- A fetch that missed in the ITLB has NO translation yet: a_mmu.pa_tag and
+  -- a_mmu.c are both undefined, and the core deliberately keeps inst_o.en
+  -- asserted across the whole walk (core/cpu.vhd withholds dp_inst_i.ack, not
+  -- the request) so the fetch replays against the installed entry afterwards.
+  -- That fetch must not be allowed to reach either the icache or the bypass:
+  -- the PIPT icache commits a tag and a valid bit for it at the START of the
+  -- resulting line fill (icache_ccl MISS1) and nothing ever invalidates a line
+  -- whose fill is superseded, so a later fetch can hit that line and execute
+  -- whatever the data RAM holds -- silently, with no exception taken. Hold the
+  -- fetch out entirely until its translation exists.
+  translated <= (a_mmu.at = '0') or (a_mmu.hit = '1');
+
+  g_ibus_o <= ibus_o when translated else
+              NULL_INST_O;
+
   -- present the fetch to the icache only when cacheable, else hold it idle.
-  c_ibus_o <= ibus_o when cacheable else
+  c_ibus_o <= g_ibus_o when cacheable else
               NULL_INST_O;
 
   u_icache : entity work.icache_adapter
@@ -63,10 +83,10 @@ begin
   -- bypass: instruction fetch as a direct 32-bit data read with correct
   -- 16-bit half selection. Process wrapper required (VHDL-93 disallows
   -- concurrent procedure calls in architecture bodies).
-  process (ibus_o, mem_i) is
+  process (g_ibus_o, mem_i) is
   begin
 
-    splice_instr_data_bus(ibus_o, b_ibus_i, b_mem_o, mem_i);
+    splice_instr_data_bus(g_ibus_o, b_ibus_i, b_mem_o, mem_i);
 
   end process;
 

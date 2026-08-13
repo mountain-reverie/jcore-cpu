@@ -19,20 +19,35 @@
 !      broken, step 3 would miss, WALK, install and then succeed -- the data
 !      checks would all still pass and ONLY the counter catches it. Result 3 is
 !      what keeps this a superpage test instead of a 4 KB test.
-! The sub-page's own TSB row is present but PROVABLY NEVER READ, which is
-! exactly what result 3 asserts. STRONGER than the LDTLB version, which
-! asserted only that the store landed.
+! There is deliberately NO TSB row for the sub-page VA, which is exactly what
+! result 3 asserts. STRONGER than the LDTLB version, which asserted only that
+! the store landed.
 !
-! ---- a measured anomaly, recorded rather than worked around ---------------
-! Removing the sub-page row entirely -- the construction that looks strictly
-! cleaner -- passes under cpu_tb but FAILS under cpu_cache_tb: the sub-page
-! STORE completes, then the next access takes an exception, banks away (r0-r7
-! switch) and runs off into a wild SRAM address. With the row present (never
-! read, per result 3) the same sequence is green on both tops. A walker-
-! installed superpage therefore behaves differently under the cached top
-! depending on TSB contents the counter says were not consulted. NOT
-! root-caused here; it is a walker/cache interaction deserving its own
-! investigation, and it is why this guard keeps a row it does not need.
+! ---- the anomaly that used to keep a third TSB row alive (RESOLVED) -------
+! This guard once carried a third, redundant TSB row for VA 0x00011000 that
+! result 3 proves is never read. Deleting it -- the strictly cleaner
+! construction -- passed under cpu_tb but FAILED under cpu_cache_tb, and the
+! row was kept as a workaround. That was never a TSB effect: setting the row's
+! PTEL to 0 (present, but unusable) also passed. What the row actually did was
+! shift every following byte by 12, and the failure turned out to be a pure
+! ADDRESS-CONGRUENCE effect -- with the row gone the guard failed for exactly
+! those layouts with _done = 0x14 (mod 32), i.e. whenever the first fetch after
+! MMUCR.AT is set lands inside a 32-byte cache line whose fill the untranslated
+! fetch had started.
+!
+! Root cause (fixed in cache/icache_cacheable_mux.vhd): while the ITLB miss for
+! a fetch is being walked, core/cpu.vhd deliberately holds inst_o.en asserted
+! and only withholds the ack, so the fetch replays against the installed entry
+! afterwards. That in-flight fetch was still reaching the PIPT icache carrying
+! an UNDEFINED pa_tag, starting a line fill for it; icache_ccl commits both the
+! tag and the valid bit at the START of a fill (MISS1) and nothing ever
+! invalidates such a line. The fetch is now held out of the icache (and out of
+! the uncached bypass) until its translation exists. With that fix this guard
+! passes at every layout -- swept .space 0..32 before _run, all 33 green,
+! whereas before the fix every _done = 0x14 (mod 32) layout failed.
+!
+! The row is therefore GONE, and this guard is now also the regression lock for
+! that fix: it fails without it.
 !
 ! Setup requirements the LDTLB version did not have:
 !   * RB MUST be 0 -- core/cpu.vhd's walk_req is gated on dp_sr.rb = '0' and
@@ -95,7 +110,6 @@ ENTRY(start)
         ! ---- Fill the TSB from the (VA, ASID, PTEL) table. Each row's set
         ! ---- address comes from the P4 helper under that row's ASID, so no
         ! ---- hash is hand-computed. AT is off: plain P0 stores.
-        ! ---- The sub-page row is present but never read; see the header.
         mov.l   p_tsbslot, r12
         mov.l   p_tab, r14
         mov.l   p_tab_end, r5
@@ -131,7 +145,6 @@ _tsb_tab:
         ! VA          ASID        PTEL
         .long 0x00000000, 0x00000000, 0x000000C9  ! identity code page, U=0 (SMEP)
         .long 0x00010000, 0x00000000, 0x000101E9  ! the 16 KB superpage, pm=1 (16 KB)
-        .long 0x00011000, 0x00000000, 0x000101E9  ! sub-page row -- see the header
 _tsb_tab_end:
 
 ENTRY(_run)

@@ -262,10 +262,10 @@ jobs:
           # I-side cacheability: instruction fetches run through the live I-cache
           # (cpu_cache_tb); proves a C=0 translated page bypasses the icache (fresh
           # self-modified code) vs a C=1 page caches (stale). 400us to complete.
-          # Covers "walker install + cache + store": mmuwalkdside is the only
-          # guard resolving a faulting D-store purely via the HARDWARE WALKER
-          # (no LDTLB) through a non-identity mapping, with a walker-installed
-          # code page. It already runs under cpu_tb above; this adds the CACHED
+          # Covers "walker install + cache + store": mmuwalkdside resolves a
+          # faulting D-store through a non-identity mapping with a
+          # walker-installed code page. (It was written when it was the ONLY
+          # guard doing so without LDTLB; every guard is walker-only now.) It already runs under cpu_tb above; this adds the CACHED
           # top. Verified passing 2026-08-12.
           run_guard mmuwalkdside cpu_cache_tb 300us
           run_guard mmuicolor cpu_cache_tb 400us
@@ -342,9 +342,10 @@ jobs:
           #                    continuous `req' level spans a younger I-side
           #                    fetch miss that gives up and the OLDER
           #                    instruction's D-side miss; keying `tried' on the
-          #                    level denied that second miss a walk. Invisible
-          #                    while LDTLB exists, so the guard asserts WHO
-          #                    resolved the access: with the fix the D side is
+          #                    level denied that second miss a walk. The guard
+          #                    asserts WHO resolved the access -- written when a
+          #                    software install could still mask the defect:
+          #                    with the fix the D side is
           #                    walked and installed and the only surviving
           #                    fault is the younger IMISS. Reverting
           #                    core/tlb_walk.vhd to e6ee313^ gives Result=2.

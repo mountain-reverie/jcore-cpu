@@ -45,6 +45,13 @@ ARG BINUTILS_JCORE_REPO=https://github.com/mountain-reverie/binutils-gdb.git
 # Illegal now).  ldtlb, parameterless ldtlb.rn and ldc Rm,{pteh,ptel,asidr}
 # are kept.  Previous pin was ec91b2cf87c (shad/shld arch_j2_up).
 #
+# STALE AS OF THE LDTLB RETIREMENT: ldtlb (0x0038) and parameterless ldtlb.rn
+# (0x0078) are General Illegal on J4 now too, so the assembler still accepts
+# two encodings the hardware rejects.  Harmless -- no guard uses the mnemonics,
+# they all hand-assemble .word -- but the fork wants the same treatment, and
+# the pin bumped afterwards.  Deliberately NOT done here: it is a change in
+# another repository plus a human-triggered image rebuild.
+#
 # NOTE: this is a Docker ARG.  Bumping it here does NOT refresh the CI image on
 # a branch push -- the image must be rebuilt via a `build-ci-image` workflow
 # dispatch, which only a human can trigger.

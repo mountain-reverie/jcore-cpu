@@ -43,7 +43,20 @@ entity tlb_walk is
     -- over and no bus_ack ever arrives. This counter bounds that. On expiry
     -- the walker gives up exactly as it does on a tag mismatch -- it fails
     -- OPEN, to the software miss path, never closed into a stall.
-    timeout_cycles : natural := 255
+    timeout_cycles : natural := 255;
+    -- Liveness bound on RE-ARMING within one continuous `req` assertion.
+    --
+    -- `tried` is what gives the miss exception a cycle with `busy` = '0'.
+    -- Because one continuous `req` level can span several DIFFERENT misses
+    -- (see ST_IDLE), `tried` alone is per-level and wrongly denies the later
+    -- ones a walk; the fix re-arms when the requested VPN changes. But a
+    -- `req_va` that oscillates between two absent VPNs would then re-arm for
+    -- ever, `busy` would suppress the exception every time, and the core would
+    -- never progress -- a livelock traded for a deadlock. This counts the
+    -- give-ups within one `req` assertion and saturates: once exhausted,
+    -- `tried` sticks regardless of VPN and the exception is guaranteed a
+    -- cycle. Cleared only when `req` falls.
+    giveup_limit : natural := 4
   );
   port (
     clk : in    std_logic;
@@ -121,7 +134,16 @@ architecture rtl of tlb_walk is
   signal state : state_t := st_idle;
   -- One-shot: set when a walk gives up, cleared only when `req` falls. See
   -- ST_IDLE for why the walker MUST NOT re-arm on a still-asserted req.
-  signal tried    : std_logic                     := '0';
+  signal tried : std_logic := '0';
+  -- Saturating give-up counter for the current `req` assertion; see the
+  -- `giveup_limit` generic. Cleared only when `req` falls.
+  signal giveups : natural range 0 to giveup_limit := 0;
+  -- Combinational "this request may be armed". Drives BOTH the `arm` output
+  -- and the ST_IDLE arming branch, so the two can never disagree -- a
+  -- registered clear of `tried` would be one cycle too late: cpu.vhd's
+  -- exception process sees the miss in the very cycle the walk is denied, so
+  -- the re-arm decision must be visible on `arm` in THAT cycle.
+  signal may_arm  : std_logic;
   signal way      : natural range 0 to 3          := 0;
   signal set_addr : std_logic_vector(31 downto 0) := (others => '0');
   -- req_va latched at st_idle. The single source of truth for both the tag
@@ -148,9 +170,26 @@ architecture rtl of tlb_walk is
 
 begin
 
-  busy         <= '0' when state = st_idle else
-                  '1';
-  arm          <= '1' when state = st_idle and req = '1' and tried = '0' else
+  busy <= '0' when state = st_idle else
+          '1';
+  -- The one-shot is per-REQUEST, not per-`req`-LEVEL. `req` stays high across
+  -- an I-side fetch miss that gave up and the D-side miss of an OLDER
+  -- instruction that arrives right behind it, so keying the one-shot on the
+  -- level alone denies the second miss its walk for a VA it was never tried
+  -- for. Re-arm when the requested VPN differs from the one `tried` was set
+  -- for, bounded by the saturating give-up counter.
+  --
+  -- The compare is on VPN(31 downto 12), not the full VA: two accesses to the
+  -- same 4 KB page are the same translation, so re-arming for them would be
+  -- pure wasted work (measured: 46% of all denials were a fetch VA +2 inside
+  -- the page already tried). It is also materially cheaper in timing than a
+  -- 32-bit compare, which matters because `arm` feeds cpu.vhd's exception
+  -- suppression in the same cycle.
+  may_arm      <= '1' when tried = '0'
+                           or (req_va(31 downto 12) /= va_reg(31 downto 12)
+                       and giveups < giveup_limit) else
+                  '0';
+  arm          <= '1' when state = st_idle and req = '1' and may_arm = '1' else
                   '0';
   install      <= '1' when state = st_install else
                   '0';
@@ -175,6 +214,7 @@ begin
       if (rst = '1') then
         state   <= st_idle;
         tried   <= '0';
+        giveups <= 0;
         way     <= 0;
         timeout <= 0;
         walks_r <= (others => '0');
@@ -191,9 +231,18 @@ begin
             -- forever for an ack. Task 1's spike deadlocked on exactly this.
             -- Cleared only when req falls, i.e. when the access finally
             -- completed or the exception took RB to 1.
+            --
+            -- `va_reg` deliberately has NO reset assignment (only a signal
+            -- initialiser), so it is a plain enabled register in synthesis and
+            -- its post-reset content is don't-care. That is safe: the compare
+            -- above is only ever consulted when `tried` = '1', and `tried` IS
+            -- reset, so the first request after reset always arms via the
+            -- `tried = '0'` term without reading `va_reg` at all.
             if (req = '0') then
-              tried <= '0';
-            elsif (tried = '0') then
+              tried   <= '0';
+              giveups <= 0;
+            elsif (may_arm = '1') then
+              tried    <= '0';
               set_addr <= tsb_ptr(req_va, tsbcfg, tsbbr, asidr);
               va_reg   <= req_va;
               way      <= 0;
@@ -254,6 +303,9 @@ begin
               -- the exception never gets a cycle in which busy is low.
               tried <= '1';
               state <= st_idle;
+              if (giveups < giveup_limit) then
+                giveups <= giveups + 1;
+              end if;
             end if;
 
           when st_install =>
@@ -272,6 +324,9 @@ begin
             tried   <= '1';
             timeout <= 0;
             state   <= st_idle;
+            if (giveups < giveup_limit) then
+              giveups <= giveups + 1;
+            end if;
           else
             timeout <= timeout + 1;
           end if;

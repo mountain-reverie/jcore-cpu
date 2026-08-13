@@ -212,9 +212,11 @@ begin
     end if;
   end process;
 
-  -- per-cpu d-side MMU cacheability inputs (mirror cpu_cache_tb.vhd:232)
-  cpu0_a_mmu <= (pa_tag => cpu0_mmu.d_pa_tag, at => cpu0_mmu.d_at, c => cpu0_mmu.d_c);
-  cpu1_a_mmu <= (pa_tag => cpu1_mmu.d_pa_tag, at => cpu1_mmu.d_at, c => cpu1_mmu.d_c);
+  -- per-cpu d-side MMU cacheability inputs (mirror cpu_cache_tb.vhd:232).
+  -- hit gates the I side only (icache_cacheable_mux); the I-caches here are
+  -- plain icache_adapter instances with no a_mmu at all, so tie it '1'.
+  cpu0_a_mmu <= (pa_tag => cpu0_mmu.d_pa_tag, at => cpu0_mmu.d_at, c => cpu0_mmu.d_c, hit => '1');
+  cpu1_a_mmu <= (pa_tag => cpu1_mmu.d_pa_tag, at => cpu1_mmu.d_at, c => cpu1_mmu.d_c, hit => '1');
 
   -- D-caches (snoop cross-wired) + I-caches per cpu. The snoop-preserving
   -- cacheable mux routes uncached (MMIO) accesses straight to the bus with the

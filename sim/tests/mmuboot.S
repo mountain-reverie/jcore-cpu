@@ -284,7 +284,10 @@ _v_tlb:                                 ! _vbase + 0x400 (all TLB faults)
         bra     _h_common
         nop
 
-        ! ---- hot path: TSB tag match -> just LDTLB.RN. ----
+        ! ---- hot path: TSB tag match -> the row is already good, so just
+        ! rte; the re-executed access misses again and the HARDWARE walker
+        ! installs from it. (Unreachable by construction with a mandatory
+        ! walker -- a warm-TSB miss is resolved as a stall, no exception.) ----
 _h_common:
         mov.l   H_tsbptr_a, r0
         mov.l   @r0, r0                 ! r0 = TSBPTR (P4 alias)
@@ -303,9 +306,8 @@ _h_common:
         mov.l   @r4, r5
         add     #1, r5
         mov.l   r5, @r4
-        ldc     r3, ptel
-        ldtlb.rn                        ! installs into the TLB + resumes
-                                         ! the faulting instruction
+        rte                             ! resume; hw walker installs the row
+         nop
 
         ! ---- slow path: only va_A is a known-good install; anything else
         ! is a deliberate miss with no mapping. ----
@@ -325,8 +327,12 @@ _h_slow:
         mov.l   @r3, r4
         add     #1, r4
         mov.l   r4, @r3
-        ldc     r1, ptel
-        ldtlb.rn                        ! installs + resumes
+        ! Row written. Software does NOT install: return and let the
+        ! hardware walker install from the row on the re-executed access.
+        ! r15 is not banked and r4-r7 are, so nothing may be folded into
+        ! rte's delay slot here.
+        rte
+         nop
 
 _h_miss:
         mov.l   H_miss_cnt, r3

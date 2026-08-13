@@ -343,6 +343,7 @@ clean:
 mmutsb.elf: mmutsb.o
 mmuwalkhit.elf: mmuwalkhit.o
 mmuwalkmiss.elf: mmuwalkmiss.o
+mmutsbcoh.elf: mmutsbcoh.o
 mmuwalkstale.elf: mmuwalkstale.o
 mmuwalktorn.elf: mmuwalktorn.o
 mmuwalkdside.elf: mmuwalkdside.o

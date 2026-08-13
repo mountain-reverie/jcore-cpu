@@ -337,6 +337,17 @@ jobs:
           #                    otherwise fires p_walk_order_assert only in
           #                    m8_dsdslot_0, by accident.
           run_guard mmuwalkorderhit "" 100us
+          #   mmutsbcoh        TSB COHERENCY (R1). Software overwrites a TSB row
+          #                    that already held a different, valid entry for the
+          #                    same VA, using ordinary cacheable stores -- Linux's
+          #                    exact jcore_tsb_write_entry() path -- and the walker
+          #                    must install the row software LAST wrote. Run under
+          #                    BOTH tops deliberately: only cpu_cache_tb puts a
+          #                    D-cache in the walker's path, which is the
+          #                    configuration whose cacheable-vs-bypass routing R1
+          #                    was about.
+          run_guard mmutsbcoh "" 100us
+          run_guard mmutsbcoh cpu_cache_tb 200us
 
           # SP2: mmulinux links the REAL linux@jcore MMU TLB-miss handler
           # objects (built by kbuild above, via the WIP J4 gas/ld) against a

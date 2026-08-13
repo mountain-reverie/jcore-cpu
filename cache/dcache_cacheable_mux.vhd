@@ -4,9 +4,18 @@ library ieee;
   use work.data_bus_pack.all;
   use work.cache_pack.all;
 
--- Routes CPU data accesses by SH cacheability: cacheable -> write-back D-cache,
--- uncached (MMIO/control) -> direct bypass to the memory bus. The cacheable
--- decision is combinational on the (stable-for-the-whole-access) CPU address.
+-- Routes CPU data accesses by SH cacheability: cacheable -> D-cache, uncached
+-- (MMIO/control) -> direct bypass to the memory bus. The cacheable decision is
+-- combinational on the (stable-for-the-whole-access) CPU address.
+--
+-- The D-cache is WRITE-THROUGH. This header used to call it "write-back" and
+-- the mem-side comment below spoke of a "dirty-line writeback"; both were
+-- wrong, and the error matters -- it is the premise on which one would
+-- conclude that a bypassing requester (e.g. the hardware TSB walker) could
+-- read stale memory behind dirty cache lines. It cannot: every store leaves as
+-- CACHE_DCMD_WRITESGL_SL (dcache_ccl.vhm) and there is no dirty bit or
+-- writeback path in this cache at all. The in-flight mem-side transaction the
+-- cache_busy signal protects is a LINE FILL, not a writeback.
 
 entity dcache_cacheable_mux is
   port (
@@ -38,8 +47,9 @@ architecture arch of dcache_cacheable_mux is
   signal c_mem_lock : std_logic;
   signal c_mem_ddrb : std_logic;
   -- The cache still owns the memory bus while it has an in-flight mem-side
-  -- transaction (a background line fill or a dirty-line writeback): the dcache
-  -- acks the CPU on the critical word and completes the burst in the background,
+  -- transaction (a background line fill -- this cache is write-through and has
+  -- no writeback burst): the dcache acks the CPU on the critical word and
+  -- completes the burst in the background,
   -- so cpu_o may already have advanced to a following (uncacheable) access.
   signal cache_busy : std_logic;
   -- snoop tie-offs

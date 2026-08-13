@@ -1,5 +1,5 @@
 ! mmustres.S -- minimal store-resume guard: does a STORE re-execute & WRITE after
-! a DMISS_W fault is resolved by LDTLB.RN?
+! a DMISS_W fault is resolved?
 !
 ! mmuldtlbr.S proves a resumed LOAD works. This isolates the resumed STORE.
 !
@@ -9,8 +9,8 @@
 !     no fault (rules out a generic AT-store bug). Verified by load-back; on
 !     mismatch -> fail code 3.
 !   - store 0x5B5B0002 to an UNMAPPED identity page -> DMISS_W (vector 0x440).
-!     Handler installs the identity PTE and does LDTLB.RN (0x0078) to resume,
-!     so the store RE-EXECUTES against the fresh TLB entry.
+!     Handler publishes the identity PTE as a TSB row and RTEs, so the store
+!     RE-EXECUTES, misses again, and the walker installs the entry.
 !   - load the page back; compare to 0x5B5B0002.
 !       match           -> PASS (result 0)
 !       read seed 0      -> fail code 2 (resumed store DID NOT WRITE)
@@ -157,7 +157,8 @@ ENTRY(start)
         mov.l   c_sval, r3
         mov.l   r3, @r2                  ! FAULTS -> _v_store; on re-exec must WRITE SVAL
 
-        ! ---- Returned by LDTLB.RN, AT still on. Read back & classify. ----
+        ! ---- Handler RTE'd and the walker installed it, AT still on.
+        ! ---- Read back & classify. ----
         mov.l   c_fault_va, r2
         mov.l   @r2, r6
         mov.l   c_sval, r3

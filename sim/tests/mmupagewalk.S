@@ -127,12 +127,12 @@ ENTRY(start)
         mov     #1, r1
         mov.l   r1, @r0
 
-        ! ---- Store sentinel to VA 0x11000 -> DMISS_W -> _v_store -> LDTLB.RN ----
+        ! ---- Store sentinel to VA 0x11000 -> DMISS_W -> _v_store -> TSB row + RTE ----
         mov.l   p_sentinel, r5  ! 0x5E91A16C
         mov.l   p_va_sub, r6    ! 0x00011000
-        mov.l   r5, @r6         ! fires DMISS_W; LDTLB.RN re-executes this store
+        mov.l   r5, @r6         ! fires DMISS_W; the RTE re-executes this store
 
-        ! ---- (execution resumes here after LDTLB.RN RTE) ----
+        ! ---- (execution resumes here once the walker has installed the row) ----
         ! Drain write buffer
         mov     #20, r0
 1:      dt      r0

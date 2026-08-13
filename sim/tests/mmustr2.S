@@ -1,14 +1,15 @@
 ! mmustr2.S -- back-to-back store-fault repro (M6 6th defect).
 !
 ! mmustres.S proves a SINGLE resumed store writes. This isolates the case the
-! task describes: a resumed store (DMISS_W -> LDTLB.RN) whose VERY NEXT access is
+! task describes: a resumed store (DMISS_W, then resume) whose VERY NEXT access is
 ! ITSELF a DMISS_W. The first store's write must NOT be collateral-damaged by
 ! the second access's fault.
 !
 ! Flow (AT on, identity maps; code page pre-mapped):
 !   - store SVAL1 to unmapped identity page 1 -> DMISS_W.
-!     Handler installs identity PTE for the faulting VA, LDTLB.RN resumes.
-!     The resumed store re-executes and WRITES SVAL1; the immediately
+!     Handler publishes an identity TSB row for the faulting VA and RTEs.
+!     The resumed store re-executes, misses, the walker installs the entry
+!     and the store WRITES SVAL1; the immediately
 !     following instruction is ...
 !   - store SVAL2 to unmapped identity page 2 -> a second DMISS_W (back-to-back).
 !     Same handler resumes it; it writes SVAL2.
@@ -255,8 +256,9 @@ p_test_result_pass: .long   TEST_PASS_MAGIC
 #if CONFIG_PRIV_ARCH
 
         ! ---- VA-driven DMISS_W handler at VBR+0x400 ----
-        ! Reads faulting VPN from PTEH, installs identity PTE = (page | 0xE8),
-        ! LDTLB.RN to resume. Bank-1 scratch; AT stays on.
+        ! Takes the faulting VA from TEA, writes an identity TSB row for it
+        ! (through the P1 alias) and RTEs; the walker installs it on the
+        ! re-executed store. Bank-1 scratch; AT stays on.
         .balign 4
         .space 0x400, 0
         .balign 4

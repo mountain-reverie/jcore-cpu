@@ -20,17 +20,21 @@
 !   page 4 super-only  : W|X|C   = 0xC8  (U=0 -> DPROT_R on user load)
 !   page 1 left UNMAPPED (in bus range via _fault_pages, not in TLB) for the
 !     C/D/E miss sub-tests.
-!   pages 8/9 (multi-hit, sub-test G): master's 7f9b51f made LDTLB install-time
-!     dedup range-overlap-aware (not just exact-VPN), so mmumultihit.S's old
+!   pages 8/9 (multi-hit, sub-test G): master's 7f9b51f made install-time dedup
+!     range-overlap-aware (not just exact-VPN), so mmumultihit.S's old
 !     large-page/small-page two-install construction no longer multi-hits --
-!     the second LDTLB's install-time overlap scan now evicts the first
-!     mapping in place (see sim/tests/mmumultihit.S header). To still reach a
-!     genuine multi-hit (independent multi-entry overlap, which install-time
-!     dedup cannot reach because it only evicts the FIRST matching resident
-!     entry it finds -- core/tlb.vhd's LDTLB scan), sub-test G installs THREE
-!     entries: VPN 0x8 (4KB, PA 0x8000), VPN 0x9 (4KB, PA 0x9000, does not
-!     overlap VPN 0x8's page), then VPN 0x8 again with pageMask=1 (16KB,
-!     covers VPN 0x8..0xB, PA 0x8000). The third install's overlap scan finds
+!     the second install's overlap scan evicts the first mapping in place (see
+!     sim/tests/mmumultihit.S header). The scan sits on the SHARED install
+!     port (core/tlb.vhd, on tlb_wr), so it applies to walker installs exactly
+!     as it applied to LDTLB's. To still reach a genuine multi-hit (independent
+!     multi-entry overlap, which install-time dedup cannot reach because it
+!     only evicts the FIRST matching resident entry it finds), sub-test G
+!     brings in THREE entries: VPN 0x8 (4KB, PA 0x8000), VPN 0x9 (4KB, PA
+!     0x9000, does not overlap VPN 0x8's page), then VPN 0x8 again with
+!     pageMask=1 (16KB, covers VPN 0x8..0xB, PA 0x8000). Each is installed by
+!     the walker from a TSB row when the page is touched; the exact touch
+!     order and ASID trick are documented at the setup site below. The third
+!     install's overlap scan finds
 !     VPN 0x8's slot first and evicts it, but VPN 0x9's slot -- which also
 !     overlaps the new 16KB page's range -- is never reached, so it survives.
 !     A load from VPN 0x9 then genuinely matches both the surviving VPN 0x9

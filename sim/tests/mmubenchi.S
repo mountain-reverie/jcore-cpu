@@ -176,9 +176,11 @@ ENTRY(_after_ifetch)
         ! fetch ran). Keep AT ON. Re-arm the stub for a SECOND invocation by
         ! re-pointing its control block at ran_flag2 / sentinel2 /
         ! _after_ifetch2, then flush the TLB (TI|AT) leaving the TSB warm and
-        ! re-jump into the page. The second IMISS must hit the §4.1 asm hot path
-        ! (PTEH/ASIDR match against the warm TSB) -> tsb_hits++ and LDTLB.RN, with
-        ! NO second walker call.
+        ! re-jump into the page. With the TSB still warm the HARDWARE walker
+        ! resolves the second re-fetch from the surviving row, so there is NO
+        ! second C-walker call. (Before retire-LDTLB this leg took a second
+        ! IMISS that the §4.1 asm hot path serviced with LDTLB.RN; that path is
+        ! now retired and provably dead -- see the header.)
         mov.l   k_ranf2, r0 ; mov #0, r1 ; mov.l r1, @r0        ! ran_flag2 = 0
         mov.l   k_ctl0, r0
         mov.l   k_ranf2, r1 ; mov.l r1, @r0                     ! ctl[0] = ran_flag2

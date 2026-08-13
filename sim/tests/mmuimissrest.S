@@ -161,7 +161,7 @@ ENTRY(start)
         nop
         nop
         nop
-        mov.l   @r2+, r13               ! DMISS_R -> handler installs -> LDTLB.RN
+        mov.l   @r2+, r13               ! DMISS_R -> handler writes TSB row -> RTE
         nop
         nop
         nop

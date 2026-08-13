@@ -3,8 +3,8 @@
 !
 ! A single straight-line `lds.l @Rm+, PR` (function-epilogue / exception-exit
 ! return-address restore) whose operand lives in a translated page takes a cold
-! DMISS_R. The §4.2 handler installs the mapping and returns (LDTLB.RN) so the
-! load RE-EXECUTES. Architecturally the post-increment must occur EXACTLY ONCE:
+! DMISS_R. The §4.2 handler publishes the mapping as a TSB row and RTEs, so the
+! load RE-EXECUTES and the hardware walker installs it. Architecturally the post-increment must occur EXACTLY ONCE:
 ! Rm == VA+4, PR == seed.
 !
 ! This is the CO-LOCATED post-increment form: also two-slot, but in the OPPOSITE

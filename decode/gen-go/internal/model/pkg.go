@@ -136,10 +136,6 @@ func newStaticPackage() *Package {
 		SystemInstrNames: []string{
 			"BREAK", "ERROR", "GENERAL_ILLEGAL", "INTERRUPT", "RESET_CPU", "SLOT_ILLEGAL",
 			"TLB_DMISS_R", "TLB_DMISS_W", "TLB_DPROT_R", "TLB_DPROT_W", "TLB_IMISS", "TLB_IPROT",
-			// Phase-4 T2c: walk-success fetch replay. Declared here (base +
-			// overlay) like the other TLB ops; microcode exists only under
-			// spec/sh4. Appended LAST so no existing enum position moves.
-			"TLB_IREPLAY",
 		},
 		Records: []RecordType{
 			{
@@ -491,7 +487,7 @@ func newStaticPackage() *Package {
 			{
 				Name: "system_instr_codes",
 				Type: "system_instr_code_array",
-				Init: "(BREAK => x\"2\", ERROR => x\"1\", GENERAL_ILLEGAL => x\"7\", INTERRUPT => x\"0\", RESET_CPU => x\"3\", SLOT_ILLEGAL => x\"6\", TLB_DMISS_R => x\"9\", TLB_DMISS_W => x\"A\", TLB_DPROT_R => x\"C\", TLB_DPROT_W => x\"D\", TLB_IMISS => x\"8\", TLB_IPROT => x\"B\", TLB_IREPLAY => x\"4\")",
+				Init: "(BREAK => x\"2\", ERROR => x\"1\", GENERAL_ILLEGAL => x\"7\", INTERRUPT => x\"0\", RESET_CPU => x\"3\", SLOT_ILLEGAL => x\"6\", TLB_DMISS_R => x\"9\", TLB_DMISS_W => x\"A\", TLB_DPROT_R => x\"C\", TLB_DPROT_W => x\"D\", TLB_IMISS => x\"8\", TLB_IPROT => x\"B\")",
 			},
 			{
 				Name: "system_event_codes",

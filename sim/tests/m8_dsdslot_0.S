@@ -149,7 +149,6 @@
 ! skipped: TLB DPROT W has no D-side memory access
 ! skipped: TLB IMISS has no D-side memory access
 ! skipped: TLB IPROT has no D-side memory access
-! skipped: TLB IREPLAY has no D-side memory access
 ! skipped: TRAPA #imm has no D-side memory access
 ! skipped: TST #imm, R0 has no D-side memory access
 ! skipped: TST Rm, Rn has no D-side memory access

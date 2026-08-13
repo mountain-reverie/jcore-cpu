@@ -173,7 +173,6 @@
 #   TLB DPROT W          TLB DPROT W has no D-side memory access
 #   TLB IMISS            TLB IMISS has no D-side memory access
 #   TLB IPROT            TLB IPROT has no D-side memory access
-#   TLB IREPLAY          TLB IREPLAY has no D-side memory access
 #   TRAPA #imm           TRAPA #imm has no D-side memory access
 #   TST #imm, R0         TST #imm, R0 has no D-side memory access
 #   TST Rm, Rn           TST Rm, Rn has no D-side memory access
@@ -360,7 +359,6 @@
 #   TLB DPROT W          TLB DPROT W is a microcode-only system entry (plane=system), not a fetchable instruction
 #   TLB IMISS            TLB IMISS is a microcode-only system entry (plane=system), not a fetchable instruction
 #   TLB IPROT            TLB IPROT is a microcode-only system entry (plane=system), not a fetchable instruction
-#   TLB IREPLAY          TLB IREPLAY is a microcode-only system entry (plane=system), not a fetchable instruction
 #   TRAPA #imm           TRAPA #imm writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 #   TST.B #imm, @(R0, GBR) TST.B #imm, @(R0, GBR) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 #   XOR.B #imm, @(R0, GBR) XOR.B #imm, @(R0, GBR) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
@@ -537,7 +535,6 @@
 #   TLB DPROT W          TLB DPROT W has no D-side memory access
 #   TLB IMISS            TLB IMISS has no D-side memory access
 #   TLB IPROT            TLB IPROT has no D-side memory access
-#   TLB IREPLAY          TLB IREPLAY has no D-side memory access
 #   TRAPA #imm           TRAPA #imm has no D-side memory access
 #   TST #imm, R0         TST #imm, R0 has no D-side memory access
 #   TST Rm, Rn           TST Rm, Rn has no D-side memory access

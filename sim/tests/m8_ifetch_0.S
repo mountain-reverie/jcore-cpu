@@ -104,7 +104,6 @@
 ! skipped: TLB DPROT W is a microcode-only system entry (plane=system), not a fetchable instruction
 ! skipped: TLB IMISS is a microcode-only system entry (plane=system), not a fetchable instruction
 ! skipped: TLB IPROT is a microcode-only system entry (plane=system), not a fetchable instruction
-! skipped: TLB IREPLAY is a microcode-only system entry (plane=system), not a fetchable instruction
 ! skipped: TRAPA #imm writes/needs a control register; I-fetch axis tests fetch-restart precision on the General non-memory set (PrivMem ctrl side-effects need benign-init/restore across the in-page fetch)
 ! skipped: TST.B #imm, @(R0, GBR) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)
 ! skipped: XOR.B #imm, @(R0, GBR) accesses memory; I-fetch axis is fetch-only (data-access precision is covered by the D-side axis + mmuirun mixed leg)

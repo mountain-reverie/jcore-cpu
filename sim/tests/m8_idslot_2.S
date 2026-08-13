@@ -104,7 +104,6 @@
 ! skipped: TLB DPROT W is a microcode-only system entry (plane=system), not a fetchable instruction
 ! skipped: TLB IMISS is a microcode-only system entry (plane=system), not a fetchable instruction
 ! skipped: TLB IPROT is a microcode-only system entry (plane=system), not a fetchable instruction
-! skipped: TLB IREPLAY is a microcode-only system entry (plane=system), not a fetchable instruction
 ! skipped: TRAPA #imm writes/needs a control register; the I-fetch-delay-slot axis sweeps the General non-memory set
 ! skipped: TST.B #imm, @(R0, GBR) accesses memory; the I-fetch-delay-slot axis is fetch-only (data-access-in-delay-slot precision is the DSideDSlot axis)
 ! skipped: XOR.B #imm, @(R0, GBR) accesses memory; the I-fetch-delay-slot axis is fetch-only (data-access-in-delay-slot precision is the DSideDSlot axis)

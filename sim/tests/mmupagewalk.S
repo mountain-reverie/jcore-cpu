@@ -1,28 +1,48 @@
 ! mmupagewalk.S -- realistic D-store TLB-miss handler installing a 16 KB page.
 !
+! WALKER-INSTALL VERSION (L2 of "retire LDTLB"). Same subject, same assertions:
+! a miss handler makes a 16 KB mapping appear, the faulting store is resumed,
+! and the write lands in the SUB-page it addressed (PA 0x11000) and NOT in the
+! superpage base (PA 0x10000). What changes is the handler's install: instead
+! of LDTLB.RN it writes a TSB ROW and returns with a plain RTE, letting the
+! hardware walker install on the retried access. That is now the only install
+! path a miss handler can have, so this guard is the realistic end-to-end
+! shape of one.
+!
+! SUPERPAGE KEYING. The walker's TSB tag compare is exact on the 4 KB VPN even
+! for a superpage row, so the handler keys the row on the FAULTING VPN (0x11),
+! not on the superpage base (0x10) -- keying it on the base would leave VA
+! 0x11000 unfound and the handler would loop forever. The INSTALLED entry still
+! covers VA 0x10000-0x13FFF, because pm=1 masks VPN[13:12] in the TLB compare,
+! and its PPN base is 0x10000. That is what makes fail 2 meaningful: if the
+! hardware took the PA from the row's PPN base instead of splicing the 16 KB
+! page offset out of the VA, the sentinel would land at PA 0x10000.
+!
+! Verdict: SAME strength. Both assertions are unchanged, and the resumed store
+! now additionally proves the handler-writes-TSB / RTE / walker-installs
+! sequence works end to end.
+!
 ! Flow:
-!   1. Clear SR.RB=0. Install page 0 (VA 0x0->PA 0x0, 4 KB, C=1) for code.
+!   1. Clear SR.RB=0. Publish TSB rows for the identity code pages.
 !      Seed PA 0x10000 = 0, PA 0x11000 = 0 via P2 alias (AT off).
 !      Set VBR so VBR+0x400 = _v_store (placed after .space 0x380 pad so
 !      VBR = _v_store - 0x400 is a positive address).
 !   2. Enable AT (no mapping for VA 0x11000).
 !      Store sentinel to VA 0x11000 -> DMISS_W -> _v_store.
 !   3. Handler (bank-1 scratch, SR.BL=1):
-!      Build PTEL = 0x000101E8 (PA 0x10000, pm=1=16 KB, W|X|U|C).
-!      LDC PTEL, LDC ASIDR=0, LDTLB.RN (atomic install+return, no delay slot).
-!      LDTLB.RN returns to SPC: re-executes the faulting store.
+!      Take the faulting VA from TEA (0xFF00000C) -- a real handler cannot
+!      assume it. Ask the P4 slot helper (0xFF000048) for that VA's TSB set.
+!      Write the row THROUGH THE P1 ALIAS: AT is on and the TSB itself is
+!      unmapped, so a P0 store from the handler would fault in the handler.
+!      PTEL = 0x000101E9 (PA 0x10000, pm=1 = 16 KB, W|X|U|C|V).
+!      Plain RTE: the store re-executes, misses again, and THIS time the
+!      walker finds the row and installs it.
 !   4. Drain write buffer; disable AT.
 !      P2-read PA 0x11000 (expect sentinel; fail 1).
 !      P2-read PA 0x10000 (expect 0; fail 2).
 !
-! PTEH-alignment: the hardware captures PTEH = 0x11 (VA[31:12] of 0x11000).
-! The handler uses the captured value as-is (no re-alignment to 0x10 needed).
-! The masked VPN compare for pm=1 ignores VA[13:12], so PTEH=0x11 covers
-! VA 0x10000-0x13FFF.  Relocation: VA 0x11000 -> PA 0x11000.
-!
 ! J4 overlay opcodes:
-!   LDC r0,PTEH  = 0x405E   LDC r0,PTEL = 0x406E   LDC r0,ASIDR = 0x407E
-!   LDC r0,VBR   = 0x402E   LDTLB       = 0x0038   LDTLB.RN     = 0x0078
+!   LDC r0,ASIDR = 0x407E   LDC r0,VBR = 0x402E
 
 !
 ! ---- _fail integrity net ----
@@ -34,6 +54,7 @@
 ! globals below use loud sentinels (_g_exp_* = 0xFFFFFFFF, _g_bad_* = small
 ! distinct values) so an early exit still names its cause.
 #include "sim_instr.h"
+#include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
 
         .section .vect
@@ -63,14 +84,32 @@ ENTRY(start)
         nop
         nop
 
-        ! ---- Install code page 0: VA 0x0 -> PA 0x0, 4 KB, W|X|U|C ----
+        ! ---- Configure the TSB (base 0x00014000, TSB_SIZE_LOG=8 -> 256 sets
+        ! ---- x 32 bytes; HASH_SHIFT=6, HASH_MODE=1) and publish the identity
+        ! ---- code rows. AT is off here, so these are plain P0 stores.
+        mov.l   p_tsbbr_addr, r0
+        mov.l   p_tsbbr_val, r1
+        mov.l   r1, @r0
+        mov.l   p_tsbcfg_addr, r0
+        mov.l   p_tsbcfg_val, r1
+        mov.l   r1, @r0
+
         mov     #0, r0
-        .word   0x405E          ! LDC r0, PTEH (VPN = 0)
-        mov.l   p_ptel_p0, r0   ! 0x000000E8  (PA=0 | W|X|U|C)
-        .word   0x406E          ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E          ! LDC r0, ASIDR
-        .word   0x0038          ! LDTLB
+        .word   0x407E                  ! LDC r0, ASIDR  (ASID 0 throughout)
+        nop
+        nop
+
+        mov.l   p_tsbslot, r12
+        mov.l   p_tab, r14
+        mov.l   p_tab_end, r5
+1:      mov.l   @r14+, r6               ! VA
+        mov.l   @r14+, r7               ! ASID
+        mov.l   @r14+, r8               ! PTEL
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! 32-byte-aligned SET address
+        tsb_fill r10, r6, r7, r8
+        cmp/hs  r5, r14
+        bf      1b
 
         ! ---- Seed PA 0x10000 = 0, PA 0x11000 = 0 via P2 alias (AT off) ----
         mov     #0, r1
@@ -123,13 +162,32 @@ ENTRY(start)
 
         .align 2
 p_rbclear:   .long 0xDFFFFFFF
-p_ptel_p0:   .long 0x000000C8   ! page 0: PA=0x0 | W|X|C, U cleared: kernel code, SMEP
+p_tsbbr_addr:  .long 0xFF000014
+p_tsbbr_val:   .long 0x00014008  ! base=0x00014000, TSB_SIZE_LOG=8
+p_tsbcfg_addr: .long 0xFF000018
+p_tsbcfg_val:  .long 0x00000061  ! HASH_SHIFT=6, HASH_MODE=1
+p_tsbslot:     .long 0xFF000048  ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
+p_tab:         .long _tsb_tab
+p_tab_end:     .long _tsb_tab_end
 p_p2_base:   .long 0xA0010000   ! P2 alias of PA 0x10000
 p_p2_sub:    .long 0xA0011000   ! P2 alias of PA 0x11000
 k_vbr:       .long _v_store - 0x400
 p_mmucr:     .long 0xFF000010
 p_sentinel:  .long 0x5E91A16C
 p_va_sub:    .long 0x00011000
+
+        .balign 4
+_tsb_tab:
+        ! VA          ASID        PTEL
+        ! Identity code+handler pages, 16 KB GLOBAL, W|X|C, U CLEARED -- a
+        ! kernel fetch of a U=1 page is an SMEP protection fault. The walker's
+        ! tag compare is exact on the 4 KB VPN, so all four covered VPNs get a
+        ! row; whichever is fetched first installs and the rest then hit.
+        .long 0x00000000, 0x00000000, 0x000001CD
+        .long 0x00001000, 0x00000000, 0x000001CD
+        .long 0x00002000, 0x00000000, 0x000001CD
+        .long 0x00003000, 0x00000000, 0x000001CD
+_tsb_tab_end:
 #endif
 
 ENTRY(_done)
@@ -163,31 +221,45 @@ p_test_result_pass: .long   TEST_PASS_MAGIC
         .balign 4
 
         ! On exception entry SR.RB=1: r0-r7 are bank-1 scratch, no save needed.
-        ! PTEH already holds the captured faulting VPN (0x11 = VA[31:12] of
-        ! 0x11000).  Build PTEL = 0x000101E8 (PA 0x10000 | pm=1 | W|X|U|C).
-        ! pm=1 masks VPN[13:12] on compare, so entry covers VA 0x10000-0x13FFF.
-        ! LDTLB.RN has NO delay slot: it atomically installs and returns to
-        ! SPC/SSR, re-executing the faulting store through the new mapping.
 _v_store:
-        ! Explicitly set PTEH to the 16KB-aligned page base (VPN=0x10, VA 0x10000),
-        ! mirroring mmuldtlbr.S's explicit-PTEH pattern.  Build via immediate:
-        !   PTEH = 0x00010000 = 1 << 16
-        mov     #1, r2
-        shll16  r2              ! r2 = 0x00010000
-        ! Build PTEL = 0x000101E8:
-        !   0x000101E8 = (1 << 16) | (1 << 8) | 0xE8
-        !              = PA 0x10000 | pm=1 | W|X|U|C
-        mov     #1, r0
-        shll16  r0              ! r0 = 0x00010000
-        mov     #1, r1
-        shll8   r1              ! r1 = 0x00000100  (pm=1 at PTEL[11:8])
-        or      r1, r0          ! r0 = 0x00010100
-        or      #0xE8, r0       ! r0 = 0x000101E8
-        .word   0x425E          ! LDC r2, PTEH  (LDC r2,PTEH = 0x4n5E n=2 -> 0x425E)
-        .word   0x406E          ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E          ! LDC r0, ASIDR
-        .word   0x0078          ! LDTLB.RN: atomic install + return to SPC (no delay slot)
-        nop                     ! padding only (never executed; LDTLB.RN has no delay slot) — matches mmurun.S
+        ! Take the faulting VA from TEA -- a real handler cannot assume it.
+        mov.l   Htea, r0
+        mov.l   @r0, r1                 ! r1 = faulting VA (0x00011000)
+        mov.l   Hvpnmask, r2
+        and     r2, r1                  ! r1 = 4 KB VPN key for the row
+
+        ! Ask the P4 helper for this VA's TSB set under the current ASIDR.
+        mov.l   Hslot, r0
+        mov.l   r1, @r0
+        mov.l   @r0, r3                 ! r3 = 32-byte-aligned SET address (PA)
+
+        ! Address the set THROUGH P1: AT is on and the TSB is unmapped, so a P0
+        ! store from here would fault inside the handler.
+        mov.l   Hp1, r0
+        or      r0, r3
+
+        ! Write the row. Data first, tag_lo second, tag_hi LAST -- tag_hi is the
+        ! commit point because the walker compares it first, so a walker landing
+        ! mid-sequence must never see a matching tag over a half-written row.
+        mov.l   Hptel, r4               ! PA 0x10000 | pm=1 (16 KB) | W|X|U|C|V
+        mov     #0, r5                  ! ASID_TAG = 0
+        mov.l   r4, @(8, r3)
+        mov.l   r5, @(4, r3)
+        mov.l   r1, @(0, r3)
+
+        ! Plain RTE: the store re-executes, misses again, and the walker
+        ! installs the row the handler just published.
+        rte
+        nop
+
+        .align 2
+Htea:        .long 0xFF00000C           ! TEA: the faulting virtual address
+Hvpnmask:    .long 0xFFFFF000
+Hslot:       .long 0xFF000048           ! P4_TSBSLOT
+Hp1:         .long 0x80000000
+Hptel:       .long 0x000101E9           ! PA 0x10000 | pm=1 | W|X|U|C|V
 #endif
-        .org 0x12000
+        ! ---- The image must reach past the END of the TSB (PA 0x14000..
+        ! ---- 0x15FFF): the walker reads the TSB by PHYSICAL address and a
+        ! ---- physical alias is backed by SRAM only within the loaded image.
+        .org 0x16000

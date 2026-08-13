@@ -76,7 +76,7 @@ entity tlb_walk is
     bus_d   : in    std_logic_vector(31 downto 0);
     bus_ack : in    std_logic;
 
-    -- Install into the TLB, one cycle, same port LDTLB uses.
+    -- Install into the TLB, one cycle. This is the ONLY install port.
     install      : out   std_logic;
     install_ptel : out   std_logic_vector(31 downto 0);
     -- The VA this walk was started for, LATCHED at st_idle. cpu.vhd drives the

@@ -201,9 +201,8 @@ architecture stru of cpu is
   signal walk_side_i    : std_logic;
   signal walk_cnt_walks : unsigned(15 downto 0);
   signal walk_cnt_hits  : unsigned(15 downto 0);
-  -- TLB install-port muxes: LDTLB (decoder) or hardware walker. The write
-  -- enable is PER ARRAY since the split (LDTLB writes both, a walker install
-  -- only the faulting side); the data/VPN muxes are shared by both arrays.
+  -- TLB install-port write enables, one PER ARRAY: the hardware walker is the
+  -- sole installer and installs only into the side that faulted.
   signal itlb_wr     : std_logic;
   signal dtlb_wr     : std_logic;
   signal tlb_ptel_mx : std_logic_vector(31 downto 0);
@@ -858,7 +857,8 @@ begin
 
   -- TLB instantiation (J4 only).
   -- The TLB is combinational for lookups; it is clocked only for TI flush and
-  -- LDTLB writes: tlb_wr comes from decoder (sr.tlb_wr); ti is MMUCR bit[2].
+  -- installs, and every install now comes from the hardware walker
+  -- (walk_install); ti is MMUCR bit[2].
 
   g_mmu : if PRIV_ARCH generate
   begin
@@ -877,18 +877,20 @@ begin
                                                  (seg_decode(d_va_32) = SEG_P0 or seg_decode(d_va_32) = SEG_P3) else
                        '0';
 
-    -- TLB install port: LDTLB (decoder) or the hardware walker. The per-array
-    -- write enables are derived at the instantiations below.
-    tlb_ptel_mx <= walk_ptel when walk_install = '1' else
-                   dp_mmu_regs.ptel;
+    -- TLB install port. Both arrays are written only when walk_install is set,
+    -- so these carry the walker's data unconditionally -- the PTEH/PTEL CSR
+    -- alternative that used to sit on the other leg of each mux went away with
+    -- the software install instruction. PTEH and PTEL remain fully readable and
+    -- writable by software; they simply no longer feed the install port.
+    --
     -- On a walker install PTEH has NOT been written (no exception was taken),
-    -- so the TLB's VPN input must come from the faulting VA instead of the CSR
-    -- -- and specifically from the walker's LATCHED copy of it (walk_va_r), not
-    -- from walk_va. walk_va is a combinational selection that can change under
-    -- a walk in progress, which would install the fetched PTEL under the wrong
-    -- VPN. The walker compares its tag against the same latched value.
-    tlb_vpn_mx <= walk_va_r(31 downto 12) when walk_install = '1' else
-                  dp_mmu_regs.pteh(31 downto 12);
+    -- so the TLB's VPN input comes from the faulting VA -- and specifically
+    -- from the walker's LATCHED copy of it (walk_va_r), not from walk_va.
+    -- walk_va is a combinational selection that can change under a walk in
+    -- progress, which would install the fetched PTEL under the wrong VPN. The
+    -- walker compares its tag against the same latched value.
+    tlb_ptel_mx <= walk_ptel;
+    tlb_vpn_mx  <= walk_va_r(31 downto 12);
 
     -- Split ITLB/DTLB (S1). Two independent single-port arrays replace the one
     -- dual-ported 32-entry block, so each can be placed beside the cache it
@@ -897,13 +899,20 @@ begin
     -- below and the fact that multi-hit is PER ARRAY (the same page resident in
     -- both is not a multi-hit).
     --
-    -- INSTALL ROUTING. A HARDWARE-WALKER install goes to the faulting side only
-    -- -- walk_side_i names it, and installing into the other array would be
-    -- pure pollution. A SOFTWARE install (LDTLB, sr.tlb_wr) writes BOTH: it is
-    -- rare, the ISA gives no side selector, and software that LDTLBs a page
-    -- then both fetches and loads from it must keep working.
-    itlb_wr <= sr.tlb_wr or (walk_install and walk_side_i);
-    dtlb_wr <= sr.tlb_wr or (walk_install and not walk_side_i);
+    -- INSTALL ROUTING. The hardware walker is the SOLE installer: there is no
+    -- software install instruction any more. A walk installs into the faulting
+    -- side only -- walk_side_i names it, and installing into the other array
+    -- would be pure pollution.
+    --
+    -- This is demand-driven routing by construction, which is why retiring the
+    -- software path was worth doing: an I-side miss can only ever want an ITLB
+    -- entry and a D-side miss a DTLB entry, so no X-bit heuristic, fault-side
+    -- state or ABI side-selector bit is needed. The old software install had to
+    -- write BOTH arrays because the ISA gave it no side selector, which meant
+    -- every pure-data page it installed also consumed an ITLB entry it could
+    -- never legally use.
+    itlb_wr <= walk_install and walk_side_i;
+    dtlb_wr <= walk_install and not walk_side_i;
 
     u_itlb : entity work.tlb
       generic map (
@@ -929,8 +938,7 @@ begin
         at        => dp_mmu_regs.mmucr(0),
         tlb_wr    => itlb_wr,
         pteh_vpn  => tlb_vpn_mx,
-        -- Install data, not the CSR: LDTLB.RN Rm drives this from XBUS so it
-        -- does not need a separate slot to stage PTEL := Rm first.
+        -- Install data, not the CSR: the walker's fetched PTE.
         ptel  => tlb_ptel_mx,
         asidr => dp_mmu_regs.asidr(15 downto 0),
         ti    => dp_mmu_regs.mmucr(2)
@@ -1085,10 +1093,10 @@ begin
       -- second faulting access (the instruction right after a faulting one, whose
       -- access already launched -- back-to-back D-faults) dispatches a SECOND
       -- exception entry that re-saves SSR<-SR while already in exception mode
-      -- (RB=1). The handler's LDTLB.R/RTE then restores RB=1, so the resumed user
+      -- (RB=1). The handler's RTE then restores RB=1, so the resumed user
       -- code reads bank-1 (uninitialised) registers and corrupts addresses.
       -- SR.RB is this design's handler indicator: user code runs RB=0, exception
-      -- entry sets RB=1, and LDTLB.R/RTE restores it -- so RB=1 means "in the
+      -- entry sets RB=1, and RTE restores it -- so RB=1 means "in the
       -- handler". (SR.BL, the architectural block bit, is left set from reset by
       -- the bare-metal guards, so it cannot serve as the gate here.) The lingering
       -- second access then raises no exception while RB=1; it re-faults cleanly

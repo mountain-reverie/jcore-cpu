@@ -1,10 +1,10 @@
 -- ===========================================================================
--- tlb -- J4 software-loaded translation lookaside buffer (PRIV_ARCH only).
+-- tlb -- J4 walker-loaded translation lookaside buffer (PRIV_ARCH only).
 --
--- SINGLE-PORT, fully associative, software-loaded TLB with a configurable
--- entry count (generic `entries`, power of two). ONE combinational lookup port
--- per instance; a clocked process handles installs (LDTLB / hardware walker)
--- and the MMUCR.TI flush. Variable page sizes via PageMask ptel(11:8)
+-- SINGLE-PORT, fully associative TLB with a configurable entry count (generic
+-- `entries`, power of two). ONE combinational lookup port per instance; a
+-- clocked process handles installs (hardware TSB walker -- the only installer;
+-- there is no software install instruction) and the MMUCR.TI flush. Variable page sizes via PageMask ptel(11:8)
 -- (4KB..1GB); Linux uses a 16KB base page plus 64KB..256MB huge pages.
 --
 -- core/cpu.vhd instantiates this TWICE under `g_mmu : if PRIV_ARCH generate`:
@@ -12,10 +12,9 @@
 -- (load/store, side_is_i => false). Each instance owns its OWN `ram`, so the
 -- two arrays can be placed beside their respective caches instead of one
 -- dual-ported block straddling both. Consequences of the split:
---   * A hardware-walker install goes to the FAULTING side only (walk_side_i).
---   * An LDTLB (software install) writes BOTH arrays -- conservative, and it
---     preserves the semantics of guards that LDTLB a page then both fetch and
---     load from it.
+--   * An install goes to the FAULTING side only (walk_side_i), which is
+--     demand-driven routing by construction: an I-side miss can only want an
+--     ITLB entry and a D-side miss a DTLB entry. Nothing writes both arrays.
 --   * MMUCR.TI flushes both; asid/md/at feed both.
 --   * Multi-hit is detected PER ARRAY. The same page resident in both the
 --     ITLB and the DTLB is NOT a multi-hit -- they are different arrays.
@@ -67,7 +66,7 @@ entity tlb is
     asid : in    std_logic_vector(15 downto 0); -- live ASIDR (lookup tag)
     md   : in    std_logic;                     -- SR.MD (1=privileged)
     at   : in    std_logic;                     -- MMUCR.AT (translate enable)
-    -- Install (LDTLB / walker) + flush (MMUCR.TI) inputs.
+    -- Install (hardware walker) + flush (MMUCR.TI) inputs.
     tlb_wr   : in    std_logic;                      -- 1 => install {asidr,pteh,ptel}
     pteh_vpn : in    std_logic_vector(31 downto 12); -- VPN to install
     ptel     : in    std_logic_vector(31 downto 0);  -- PPN + flags to install
@@ -288,7 +287,7 @@ begin
 
   end process;
 
-  -- Clocked install (LDTLB / walker) + MMUCR.TI flush. TI clears VALID (and the
+  -- Clocked install (hardware walker) + MMUCR.TI flush. TI clears VALID (and the
   -- NRU "used" state) on every entry -> a full revocation
   -- (docs/architecture/tlb.md section 6). An install latches the whole entry
   -- atomically from {asidr, pteh_vpn, ptel} into one NRU-chosen slot (no
@@ -322,7 +321,8 @@ begin
         -- if a valid entry already OVERLAPS this mapping's range under this
         -- ASID (or either side is global), overwrite THAT slot so the
         -- install replaces the mapping in place. This mirrors SH-4 LDTLB
-        -- semantics and prevents a benign re-install -- e.g. Linux upgrading
+        -- semantics (inherited even though the instruction itself is gone)
+        -- and prevents a benign re-install -- e.g. Linux upgrading
         -- a page's permissions (dirty bit) while it is still resident, or
         -- installing a narrower page inside a resident superpage -- from
         -- leaving TWO matching entries, which the S-I5 multi-hit check would

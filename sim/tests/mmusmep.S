@@ -42,9 +42,23 @@
 !   because it is a USER page, not because it's non-executable; allowed
 !   to a USER fetch)
 !
+! WALKER-INSTALL VERSION (L2 of "retire LDTLB"). SAME strength: the IPROT
+! sub-test, the TEA/EXPEVT pins and the user-mode negative control are all
+! unchanged. All three mappings are now published as TSB rows BEFORE AT goes
+! on and installed by the walker on first touch. Note in particular what this
+! does NOT weaken: the walker does not evaluate SMEP, so it installs the
+! U=1 page happily and the KERNEL fetch of it then takes IPROT at lookup --
+! i.e. the rule is still exercised against a genuinely resident entry, which
+! is the only shape that matters.
+!
+! _user_ok_page's row moves from mid-test (it used to be LDTLB'd after AT was
+! already on) to the same up-front fill. That is not a shortcut: the walker
+! installs only on a MISS, so publishing the row early changes nothing about
+! WHEN the entry becomes resident -- it still appears on the first user-mode
+! fetch of that page, which is the access the negative control is about.
+!
 ! J4 overlay opcodes (same encodings as mmufault.S):
-!   LDC r0,PTEH=0x405E  LDC r0,PTEL=0x406E  LDC r0,ASIDR=0x407E
-!   LDTLB=0x0038        LDC r0,VBR=0x402E
+!   LDC r0,ASIDR=0x407E  LDC r0,VBR=0x402E
 !   STC EXPEVT,r0=0x0052
 !   STC SPC,r0=0x0042   LDC r0,SPC=0x404E
 !
@@ -69,6 +83,7 @@
 ! globals below use loud sentinels (_g_exp_* = 0xFFFFFFFF, _g_bad_* = small
 ! distinct values) so an early exit still names its cause.
 #include "sim_instr.h"
+#include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
 
         .section .vect
@@ -103,35 +118,56 @@ ENTRY(start)
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
-        ! ---- Map our own code's page: identity, KERNEL-ONLY (no U bit) so
-        ! this mapping itself can never trip SMEP: W|X|C = 0xC8. Computed at
+        ! ---- Publish the three TSB rows, AT still off (plain P0 stores).
+        ! ---- TSB: base 0x00014000, TSB_SIZE_LOG=8 (256 sets x 32 bytes),
+        ! ---- HASH_SHIFT=6, HASH_MODE=1; set addresses come from the P4 helper
+        ! ---- at 0xFF000048 rather than being hand-computed.
+        mov.l   p_tsbbr_addr, r0
+        mov.l   p_tsbbr_val, r1
+        mov.l   r1, @r0
+        mov.l   p_tsbcfg_addr, r0
+        mov.l   p_tsbcfg_val, r1
+        mov.l   r1, @r0
+        mov     #0, r0
+        .word   0x407E                  ! LDC r0, ASIDR  (ASID 0 throughout)
+        nop
+        nop
+        mov.l   p_tsbslot, r12
+        mov     #0, r7                  ! ASID_TAG = 0
+
+        ! ---- Row 1: our own code's page, identity, KERNEL-ONLY (no U bit) so
+        ! this mapping itself can never trip SMEP: W|X|C|V. Computed at
         ! runtime (mask &start down to its page) rather than hardcoded, since
         ! the .balign 4096 before _user_page (below) forces this whole
         ! object's .text into its own page-aligned region and its base is
         ! not an assemble-time constant. Needed so our own code (and the
         ! handler + globals that follow it) keeps fetching/loading once AT
         ! is enabled. ----
-        mov.l   p_start_addr, r0
+        mov.l   p_start_addr, r6
         mov.l   p_pagemask, r1
-        and     r1, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN = start's page, ASID=0)
-        mov.l   p_start_addr, r0
-        and     r1, r0
-        mov.l   p_ownpage_flags, r2
-        or      r2, r0
-        .word   0x406E                  ! LDC r0, PTEL = (start & pagemask) | W|X|C
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        and     r1, r6                  ! r6 = start's page base
+        mov     r6, r8
+        mov.l   p_ownpage_flags, r1
+        or      r1, r8                  ! PTEL = page | W|X|C|V
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! 32-byte-aligned SET address
+        tsb_fill r10, r6, r7, r8
 
-        ! ---- Map _user_page: identity, user-executable, X|U|C = 0x68. ----
-        mov.l   p_user_page_addr, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN=&_user_page, ASID=0)
-        mov.l   p_ptel_userx, r0
-        .word   0x406E                  ! LDC r0, PTEL = &_user_page | 0x68
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        ! ---- Row 2: _user_page, identity, user-executable, X|U|C|V. ----
+        mov.l   p_user_page_addr, r6
+        mov.l   p_ptel_userx, r8
+        mov.l   r6, @r12
+        mov.l   @r12, r10
+        tsb_fill r10, r6, r7, r8
+
+        ! ---- Row 3: _user_ok_page, identity, user-executable, X|U|C|V.
+        ! The negative control's page; see the header note on why publishing
+        ! its row here does not move when the entry becomes resident. ----
+        mov.l   p_userok_page_addr, r6
+        mov.l   p_ptel_userok, r8
+        mov.l   r6, @r12
+        mov.l   @r12, r10
+        tsb_fill r10, r6, r7, r8
 
         ! ---- Enable AT (MMUCR.AT=1 at P4 0xFF000010). ----
         mov.l   p_mmucr, r0
@@ -175,14 +211,8 @@ ENTRY(after)
         ! TRAPAs back -- _user_page's stub above unconditionally fails
         ! and must not be reused here.
         ! ==============================================================
-        ! ---- Map _user_ok_page: identity, user-executable, X|U|C = 0x68. ----
-        mov.l   p_userok_page_addr, r0
-        .word   0x405E                  ! LDC r0, PTEH (VPN=&_user_ok_page, ASID=0)
-        mov.l   p_ptel_userok, r0
-        .word   0x406E                  ! LDC r0, PTEL = &_user_ok_page | 0x68
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        ! ---- _user_ok_page's row was published up front with the others;
+        ! ---- the walker installs it on the first user-mode fetch below. ----
 
         ! Any IPROT landing at _v_ifetch during this sub-test IS the
         ! failure under test (SMEP over-firing in user mode): force a
@@ -250,7 +280,7 @@ p_rbclear:       .long 0xDFFFFFFF       ! clear SR.RB (bit 29)
 p_mdmask:        .long 0xBFFFFFFF       ! clear SR.MD (bit 30) -> user mode
 p_vbr_val:       .long _v_ifetch - 0x400
 p_mmucr:         .long 0xFF000010
-p_ptel_userx:    .long _user_page + 0x68  ! identity PPN | X|U|C, W=0
+p_ptel_userx:    .long _user_page + 0x69  ! identity PPN | X|U|C|V, W=0
 c_iprot:         .long 0x000000A0        ! EXPEVT IPROT
 c_bogus_expevt:  .long 0xFFFFFFFF        ! guaranteed EXPEVT mismatch sentinel
 c_marker_expect: .long 0x0000005A        ! expected _g_user_marker value
@@ -263,10 +293,15 @@ p_g_user_marker: .long _g_user_marker
 p_after:         .long after
 p_user_page_addr: .long _user_page
 p_userok_page_addr: .long _user_ok_page
-p_ptel_userok:   .long _user_ok_page + 0x68  ! identity PPN | X|U|C, W=0
+p_ptel_userok:   .long _user_ok_page + 0x69  ! identity PPN | X|U|C|V, W=0
 p_start_addr:    .long start
 p_pagemask:      .long 0xFFFFF000
-p_ownpage_flags: .long 0x000000C8       ! W|X|C -- U=0 (kernel-only). This is the
+p_tsbbr_addr:    .long 0xFF000014
+p_tsbbr_val:     .long 0x00014008       ! base=0x00014000, TSB_SIZE_LOG=8
+p_tsbcfg_addr:   .long 0xFF000018
+p_tsbcfg_val:    .long 0x00000061       ! HASH_SHIFT=6, HASH_MODE=1
+p_tsbslot:       .long 0xFF000048       ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
+p_ownpage_flags: .long 0x000000C9       ! W|X|C|V -- U=0 (kernel-only). This is the
                                          ! guard's OWN code page, always fetched
                                          ! in supervisor mode; U=1 here would trip
                                          ! SMEP on the very next instruction fetch
@@ -428,5 +463,11 @@ _user_ok_page:
         trapa   #1                      ! -> VBR+0x100 (_v_trapa)
 1:      bra     1b
         nop
+
+        ! ---- The image must reach past the END of the TSB (PA 0x14000..
+        ! ---- 0x15FFF): the walker reads the TSB by PHYSICAL address and a
+        ! ---- physical alias is backed by SRAM only within the loaded image.
+_tsb_backing:
+        .space 0x16000, 0
 
 #endif  ! CONFIG_PRIV_ARCH

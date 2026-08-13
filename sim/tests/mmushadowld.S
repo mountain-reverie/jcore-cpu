@@ -77,13 +77,21 @@
 ! Overlay .word encodings (the assembler does not know these J4 forms):
 !   LDC r0,VBR  = 0x402E   LDC r0,PTEH  = 0x405E   (PTEH is READ via the
 !   read-only P4 alias 0xFF000000, not STC)
-!   LDC r0,PTEL = 0x406E   LDC r0,ASIDR= 0x407E   LDTLB = 0x0038  LDTLB.RN = 0x0078
+!   LDC r0,ASIDR= 0x407E!
+! WALKER-INSTALL VERSION (L2 of "retire LDTLB"). SAME strength: every
+! assertion, the fault-count anti-vacuity check and the U=0 layout contract
+! are untouched. Only the install path moves -- the setup loop publishes a TSB
+! ROW per code page, and the demand-paging handler publishes the faulting
+! page's row (through the P1 alias, because AT is on and the TSB itself is
+! unmapped) and returns with a plain RTE instead of LDTLB.RN.
+
 !
 ! ---- _fail integrity net ----
 ! _fail writes r9 verbatim to TEST_RESULT_ADDRESS; sim/cpu_ctb.c's
 ! test_result() requires TEST_PASS_MAGIC for PASS; _fail still clamps r9==0
 ! to 0x7F.
 #include "sim_instr.h"
+#include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
 
 #define PAGE_SZ  0x1000
@@ -125,21 +133,35 @@ ENTRY(start)
         mov.l   p_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
-        ! ---- Identity-map every code page: start .. _code_end. ----
+        ! ---- Publish a TSB row for every code page: start .. _code_end. ----
         ! The body spans more than one page, so all of it (preamble, handler,
-        ! verifier, literal pools) must be mapped BEFORE AT goes on -- otherwise
+        ! verifier, literal pools) must have a row BEFORE AT goes on -- otherwise
         ! the first fault's own handler fetch IMISSes and double-faults.
+        ! TSB: base 0x00014000, TSB_SIZE_LOG=8 (256 sets x 32 bytes),
+        ! HASH_SHIFT=6, HASH_MODE=1; set addresses come from the P4 helper at
+        ! 0xFF000048. AT is off here, so these are plain P0 stores.
+        mov     #0, r0
+        .word   0x407E                  ! LDC r0, ASIDR  (ASID 0 throughout)
+        nop
+        nop
+        mov.l   p_tsbbr_addr, r0
+        mov.l   p_tsbbr_val, r1
+        mov.l   r1, @r0
+        mov.l   p_tsbcfg_addr, r0
+        mov.l   p_tsbcfg_val, r1
+        mov.l   r1, @r0
+
+        mov.l   p_tsbslot, r12
         mov.l   p_code_start, r2
         mov.l   p_code_end, r3
-1:      mov     r2, r0
-        .word   0x405E                  ! LDC r0, PTEH
-        mov     r2, r0
+1:      mov.l   r2, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! 32-byte-aligned SET address
         mov.l   p_code_flags, r1
-        or      r1, r0                  ! PTEL = page | 0xC8 (kernel code, U clear)
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        mov     r2, r0
+        or      r1, r0                  ! PTEL = page | 0xC9 (kernel code, U clear)
+        mov     r0, r8
+        mov     #0, r7                  ! ASID_TAG = 0
+        tsb_fill r10, r2, r7, r8
         mov.l   p_page_sz, r0
         add     r0, r2
         cmp/hs  r3, r2
@@ -185,7 +207,12 @@ p_vbr_val:      .long _v_shl - 0x400
 p_mmucr:        .long 0xFF000010
 p_code_start:   .long start
 p_code_end:     .long _code_end
-p_code_flags:   .long 0x000000C8
+p_code_flags:   .long 0x000000C9        ! W|X|C|V, U clear (SMEP: fetched pages)
+p_tsbbr_addr:   .long 0xFF000014
+p_tsbbr_val:    .long 0x00014008        ! base=0x00014000, TSB_SIZE_LOG=8
+p_tsbcfg_addr:  .long 0xFF000018
+p_tsbcfg_val:   .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
+p_tsbslot:      .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
 p_page_sz:      .long PAGE_SZ
 p_fc:           .long _fault_count
 p_d0:           .long _dpage_S0
@@ -332,24 +359,39 @@ _v_shl:
         mov.l   Hcflags, r0             ! code/stub page: 0xC8 (U clear)
         bra     2f
         nop
-1:      mov.l   Hflags, r0              ! data page: 0xE8
+1:      mov.l   Hflags, r0              ! data page: 0xE9
 2:      or      r1, r0                  ! PTEL = page | flags
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
+        mov     r0, r4                  ! r4 = PTEL
+
+        ! Publish the row for this page. The set address comes from the P4
+        ! helper and is addressed THROUGH P1: AT is on and the TSB is unmapped,
+        ! so a P0 store from the handler would fault inside the handler.
+        mov.l   Hslot, r0
+        mov.l   r1, @r0                 ! r1 = page base (the row's VA key)
+        mov.l   @r0, r3
+        mov.l   Hp1, r0
+        or      r0, r3
+        mov     #0, r5                  ! ASID_TAG = 0
+        mov.l   r4, @(8, r3)            ! data first ...
+        mov.l   r5, @(4, r3)            ! ... tag_lo second ...
+        mov.l   r1, @(0, r3)            ! ... tag_hi LAST (the commit point)
+
         mov.l   Hcount, r0              ! non-vacuity: count this fault
-        mov.l   @r0, r1
-        add     #1, r1
-        mov.l   r1, @r0
-        .word   0x0078                  ! LDTLB.RN -- install + return atomically
+        mov.l   @r0, r2
+        add     #1, r2
+        mov.l   r2, @r0
+        rte                             ! retry: the walker installs the row
+        nop
 _h_fail_spin:
         bra     _h_fail_spin
         nop
         .align 2
 Hpagemask:      .long 0xFFFFF000
 Hpteh_a:        .long 0xFF000000
-Hflags:         .long 0x000000E8
-Hcflags:        .long 0x000000C8
+Hflags:         .long 0x000000E9        ! data page: W|X|U|C|V
+Hcflags:        .long 0x000000C9        ! code/stub page: W|X|C|V, U clear
+Hslot:          .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
+Hp1:            .long 0x80000000
 Hdbase:         .long _dpage_S0
 Hcount:         .long _fault_count
 
@@ -368,5 +410,11 @@ _dpage_S0:  .long 0xD0000000
         .balign PAGE_SZ
 _dpage_S1:  .long 0xD1111111
             .space PAGE_SZ - 4, 0
+
+        ! ---- The image must reach past the END of the TSB (PA 0x14000..
+        ! ---- 0x15FFF): the walker reads the TSB by PHYSICAL address and a
+        ! ---- physical alias is backed by SRAM only within the loaded image.
+_tsb_backing:
+        .space 0x16000, 0
 
 #endif

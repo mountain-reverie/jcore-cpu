@@ -709,6 +709,16 @@ else
   # on the bus while a younger delay-slot I-fetch misses. Read its header
   # before reshaping it.
   run_guard mmuwalkorderhit "" 100us
+  # REGRESSION LOCK for the walker's per-REQUEST one-shot (e6ee313,
+  # core/tlb_walk.vhd). One continuous `req' level spans a younger I-side fetch
+  # miss that gives up and the OLDER instruction's D-side miss; keying `tried'
+  # on the level denied that second miss a walk for a VA it was never tried
+  # for. Invisible while LDTLB exists (software just installs the entry), so
+  # this guard asserts WHO resolved it, not what came back: with the fix the
+  # D side is walked and installed, takes no exception, and the only fault left
+  # is the younger IMISS. Revert core/tlb_walk.vhd to e6ee313^ and it reports
+  # Result=2 (DMISS_R -- the D-side walk was denied). Read its header.
+  run_guard mmuwalkrearm "" 100us
   # TSB COHERENCY (R1). Software writes a TSB row over a different, valid entry
   # for the same VA with ordinary cacheable stores -- Linux's exact path -- and
   # the walker must install the row software LAST wrote. Run under BOTH tops on

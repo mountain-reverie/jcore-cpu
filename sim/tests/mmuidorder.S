@@ -174,15 +174,24 @@
 ! The handler is entered with SR.RB=1 and uses only r0-r7 (bank 1); r9 and
 ! r11-r14 are non-banked and carry state across faults untouched.
 !
+! WALKER-INSTALL VERSION (L2 of "retire LDTLB"). SAME strength: the ordering
+! scenario, the fault log and every check are unchanged. Page 0 is published as
+! a TSB row before AT goes on, and the common handler publishes the faulting
+! page's row -- through the P1 alias, because AT is on and the TSB is unmapped
+! so a P0 store from the handler would fault inside the handler -- then returns
+! with a plain RTE. Pages 1 and 3 still have NO row, so they still fault, the
+! walker still gives up on them, and the software handler is still what
+! resolves each miss.
+!
 ! J4 overlay opcodes (the assembler does not know these forms):
-!   LDC r0,PTEH=0x405E  LDC r0,PTEL=0x406E  LDC r0,ASIDR=0x407E
-!   LDTLB=0x0038        LDC r0,VBR=0x402E
+!   LDC r0,ASIDR=0x407E  LDC r0,VBR=0x402E
 !
 ! ---- _fail integrity net ----
 ! _fail writes r9 verbatim to TEST_RESULT_ADDRESS; sim/cpu_ctb.c's
 ! test_result() requires TEST_PASS_MAGIC for PASS, and _fail clamps r9==0 to
 ! 0x7F so an un-set fail code is never mistaken for PASS.
 #include "sim_instr.h"
+#include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
 
         .section .vect
@@ -226,14 +235,35 @@ ENTRY(start)
         mov.l   p_log_base, r1
         mov.l   r1, @r0
 
-        ! ---- Map page 0 identity, W|X|C (no U: kernel fetch, SMEP). ----
+        ! ---- Point the walker at a TSB of our own (base 0x00014000,
+        ! ---- TSB_SIZE_LOG=8 -> 256 sets x 32 bytes; HASH_SHIFT=6,
+        ! ---- HASH_MODE=1). The image is padded past its end so the walker's
+        ! ---- PHYSICAL reads land in SRAM, and the image is zero-filled there,
+        ! ---- so every row starts invalid: pages 1 and 3 have no row and still
+        ! ---- fault, exactly as they did under LDTLB.
+        mov.l   p_tsbbr_addr, r0
+        mov.l   p_tsbbr_val, r1
+        mov.l   r1, @r0
+        mov.l   p_tsbcfg_addr, r0
+        mov.l   p_tsbcfg_val, r1
+        mov.l   r1, @r0
+
+        ! ---- Publish the TSB row for page 0: identity, W|X|C|V (no U: this
+        ! ---- page is FETCHED and a kernel fetch of a U=1 page is an SMEP
+        ! ---- protection fault). The set address comes from the P4 helper at
+        ! ---- 0xFF000048; AT is off, so these are plain P0 stores. The TSB
+        ! ---- itself is configured and zeroed above.
         mov     #0, r0
-        .word   0x405E                  ! LDC r0, PTEH  (VPN=0, ASID=0)
-        mov.l   p_ptel_page0, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        .word   0x407E                  ! LDC r0, ASIDR  (ASID 0 throughout)
+        nop
+        nop
+        mov.l   p_tsbslot, r12
+        mov     #0, r6                  ! VA 0
+        mov     #0, r7                  ! ASID_TAG = 0
+        mov.l   p_ptel_page0, r8
+        mov.l   r6, @r12
+        mov.l   @r12, r10
+        tsb_fill r10, r6, r7, r8
 
         ! ---- Enable AT. Pages 1 and 3 are deliberately NOT mapped. ----
         mov.l   p_mmucr, r0
@@ -269,7 +299,12 @@ ENTRY(start)
 p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _vbase
 p_mmucr:        .long 0xFF000010
-p_ptel_page0:   .long 0x000000C8        ! PA 0x0000 | W|X|C
+p_ptel_page0:   .long 0x000000C9        ! PA 0x0000 | W|X|C|V
+p_tsbslot:      .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
+p_tsbbr_addr:   .long 0xFF000014
+p_tsbbr_val:    .long 0x00014008        ! base=0x00014000, TSB_SIZE_LOG=8
+p_tsbcfg_addr:  .long 0xFF000018
+p_tsbcfg_val:   .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
 c_data_va:      .long 0x00003000        ! page 3, unmapped -> DMISS_R (OLDER)
 c_target_va:    .long 0x00001004        ! branch target, on unmapped page 1
 c_race_va:      .long 0x00000FFC        ! the load, 3rd-from-last halfword of page 0
@@ -427,22 +462,33 @@ _h_tlb:
         add     #4, r5
         mov.l   r5, @r1
 
-        mov     r2, r0
-        .word   0x405E                  ! LDC r0, PTEH
+        ! ---- Publish the row for the faulting page. The set address comes
+        ! ---- from the P4 helper and is addressed THROUGH P1: AT is on and the
+        ! ---- TSB is unmapped, so a P0 store from here would fault inside the
+        ! ---- handler. Then a plain RTE; the access retries, misses again, and
+        ! ---- the walker installs the row.
         mov.l   Hptel_flags, r3
         mov     r2, r0
         or      r3, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        mov     r0, r4                  ! r4 = PTEL
+        mov.l   Hslot, r0
+        mov.l   r2, @r0
+        mov.l   @r0, r6
+        mov.l   Hp1, r0
+        or      r0, r6
+        mov     #0, r7                  ! ASID_TAG = 0
+        mov.l   r4, @(8, r6)            ! data first ...
+        mov.l   r7, @(4, r6)            ! ... tag_lo second ...
+        mov.l   r2, @(0, r6)            ! ... tag_hi LAST (the commit point)
         rte                             ! PC <- SPC (hardware restart PC)
         nop
 
         .align 2
 Htea_addr:      .long 0xFF00000C
 Hvpn_mask:      .long 0xFFFFF000
-Hptel_flags:    .long 0x000000C8
+Hptel_flags:    .long 0x000000C9        ! identity | W|X|C|V (U clear: SMEP)
+Hslot:          .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
+Hp1:            .long 0x80000000
 Hlog_ptr:       .long _log_ptr
 Hlog_end:       .long _log_end
 Hfail:          .long _fail
@@ -483,6 +529,11 @@ _log_end:
         .org 0x3000
         .long   0x5A5AC3C3              ! r12 must end up holding this
 
+        ! ---- The image must reach past the END of the guard's TSB: the walker
+        ! ---- reads it by PHYSICAL address and a physical alias is backed by
+        ! ---- SRAM only within the loaded image extent.
         .org 0x3100
+
+        .org 0x16000
 
 #endif  ! CONFIG_PRIV_ARCH

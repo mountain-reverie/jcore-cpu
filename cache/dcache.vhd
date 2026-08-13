@@ -7,9 +7,6 @@ library ieee;
   use work.cache_clkmode.all;  -- CACHE_SAME_CLOCK (true=single-clock FPGA)
 
 entity dcache is
-  generic (
-    priv_arch : boolean := false
-  );
   port (
     clk125 : in    std_logic;
     clk200 : in    std_logic;
@@ -88,9 +85,6 @@ begin
 
   -- cpu clock domain, sub module ---------------------------------------------
   udcache_ccl : component dcache_ccl
-    generic map (
-      priv_arch => priv_arch
-    )
     port map (
       clk => clk125,
       -- ------

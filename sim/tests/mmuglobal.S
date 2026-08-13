@@ -18,6 +18,24 @@
 ! is normally exempt from the plain "u=0 and md=0" user-page check --
 ! this is a NEW fail-closed rule, not a variant of the existing one.
 !
+! WALKER-INSTALL VERSION (L2 of "retire LDTLB"). SAME strength -- every leg,
+! every result code and the negative control are unchanged. The three entries
+! now come from TSB rows filed under ASID A and are installed by the walker on
+! first touch. Two points that matter:
+!
+!   * The G=1,U=1 entry is REJECTED AT THE PROTECTION STAGE, not at the tag
+!     compare, so the walker installs it happily and the access then takes
+!     DPROT_R. That is the intended shape: the fail-closed rule must hold
+!     against an entry that really is resident, which is exactly what the
+!     walker produces.
+!   * HASH_MODE=1 puts the ASID in the TSB index, so a row filed under ASID A
+!     is NOT found under ASID B. The negative-control page is therefore made
+!     resident under ASID A during setup (fail 7 if it does not read back);
+!     from then on G=1 is what carries it across the ASID switch -- which is
+!     the property the negative control is there to check. The entry under
+!     test is likewise resident from leg A onward, so leg B genuinely re-uses
+!     one global entry under a second ASID rather than walking a second row in.
+!
 ! Construction:
 !   - page 0 mapped GLOBAL kernel-only identity (code): W|X|C|G = 0xCC,
 !     U cleared -- keeps fetching across the ASID switch below (as in
@@ -55,6 +73,9 @@
 !   5  negative control: G=1,U=0 page did not HIT under ASID A
 !   6  negative control: G=1,U=0 page did not HIT under ASID B (after
 !      switching back to A -- see below, checked in the opposite order)
+!   7  setup/warm-up: the G=1,U=0 negative-control page did not read back
+!      under ASID A, so it never became resident and legs 5/6 would be
+!      testing nothing
 
 !
 ! ---- _fail integrity net ----
@@ -66,6 +87,7 @@
 ! globals below use loud sentinels (_g_exp_* = 0xFFFFFFFF, _g_bad_* = small
 ! distinct values) so an early exit still names its cause.
 #include "sim_instr.h"
+#include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
 
         .section .vect
@@ -109,45 +131,59 @@ ENTRY(start)
         mov.l   p_p1_8000, r2          ! 0x80008000 -> PA 0x8000
         mov.l   r3, @r2
 
-        ! ---- ASIDR = A (0x0011). ----
+        ! ---- Configure the TSB (base 0x00014000, TSB_SIZE_LOG=8 -> 256 sets
+        ! ---- x 32 bytes; HASH_SHIFT=6, HASH_MODE=1) and publish the three
+        ! ---- rows. Each row's set address is asked of the P4 helper
+        ! ---- (0xFF000048) UNDER THAT ROW'S ASID, because HASH_MODE=1 folds
+        ! ---- the ASID into the index. AT is off: plain P0 stores.
+        mov.l   p_tsbbr_addr, r0
+        mov.l   p_tsbbr_val, r1
+        mov.l   r1, @r0
+        mov.l   p_tsbcfg_addr, r0
+        mov.l   p_tsbcfg_val, r1
+        mov.l   r1, @r0
+        mov.l   p_tsbslot, r12
+        mov.l   p_tab, r14
+        mov.l   p_tab_end, r5
+1:      mov.l   @r14+, r6               ! VA
+        mov.l   @r14+, r7               ! ASID
+        mov.l   @r14+, r8               ! PTEL
+        mov     r7, r0
+        .word   0x407E                  ! LDC r0, ASIDR
+        nop
+        nop
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! 32-byte-aligned SET address
+        tsb_fill r10, r6, r7, r8
+        cmp/hs  r5, r14
+        bf      1b
+
+        ! ---- ASIDR = A (0x0011) for the run. ----
         mov.l   p_asid_a, r0
         .word   0x407E                  ! LDC r0, ASIDR
-
-        ! ---- Map page 0 GLOBAL kernel-only identity (code): W|X|C|G = 0xCC,
-        ! U cleared -- keeps executing across ASID switches, itself
-        ! unaffected by the new rule. ----
-        mov     #0, r0
-        .word   0x405E                  ! LDC r0, PTEH  (VPN=0)
-        mov.l   p_ptel_page0, r0       ! 0x000000CC (W|X|C|G, U=0)
-        .word   0x406E                  ! LDC r0, PTEL
-        mov.l   p_asid_a, r0
-        .word   0x407E                  ! LDC r0, ASIDR (re-assert A; global ignores it)
-        .word   0x0038                  ! LDTLB
-
-        ! ---- Map VPN 0x4 (VA 0x4000 -> PA 0x4000): G=1,U=1 (PTEL=0xEC),
-        ! under ASID A -- the entry under test. ----
-        mov.l   p_pteh_p4, r0          ! VPN 0x4
-        .word   0x405E                  ! LDC r0, PTEH
-        mov.l   p_ptel_p4_global_user, r0  ! 0x000040EC (W|X|U|C|G)
-        .word   0x406E                  ! LDC r0, PTEL
-        mov.l   p_asid_a, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
-
-        ! ---- Map VPN 0x8 (VA 0x8000 -> PA 0x8000): G=1,U=0 (PTEL=0xCC),
-        ! a LEGIT global kernel page -- negative control. ----
-        mov.l   p_pteh_p8, r0          ! VPN 0x8
-        .word   0x405E                  ! LDC r0, PTEH
-        mov.l   p_ptel_p8_global_kern, r0  ! 0x000080CC (W|X|C|G, U=0)
-        .word   0x406E                  ! LDC r0, PTEL
-        mov.l   p_asid_a, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        nop
+        nop
 
         ! ---- Enable AT. ----
         mov.l   p_mmucr, r0
         mov     #1, r1
         mov.l   r1, @r0
+
+        ! ---- SETUP CHECK / warm-up: make the G=1,U=0 negative-control page
+        ! ---- resident under ASID A. Its row is filed under A only, so this is
+        ! ---- the one chance the walker gets to install it; legs 5 and 6 then
+        ! ---- test whether G=1 carries the RESIDENT entry across the ASID
+        ! ---- switch, which is the property they name.
+        mov.l   c_va8, r2
+        mov.l   @r2, r8
+        mov.l   p_sentinel2, r0
+        cmp/eq  r8, r0
+        bt      1f
+        mov.l   p_mmucr, r0 ; mov #0, r1 ; mov.l r1, @r0
+        mov     #7, r9
+        bra     _fail
+        nop
+1:
 
         ! ---- Set up expected fault info for Leg A. ----
         mov.l   p_g_exp_expevt, r0
@@ -230,11 +266,13 @@ ENTRY(leg_b_after)
 p_rbclear:              .long 0xDFFFFFFF
 p_vbr_val:               .long _vbase
 p_mmucr:                  .long 0xFF000010
-p_ptel_page0:             .long 0x000000CC        ! W|X|C|G, U=0 (kernel global code page)
-p_pteh_p4:                .long 0x00004000
-p_ptel_p4_global_user:    .long 0x000040EC        ! PA 0x4000 | W|X|U|C|G -- the entry under test
-p_pteh_p8:                .long 0x00008000
-p_ptel_p8_global_kern:    .long 0x000080CC        ! PA 0x8000 | W|X|C|G, U=0 -- negative control
+p_tsbbr_addr:             .long 0xFF000014
+p_tsbbr_val:              .long 0x00014008        ! base=0x00014000, TSB_SIZE_LOG=8
+p_tsbcfg_addr:            .long 0xFF000018
+p_tsbcfg_val:             .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
+p_tsbslot:                .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
+p_tab:                    .long _tsb_tab
+p_tab_end:                .long _tsb_tab_end
 p_asid_a:                 .long 0x00000011
 p_asid_b:                 .long 0x00000022
 p_sentinel1:              .long 0xA51DA51D
@@ -249,6 +287,14 @@ p_g_bad_expevt:           .long _g_bad_expevt
 p_g_resume:               .long _g_resume
 p_leg_a_after:            .long leg_a_after
 p_leg_b_after:            .long leg_b_after
+
+        .balign 4
+_tsb_tab:
+        ! VA          ASID        PTEL
+        .long 0x00000000, 0x00000011, 0x000000CD  ! page 0 W|X|C|G|V, U=0 (code)
+        .long 0x00004000, 0x00000011, 0x000040ED  ! PA 0x4000 W|X|U|C|G|V -- under test
+        .long 0x00008000, 0x00000011, 0x000080CD  ! PA 0x8000 W|X|C|G|V, U=0 -- control
+_tsb_tab_end:
 
 #endif  ! CONFIG_PRIV_ARCH
 
@@ -327,8 +373,11 @@ _g_exp_expevt:  .long 0xFFFFFFFF        ! sentinel: unset (a real sub-test alway
 _g_bad_expevt:  .long 0x5A              ! loud fail-code sentinel: names an early fault
 _g_resume:      .long 0
 
-        ! ---- Backing-page padding: VA 0x4000 and 0x8000. ----
+        ! ---- Backing store: the mapped pages (PA 0x4000, 0x8000) and the TSB
+        ! ---- at PA 0x14000..0x15FFF. The walker reads the TSB by PHYSICAL
+        ! ---- address and a physical alias is backed by SRAM only within the
+        ! ---- loaded image extent, so the image must reach past the TSB end.
 _fault_pages:
-        .space 0x8000, 0
+        .space 0x16000, 0
 
 #endif  ! CONFIG_PRIV_ARCH

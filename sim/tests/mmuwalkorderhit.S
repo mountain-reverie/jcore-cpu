@@ -101,9 +101,23 @@
 ! The handler is entered with SR.RB=1 and uses only r0-r7 (bank 1); r9 and
 ! r11-r14 are non-banked and carry state across faults untouched.
 !
+! WALKER-INSTALL VERSION (L2 of "retire LDTLB"). SAME strength: the window is
+! built by the same instruction sequence, the same three checks apply, and the
+! ordering gate is still watched by p_walk_order_assert in the RTL. Only the
+! install path moves -- pages 0 and 2 are published as TSB rows before AT goes
+! on (page 2's row is still THE POINT: the older D accesses must HIT so
+! walk_d_miss stays '0'), and the common handler publishes the faulting page's
+! row through the P1 alias and returns with a plain RTE.
+!
+! The guard's design -- an otherwise ZEROED TSB so every walk fails OPEN and
+! the software handler is what resolves the miss -- SURVIVES: only the pages
+! the guard deliberately pre-maps get rows up front, plus whatever the handler
+! publishes as it goes. Every page the window walks for the first time still
+! finds nothing, so the walker still arms, walks and gives up, and check 5's
+! cnt_walks reading is unchanged.
+!
 ! J4 overlay opcodes (the assembler does not know these forms):
-!   LDC r0,PTEH=0x405E  LDC r0,PTEL=0x406E  LDC r0,ASIDR=0x407E
-!   LDTLB=0x0038        LDC r0,VBR=0x402E
+!   LDC r0,ASIDR=0x407E  LDC r0,VBR=0x402E
 ! A hand-assembled .word is an UNCHECKED assertion about the hardware:
 ! 0x2DC2 is MOV.L R12,@R13 -- MOV.L Rm,@Rn is 0010 nnnn mmmm 0010, n=13 m=12.
 ! mmuidorder.S spent two RTL probes on exactly this class of typo.
@@ -132,6 +146,7 @@
 ! test_result() requires TEST_PASS_MAGIC for PASS, and _fail clamps r9==0 to
 ! 0x7F so an un-set fail code is never mistaken for PASS.
 #include "sim_instr.h"
+#include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
 
         .section .vect
@@ -187,27 +202,6 @@ ENTRY(start)
         dt      r2
         bf      1b
 
-        ! ---- Map page 0 identity, W|X|C (no U: kernel fetch, SMEP). ----
-        mov     #0, r0
-        .word   0x405E                  ! LDC r0, PTEH  (VPN=0, ASID=0)
-        mov.l   p_ptel_page0, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
-
-        ! ---- Map page 2 identity TOO. THIS IS THE GUARD'S POINT: the older
-        !      D accesses must HIT, so that walk_d_miss stays '0' and the
-        !      younger I-side miss is the one eligible to arm. Check 3
-        !      re-verifies it after the fact. ----
-        mov.l   p_pteh_page2, r0
-        .word   0x405E                  ! LDC r0, PTEH
-        mov.l   p_ptel_page2, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
-
         ! ---- Point the walker at the zeroed TSB. ----
         mov.l   p_tsbbr_addr, r0
         mov.l   p_tsbbr_val, r1
@@ -215,6 +209,36 @@ ENTRY(start)
         mov.l   p_tsbcfg_addr, r0
         mov.l   p_tsbcfg_val, r1
         mov.l   r1, @r0
+
+        ! ---- Publish the TSB rows for page 0 and page 2 into the guard's OWN
+        ! ---- TSB (base 0x00010000, TSB_SIZE_LOG=6, configured and zeroed
+        ! ---- above); set addresses come from the P4 helper at 0xFF000048.
+        ! ---- Page 0 identity, W|X|C|V (no U: kernel fetch, SMEP).
+        ! ---- Page 2 identity TOO. THIS IS THE GUARD'S POINT: the older D
+        ! ---- accesses must HIT, so that walk_d_miss stays '0' and the younger
+        ! ---- I-side miss is the one eligible to arm. Check 3 re-verifies it
+        ! ---- after the fact.
+        ! ---- Every OTHER page still has NO row, so the walker still arms,
+        ! ---- walks, finds nothing and gives up -- which is what puts the
+        ! ---- software handler in the window this guard is built to reach.
+        mov     #0, r0
+        .word   0x407E                  ! LDC r0, ASIDR  (ASID 0 throughout)
+        nop
+        nop
+        mov.l   p_tsbslot, r12
+        mov     #0, r7                  ! ASID_TAG = 0
+
+        mov     #0, r6                  ! VA 0
+        mov.l   p_ptel_page0, r8
+        mov.l   r6, @r12
+        mov.l   @r12, r10
+        tsb_fill r10, r6, r7, r8
+
+        mov.l   p_pteh_page2, r6        ! VA of page 2
+        mov.l   p_ptel_page2, r8
+        mov.l   r6, @r12
+        mov.l   @r12, r10
+        tsb_fill r10, r6, r7, r8
 
         ! ---- Enable AT. Page 1 is deliberately NOT mapped: it is what the
         !      fall-through fetch misses on. ----
@@ -235,6 +259,19 @@ ENTRY(start)
         !      which is what p_walk_order_assert needs in order to be able to
         !      sample anything.
         mov.l   c_warm_va, r0
+        mov.l   @r0, r0
+
+        ! ---- RESIDENCY warm-up for page 2 (walker-only install). Its TSB row
+        !      is published, but a row is not residency: the entry appears only
+        !      when something TOUCHES the page, and under LDTLB that happened
+        !      before AT was ever on. The first touch in this guard is inside
+        !      the race -- exactly where the ordering gate may legitimately
+        !      refuse to arm a D-side walk, which turns the touch into a FAULT
+        !      and destroys check 3's premise (measured: page 2 appeared in the
+        !      fault log, Result=3). Touch it here instead, with nothing else in
+        !      flight, so the race starts from the intended state: page 2
+        !      RESIDENT and hitting.
+        mov.l   c_data_va, r0
         mov.l   @r0, r0
 
         ! ---- Operands for the race. r13 = the MAPPED data page the stores
@@ -263,9 +300,10 @@ ENTRY(start)
 p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _vbase
 p_mmucr:        .long 0xFF000010
-p_ptel_page0:   .long 0x000000C8        ! PA 0x0000 | W|X|C
+p_ptel_page0:   .long 0x000000C9        ! PA 0x0000 | W|X|C|V
+p_tsbslot:      .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
 p_pteh_page2:   .long 0x00002000        ! VPN of page 2, ASID 0
-p_ptel_page2:   .long 0x000020C8        ! PA 0x2000 | W|X|C
+p_ptel_page2:   .long 0x000020C9        ! PA 0x2000 | W|X|C|V
 p_tsbbr_addr:   .long 0xFF000014
 p_tsbbr_val:    .long 0x00010006        ! base=0x00010000, TSB_SIZE_LOG=6
 p_tsbcfg_addr:  .long 0xFF000018
@@ -441,22 +479,33 @@ _h_tlb:
         add     #4, r5
         mov.l   r5, @r1
 
-        mov     r2, r0
-        .word   0x405E                  ! LDC r0, PTEH
+        ! ---- Publish the row for the faulting page. The set address comes
+        ! ---- from the P4 helper and is addressed THROUGH P1: AT is on and the
+        ! ---- TSB is unmapped, so a P0 store from here would fault inside the
+        ! ---- handler. Then a plain RTE; the access retries, misses again, and
+        ! ---- the walker installs the row.
         mov.l   Hptel_flags, r3
         mov     r2, r0
         or      r3, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
+        mov     r0, r4                  ! r4 = PTEL
+        mov.l   Hslot, r0
+        mov.l   r2, @r0
+        mov.l   @r0, r6
+        mov.l   Hp1, r0
+        or      r0, r6
+        mov     #0, r7                  ! ASID_TAG = 0
+        mov.l   r4, @(8, r6)            ! data first ...
+        mov.l   r7, @(4, r6)            ! ... tag_lo second ...
+        mov.l   r2, @(0, r6)            ! ... tag_hi LAST (the commit point)
         rte                             ! PC <- SPC (hardware restart PC)
         nop
 
         .align 2
 Htea_addr:      .long 0xFF00000C
 Hvpn_mask:      .long 0xFFFFF000
-Hptel_flags:    .long 0x000000C8
+Hptel_flags:    .long 0x000000C9        ! identity | W|X|C|V (U clear: SMEP)
+Hslot:          .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
+Hp1:            .long 0x80000000
 Hlog_ptr:       .long _log_ptr
 Hlog_end:       .long _log_end
 Hfail:          .long _fail
@@ -492,6 +541,11 @@ _log_end:
         .org 0x2000
         .long   0
 
+        ! ---- The image must reach past the END of the TSB (PA 0x14000..
+        ! ---- 0x15FFF): the walker reads the TSB by PHYSICAL address and a
+        ! ---- physical alias is backed by SRAM only within the loaded image.
         .org 0x3100
+
+        .org 0x16000
 
 #endif  ! CONFIG_PRIV_ARCH

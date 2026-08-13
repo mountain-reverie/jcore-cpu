@@ -13,8 +13,12 @@ library ieee;
 -- is still true, so cpu.vhd's exception process raises the fault exactly as it
 -- did before this entity existed. There is therefore no "fail" output.
 --
--- The walk cannot itself fault: TSBBR is physical, so these reads bypass
--- translation entirely. No nesting, no recursion, no new exception class.
+-- The walk cannot itself fault: TSBBR holds a P1 KERNEL VIRTUAL address (see
+-- linux head_32.S, which states this in capitals because the spec said
+-- "physical" for a long time and was wrong), and P1 is untranslated, so these
+-- reads bypass the TLB entirely. The bypass is real; the reason is P1, not a
+-- raw physical base -- handing the walker an actual PA would NOT work.
+-- No nesting, no recursion, no new exception class.
 
 entity tlb_walk is
   generic (

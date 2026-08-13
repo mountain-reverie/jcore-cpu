@@ -261,8 +261,10 @@ HP_result: .long TEST_RESULT_ADDRESS
         .org    _vbase + 0x400
 
         ! _vbase + 0x400 -- ALL TLB faults. The fast path is INLINED HERE:
-        ! hardware lands on the first instruction and a TSB hit runs straight
-        ! to LDTLB.RN with NO taken branch. `_h_common` is an alias for the
+        ! hardware lands on the first instruction and, before retire-LDTLB, a TSB
+        ! hit ran straight to LDTLB.RN with NO taken branch. The path is kept
+        ! inline (and its tag compares turned into an assertion -- see below) so
+        ! the benchmark still measures the same window. `_h_common` is an alias for the
         ! vector itself so sim/bench_tlb_hotpath.sh can bracket the path with
         ! the same [_h_common, _h_slow) symbol pair it uses for mmurun.
 _v_tlb:
@@ -296,10 +298,10 @@ _h_common:
         ! ---- Slow path: call the C walker. Must come IMMEDIATELY after the
         ! fast path, with NO alignment padding: sim/bench_tlb_hotpath.sh
         ! measures dwell as "PC within [_h_common, _h_slow)", so a pad word here
-        ! lands inside the measured window. It is not merely dead space either --
-        ! LDTLB.RN has no delay slot, so the PC parks on whatever follows it for
-        ! the 4 cycles the install+redirect takes, and a pad word absorbs those
-        ! into the reported dwell. A `.balign 4` here previously made this guard
+        ! lands inside the measured window. It was not merely dead space under
+        ! the old software install either -- LDTLB.RN had no delay slot, so the PC
+        ! parked on whatever followed it for the 4 cycles the install+redirect
+        ! took, and a pad word absorbed those into the reported dwell. A `.balign 4` here previously made this guard
         ! report 21 cyc against mmubenchi's 17 for the SAME 11 instructions, and
         ! that phantom 4-cycle gap got written up as an unexplained I-vs-D
         ! microarchitectural difference. It was padding. Do not re-add it. ----

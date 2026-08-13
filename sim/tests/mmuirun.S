@@ -3,8 +3,8 @@
 ! lives in P1 (untranslated). One P0 CODE page (VA 0x00100000, identity-backed
 ! at PA 0x00100000, PTE flags 0x0F1 incl. EXEC; bits[11:8]=0 → pm=0) holds a small workload that is
 ! COPIED there (AT off) before AT is enabled. With AT on, jmp to VA 0x00100000
-! -> cold IMISS (VBR+0x400) -> walker installs I-PTE -> LDTLB.RN re-fetches the
-! faulting instruction -> workload runs (writes ran_flag) -> jmp back to P1.
+! -> cold IMISS (VBR+0x400) -> handler publishes the I-PTE as a TSB row and
+! RTEs -> the re-fetch misses again and the HARDWARE walker installs it -> workload runs (writes ran_flag) -> jmp back to P1.
 ! PASS proves execution RESUMED inside the translated page (ran_flag written by
 ! an instruction fetched through translation) and walker_calls==1.
 !

@@ -253,7 +253,6 @@ func newStaticPackage() *Package {
 					{Names: []string{"ilevel"}, Type: "std_logic_vector(3 downto 0)"},
 					{Names: []string{"mmu_reg_wr"}, Type: "std_logic"},
 					{Names: []string{"mmu_reg_sel"}, Type: "mmu_reg_sel_t"},
-					{Names: []string{"tlb_wr"}, Type: "std_logic"},
 				},
 			},
 			{
@@ -275,15 +274,14 @@ func newStaticPackage() *Package {
 					{Names: []string{"mulcom2"}, Type: "mult_state_t", Default: "NOP"},
 					{Names: []string{"macsel1"}, Type: "macin1_sel_t", Default: "SEL_XBUS"},
 					{Names: []string{"macsel2"}, Type: "macin2_sel_t", Default: "SEL_YBUS"},
-					// mmu_reg_wr, mmu_reg_sel, tlb_wr intentionally have NO
+					// mmu_reg_wr and mmu_reg_sel intentionally have NO
 					// Default: decode_table_simple.vhd's golden reset
-					// aggregate has never assigned these three (added to
-					// the record by the MMU work without a matching reset
+					// aggregate has never assigned them (added to the
+					// record by the MMU work without a matching reset
 					// update; a pre-existing latent gap, out of scope for
 					// this refactor — preserved here for byte-identity).
 					{Names: []string{"mmu_reg_wr"}, Type: "std_logic"},
 					{Names: []string{"mmu_reg_sel"}, Type: "mmu_reg_sel_t"},
-					{Names: []string{"tlb_wr"}, Type: "std_logic"},
 				},
 			},
 			{

@@ -22,7 +22,6 @@ const (
 	SigMmuRegSel   Signal = "mmu_reg_sel"
 	SigMmuRegSelWr Signal = "mmu_reg_sel_wr"
 	SigMmuRegWr    Signal = "mmu_reg_wr"
-	SigTlbWr       Signal = "tlb_wr"
 	SigZbusSel     Signal = "zbus_sel"
 	SigRegnumX     Signal = "regnum_x"
 	SigRegnumY     Signal = "regnum_y"
@@ -126,7 +125,6 @@ func (s Signal) IsStdLogic() bool {
 		SigIncPC, SigIfIssue, SigIfAdsel, SigDelayJump, SigDispatch,
 		SigIlevelCap, SigEventAck0, SigMaskInt,
 		SigMmuRegWr,
-		SigTlbWr,
 		SigDebug, SigSlp,
 		SigLatchExt, SigImmFromExt:
 		return true
@@ -268,7 +266,6 @@ var SignalVHDLPath = map[Signal]string{
 	SigMmuRegSel:   "ex.mmu_reg_sel",
 	SigMmuRegSelWr: "ex_stall.mmu_reg_sel",
 	SigMmuRegWr:    "ex_stall.mmu_reg_wr",
-	SigTlbWr:       "ex_stall.tlb_wr",
 	SigMacBusy:     "mac_busy", // top-level signal in arch, not record
 	SigMacStallSns: "mac_stall_sense",
 	SigMacSLatch:   "mac_s_latch",

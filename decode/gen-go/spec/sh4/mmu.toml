@@ -73,42 +73,14 @@
     zbus = "ASIDR"
     zbus_sel = "Y"
 
-[[instr]]
-  name = "LDTLB"
-  privileged = true
-  opcode = "0000 0000 0011 1000"
-  operation = "PTEH/PTEL/ASIDR -> TLB"
-  [[instr.slots]]
-    tlb_wr = "YES"
-    mask_int = "YES"
-    pc = "INC"
-
-[[instr]]
-  name = "LDTLB.RN"
-  privileged = true
-  format = "0"
-  opcode = "0000 0000 0111 1000"
-  operation = "PTEH/PTEL/ASIDR -> TLB; SR<-SSR, PC<-SPC (no delay slot)"
-
-  [[instr.slots]]
-    tlb_wr = "YES"
-    ybus = "SSR"
-    zbus_sel = "Y"
-    sr = "Z"
-    pc = "HOLD"
-  [[instr.slots]]
-    ybus = "SPC"
-    zbus = "PC"
-    zbus_sel = "Y"
-    pc = "HOLD"
-  [[instr.slots]]
-    if_addy = "ZBUS"
-    if_issue = "YES"
-    pc = "HOLD"
-  [[instr.slots]]
-    dispatch = "YES"
-    if_issue = "YES"
-    pc = "INC"
+# ---- LDTLB / LDTLB.RN: RETIRED (0x0038, 0x0078) ----
+# Both encodings are gone. The hardware TSB walker is the sole TLB installer;
+# core/cpu.vhd drives the ITLB/DTLB write enables from walk_install alone, so a
+# software install has nothing to drive. LDTLB.RN's second job -- the resume
+# (SR<-SSR, PC<-SPC) -- is plain RTE, which the linux@jcore handler now uses.
+# The opcodes are deliberately left UNALLOCATED rather than reused: they decode
+# as General Illegal, so any stale binary that still executes one faults loudly
+# instead of silently doing something else.
 
 # ---- Break / Reset CPU: bit-11 pin (J4 overlay only) ----
 # The base spec uses don't-care bit 11 (---- -010 / ---- -011). That is correct

@@ -88,16 +88,36 @@
 ! lands back on the jmp, the load then succeeds, and only then does the branch
 ! target's fetch raise MULTI_HIT.
 !
+! ---- WALKER-INSTALL VERSION (L2 of "retire LDTLB") ----
+!
+! Every TLB entry in this file is installed by the HARDWARE TSB WALKER. The
+! race, the order log, every check and every result code are unchanged. Three
+! things had to change, all forced by the walker:
+!
+!   (i)   it installs only on a MISS, so the three coexisting entries on VPN V
+!         are now provoked by three ACCESSES under three different ASIDs
+!         instead of three back-to-back installs;
+!   (ii)  it installs into ONE array, by side. This construction needs the I
+!         array, so each of the three installs is a real INSTRUCTION FETCH of
+!         V. All three candidate PAs already carried `jmp @r14 / nop`, so each
+!         install jumps into V and bounces back to a label parked in r14;
+!   (iii) the GI handler no longer reinstalls anything by hand -- see
+!         "Servicing the MULTI_HIT" below.
+!
 ! ---- Reaching a GENUINE MULTI_HIT ----
 !
-! A two-entry install can no longer reach it: LDTLB's install-time overlap
-! eviction merges them (sim/tests/mmumultihit.S documents this at length). The
+! A two-entry install can no longer reach it: install-time overlap eviction
+! merges them (sim/tests/mmumultihit.S documents this at length). The
 ! reachable construction is copied from m8_multihit_ifetch.S sub-test 1 -- see
 ! that file's header for the full derivation against core/tlb.vhd. In brief:
 ! install THREE entries on one VPN V -- A under ASID_A (non-global), B under
-! ASID_B (non-global), C global -- because LDTLB's dedup scan latches on the
-! FIRST overlapping match and never re-fires. Installing C evicts A and leaves
-! B untouched; with ASIDR=ASID_B, B (asid match) and C (global) both match one
+! ASID_B (non-global), C global -- because the dedup scan latches on the
+! FIRST overlapping match and never re-fires. The walker supplies the two
+! extra misses: with A resident and non-global under ASID_A, a fetch of V
+! under ASID_B misses again and walks in B; with A and B both resident and
+! neither matching, a fetch of V under a THIRD ASID (0) misses again and walks
+! in C from the row whose PTEL is global. Installing C evicts A and leaves B
+! untouched; with ASIDR=ASID_B, B (asid match) and C (global) both match one
 ! lookup and the scan raises MULTI_HIT.
 !
 ! ---- Servicing the MULTI_HIT (why the handler flushes) ----
@@ -111,18 +131,27 @@
 ! that case as a lost instruction, which is exactly the false positive this
 ! guard exists to avoid.
 !
-! Resolution is by full TI flush + reinstall (code map, a SINGLE mapping for V,
-! and the data page). There is no targeted single-entry invalidate, and
-! re-installing over V cannot converge: each global install evicts only the
-! first of the two overlapping entries and adds one back, so the count stays at
-! two forever. The reinstall includes the data page so servicing the MULTI_HIT
-! does not manufacture a second, spurious DMISS_R and perturb the order log.
+! Resolution is a full TI flush, and NOTHING ELSE. There is no targeted
+! single-entry invalidate, so the whole array goes -- and under walker-only
+! install that is sufficient, where under LDTLB it was not. The TSB SURVIVES a
+! TI flush, and after the flush ASIDR is ASID_B, so the next fetch of V walks
+! the ONE row hashed for (V, ASID_B) and installs exactly ONE entry. A single
+! walk cannot produce two entries by construction. The LDTLB version had to
+! reinstall the code map, a single mapping for V and the data page by hand,
+! precisely because re-installing over V never converged: each global install
+! evicts only the first of the two overlapping entries and adds one back, so
+! the count stayed at two forever.
 !
-! Page V's backing page (PA_C, the survivor) is seeded via P1 with
-! `jmp @r14 / nop` (0x4E2B 0x0009), so once V resolves to a single mapping,
-! control lands there and bounces to `after_race` in r14. That works whether
-! SPC pointed at the branch target (lands directly in V) or at the older jmp
-! (re-runs the -- now idempotent, base r13 != dest r12 -- load and jumps to V).
+! The data page comes back the same way, from the row the D-side handler
+! published, so the flush still cannot manufacture a second, spurious DMISS_R
+! and perturb the order log.
+!
+! All three of page V's candidate backing pages are seeded via P1 with
+! `jmp @r14 / nop` (0x4E2B 0x0009), so once V resolves to a single mapping --
+! now PA_B, the row reachable under ASID_B, rather than PA_C -- control lands
+! there and bounces to `after_race` in r14. That works whether SPC pointed at
+! the branch target (lands directly in V) or at the older jmp (re-runs the --
+! now idempotent, base r13 != dest r12 -- load and jumps to V).
 !
 ! ---- The order log ----
 !
@@ -168,7 +197,8 @@
 ! mutated red independently, and each reported ITS OWN code, not a timeout and
 ! not a neighbour's code:
 !
-!   1. Drop the third LDTLB (entry C never installs) -> the construction can no
+!   1. Clear the GLOBAL bit in page V's third TSB row (entry C is no longer
+!      global, so under ASID_B only B matches) -> the construction can no
 !      longer multi-hit.                                        Result=3.
 !   2. Point the delay-slot load at an already-mapped address -> the older
 !      D-side leg of the race disappears, so the MULTI_HIT is logged first.
@@ -176,21 +206,34 @@
 !   3. Seed the data page with a value other than the expected one -> the load
 !      commits but yields the wrong word, i.e. the check really does read the
 !      delay-slot load's result and not a constant.             Result=4.
+!   4. Corrupt the GI handler's expected MMUFSR -> Result=6, i.e. the handler
+!      really is reading a live MULTI_HIT and not a stale register.
 !
-! Re-run all three after any change to the construction.
+! All four re-measured on the walker-install version (2026-08-13); re-run them
+! after any change to the construction.
 !
 ! PTEL flag bit layout (core/tlb.vhd): bit7=W bit6=X bit5=U bit4=D bit3=C
-! bit2=G bit1=STALE bit0=V. Kernel non-global code: W|X|C = 0xC8; the global
-! variant ORs in bit2 (0xCC). Every mapping installed from a HANDLER is global
-! so it survives (and does not disturb) the ASIDR=ASID_B the multi-hit
-! construction depends on -- no handler here touches ASIDR.
+! bit2=G bit1=STALE bit0=V. Kernel non-global code: W|X|C|V = 0xC9; the global
+! variant ORs in bit2 (0xCD). Bit0 (V) MUST be set in a TSB entry:
+! core/tlb_walk.vhd rejects a data word with V=0 or STALE=1 as "no entry", so
+! the LDTLB version's 0xC8/0xCC become 0xC9/0xCD here. U stays 0 throughout:
+! page V is FETCHED, and a kernel fetch of a U=1 page is an SMEP protection
+! fault. Every mapping published from a HANDLER is global so it survives (and
+! does not disturb) the ASIDR=ASID_B the multi-hit construction depends on --
+! no handler here touches ASIDR.
+!
+! TSB: base 0x00014000, TSB_SIZE_LOG=8 (256 sets x 32 bytes = 8 KB),
+! HASH_SHIFT=6, HASH_MODE=1. Slot addresses are never hand-computed: the guard
+! and both handlers ask the P4 TSB-slot helper (0xFF000048, the single
+! tsb_ptr() implementation the walker and TSBPTR also use). The image is padded
+! past the END of the TSB, because the walker reads it by PHYSICAL address and
+! a physical alias is backed by SRAM only within the loaded image extent.
 !
 ! Handlers are entered with SR.RB=1, so they use only r0-r7 (bank 1); r9 and
 ! r12-r14 are non-banked and carry state across faults untouched.
 !
 ! Overlay .word encodings (the assembler does not know these J4 forms):
-!   LDC r0,VBR = 0x402E   LDC r0,PTEH = 0x405E   LDC r0,PTEL = 0x406E
-!   LDC r0,ASIDR = 0x407E   LDTLB = 0x0038
+!   LDC r0,VBR = 0x402E   LDC r0,ASIDR = 0x407E
 !   STC EXPEVT,r0 = 0x0052   STC SPC,r0 = 0x0042
 !
 ! ---- _fail integrity net ----
@@ -198,6 +241,7 @@
 ! test_result() requires TEST_PASS_MAGIC for PASS, and _fail clamps r9==0 to
 ! 0x7F so an un-set fail code is never mistaken for PASS.
 #include "sim_instr.h"
+#include "mmuwalk_common.inc"
 #define ENTRY(name) .globl name; .balign 4; name:
 
         .section .vect
@@ -226,7 +270,7 @@ ENTRY(start)
         ! gated on SR.RB='0' (core/cpu.vhd); with RB=1 (reset default)
         ! I-fetches bypass the TLB and page V never multi-hits. ----
         stc     sr, r0
-        mov.l   p_rbclear, r1
+        mov.l   s_rbclear, r1
         and     r1, r0
         ldc     r0, sr
         nop
@@ -235,33 +279,15 @@ ENTRY(start)
 
         ! ---- VBR = _vbase (so VBR+0x100 = General Illegal / MULTI_HIT and
         ! VBR+0x400 = all six TLB fault kinds). ----
-        mov.l   p_vbr_val, r0
+        mov.l   s_vbr_val, r0
         .word   0x402E                  ! LDC r0, VBR
 
-        ! ---- Clean-slate TLB, then map the code region identity, kernel,
-        ! GLOBAL. Global is required: the A/B/C installs below churn ASIDR,
-        ! and a non-global code map would IMISS on the very next fetch. ----
-        mov.l   p_mmucr, r0
+        ! ---- Clean-slate TLB. ----
+        mov.l   s_mmucr, r0
         mov     #4, r1
         mov.l   r1, @r0                 ! TI: invalidate all 32 entries
         mov     #0, r1
         mov.l   r1, @r0                 ! TI released
-
-        mov.l   p_code_start, r2
-        mov.l   p_code_end, r3
-1:      mov     r2, r0
-        .word   0x405E                  ! LDC r0, PTEH
-        mov     r2, r0
-        mov.l   p_code_flags, r1
-        or      r1, r0                  ! PTEL = page | W|X|C|GLOBAL
-        .word   0x406E                  ! LDC r0, PTEL
-        mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR
-        .word   0x0038                  ! LDTLB
-        mov.l   p_page_sz, r0
-        add     r0, r2
-        cmp/hs  r3, r2
-        bf      1b
 
         ! ---- Seed the backing pages via P1 (untranslated, AT-independent)
         ! before AT goes on. ALL THREE candidate PAs need real content, not
@@ -280,58 +306,168 @@ ENTRY(start)
         ! after_race and reports the precise code (3: MULTI_HIT never arrived).
         ! Nothing is weakened: the checks at after_race, not the landing page,
         ! are what decide PASS. ----
-        mov.l   p_payload_instr, r4     ! 0x4E2B0009 = "jmp @r14 / nop"
-        mov.l   p_p1_a, r2 ; mov.l r4, @r2
-        mov.l   p_p1_b, r2 ; mov.l r4, @r2
-        mov.l   p_p1_c, r2 ; mov.l r4, @r2
+        mov.l   s_payload_instr, r4     ! 0x4E2B0009 = "jmp @r14 / nop"
+        mov.l   s_p1_a, r2 ; mov.l r4, @r2
+        mov.l   s_p1_b, r2 ; mov.l r4, @r2
+        mov.l   s_p1_c, r2 ; mov.l r4, @r2
 
         ! ---- Seed the delay-slot load's data word through P1, on a page
         ! deliberately left UNMAPPED so the load takes DMISS_R. ----
-        mov.l   p_p1_data, r2
-        mov.l   p_dataword, r3
+        mov.l   s_p1_data, r2
+        mov.l   s_dataword, r3
         mov.l   r3, @r2
 
         ! ---- Order log: empty. ----
-        mov.l   p_log_ptr, r0
-        mov.l   p_log_base, r1
+        mov.l   s_log_ptr, r0
+        mov.l   s_log_base, r1
         mov.l   r1, @r0
 
+        ! ---- Configure the TSB and fill it from the (VA, ASID, PTEL) table.
+        ! ---- For each row the set address is asked of the P4 helper UNDER
+        ! ---- THAT ROW'S ASID, so no hash is hand-computed. AT is still off,
+        ! ---- so these are plain untranslated P0 stores. ----
+        mov.l   s_tsbbr_addr, r0
+        mov.l   s_tsbbr_val, r1
+        mov.l   r1, @r0
+        mov.l   s_tsbcfg_addr, r0
+        mov.l   s_tsbcfg_val, r1
+        mov.l   r1, @r0
+
+        mov.l   s_tsbslot, r12
+        mov.l   s_tab, r14
+        mov.l   s_tab_end, r5
+1:      mov.l   @r14+, r6               ! VA
+        mov.l   @r14+, r7               ! ASID_TAG
+        mov.l   @r14+, r8               ! PTEL
+        mov     r7, r0
+        .word   0x407E                  ! LDC r0, ASIDR
+        nop
+        nop
+        mov.l   r6, @r12                ! write VA -> helper
+        mov.l   @r12, r10               ! r10 = 32-byte-aligned SET address
+        tsb_fill r10, r6, r7, r8
+        cmp/hs  r5, r14
+        bf      1b
+
+        mov     #0, r0
+        .word   0x407E                  ! ASIDR := 0, the ASID the code
+        nop                             ! superpage is first walked in under
+        nop
+
+        bra     _run
+        nop
+
+        ! ---- Literal pool 1 (setup). SH-2 `mov.l @(disp,PC)` is FORWARD-only
+        ! ---- and reaches +1020 bytes, so the constants are split into this
+        ! ---- setup pool and a body pool after the checks; a couple are
+        ! ---- duplicated in both. ----
+        .align  2
+s_rbclear:      .long   0xDFFFFFFF
+s_vbr_val:      .long   _vbase
+s_mmucr:        .long   0xFF000010
+s_payload_instr:.long   0x4E2B0009      ! "jmp @r14" / nop delay slot
+s_p1_a:         .long   0x80040000      ! P1(0x40000)
+s_p1_b:         .long   0x80041000      ! P1(0x41000)
+s_p1_c:         .long   0x80042000      ! P1(0x42000)
+s_p1_data:      .long   0x80030000      ! P1(0x30000)
+s_dataword:     .long   0x5A5AC3C3      ! what the delay-slot load must yield
+s_log_ptr:      .long   _log_ptr
+s_log_base:     .long   _log
+s_tsbbr_addr:   .long   0xFF000014
+s_tsbbr_val:    .long   0x00014008      ! base=0x00014000, TSB_SIZE_LOG=8
+s_tsbcfg_addr:  .long   0xFF000018
+s_tsbcfg_val:   .long   0x00000061      ! HASH_SHIFT=6, HASH_MODE=1
+s_tsbslot:      .long   0xFF000048      ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
+s_tab:          .long   _tsb_tab
+s_tab_end:      .long   _tsb_tab_end
+
+        ! ---- TSB fill table: VA, ASID_TAG, PTEL.
+        ! The code region is ONE 16 KB GLOBAL identity page (VA 0..0x3FFF,
+        ! page_mask=1). The walker's tag compare is EXACT on the 4 KB VPN even
+        ! for a superpage entry, so each of VPN 0..3 needs its own row;
+        ! whichever is touched first installs the same 16 KB mapping and the
+        ! rest then hit without walking.
+        ! Each code row is duplicated under EVERY ASID this guard uses (0,
+        ! ASID_A, ASID_B). core/tlb_walk.vhd requires tag_lo = asidr EXACTLY,
+        ! global bit or not, so a row is only reachable under its own ASID.
+        ! The global TLB entry means the ASIDR churn during the A/B/C installs
+        ! never re-walks code -- but the GI handler's TI flush drops it, and
+        ! the fetches after that RTE run under ASID_B.
+        ! Page V gets its three rows; the DATA page deliberately gets NONE --
+        ! it must miss, and its row is published by the D-side handler.
+        .balign 4
+_tsb_tab:
+        .long   0x00000000, 0x00000000, 0x000001CD  ! code 16K global W|X|C|V
+        .long   0x00001000, 0x00000000, 0x000001CD
+        .long   0x00002000, 0x00000000, 0x000001CD
+        .long   0x00003000, 0x00000000, 0x000001CD
+        .long   0x00000000, 0x00000011, 0x000001CD
+        .long   0x00001000, 0x00000011, 0x000001CD
+        .long   0x00002000, 0x00000011, 0x000001CD
+        .long   0x00003000, 0x00000011, 0x000001CD
+        .long   0x00000000, 0x00000022, 0x000001CD
+        .long   0x00001000, 0x00000022, 0x000001CD
+        .long   0x00002000, 0x00000022, 0x000001CD
+        .long   0x00003000, 0x00000022, 0x000001CD
+        .long   0x00020000, 0x00000011, 0x000400C9  ! V: PA 0x40000, non-global
+        .long   0x00020000, 0x00000022, 0x000410C9  ! V: PA 0x41000, non-global
+        .long   0x00020000, 0x00000000, 0x000420CD  ! V: PA 0x42000, GLOBAL
+_tsb_tab_end:
+
+ENTRY(_run)
         ! ---- Enable AT. The data page and page V's single resolution are
-        ! installed later, by the handlers. ----
+        ! left to the handlers / the walker. ASIDR is 0 here, so the next
+        ! fetch and the next literal load each walk the code superpage in --
+        ! one into u_itlb, one into u_dtlb. BOTH arrays matter: the handlers
+        ! run with SR.RB=1, where core/cpu.vhd's walk_req is NOT armed, so a
+        ! D-miss on the handler's own literal pool would be an unrecoverable
+        ! nested fault. Under LDTLB the pre-AT map loop wrote both arrays for
+        ! free; the walker installs one side per miss. ----
         mov.l   p_mmucr, r0
         mov     #1, r1
         mov.l   r1, @r0
 
         ! ================================================================
-        ! Build the three-entry MULTI_HIT construction on VPN V.
+        ! Build the three-entry MULTI_HIT construction on VPN V. Each entry
+        ! is installed by a real INSTRUCTION FETCH of V under its own ASID:
+        ! the walker installs only on a MISS, and only into the array of the
+        ! missing side -- and this construction needs the I array. All three
+        ! candidate PAs already carry `jmp @r14 / nop`, so each install jumps
+        ! into V and bounces straight back to the label parked in r14.
         ! ================================================================
         mov.l   p_asid_a, r0
-        .word   0x407E                  ! LDC r0, ASIDR (install A under ASID_A)
-        mov.l   p_pteh_v, r0
-        .word   0x405E                  ! LDC r0, PTEH  (VPN V)
-        mov.l   p_ptel_a, r0            ! PA_A | W|X|C, non-global
-        .word   0x406E                  ! LDC r0, PTEL
-        .word   0x0038                  ! LDTLB
-
+        .word   0x407E                  ! LDC r0, ASIDR := ASID_A
+        nop
+        nop
+        mov.l   p_ret_a, r14
+        mov.l   p_v_va, r1
+        jmp     @r1                     ! install A: PA_A, non-global
+        nop
+ENTRY(_mh_ret_a)
         mov.l   p_asid_b, r0
-        .word   0x407E                  ! LDC r0, ASIDR (install B under ASID_B)
-        mov.l   p_pteh_v, r0
-        .word   0x405E                  ! LDC r0, PTEH  (same VPN V)
-        mov.l   p_ptel_b, r0            ! PA_B | W|X|C, non-global
-        .word   0x406E                  ! LDC r0, PTEL
-        .word   0x0038                  ! LDTLB
-
+        .word   0x407E                  ! LDC r0, ASIDR := ASID_B
+        nop
+        nop
+        mov.l   p_ret_b, r14
+        mov.l   p_v_va, r1
+        jmp     @r1                     ! install B: A is non-global with
+        nop                             ! asid_tag=ASID_A, so V misses again
+ENTRY(_mh_ret_b)
         mov     #0, r0
-        .word   0x407E                  ! LDC r0, ASIDR (C is global; ASID moot)
-        mov.l   p_pteh_v, r0
-        .word   0x405E                  ! LDC r0, PTEH  (same VPN V)
-        mov.l   p_ptel_c, r0            ! PA_C | W|X|C|GLOBAL
-        .word   0x406E                  ! LDC r0, PTEL
-        .word   0x0038                  ! LDTLB
+        .word   0x407E                  ! LDC r0, ASIDR := 0, a THIRD ASID --
+        nop                             ! load-bearing: it is what makes the
+        nop                             ! third fetch of V miss
+        mov.l   p_ret_c, r14
+        mov.l   p_v_va, r1
+        jmp     @r1                     ! install C: PA_C, GLOBAL. The dedup
+        nop                             ! scan latches on the FIRST overlap
+ENTRY(_mh_ret_c)
         ! -> A evicted (first match found), B survives, C occupies A's slot.
 
         mov.l   p_asid_b, r0
         .word   0x407E                  ! LDC r0, ASIDR := ASID_B (matches B)
+        nop
+        nop
 
         ! ================================================================
         ! THE RACE. r12/r13/r14 are non-banked and survive both handlers.
@@ -417,26 +553,14 @@ _bail:
         nop
 
         .align  2
-p_rbclear:      .long   0xDFFFFFFF
-p_vbr_val:      .long   _vbase
 p_mmucr:        .long   0xFF000010
-p_code_start:   .long   start
-p_code_end:     .long   _code_end
-p_code_flags:   .long   0x000000CC      ! kernel W|X|C|GLOBAL
-p_page_sz:      .long   0x1000
 p_asid_a:       .long   0x00000011      ! ASID_A
 p_asid_b:       .long   0x00000022      ! ASID_B != ASID_A
-p_payload_instr:.long   0x4E2B0009      ! "jmp @r14" / nop delay slot
-p_p1_a:         .long   0x80040000      ! P1(0x40000)
-p_p1_b:         .long   0x80041000      ! P1(0x41000)
-p_p1_c:         .long   0x80042000      ! P1(0x42000)
-p_p1_data:      .long   0x80030000      ! P1(0x30000)
 p_dataword:     .long   0x5A5AC3C3      ! what the delay-slot load must yield
-p_pteh_v:       .long   0x00020000      ! VPN V = 0x20
-p_ptel_a:       .long   0x000400C8      ! PA 0x40000 | W|X|C, non-global
-p_ptel_b:       .long   0x000410C8      ! PA 0x41000 | W|X|C, non-global
-p_ptel_c:       .long   0x000420CC      ! PA 0x42000 | W|X|C|GLOBAL
-p_v_va:         .long   0x00020000
+p_v_va:         .long   0x00020000      ! VPN V = 0x20
+p_ret_a:        .long   _mh_ret_a
+p_ret_b:        .long   _mh_ret_b
+p_ret_c:        .long   _mh_ret_c
 p_data_va:      .long   0x00030000      ! unmapped at race time -> DMISS_R
 p_after_race:   .long   after_race
 p_log_ptr:      .long   _log_ptr
@@ -539,11 +663,25 @@ _h_tlb:
         mov.l   Td_tea, r1
         mov.l   r2, @r1                 ! diagnostic, never asserted on
 
-        mov.l   Tdata_va, r0
-        .word   0x405E                  ! LDC r0, PTEH
-        mov.l   Tdata_ptel, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        .word   0x0038                  ! LDTLB
+        ! ---- Publish the data page's TSB row and let the WALKER install it.
+        ! The row is addressed THROUGH THE P1 ALIAS: AT is on here and the TSB
+        ! is unmapped, so a P0 store from the handler would fault inside the
+        ! handler. It is tagged with the ASID in force at the fault (ASID_B) --
+        ! core/tlb_walk.vhd requires tag_lo = asidr EXACTLY, global bit or not.
+        ! Then a plain RTE: the load retries, misses again, and the walker
+        ! installs. The row SURVIVES the GI handler's TI flush, which is what
+        ! keeps that flush from manufacturing a second, spurious DMISS_R.
+        mov.l   Tdata_va, r2
+        mov.l   Tslot, r0
+        mov.l   r2, @r0
+        mov.l   @r0, r3
+        mov.l   Tp1, r0
+        or      r0, r3
+        mov.l   Tasid_b, r4
+        mov.l   Tdata_ptel, r5
+        mov.l   r5, @(8, r3)            ! data first ...
+        mov.l   r4, @(4, r3)            ! ... tag_lo second ...
+        mov.l   r2, @(0, r3)            ! ... tag_hi LAST (the commit point)
         rte                             ! PC <- SPC (hardware restart PC)
         nop
 
@@ -557,7 +695,10 @@ Td_spc:         .long   _d_spc
 Td_tea:         .long   _d_tea
 Ttea_addr:      .long   0xFF00000C
 Tdata_va:       .long   0x00030000
-Tdata_ptel:     .long   0x000300CC      ! PA 0x30000 identity | W|X|C|GLOBAL
+Tdata_ptel:     .long   0x000300CD      ! PA 0x30000 identity | W|X|C|G|V
+Tslot:          .long   0xFF000048      ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
+Tp1:            .long   0x80000000
+Tasid_b:        .long   0x00000022      ! ASID_B -- the ASID in force at the race
 
         ! ================================================================
         ! General Illegal handler = MULTI_HIT. Appends TAG_MH, records SPC
@@ -606,44 +747,33 @@ _h_gi:
         jmp     @r0
         nop
 2:
-        ! ---- Resolve: AT off, flush everything, reinstall. There is no
-        ! targeted single-entry invalidate, and re-installing over V never
-        ! converges (each global install evicts only the FIRST of the two
-        ! overlapping entries and adds one back). ----
+        ! ---- Resolve: AT off + TI flush, then AT back on and RTE. There is
+        ! no targeted single-entry invalidate, so the whole array goes.
+        !
+        ! Under LDTLB this handler then had to REINSTALL by hand (code map, a
+        ! single mapping for V, the data page) because the flush left nothing
+        ! behind. Under walker-only install that software reinstall is not
+        ! merely unnecessary, it is how the multi-hit is resolved: the TSB
+        ! SURVIVES a TI flush, and after the flush ASIDR is ASID_B, so the
+        ! next fetch of V walks the ONE row hashed for (V, ASID_B) and
+        ! installs exactly one entry. Re-installing over V by hand never
+        ! converged -- each global install evicts only the FIRST of the two
+        ! overlapping entries and adds one back -- whereas a single walk
+        ! cannot produce two entries by construction.
+        !
+        ! The code superpage and the data page come back the same way, from
+        ! their own rows, on demand. The data row was published by the D-side
+        ! handler, so the flush still cannot manufacture a spurious second
+        ! DMISS_R and perturb the order log.
+        !
+        ! Note the landing page is now PA_B, the row reachable under ASID_B,
+        ! rather than PA_C. All three candidate PAs carry the same
+        ! `jmp @r14 / nop` payload, so the recovery path is unchanged.
         mov.l   Gmmucr, r0
         mov     #4, r1
         mov.l   r1, @r0                 ! AT off + TI
         mov     #0, r1
         mov.l   r1, @r0                 ! TI released
-
-        mov.l   Gcode_start, r2
-        mov.l   Gcode_end, r3
-3:      mov     r2, r0
-        .word   0x405E                  ! LDC r0, PTEH
-        mov     r2, r0
-        mov.l   Gcode_flags, r1
-        or      r1, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        .word   0x0038                  ! LDTLB
-        mov.l   Gpage_sz, r0
-        add     r0, r2
-        cmp/hs  r3, r2
-        bf      3b
-
-        ! V -> PA_C only. Page V's content is `jmp @r14 / nop`, seeded via P1.
-        mov.l   Gpteh_v, r0
-        .word   0x405E                  ! LDC r0, PTEH
-        mov.l   Gptel_c, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        .word   0x0038                  ! LDTLB
-
-        ! The data page, so servicing the MULTI_HIT cannot manufacture a
-        ! spurious second DMISS_R and perturb the order log.
-        mov.l   Gdata_va, r0
-        .word   0x405E                  ! LDC r0, PTEH
-        mov.l   Gdata_ptel, r0
-        .word   0x406E                  ! LDC r0, PTEL
-        .word   0x0038                  ! LDTLB
 
         mov.l   Gmmucr, r0
         mov     #1, r1
@@ -661,14 +791,6 @@ Gfsr_addr:      .long   0xFF00002C
 Gexp_fsr:       .long   0x00001700
 Gfail:          .long   _fail
 Gmmucr:         .long   0xFF000010
-Gcode_start:    .long   start
-Gcode_end:      .long   _code_end
-Gcode_flags:    .long   0x000000CC
-Gpage_sz:       .long   0x1000
-Gpteh_v:        .long   0x00020000
-Gptel_c:        .long   0x000420CC      ! PA 0x42000 | W|X|C|GLOBAL
-Gdata_va:       .long   0x00030000
-Gdata_ptel:     .long   0x000300CC      ! PA 0x30000 identity | W|X|C|GLOBAL
 
         ! ---- Order log and diagnostics, inside the identity-mapped,
         ! writable code region. ----
@@ -687,5 +809,12 @@ _log_end:
 ! the body, the report epilogue, both handlers, the vector table, every
 ! literal pool, and the log.
 ENTRY(_code_end)
+
+        ! ---- The image must reach past the END of the guard's TSB: the
+        ! ---- walker reads it by PHYSICAL address, and a physical alias is
+        ! ---- backed by SRAM only within the loaded image extent. (.org is
+        ! ---- section-relative and .text starts at 0x1000, so 0x15000 ->
+        ! ---- 0x16000, just past the TSB's end at 0x00016000.)
+        .org 0x15000
 
 #endif  ! CONFIG_PRIV_ARCH

@@ -154,11 +154,28 @@
 !     (core/cpu.vhd walk_side_i), so those pages now land in the DTLB ONLY.
 !     That is what unblocks the 8+16 / 8+8 capacity sweep.
 !
-! TLB budget: 32 entries per array (core/tlb.vhd). FLUSH_TLB runs at the leg
-! boundaries (never inside a measured window) so no leg's live set has to share
-! with another's. The largest leg is D: 10 stubs + trampoline + code pages in
-! the ITLB, and 10 data pages + the code pages the verifier reads through in
-! the DTLB -- comfortably inside 32 each now that the two no longer share.
+! TLB budget: 8 ITLB + 16 DTLB entries (core/cpu.vhd instantiation). FLUSH_TLB
+! runs at the leg boundaries (never inside a measured window) so no leg's live
+! set has to share with another's. The largest leg is D: 10 stubs + trampoline
+! + code pages in the ITLB, and 10 data pages + the code pages the verifier
+! reads through in the DTLB.
+!
+! THIS FILE IS THE SUITE'S DTLB-CAPACITY CANARY, measured 2026-08-13 in the L4
+! capacity sweep. It is the only guard anywhere in mmu_sim.sh / linux_sim.sh
+! whose D-side live set exceeds 8 pages, and it is the only one that reacts to
+! DTLB size:
+!   8 ITLB + 16 DTLB -> PASS (all three legs, no constant touched)
+!   8 ITLB +  8 DTLB -> FAIL, Result=0x10 (leg A fault count). Layers 1-3
+!     (exactly-once register arithmetic, page read-backs) still PASS, so every
+!     translation is CORRECT and every access ran exactly once -- what moves is
+!     only the number of faults leg A takes, because its ten data pages plus
+!     the literal-pool code pages it reads through no longer fit in 8 DTLB
+!     entries. The expected count was NOT retuned to accommodate that; 8+8 was
+!     rejected instead.
+! The ITLB stayed at 8 through both, so leg D's 11-page I-side live set is
+! served by capacity misses that the walker absorbs as stalls, without any
+! extra fault -- which is exactly the asymmetry that makes 8+16 the shipped
+! configuration.
 !
 ! TSB: _tsb_base (32 KB-aligned, at the end of the image), TSB_SIZE_LOG=10
 ! (1024 sets x 32 bytes), HASH_SHIFT=6, HASH_MODE=1. Set addresses come from

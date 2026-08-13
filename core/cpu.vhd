@@ -916,7 +916,28 @@ begin
 
     u_itlb : entity work.tlb
       generic map (
-        entries   => 32,
+        -- TLB CAPACITY (8 ITLB / 16 DTLB), measured 2026-08-13, 6-seed
+        -- nextpnr sweeps vs the 32+32 control (mean 29.55, range 28.94-30.37):
+        --
+        --   8+16  mean 34.69  min 33.65  sd 0.95  -> +5.14  RESOLVED, SHIPPED
+        --   8+8   mean 34.31  min 32.67  sd 1.22  -> +4.76  RESOLVED but RED
+        --   16+16 mean 33.01  min 31.41  sd 1.19  -> +3.46  RESOLVED
+        --   8+32  mean 31.36  min 29.84  sd 1.05  -> +1.81  marginal
+        --
+        -- Fmax scales with TOTAL comparator count, consistent with the
+        -- broadcast-fanout theory the split was built on. 8+16 wins on both
+        -- axes: the highest mean AND the whole suite green.
+        --
+        -- 8+8 is NOT shipped despite being within noise of 8+16 on clock: it
+        -- turns mmudrain red (leg A fault count, Result=0x10) because that
+        -- guard's D-side live set exceeds 8 pages. See sim/tests/mmudrain.S.
+        --
+        -- Only shrinking is possible at all because the walker is the sole
+        -- installer and routes by side (itlb_wr/dtlb_wr above). Under the old
+        -- software LDTLB, which wrote BOTH arrays, every shrunk size failed.
+        --
+        -- `entries` MUST stay a power of two (log2 leaf/root reduction).
+        entries   => 8,
         side_is_i => true
       )
       port map (
@@ -946,7 +967,11 @@ begin
 
     u_dtlb : entity work.tlb
       generic map (
-        entries   => 32,
+        -- Twice the ITLB. Asymmetric on purpose: the D side is the one with a
+        -- guard (mmudrain) that needs more than 8 entries, and every SH code
+        -- page carrying a PC-relative literal pool is read through the DTLB as
+        -- well as fetched through the ITLB. See the ITLB block above.
+        entries   => 16,
         side_is_i => false
       )
       port map (

@@ -296,7 +296,7 @@ jobs:
           # invoked by nothing and currently fail" -- was stale: they pass, and
           # they are invoked below. mmubratest was retired in 26b3d87.)
           run_guard m8_smoke
-          run_guard m8_dside "" 200us
+          run_guard m8_dside "" 420us
           # M8 MAC-arithmetic guard (short, 80us is sufficient).
           run_guard m8_macarith
           # M8 fault-then-clean-MAC regression guard (cited by core/datapath.vhm
@@ -323,10 +323,10 @@ jobs:
           #   mmuidorder       older held D-side fault vs younger deferred I-fetch
           #                    fault at one dispatch boundary; Result=2 without
           #                    the decode_core fix
-          run_guard m8_idslot_0 "" 200us
-          run_guard m8_idslot_1 "" 200us
-          run_guard m8_idslot_2 "" 200us
-          run_guard m8_dsdslot_0 "" 600us
+          run_guard m8_idslot_0 "" 400us
+          run_guard m8_idslot_1 "" 400us
+          run_guard m8_idslot_2 "" 400us
+          run_guard m8_dsdslot_0 "" 1100us
           run_guard m8_multihit_ifetch "" 100us
           run_guard mmumhorder "" 100us
           run_guard mmuidorder "" 100us

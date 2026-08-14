@@ -5,8 +5,8 @@
 #   - sh2-elf-gcc 14.2.0 (+ binutils from the mountain-reverie/binutils-gdb
 #     "jcore" fork, pinned by commit -- bare-metal SH-2 cross, with native
 #     understanding of the J4 privileged mnemonics (ldc Rm,pteh/ptel/asidr,
-#     stc expevt/intevt/tra, ldtlb, ldtlb.rn, etc). See BINUTILS_JCORE_COMMIT
-#     below.
+#     stc expevt/intevt/tra, etc). The TLB-install encodings are NOT among
+#     them -- see BINUTILS_JCORE_COMMIT below.
 #   - GHDL 6.0.0 (libghdl exported, needed by ghdl-yosys-plugin)
 #   - yosys 0.44
 #   - ghdl-yosys-plugin @ 07a30ed (newer commits break against GHDL 6.0.0
@@ -39,23 +39,25 @@ ARG GHDL_YOSYS_PLUGIN_COMMIT=07a30ed
 # bump: `git ls-remote https://github.com/mountain-reverie/binutils-gdb jcore`
 # and update both the SHA and the comment below.
 ARG BINUTILS_JCORE_REPO=https://github.com/mountain-reverie/binutils-gdb.git
-# Branch mmu/retire-seven -- "sh: retire the seven MMU read encodings from the
-# assembler": removes stc {pteh,ptel,asidr,tsbptr},Rn, cmp/eq {pteh,asidr},Rn
-# and ldtlb.rn Rm, which the J4 decoder no longer accepts (they are General
-# Illegal now).  ldtlb, parameterless ldtlb.rn and ldc Rm,{pteh,ptel,asidr}
-# are kept.  Previous pin was ec91b2cf87c (shad/shld arch_j2_up).
+# Branch jcore @ bd680a024 -- two retirements, both merged:
+#   PR #3 "retire the seven MMU read encodings": removes
+#     stc {pteh,ptel,asidr,tsbptr},Rn, cmp/eq {pteh,asidr},Rn and ldtlb.rn Rm.
+#   PR #4 "retire the TLB-install encodings": deletes ldtlb.rn (0x0078)
+#     outright, and drops arch_j4_up from ldtlb (0x0038) while KEEPING
+#     arch_sh3_up -- ldtlb is a genuine upstream SH-3/SH-4 instruction and
+#     must still assemble for those targets.  err-jcore-tlb.s pins both.
+# ldc Rm,{pteh,ptel,asidr} are kept: software still writes those CSRs.
+# Previous pins: ec91b2cf87c (shad/shld arch_j2_up), 9fd8b08c71f (PR #3).
 #
-# STALE AS OF THE LDTLB RETIREMENT: ldtlb (0x0038) and parameterless ldtlb.rn
-# (0x0078) are General Illegal on J4 now too, so the assembler still accepts
-# two encodings the hardware rejects.  Harmless -- no guard uses the mnemonics,
-# they all hand-assemble .word -- but the fork wants the same treatment, and
-# the pin bumped afterwards.  Deliberately NOT done here: it is a change in
-# another repository plus a human-triggered image rebuild.
+# The assembler and the hardware now agree: every TLB-install encoding is
+# General Illegal on J4, and gas refuses to emit one.  linux@jcore stopped
+# using ldtlb.rn in the same arc (mountain-reverie/linux PR #11), so the
+# cosim guards that link the real handler objects build against this pin.
 #
 # NOTE: this is a Docker ARG.  Bumping it here does NOT refresh the CI image on
 # a branch push -- the image must be rebuilt via a `build-ci-image` workflow
-# dispatch, which only a human can trigger.
-ARG BINUTILS_JCORE_COMMIT=9fd8b08c71f3eb65443f606c08896903f79beeaf
+# dispatch.
+ARG BINUTILS_JCORE_COMMIT=bd680a02498865b6dc3c35b381779e7cabb60984
 ARG SH2_GCC_VERSION=14.2.0
 ARG GO_VERSION=1.26.2
 # OpenSTA is not packaged for Ubuntu; built from source below. OpenSTA requires

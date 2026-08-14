@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/j-core/jcore-cpu/decode/gen-go/internal/microcode"
 	"github.com/j-core/jcore-cpu/decode/gen-go/internal/opcode"
 	"github.com/j-core/jcore-cpu/decode/gen-go/internal/spec"
 )
@@ -125,7 +126,9 @@ func Sync(d *Doc, vds []VariantData) (*Report, error) {
 				}
 				continue
 			}
-			setCols(row, vd, vd.Set.ByKey[k])
+			if err := setCols(row, vd, vd.Set.ByKey[k]); err != nil {
+				return nil, err
+			}
 			matched[row] = true
 		}
 	}
@@ -142,7 +145,9 @@ func Sync(d *Doc, vds []VariantData) (*Report, error) {
 		r := newRow(p.in, p.vd.Variant.Group)
 		for _, vd := range vds {
 			if in, ok := vd.Set.ByKey[p.key]; ok {
-				setCols(r, vd, in)
+				if err := setCols(r, vd, in); err != nil {
+					return nil, err
+				}
 			} else {
 				setColsFalse(r, vd.Variant.Name)
 			}
@@ -301,18 +306,78 @@ func pickRow(cands []*Row, in spec.Instr) (*Row, error) {
 	return nil, fmt.Errorf("opcode %q (%s): %d of %d candidate rows match by mnemonic; cannot disambiguate", in.Opcode, in.Name, n, len(cands))
 }
 
-func setCols(r *Row, vd VariantData, in spec.Instr) {
+func setCols(r *Row, vd VariantData, in spec.Instr) error {
 	name := vd.Variant.Name
 	tm := vd.Tab.For(in)
 	r.Set(name, true)
 	r.Set(name+".issue", tm.Issue.jsonValue())
 	r.Set(name+".latency", tm.Latency.jsonValue())
+	exc, err := exceptionsFor(in)
+	if err != nil {
+		return err
+	}
+	if len(exc) > 0 {
+		r.Set(name+".exceptions", exc)
+	} else {
+		r.Delete(name + ".exceptions")
+	}
+	return nil
 }
 
 func setColsFalse(r *Row, name string) {
 	r.Set(name, false)
 	r.Set(name+".issue", intToNum(0))
 	r.Set(name+".latency", intToNum(0))
+	// Deleted, not emptied: an empty list would read as "this instruction
+	// raises no exceptions here", when the truth is that it does not exist on
+	// this variant at all.
+	r.Delete(name + ".exceptions")
+}
+
+// exceptionsFor derives the exceptions an instruction can raise ON THE VARIANT
+// IT WAS LOADED FOR, from the TOML spec alone. Names follow the Renesas
+// vocabulary so a row can be compared against the upstream SH documentation.
+//
+// Deliberately limited to what the spec DETERMINES, rather than everything the
+// hardware can raise:
+//
+//   - "Slot illegal instruction exception" — microcode.IsSlotIllegal, the same
+//     single-sourced rule that drives check_illegal_delay_slot. Variant-
+//     dependent: the sh4 overlay patches it onto the PC-relative fetches, so a
+//     J2 row and a J4 row legitimately differ. That split is the reason this
+//     annotation exists at all — it was invisible before.
+//   - "General illegal instruction exception" — from `privileged`, raised when
+//     the instruction is issued with SR.MD=0. NOTE the decoder reports that
+//     same fault as SLOT_ILLEGAL when it happens inside a delay slot
+//     (decode_core.vhm ORs illegal_instr into the slot-illegal arm), which is
+//     why upstream SH docs list BOTH on every LDC/STC. It is deliberately not
+//     duplicated here: "Slot illegal instruction exception" in this field means
+//     "this instruction may not appear in a delay slot AT ALL", which is the
+//     property worth reviewing, and privileged instructions in supervisor mode
+//     are perfectly legal there.
+//   - "Unconditional trap" — TRAPA.
+//
+// NOT emitted: the data-side TLB/address-error family. Those are a property of
+// the memory system and the build's PRIV_ARCH setting rather than of the
+// instruction, they would add a near-identical list to every MOV row, and the
+// mnemonic already tells you the instruction touches memory. Adding them would
+// grow the file substantially for close to zero review signal.
+func exceptionsFor(in spec.Instr) ([]string, error) {
+	var out []string
+	ill, err := microcode.IsSlotIllegal(in)
+	if err != nil {
+		return nil, err
+	}
+	if ill {
+		out = append(out, "Slot illegal instruction exception")
+	}
+	if in.Privileged {
+		out = append(out, "General illegal instruction exception")
+	}
+	if strings.HasPrefix(in.Name, "TRAPA") {
+		out = append(out, "Unconditional trap")
+	}
+	return out, nil
 }
 
 func newRow(in spec.Instr, group string) *Row {

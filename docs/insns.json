@@ -238,7 +238,8 @@
       "J4.latency": 1,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 1
+      "J2A.latency": 1,
+      "J4.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Data Transfer Instructions",
@@ -286,7 +287,8 @@
       "J4.latency": 1,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 1
+      "J2A.latency": 1,
+      "J4.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Data Transfer Instructions",
@@ -334,7 +336,8 @@
       "J4.latency": 1,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 1
+      "J2A.latency": 1,
+      "J4.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Data Transfer Instructions",
@@ -7246,7 +7249,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["Slot illegal instruction exception"],
+      "J1.exceptions": ["Slot illegal instruction exception"],
+      "J4.exceptions": ["Slot illegal instruction exception"],
+      "J2A.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Branch Instructions",
@@ -7294,7 +7301,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["Slot illegal instruction exception"],
+      "J1.exceptions": ["Slot illegal instruction exception"],
+      "J4.exceptions": ["Slot illegal instruction exception"],
+      "J2A.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Branch Instructions",
@@ -7342,7 +7353,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["Slot illegal instruction exception"],
+      "J1.exceptions": ["Slot illegal instruction exception"],
+      "J4.exceptions": ["Slot illegal instruction exception"],
+      "J2A.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Branch Instructions",
@@ -7390,7 +7405,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["Slot illegal instruction exception"],
+      "J1.exceptions": ["Slot illegal instruction exception"],
+      "J4.exceptions": ["Slot illegal instruction exception"],
+      "J2A.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Branch Instructions",
@@ -7438,7 +7457,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["Slot illegal instruction exception"],
+      "J1.exceptions": ["Slot illegal instruction exception"],
+      "J4.exceptions": ["Slot illegal instruction exception"],
+      "J2A.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Branch Instructions",
@@ -7486,7 +7509,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["Slot illegal instruction exception"],
+      "J1.exceptions": ["Slot illegal instruction exception"],
+      "J4.exceptions": ["Slot illegal instruction exception"],
+      "J2A.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Branch Instructions",
@@ -7534,7 +7561,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["Slot illegal instruction exception"],
+      "J1.exceptions": ["Slot illegal instruction exception"],
+      "J4.exceptions": ["Slot illegal instruction exception"],
+      "J2A.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Branch Instructions",
@@ -7582,7 +7613,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["Slot illegal instruction exception"],
+      "J1.exceptions": ["Slot illegal instruction exception"],
+      "J4.exceptions": ["Slot illegal instruction exception"],
+      "J2A.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Branch Instructions",
@@ -7630,7 +7665,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["Slot illegal instruction exception"],
+      "J1.exceptions": ["Slot illegal instruction exception"],
+      "J4.exceptions": ["Slot illegal instruction exception"],
+      "J2A.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Branch Instructions",
@@ -7678,7 +7717,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["Slot illegal instruction exception"],
+      "J1.exceptions": ["Slot illegal instruction exception"],
+      "J4.exceptions": ["Slot illegal instruction exception"],
+      "J2A.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Branch Instructions",
@@ -7726,7 +7769,8 @@
       "J4.latency": 0,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2A.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Branch Instructions",
@@ -7774,7 +7818,8 @@
       "J4.latency": 0,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 6
+      "J2A.latency": 6,
+      "J2A.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Branch Instructions",
@@ -7822,7 +7867,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["Slot illegal instruction exception"],
+      "J1.exceptions": ["Slot illegal instruction exception"],
+      "J4.exceptions": ["Slot illegal instruction exception"],
+      "J2A.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Branch Instructions",
@@ -7870,7 +7919,8 @@
       "J4.latency": 0,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2A.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "Branch Instructions",
@@ -7918,7 +7968,8 @@
       "J4.latency": 0,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2A.exceptions": ["Slot illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -8206,7 +8257,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 2,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["General illegal instruction exception"],
+      "J1.exceptions": ["General illegal instruction exception"],
+      "J4.exceptions": ["General illegal instruction exception"],
+      "J2A.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -8254,7 +8309,11 @@
       "J4.latency": 3,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 3
+      "J2A.latency": 3,
+      "J2.exceptions": ["General illegal instruction exception"],
+      "J1.exceptions": ["General illegal instruction exception"],
+      "J4.exceptions": ["General illegal instruction exception"],
+      "J2A.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -8446,7 +8505,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 2,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["General illegal instruction exception"],
+      "J1.exceptions": ["General illegal instruction exception"],
+      "J4.exceptions": ["General illegal instruction exception"],
+      "J2A.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -8494,7 +8557,11 @@
       "J4.latency": 3,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 3
+      "J2A.latency": 3,
+      "J2.exceptions": ["General illegal instruction exception"],
+      "J1.exceptions": ["General illegal instruction exception"],
+      "J4.exceptions": ["General illegal instruction exception"],
+      "J2A.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -8929,7 +8996,8 @@
       "J1.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "J4.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -9025,7 +9093,8 @@
       "J1.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "J4.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -9217,7 +9286,8 @@
       "J1.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "J4.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -10709,7 +10779,11 @@
       "J4.latency": 4,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 4
+      "J2A.latency": 4,
+      "J2.exceptions": ["Slot illegal instruction exception","General illegal instruction exception"],
+      "J1.exceptions": ["Slot illegal instruction exception","General illegal instruction exception"],
+      "J4.exceptions": ["Slot illegal instruction exception","General illegal instruction exception"],
+      "J2A.exceptions": ["Slot illegal instruction exception","General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -10949,7 +11023,11 @@
       "J4.latency": 3,
       "J2A": true,
       "J2A.issue": 3,
-      "J2A.latency": 3
+      "J2A.latency": 3,
+      "J2.exceptions": ["General illegal instruction exception"],
+      "J1.exceptions": ["General illegal instruction exception"],
+      "J4.exceptions": ["General illegal instruction exception"],
+      "J2A.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -11045,7 +11123,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["General illegal instruction exception"],
+      "J1.exceptions": ["General illegal instruction exception"],
+      "J4.exceptions": ["General illegal instruction exception"],
+      "J2A.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -11093,7 +11175,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 2,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["General illegal instruction exception"],
+      "J1.exceptions": ["General illegal instruction exception"],
+      "J4.exceptions": ["General illegal instruction exception"],
+      "J2A.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -11285,7 +11371,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 1,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["General illegal instruction exception"],
+      "J1.exceptions": ["General illegal instruction exception"],
+      "J4.exceptions": ["General illegal instruction exception"],
+      "J2A.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -11333,7 +11423,11 @@
       "J4.latency": 2,
       "J2A": true,
       "J2A.issue": 2,
-      "J2A.latency": 2
+      "J2A.latency": 2,
+      "J2.exceptions": ["General illegal instruction exception"],
+      "J1.exceptions": ["General illegal instruction exception"],
+      "J4.exceptions": ["General illegal instruction exception"],
+      "J2A.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -11768,7 +11862,8 @@
       "J1.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "J4.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -11864,7 +11959,8 @@
       "J1.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "J4.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -12056,7 +12152,8 @@
       "J1.latency": 0,
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "J4.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -13067,7 +13164,11 @@
       "J4.latency": 8,
       "J2A": true,
       "J2A.issue": 2,
-      "J2A.latency": 8
+      "J2A.latency": 8,
+      "J2.exceptions": ["Slot illegal instruction exception","Unconditional trap"],
+      "J1.exceptions": ["Slot illegal instruction exception","Unconditional trap"],
+      "J4.exceptions": ["Slot illegal instruction exception","Unconditional trap"],
+      "J2A.exceptions": ["Slot illegal instruction exception","Unconditional trap"]
     },
     {
       "group": "System Control Instructions",
@@ -22212,7 +22313,8 @@
       "collides": ["stc\tMOD,Rn"],
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "J4.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -22258,7 +22360,8 @@
       "collides": ["stc\tRS,Rn"],
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "J4.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -22304,7 +22407,8 @@
       "collides": ["stc\tRE,Rn"],
       "J2A": false,
       "J2A.issue": 0,
-      "J2A.latency": 0
+      "J2A.latency": 0,
+      "J4.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -22350,7 +22454,8 @@
       "J2A": false,
       "J2A.issue": 0,
       "J2A.latency": 0,
-      "collides": ["ldc\tRm,MOD"]
+      "collides": ["ldc\tRm,MOD"],
+      "J4.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -22396,7 +22501,8 @@
       "J2A": false,
       "J2A.issue": 0,
       "J2A.latency": 0,
-      "collides": ["ldc\tRm,RS"]
+      "collides": ["ldc\tRm,RS"],
+      "J4.exceptions": ["General illegal instruction exception"]
     },
     {
       "group": "System Control Instructions",
@@ -22442,7 +22548,8 @@
       "J2A": false,
       "J2A.issue": 0,
       "J2A.latency": 0,
-      "collides": ["ldc\tRm,RE"]
+      "collides": ["ldc\tRm,RE"],
+      "J4.exceptions": ["General illegal instruction exception"]
     }
   ]
 }

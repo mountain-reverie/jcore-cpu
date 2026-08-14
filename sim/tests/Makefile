@@ -38,7 +38,7 @@ print-base-imgs:
 # regression.sh Step 6 -- which runs `make all` then globs sim/tests/*.img on
 # the base-J2 cpu_ctb -- never sweeps them up and hangs to stop-time.
 # sim/mmu_sim.sh builds each of these explicitly by target name ($t.img).
-j4-guards: j4_illegal_trap.img
+j4-guards: j4_illegal_trap.img slotillset.img
 
 # ---------------------------------------------------------------------------
 # SP2 mmulinux: harness driving the REAL linux@jcore MMU objects (built by
@@ -280,6 +280,7 @@ sh2a_bitmem_rmw.elf: sh2a_bitmem_rmw.o
 sh2a_pref.elf: sh2a_pref.o
 sh2a_tbr.elf: sh2a_tbr.o
 j4_illegal_trap.elf: j4_illegal_trap.o
+slotillset.elf: slotillset.o
 mmubench.elf: mmubench.o tlbwalk.o
 mmubenchi.elf: mmubenchi.o tlbwalk.o
 mmuvecsplit.elf: mmuvecsplit.o

@@ -155,6 +155,37 @@ End-to-end regression (generator unit tests + simulator + TAP testbenches):
 decode/gen-go/regression.sh
 ```
 
+**`make -C decode generate-j4` writes the J4-overlay tables into the in-tree
+`decode/`.** The in-tree tables must stay BASE — committing J4-overlay tables is
+a known Fmax regression (see `sim/mmu_sim.sh`'s header). The J4 build path is
+out-of-tree: `sim/gen/j4-w<width>/decode`, produced by `CPU_VARIANT=j4`. If you
+run `generate-j4` by accident, `git diff --stat decode/` shows it immediately
+(hundreds of changed lines instead of the handful your edit explains); recover
+with a plain `make -C decode generate`.
+
+### Per-variant spec attributes
+
+Two `[[instr]]` keys express rules the microcode walk cannot infer:
+
+- `slot_illegal = true` — forces membership in `check_illegal_delay_slot`. The
+  derived rule only sees instructions asserting `wrpc_z`, which misses the
+  conditional branches (they redirect via `zbus="T(PC)"`). `microcode.IsSlotIllegal`
+  is the single definition of the set: it drives both the generated decoder and
+  `docs/insns.json`'s `.exceptions`. Do not add a second copy of this rule.
+- `patch = true` — an OVERLAY-only entry that refines the attributes of the
+  same-named base instruction in place, leaving opcode and microcode alone. Use
+  it for ISA rules scoped to some variants; a full override would have to
+  duplicate, and then drift from, the base microcode.
+
+**ISA rules are often variant-scoped, and the upstream docs hide it.** `MOVA` and
+`MOV.{W,L} @(disp,PC),Rn` are slot-illegal on SH-3/SH-4 ONLY ("SH4\*: If this
+instruction is executed in a delay slot..."); on SH-1/SH-2 they are legal there,
+and `testrom/tests/testmov2.s:27` actively depends on it — trapping them on J2
+hangs the test ROM (`regression.sh` Step 3 stops after 5 of 20 LED writes). They
+live in `spec/sh4/mov.toml` as a patch, NOT in the base spec. Oleg Endo's
+"Possible Exceptions" list (`shared-ptr.com/sh_insns.html`) is the SH-4 list and
+does not carry that scoping, so it reads as unconditional.
+
 ### Regenerating Toolchain (assembler/LLVM) Definitions
 
 **Never hand-edit binutils `opcodes/sh-opc.h` to teach the assembler about a
@@ -186,7 +217,12 @@ which is a gcc flag). `testrom/Makefile` passes `-Wa,--isa=sh-j2`.
 
 If an instruction is added to `decode/gen-go/spec/`, it must also be added to
 `docs/insns.json` — that file feeds both the GitHub Pages instruction explorer
-and `tools/insns2asm`.
+and `tools/insns2asm`. Sync it from the spec rather than by hand:
+
+```bash
+make -C decode insns          # regenerate docs/insns.json from the TOML spec
+make -C decode insns-check    # verify it is in sync (non-zero if not)
+```
 
 ## VHDL Configurations
 
@@ -229,6 +265,15 @@ in the J4 overlay decoder) and runs the guard set.
 - **`-n` skips the build entirely** — it is not "make decides nothing changed",
   make is never invoked. Any RTL change measured under `-n` is measured against
   stale hardware. Rebuild (no `-n`) for every RTL A/B, however small.
+- **DELETING a spec file does not invalidate the J4 decoder build**, even without
+  `-n`. Make's prerequisites come from a wildcard over `decode/gen-go/spec/`, so
+  removing a file leaves the target looking up to date; *editing* one triggers
+  correctly. Measured 2026-08-14: deleting `spec/sh4/mov.toml` and re-running the
+  full `sim/mmu_sim.sh` reported PASS against the OLD decoder — the tell is that
+  the `emitted to .../sim/gen/j4-w72/decode` line is absent from the log. Any A/B
+  performed by removing a spec file is measuring stale hardware, exactly like the
+  `-n` trap above. Force it with `rm -rf sim/gen/j4-w72` before the run, and
+  check for that `emitted to` line before believing the result.
 - **CI keeps its OWN guard list, and the two diverge in BOTH directions.**
   `.github/workflows/full-regression.yml` defines its own `run_guard` and its
   own sequence; adding a guard to `sim/mmu_sim.sh` does not add it to CI, or the
@@ -301,8 +346,10 @@ NOTE when a tracked `.vhd` is regenerated but uncommitted.
 ## GitHub Pages
 
 - `docs/insns/` is deployed to GitHub Pages via `synth-cpu.yml` as an interactive SH instruction reference (jQuery Dynatable).
-- `docs/insns.json` is the data source for the instruction explorer page. When new instructions are added to the CPU (in `decode/gen-go/spec/`), `docs/insns.json` must be updated to keep the explorer page in sync.
+- `docs/insns.json` is the data source for the instruction explorer page. When new instructions are added to the CPU (in `decode/gen-go/spec/`), regenerate it with `make -C decode insns` to keep the explorer page in sync.
 - The deployed instruction explorer lives at `/insns/` on the jcore-cpu GitHub Pages site.
+- Each row carries a per-variant `<VARIANT>.exceptions` list (e.g. `J4.exceptions`), derived from the TOML spec — see `internal/insns.exceptionsFor`. It covers only what the spec *determines* (slot-illegal, general-illegal from `privileged`, TRAPA's trap), NOT the data-side TLB/address-error family. Absent means "not on this variant"; the variant split is meaningful, e.g. `MOVA` lists slot-illegal on J4 only.
+- The explorer declares its columns explicitly via `data-dynatable-column`, so adding a key to `insns.json` does not surface it automatically — render it in the detail rows (see how `collides` and `exceptions` are built).
 
 ## Key Conventions
 

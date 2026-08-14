@@ -112,8 +112,12 @@ type PredecodeBitAssign struct {
 // bits within each top-nibble group; for the illegal checks we use the
 // full map.
 //
-// writesPC is the set of instruction names that write PC (branches);
-// drives check_illegal_delay_slot.
+// slotIllegal is the set of instruction names that must trap when placed in
+// a delay slot; drives check_illegal_delay_slot. It is the union of the
+// instructions that write PC through wrpc_z (the unconditional branches, RTE
+// and TRAPA) and
+// those carrying an explicit slot_illegal = true in the spec — see
+// spec.Instr.SlotIllegal for why the wrpc_z rule alone is not sufficient.
 // IllegalMode selects how check_illegal_instruction is generated.
 //
 //	IllegalFull — trap every encoding not defined by the loaded spec.
@@ -444,10 +448,10 @@ func nibbleSpaced16Bit(m logic.LogicMap) string {
 	return raw[0:4] + " " + raw[4:8] + " " + raw[8:12] + " " + raw[12:16]
 }
 
-func buildIllegalSlot(lm map[string]logic.LogicMap, writesPC map[string]bool) string {
+func buildIllegalSlot(lm map[string]logic.LogicMap, slotIllegal map[string]bool) string {
 	var pcMaps []logic.LogicMap
-	names := make([]string, 0, len(writesPC))
-	for n := range writesPC {
+	names := make([]string, 0, len(slotIllegal))
+	for n := range slotIllegal {
 		if _, ok := lm[n]; ok {
 			names = append(names, n)
 		}

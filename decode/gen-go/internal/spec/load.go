@@ -58,6 +58,34 @@ func LoadProfile(base string, overlays ...string) (*Spec, error) {
 		}
 		for _, instr := range overlayInstrs {
 			applyDefaults(&instr, out.Defaults)
+			// ATTRIBUTE PATCH: `patch = true` refines the base instruction's
+			// attributes in place instead of replacing it, so the patch never
+			// has to duplicate — and then drift from — the base microcode.
+			//
+			// This exists for ISA rules that apply to only SOME variants. The
+			// motivating case: MOVA / MOV.{W,L} @(disp,PC),Rn raise a slot
+			// illegal instruction exception on SH-3/SH-4 but are LEGAL in a
+			// delay slot on SH-1/SH-2 — where testrom/tests/testmov2.s
+			// actively depends on that. See spec/sh4/mov.toml.
+			if instr.Patch {
+				idx, ok := nameIndex[instr.Name]
+				if !ok {
+					return nil, fmt.Errorf(
+						"%s: attribute patch for unknown instruction %q",
+						overlayDir, instr.Name)
+				}
+				// A patch carrying microcode is ambiguous: silently dropping it
+				// would hide a real edit, so refuse it and ask for a full
+				// override instead.
+				if len(instr.Slots) > 0 {
+					return nil, fmt.Errorf(
+						"%s: %q is patch = true but declares %d slot(s); "+
+							"drop `patch` to override the instruction outright",
+						overlayDir, instr.Name, len(instr.Slots))
+				}
+				applyPatch(&out.Instrs[idx], instr)
+				continue
+			}
 			if idx, ok := nameIndex[instr.Name]; ok {
 				// Preserve structural metadata from the base instruction when the
 				// overlay omits it. Specifically, if the overlay doesn't specify
@@ -82,6 +110,22 @@ func LoadProfile(base string, overlays ...string) (*Spec, error) {
 	}
 
 	return out, nil
+}
+
+// applyPatch merges the attribute-only overlay entry `patch` onto the base
+// instruction `base`, leaving base's opcode, microcode and identity intact.
+//
+// Only attributes the patch actually SETS are applied: the boolean flags are
+// one-way (true wins, false means "unset, inherit"), so a patch can add a
+// variant-specific rule but never silently clear a base one. Nothing else is
+// merged — a patch that means to change microcode should be a full override.
+func applyPatch(base *Instr, patch Instr) {
+	if patch.SlotIllegal {
+		base.SlotIllegal = true
+	}
+	if patch.Privileged {
+		base.Privileged = true
+	}
 }
 
 // readDir reads all *.toml files in dir (alphabetically) and returns the

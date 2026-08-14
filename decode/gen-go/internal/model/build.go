@@ -430,7 +430,7 @@ func Build(s *spec.Spec, width int, mode IllegalMode) (*Decoder, error) {
 	//     need their if_issue/dispatch slots driven).
 	instrLogicNormal := make(map[string]logic.LogicMap, len(allInstrs))
 	instrLogicAll := make(map[string]logic.LogicMap, len(allInstrs))
-	writesPC := make(map[string]bool)
+	slotIllegal := make(map[string]bool)
 	privileged := make(map[string]bool)
 	instrAddrs := make(map[string]int)
 
@@ -452,24 +452,20 @@ func Build(s *spec.Spec, width int, mode IllegalMode) (*Decoder, error) {
 			if si.Privileged {
 				privileged[si.Name] = true
 			}
-			// Detect "writes PC": walk slots looking for SigWrpcZ == "1".
-			for _, slot := range si.Slots {
-				if len(slot) == 0 {
-					continue
-				}
-				am, err := microcode.AssignSlot(*si, slot)
-				if err != nil {
-					return nil, fmt.Errorf("%s logicmap: %w", si.Name, err)
-				}
-				if am[microcode.SigWrpcZ] == "1" {
-					writesPC[si.Name] = true
-					break
-				}
+			// Single-sourced with docs/insns.json's `.exceptions` annotation —
+			// see microcode.IsSlotIllegal for why this rule lives in exactly
+			// one place.
+			ill, err := microcode.IsSlotIllegal(*si)
+			if err != nil {
+				return nil, fmt.Errorf("%s logicmap: %w", si.Name, err)
+			}
+			if ill {
+				slotIllegal[si.Name] = true
 			}
 		}
 	}
 
-	d.Body = BuildBody(instrAddrs, instrLogicNormal, writesPC, privileged, addrBits, mode)
+	d.Body = BuildBody(instrAddrs, instrLogicNormal, slotIllegal, privileged, addrBits, mode)
 	d.Simple = BuildSimple(s, instrLogicAll, slotAssigns)
 	d.Direct = BuildDirect(s, instrLogicAll, slotAssigns)
 	d.Entity = BuildEntity(d.Package)

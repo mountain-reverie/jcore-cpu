@@ -65,6 +65,18 @@ architecture ice40dsp of mult is
   -- C/D/CI inputs. No ACCUMCO/ACCUMCI/CO dedicated DSP-cascade wire is used
   -- anywhere (CI is a routable general fabric input, not the cascade carry).
   --
+  -- EVERY adder here selects its UPPER input from the C/D port
+  -- ({TOP,BOT}ADDSUB_UPPERINPUT='1'), never from the accumulator register.
+  -- On real SB_MAC16 silicon UPPERINPUT='0' means "add the accumulator", i.e.
+  -- this adder's own previous output fed back -- so a top adder written as
+  -- "0 + 0 + carry" with UPPERINPUT='0' actually ACCUMULATES its carry on every
+  -- clock the operands are held, and keeps that state across multiplies.
+  -- core/sb_mac16_sim.vhd does not model the accumulator ("not modelled,
+  -- zeroed"), so simulation shows the intended 0 and never sees this.
+  -- Measured on hardware: MACL was always correct (its adders already used
+  -- '1'), while MACH was wrong, changed when CALC_CYCLES changed, and varied
+  -- run to run -- e.g. 0xFFFFFFFF*0xFFFFFFFF -> hi=0xffff5f90, not 0xfffffffe.
+  --
   -- Column carry-propagate (16-bit columns c0..c3), all inside DSP adders:
   --   result[15:0]  = G[15:0]                              (o_g[15:0])
   --   result[31:16] = G[31:16] + M[15:0]        -> cB      (DSP_C1  bottom)
@@ -183,7 +195,7 @@ begin
       BOTOUTPUT_SELECT => "00",    TOPOUTPUT_SELECT => "00",
       BOTADDSUB_LOWERINPUT => "10", BOTADDSUB_UPPERINPUT => '1',
       BOTADDSUB_CARRYSELECT => "00",
-      TOPADDSUB_LOWERINPUT => "10", TOPADDSUB_UPPERINPUT => '0',
+      TOPADDSUB_LOWERINPUT => "10", TOPADDSUB_UPPERINPUT => '1',
       TOPADDSUB_CARRYSELECT => "10",
       A_SIGNED => '0', B_SIGNED => '0')
     port map (
@@ -205,7 +217,7 @@ begin
       BOTOUTPUT_SELECT => "00",    TOPOUTPUT_SELECT => "00",
       BOTADDSUB_LOWERINPUT => "00", BOTADDSUB_UPPERINPUT => '1',
       BOTADDSUB_CARRYSELECT => "00",
-      TOPADDSUB_LOWERINPUT => "00", TOPADDSUB_UPPERINPUT => '0',
+      TOPADDSUB_LOWERINPUT => "00", TOPADDSUB_UPPERINPUT => '1',
       TOPADDSUB_CARRYSELECT => "10",
       A_SIGNED => '0', B_SIGNED => '0')
     port map (
@@ -226,7 +238,7 @@ begin
       BOTOUTPUT_SELECT => "00",    TOPOUTPUT_SELECT => "00",
       BOTADDSUB_LOWERINPUT => "00", BOTADDSUB_UPPERINPUT => '1',
       BOTADDSUB_CARRYSELECT => "00",
-      TOPADDSUB_LOWERINPUT => "00", TOPADDSUB_UPPERINPUT => '0',
+      TOPADDSUB_LOWERINPUT => "00", TOPADDSUB_UPPERINPUT => '1',
       TOPADDSUB_CARRYSELECT => "10",
       A_SIGNED => '0', B_SIGNED => '0')
     port map (

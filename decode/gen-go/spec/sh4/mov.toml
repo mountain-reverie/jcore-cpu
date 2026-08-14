@@ -1,0 +1,41 @@
+# J4 (SH-3/SH-4 privileged-architecture) refinements to the base MOV set.
+#
+# These are ATTRIBUTE PATCHES, not overrides: `patch = true` makes
+# spec.LoadProfile merge the flag onto the same-named base instruction and
+# leave its opcode and microcode alone. Duplicating the base microcode
+# here would only create a drift hazard. See spec.applyPatch.
+#
+# ---- Why these are J4-only ----
+# The PC-relative operand fetches raise a slot illegal instruction exception
+# when executed in a delay slot on SH-3/SH-4 ONLY. The Renesas note is
+# explicitly scoped: "SH4*: If this instruction is executed in a delay slot, a
+# slot illegal instruction exception will be generated."
+#
+# On SH-1/SH-2 they are LEGAL in a delay slot with defined semantics (the PC
+# they read resolves to the branch target's "first address + 2"), and J-core's
+# own test ROM depends on it: testrom/tests/testmov2.s:27 deliberately runs
+# `bra` with `mova` in the delay slot. Setting slot_illegal in the BASE spec
+# hangs the J2 test ROM -- measured, decode/gen-go/regression.sh Step 3 stops
+# after 5 of 20 LED writes.
+#
+# The conditional branches (BT/BF/BT_S/BF_S) are NOT here on purpose: they are
+# slot-illegal on SH-1/SH-2 as well, so they carry slot_illegal in the base
+# spec/branch.toml and apply to every variant.
+#
+# Locked in by sim/tests/slotillset.S (J4 must trap) and, on the J2 side, by
+# testmov2.s via regression.sh Step 3 (J2 must not).
+
+[[instr]]
+  name = "MOVA @(disp, PC), R0"
+  patch = true
+  slot_illegal = true
+
+[[instr]]
+  name = "MOV.W @(disp, PC), Rn"
+  patch = true
+  slot_illegal = true
+
+[[instr]]
+  name = "MOV.L @(disp, PC), Rn"
+  patch = true
+  slot_illegal = true

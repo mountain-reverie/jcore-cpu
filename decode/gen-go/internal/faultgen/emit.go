@@ -691,6 +691,22 @@ func emitIFetchDSlot(c Class, id int) (string, string, error) {
 		return fmt.Sprintf("! skipped: %s excluded from I-fetch-delay-slot axis (control-flow/system; a branch is illegal in a delay slot)\n", c.Instr.Name),
 			"", errSkip
 	}
+	// This axis's whole construction is "plant the instruction in a delay
+	// slot", so an instruction the ISA forbids there cannot be a subject: it
+	// raises SLOT_ILLEGAL before any I-fetch fault can be observed. Derived
+	// from the spec flag rather than a name list so a future slot_illegal
+	// addition excludes itself here automatically. NOTE this is axis-local on
+	// purpose -- unlike Bespoke, these instructions stay in scope for the
+	// plain (non-delay-slot) I-fetch axis.
+	//
+	// Live for the J4 profile via spec/sh4/mov.toml, which patches
+	// slot_illegal onto the PC-relative fetches: on SH-3/SH-4 they are
+	// slot-illegal, while on SH-1/SH-2 they are legal in a delay slot and stay
+	// in this axis.
+	if c.Instr.SlotIllegal {
+		return fmt.Sprintf("! skipped: %s is slot-illegal on this profile; it cannot be planted in a delay slot\n", c.Instr.Name),
+			"", errSkip
+	}
 	if c.Instr.Plane == "system" {
 		return fmt.Sprintf("! skipped: %s is a microcode-only system entry (plane=system), not a fetchable instruction\n", c.Instr.Name),
 			"", errSkip

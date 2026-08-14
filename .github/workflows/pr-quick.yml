@@ -111,6 +111,15 @@ jobs:
       # If you are tempted to delete this step because it looks redundant with
       # Steps 1-7 below: it is not -- none of those steps touch sim/tests/*.S
       # syntax at all.
+      - name: Guard lists agree on stop times
+        # sim/mmu_sim.sh and full-regression.yml keep SEPARATE hand-maintained
+        # guard lists. They have diverged repeatedly; most recently every m8_*
+        # guard was budgeted 200-600us in CI against 300-900us locally, so a
+        # change that made them slower passed locally and failed only in CI --
+        # reported as a functional failure, because a stop-time overrun looks
+        # exactly like one. Seconds to check, hours to debug when it lands.
+        run: scripts/guard_list_drift.sh
+
       - name: Assemble-only syntax gate for sim/tests/*.S
         working-directory: jcore-cpu
         env:

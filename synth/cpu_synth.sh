@@ -58,7 +58,7 @@
 # original J2-only script (so the existing J2 dashboard series is unbroken).
 set -euo pipefail
 
-BACKEND="${1:?usage: cpu_synth.sh <asic|ecp5|timing|ice40>}"
+BACKEND="${1:?usage: cpu_synth.sh <asic|ecp5|timing|ice40|scc>}"
 SYNTH_VARIANT="${SYNTH_VARIANT:-j2}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -369,6 +369,35 @@ case "$BACKEND" in
       yosys -m ghdl -p "$GHDL_BASE -e $TIMING_TOP; synth_ice40 -dsp -top $TIMINGCELL; check -assert; chformal -remove; delete t:\$check t:\$print; stat; write_json $OUT/cpu_ice40.json"
     fi
     ;;
-  *) echo "ERROR: unknown backend '$BACKEND' (want asic|ecp5|timing|ice40)" >&2; exit 1 ;;
+  scc)
+    # slot_o combinational-loop regression guard (core/datapath.vhm). slot_o
+    # must stay out of every SCC; a residual SCC not involving it is fine (abc9
+    # resolves it), so we only fail if slot_o reappears.
+    #
+    # This lives here, not in the workflow, because it needs EXACTLY the file
+    # list above. It used to carry a hand-copied duplicate of that list in
+    # .github/workflows/synth-cpu.yml, which went stale the moment
+    # core/tlb_walk.vhd was added: every run failed with
+    #   core/cpu.vhd: error: unit "tlb_walk" not found in library "work"
+    # reported under a step named for a combinational loop, with the real error
+    # swallowed into a redirected file. Driving it from FILES[] means the list
+    # cannot drift from the one the real synth uses.
+    REPORT="$OUT/scc_report.txt"
+    if ! yosys -m ghdl -p \
+        "$GHDL_BASE -e $TOP; hierarchy -top $CPUTOP; proc; flatten; opt; scc -nofeedback -select; select -list" \
+        > "$REPORT" 2>&1; then
+      echo "ERROR: elaboration/synthesis failed -- report follows" >&2
+      cat "$REPORT" >&2
+      exit 1
+    fi
+    grep -E 'Found [0-9]+ SCCs' "$REPORT" | tail -1 || true
+    if grep -E "^$CPUTOP/" "$REPORT" | grep -q 'slot_o'; then
+      echo "REGRESSION: slot_o is back in a combinational loop" >&2
+      grep -E "^$CPUTOP/" "$REPORT" | grep 'slot_o' >&2
+      exit 1
+    fi
+    echo "OK: slot_o is not in any SCC"
+    ;;
+  *) echo "ERROR: unknown backend '$BACKEND' (want asic|ecp5|timing|ice40|scc)" >&2; exit 1 ;;
 esac
 echo "cpu_synth.sh: $BACKEND OK"

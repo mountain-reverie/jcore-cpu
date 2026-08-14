@@ -112,6 +112,7 @@ jobs:
       # Steps 1-7 below: it is not -- none of those steps touch sim/tests/*.S
       # syntax at all.
       - name: Guard lists agree on stop times
+        working-directory: jcore-cpu
         # sim/mmu_sim.sh and full-regression.yml keep SEPARATE hand-maintained
         # guard lists. They have diverged repeatedly; most recently every m8_*
         # guard was budgeted 200-600us in CI against 300-900us locally, so a

@@ -427,6 +427,7 @@
     var ed = document.getElementById('description' + rowIndex);
     var eo = document.getElementById('operation' + rowIndex);
     var ec = document.getElementById('collides' + rowIndex);
+    var ex = document.getElementById('exceptions' + rowIndex);
     var s = window.getSelection();
 
     if (!s.isCollapsed)
@@ -437,6 +438,7 @@
       ed.style.display = 'none';
       eo.style.display = 'none';
       if (ec) ec.style.display = 'none';
+      if (ex) ex.style.display = 'none';
       cur_opened = null;
     }
     else {
@@ -444,19 +446,21 @@
       ed.style.display = 'table-row';
       eo.style.display = 'table-row';
       if (ec) ec.style.display = 'table-row';
+      if (ex) ex.style.display = 'table-row';
 
       if (cur_opened != null) {
         if (cur_opened[0]) cur_opened[0].style.display = 'none';
         cur_opened[1].style.display = 'none';
         cur_opened[2].style.display = 'none';
         if (cur_opened[3]) cur_opened[3].style.display = 'none';
+        if (cur_opened[4]) cur_opened[4].style.display = 'none';
       }
-      cur_opened = [eh, ed, eo, ec];
+      cur_opened = [eh, ed, eo, ec, ex];
     }
   }
 
   function on_mouse_over(rowIndex) {
-    var h, d, o, c;
+    var h, d, o, c, x;
 
     document.getElementById('line0.' + rowIndex).style.backgroundColor = "#F0F0F0";
     document.getElementById('line1.' + rowIndex).style.backgroundColor = "#F0F0F0";
@@ -474,10 +478,13 @@
 
     c = document.getElementById('collides' + rowIndex);
     if (c) c.style.backgroundColor = "#F0F0F0";
+
+    x = document.getElementById('exceptions' + rowIndex);
+    if (x) x.style.backgroundColor = "#F0F0F0";
   }
 
   function on_mouse_out(rowIndex) {
-    var h, d, o, c;
+    var h, d, o, c, x;
 
     document.getElementById('line0.' + rowIndex).style.backgroundColor = "";
     document.getElementById('line1.' + rowIndex).style.backgroundColor = "";
@@ -495,6 +502,9 @@
 
     c = document.getElementById('collides' + rowIndex);
     if (c) c.style.backgroundColor = "";
+
+    x = document.getElementById('exceptions' + rowIndex);
+    if (x) x.style.backgroundColor = "";
   }
 
   function extract_4c(code) {
@@ -632,6 +642,31 @@
       collidesRow = '<tr class="collapse" id="collides' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);"><td colspan=' + colspan + '><i><b>Collides with:</b></i> ' + links + '</td></tr>';
     }
 
+    // Per-variant "possible exceptions", derived from the TOML spec by
+    // cpugen (internal/insns.exceptionsFor). Variants sharing an identical
+    // list are grouped, so the common case reads "J1, J2, J2A, J4: ..." while
+    // a genuine variant split (e.g. the PC-relative fetches, slot-illegal on
+    // J4 only) stands out as its own line.
+    var exceptionsRow = '';
+    var excGroups = {}, excOrder = [];
+    ['J1', 'J2', 'J2A', 'J4'].forEach(function (v) {
+      var list = record[v + '.exceptions'];
+      if (!list || !list.length) return;
+      var key = list.join('\u0000');
+      if (!excGroups[key]) { excGroups[key] = { list: list, vars: [] }; excOrder.push(key); }
+      excGroups[key].vars.push(v);
+    });
+    if (excOrder.length) {
+      var parts = excOrder.map(function (k) {
+        var g = excGroups[k];
+        var esc = g.list.map(function (e) {
+          return e.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        }).join(', ');
+        return '<b>' + g.vars.join(', ') + ':</b> ' + esc;
+      }).join('<br/>');
+      exceptionsRow = '<tr class="collapse" id="exceptions' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);"><td colspan=' + colspan + '><i><b>Possible exceptions (J-core, derived from the decoder spec)</b></i><br/>' + parts + '</td></tr>';
+    }
+
     return group_start + '<tr class="top" id="line0.' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);">' +
       '<td class="compat">' + compat[0] + '</td><td class="compat">' + compat[1] + '</td><td class="compat">' + compat[2] + '</td>' +
       '<td rowspan=4>' + collideIcon + record.format + '</td>' +
@@ -655,7 +690,7 @@
       '</tr>' + hexCode +
       '<tr class="collapse" id="description' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);"><td colspan=' + colspan + '><i><b>Description</b></i><br/><pre>' + record.description + '</pre></td></tr>' +
       '<tr class="collapse" id="operation' + rowIndex + '" onmouseover="on_mouse_over(' + rowIndex + ');" onmouseout="on_mouse_out(' + rowIndex + ');" onclick="on_mouse_click(' + rowIndex + ', event);"><td colspan=' + colspan + '><i><b>Operation</b></i><pre class="code">' + record.operation + '</pre></td></tr>' +
-      collidesRow;
+      collidesRow + exceptionsRow;
   }
 
   var last_query = "";

@@ -31,7 +31,28 @@ type Instr struct {
 	Plane      string `toml:"plane,omitempty"` // "" (default) or "system" (microcode-only, excluded from disassembler)
 	TableRef   string `toml:"table_ref,omitempty"`
 	Privileged bool   `toml:"privileged,omitempty"` // true => illegal-instruction trap when SR.MD=0
-	Slots      []Slot `toml:"slots"`
+	// SlotIllegal forces this instruction into check_illegal_delay_slot even
+	// when it does not assert wrpc_z. The derived rule (see model.BuildBody)
+	// catches only instructions that write PC through wrpc_z, which silently
+	// misses two ISA-mandated groups:
+	//   - the conditional branches BT/BF/BT_S/BF_S, which redirect via
+	//     zbus="T(PC)" + if_addy="ZBUS" rather than wrpc_z;
+	//   - the PC-relative operand fetches MOVA and MOV.{W,L} @(disp,PC),Rn,
+	//     which never write PC at all but read a PC that is indeterminate in
+	//     a delay slot.
+	// Both are listed as raising a slot illegal instruction exception by the
+	// SH ISA (Renesas SH Instruction Set Summary, "Possible Exceptions").
+	SlotIllegal bool `toml:"slot_illegal,omitempty"`
+	// Patch marks an OVERLAY entry as an attribute patch: it refines the
+	// attributes of the same-named base instruction in place instead of
+	// replacing it, leaving opcode and microcode untouched. Only meaningful
+	// in an overlay directory; see spec.applyPatch and spec/sh4/mov.toml.
+	//
+	// This is an explicit marker rather than an inferred one ("an entry with
+	// no slots") because slotless overlay entries are already a legitimate way
+	// to declare a whole instruction — see override_test.go.
+	Patch bool   `toml:"patch,omitempty"`
+	Slots []Slot `toml:"slots"`
 }
 
 // File represents the contents of one TOML file under spec/.

@@ -169,7 +169,15 @@ begin
     CONTINUE when others;
 
   ----- CPU0 -----
+  -- PRIV_ARCH mirrors sim/cpu_tb.vhd: derived from CPU_VARIANT (only j4 sets
+  -- it), so a base-J2 build of this TB elaborates exactly as it did before and
+  -- the existing smp_bringup guard is unaffected. A j4 build brings up the
+  -- MMU/TLB on BOTH cores, which is what tests/dualcore/mmusmpasid.S needs:
+  -- cross-core ASID isolation cannot be observed with one core's MMU off.
   cpu0: configuration work.cpu_sim
+#if CONFIG_PRIV_ARCH
+            generic map(PRIV_ARCH => true)
+#endif
             port map(clk => clk, rst => rst,
                      db_o => cpu0_db_o, db_lock => cpu0_db_lock, db_i => cpu0_db_i,
                      inst_o => cpu0_inst_o, inst_i => cpu0_inst_i,
@@ -179,6 +187,9 @@ begin
                      mmu_o => cpu0_mmu);
   ----- CPU1 -----
   cpu1: configuration work.cpu_sim
+#if CONFIG_PRIV_ARCH
+            generic map(PRIV_ARCH => true)
+#endif
             port map(clk => clk, rst => rst,
                      db_o => cpu1_db_o, db_lock => cpu1_db_lock, db_i => cpu1_db_i,
                      inst_o => cpu1_inst_o, inst_i => cpu1_inst_i,

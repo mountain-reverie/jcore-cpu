@@ -569,8 +569,8 @@ ENTRY(arch_local_save_flags)
         rts
         nop
 
-! memset(s, c, n) / jcore_boot_tsb -- link-only stubs for tlb-jcore.o's
-! jcore_tsb_flush_on_generation(); never actually invoked here.
+! memset(s, c, n) / jcore_boot_tsb -- link-only stubs for tlb-jcore.o;
+! never actually invoked here.
 ENTRY(memset)
         mov     r4, r3
 1:      tst     r6, r6

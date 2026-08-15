@@ -101,15 +101,19 @@
 !   r9=14 scenario 5: captured faulting address != VA_C
 !   r9=15 scenario 5: VA_C's TSB slot tag_hi == VA_C (translation WAS
 !         installed despite _PAGE_STALE -- walker must fault, not install)
-!   r9=16 scenario 6 (ASID generation tagging): resumed load's value !=
-!         harness seed for VA_D (initial gen0 install), OR the TSB slot's
-!         tag_lo != the live (gen1) ASIDR after the cross-generation
-!         re-touch (a stale gen0 tag surviving would mean a false-hit risk
-!         -- security-review S-I3)
-!   r9=17 scenario 6: walker-invocation counter did NOT change across the
-!         ASIDR generation bump (same 12-bit ASID, gen_low 0->1) -- the
-!         TSB fast-path tag_lo compare must treat this as a miss and force
-!         a real re-walk, exactly like scenario 3's cross-ASID case
+!   r9=16 scenario 6 (full-width tag_lo compare, hw headroom): resumed
+!         load's value != harness seed for VA_D (initial install), OR the
+!         TSB slot's tag_lo != the live ASIDR after the harness pokes
+!         bits[15:12] and re-touches (a stale tag surviving would be a
+!         false-hit risk). Bits[15:12] are a synthetic RTL-headroom probe,
+!         not a kernel-producible ASID_TAG format -- the generation nibble
+!         set_asid()/get_asid() used to pack there has been retired, so
+!         those bits are permanently zero in any tag Linux itself writes
+!   r9=17 scenario 6: walker-invocation counter did NOT change when the
+!         harness changed ASIDR bits[15:12] (same 12-bit ASID) -- the TSB
+!         fast-path tag_lo compare is full-width and must treat this as a
+!         miss, forcing a real re-walk, exactly like scenario 3's
+!         cross-ASID case
 !   r9=18 scenario 7 (write-protect fault, REAL entry.S prologue): fault-
 !         count global did not read back as exactly 3 (do_page_fault() not
 !         reached exactly once more for VA_E's store)
@@ -554,15 +558,25 @@ s5_assert:
         mov.l   @(16, r3), r2           ! tag_hi, way 1
         cmp/eq  r1, r2 ; mov #15, r9 ; bt _fail             ! translation WAS installed
 
-        ! ================= SCENARIO 6: ASID generation tagging (S-I3) ========
+        ! ================= SCENARIO 6: full-width tag_lo compare (hw headroom)
         ! VA_D is a fresh mapped page (present+valid, no STALE) never touched
-        ! by scenarios 1-5. Install its translation under ASIDR=gen0 (12-bit
-        ! ASID X, gen_low=0), then advance ASIDR to gen1 (SAME 12-bit ASID X,
-        ! gen_low=0->1) and re-touch: the TSB fast-path's tag_lo compare
-        ! (core/tlb.vhd ASID_TAG[15:12] generation field) must MISS despite
-        ! the low 12 ASID bits being identical, forcing a real re-walk. This
-        ! proves generation-tagging rejects a stale cross-generation TSB
-        ! entry instead of a false ASID-recycling hit.
+        ! by scenarios 1-5. This scenario predates the removal of the ASID
+        ! generation nibble the kernel used to pack into ASID_TAG[15:12]
+        ! (set_asid()/get_asid() are now strictly 12-bit; a kernel-produced
+        ! tag_lo can no longer have any bit set above bit 11). It is kept
+        ! because it still exercises a real RTL property: the TSB fast-path's
+        ! tag_lo compare (core/tlb.vhd) is full-width, not masked to 12 bits,
+        ! so ANY stale bit outside the ASID field -- kernel-producible or not
+        ! -- correctly forces a miss/re-walk rather than a false hit. The two
+        ! hand-written ASIDR literals below (k_asidr_gen0/k_asidr_gen1) are a
+        ! synthetic 32-bit value the harness pokes directly into ASIDR to
+        ! probe that headroom; they are not a format the kernel emits. This
+        ! still passes today only because arch/sh/mm/tlb-jcore.c's
+        ! __update_tlb() reads JCORE_ASIDR raw (__raw_readl(), not
+        ! get_asid()) rather than the 12-bit kernel view, so the harness's
+        ! bits[15:12] round-trip unmolested -- that is a property of this
+        ! bare-metal harness poking ASIDR directly, not of anything Linux
+        ! itself can produce.
         !
         ! ---- Reset the fault target: scenario 6 expects zero faults (VA_D
         ! is present+valid), same discipline as scenarios 1-3. ----
@@ -590,10 +604,10 @@ s5_assert:
 
         mov.l   k_wcnt, r0 ; mov.l @r0, r4   ! r4 = wcnt baseline (post gen0 walk)
 
-        ! ---- ASIDR = gen1 (SAME 12-bit ASID X, gen_low 0->1). The TSB slot
-        ! installed above still carries tag_lo = gen0's ASIDR value; the
-        ! generation bump must make the fast-path tag_lo compare MISS even
-        ! though the low 12 ASID bits are unchanged. ----
+        ! ---- ASIDR = gen1 (SAME 12-bit ASID X, bits[15:12] now 0x1, a value
+        ! no kernel build can produce anymore). The TSB slot installed above
+        ! still carries tag_lo = gen0's ASIDR value; the full-width tag_lo
+        ! compare must MISS even though the low 12 ASID bits are unchanged. ----
         mov.l   k_asidr_gen1, r0
         ldc     r0, asidr
         nop
@@ -610,7 +624,8 @@ s5_assert:
 
         mov.l   k_wcnt, r0 ; mov.l @r0, r5
         cmp/eq  r4, r5 ; mov #17, r9 ; bt _fail
-                                 ! walker did NOT re-run for the new generation
+                                 ! walker did NOT re-run despite tag_lo bits
+                                 ! outside the 12-bit ASID field changing
 
         mov.l   k_tsbptr_a, r3
         mov.l   @r3, r3
@@ -633,7 +648,7 @@ s5_assert:
         mov.l   @(4, r3), r2            ! tag_lo (ASID_TAG) at VA_D's TSB slot
         mov.l   k_asidr_gen1, r1
         cmp/eq  r1, r2 ; mov #16, r9 ; bf _fail
-                         ! stale gen0 tag retained -- false-hit risk (S-I3)
+                         ! stale full-width tag retained -- false-hit risk
 
         mov.l   v_seed_d, r1 ; cmp/eq r1, r8 ; mov #16, r9 ; bf _fail
                                  ! translation after generation bump wrong/stale
@@ -837,17 +852,20 @@ k_faultcode:    .long 0x8002A014        ! do_page_fault-recorded error_code (r5)
 unexpected_fault_ptr: .long unexpected_fault
 
 ! ---- Scenario 6 scratch: a fresh mapped VA_D (present+valid, own backing
-! page distinct from va_A's so its seed value is unambiguous) and the two
-! ASIDR literals that differ ONLY in gen_low (bits [15:12]) -- same 12-bit
-! ASID X (chosen as 2, distinct from scenario 1's ASID 0 and scenario 3's
-! ASID 1) across both generations.
+! page distinct from va_A's so its seed value is unambiguous) and two
+! hand-written ASIDR literals that differ ONLY in bits [15:12] -- same
+! 12-bit ASID X (chosen as 2, distinct from scenario 1's ASID 0 and
+! scenario 3's ASID 1). These bits are a synthetic probe of RTL headroom,
+! not a kernel-producible ASID_TAG format: set_asid()/get_asid() are
+! strictly 12-bit since the generation nibble was retired, so bits[15:12]
+! are permanently zero in any tag Linux itself writes.
 va_D:           .long 0x0010C000        ! pte_index 0x43 -> k_ptetbl+0x10C
 k_pte_d:        .long 0x8002410C
 v_pte_d:        .long 0x000440B9        ! PFN(0x00044000)|V|C|U|W|D
 k_backing_d:    .long 0x80044000
 v_seed_d:       .long 0xD00DFEED
-k_asidr_gen0:   .long 0x00000002        ! ASID X=2, gen_low=0
-k_asidr_gen1:   .long 0x00001002        ! ASID X=2, gen_low=1 (X | 0x1000)
+k_asidr_gen0:   .long 0x00000002        ! ASID X=2, bits[15:12]=0
+k_asidr_gen1:   .long 0x00001002        ! ASID X=2, bits[15:12]=1 (X | 0x1000)
 
 ! ---- Scenario 7 scratch: VA_E present+valid, read-only (PTEL X|U|C =
 ! 0x68, W clear), own backing page. A store must take a real DPROT_W
@@ -997,7 +1015,7 @@ ENTRY(arch_local_save_flags)
 ! invalidation is a no-op here and scenario 8 would pass vacuously. Defined
 ! as an absolute symbol at k_tsb's address rather than a .bss array so
 ! there is exactly one TSB and the equality is stated, not hoped for. The
-! kernel memsets JCORE_BOOT_TSB_BYTES (4096) from it; 0x80028000..0x8002A000
+! kernel memsets JCORE_BOOT_TSB_BYTES (8192) from it; 0x80028000..0x8002A000
 ! is reserved for that and ends exactly where the scratch globals (k_wcnt)
 ! begin.
         .globl  jcore_boot_tsb

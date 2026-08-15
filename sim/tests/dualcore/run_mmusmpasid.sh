@@ -23,15 +23,24 @@ if [ "$(grep -c 'PRIV_ARCH => true' "$SIMDIR/cpu_dualcore_tb.vhh" 2>/dev/null ||
   exit 1
 fi
 
-if command -v sh2-elf-gcc >/dev/null 2>&1; then
-  make -C "$HERE" mmusmpasid_ok.img mmusmpasid_bug.img >/dev/null
+if ! command -v sh2-elf-gcc >/dev/null 2>&1; then
+  echo "FAIL: sh2-elf-gcc not found -- cannot rebuild mmusmpasid_{ok,bug}.img" >&2
+  echo "      Refusing to run against whatever .img files happen to be on disk:" >&2
+  echo "      a stale-but-passing _ok.img plus a stale-but-failing _bug.img would" >&2
+  echo "      report a green that measures nothing. Install the toolchain and" >&2
+  echo "      re-run." >&2
+  exit 1
 fi
+make -C "$HERE" mmusmpasid_ok.img mmusmpasid_bug.img >/dev/null
+
+TMPDIR_RUN="$(mktemp -d "${TMPDIR:-/tmp}/mmusmpasid.XXXXXX")"
+trap 'rm -rf "$TMPDIR_RUN"' EXIT
 
 run_one() {   # $1 = img basename; echoes "PASS" or "FAIL"
   local raw
   raw="$( (cd "$SIMDIR" && SIM_TOP=cpu_dualcore_tb ./cpu_ctb \
             -i "tests/dualcore/$1.img" --stop-time=400us) 2>&1 || true )"
-  printf '%s' "$raw" > "/tmp/$1.log"
+  printf '%s' "$raw" > "$TMPDIR_RUN/$1.log"
   if grep -qi 'Test Passed' <<<"$raw"; then echo PASS; else echo FAIL; fi
 }
 
@@ -42,7 +51,7 @@ rc=0
 if [ "$ok" != PASS ]; then
   echo "FAIL: mmusmpasid_ok did not pass (per-core TSBs must isolate)" >&2
   grep -ivE "metavalue detected|EN UNKNOWN|EN0 UNKNOWN|EN1 UNKNOWN|Read invalid cmd" \
-    /tmp/mmusmpasid_ok.log | tail -40 >&2
+    "$TMPDIR_RUN/mmusmpasid_ok.log" | tail -40 >&2
   rc=1
 fi
 if [ "$bug" != FAIL ]; then

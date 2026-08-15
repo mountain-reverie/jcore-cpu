@@ -588,9 +588,9 @@ ENTRY(memset)
         .balign 16
         .globl  jcore_boot_tsb
         .type   jcore_boot_tsb, @object
-        .size   jcore_boot_tsb, 4096
+        .size   jcore_boot_tsb, 8192
 jcore_boot_tsb:
-        .skip   4096
+        .skip   8192
         .text
 
 ! jcore_tlb_walk_mark_accessed(pte_t *ptep, pte_t entry) -- STRONG

@@ -446,3 +446,22 @@ jobs:
           make TOOLS_DIR="$TOOLS_DIR" JCORE_SOC="$JCORE_SOC" \
             cpu_ctb cpu_dualcore_tb work-obj93.cf >/dev/null
           bash tests/dualcore/run_bringup.sh
+      - name: Build cpu_dualcore_tb (J4/PRIV_ARCH) + run mmusmpasid
+        working-directory: jcore-cpu
+        shell: bash
+        env:
+          TOOLS_DIR: ${{ github.workspace }}/jcore-soc/tools
+          JCORE_SOC: ${{ github.workspace }}/jcore-soc
+        run: |
+          set -euo pipefail
+          # J4 overlay decoder: mmusmpasid needs the MMU, and the guard body is
+          # #if CONFIG_PRIV_ARCH'd, so a base-J2 build would pass vacuously.
+          make -C decode generate-j4
+          cd sim
+          # The sim Makefile does NOT reanalyse VHDL on its own -- without this
+          # rm the J4 build silently reuses the base-J2 elaboration from the
+          # step above (sim/mmu_sim.sh does the same).
+          rm -f work-obj93.cf cpu_dualcore_tb.vhh cpu_ctb
+          make CPU_VARIANT=j4 TOOLS_DIR="$TOOLS_DIR" JCORE_SOC="$JCORE_SOC" \
+            cpu_ctb cpu_dualcore_tb work-obj93.cf >/dev/null
+          bash tests/dualcore/run_mmusmpasid.sh

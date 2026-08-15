@@ -987,9 +987,9 @@ ENTRY(arch_local_save_flags)
         nop
 
 ! memset(s, c, n) / jcore_boot_tsb -- referenced by tlb-jcore.o's
-! jcore_tsb_flush_on_generation() (ASID-generation wrap, S-I3) and, since
-! the C1 fix, by local_flush_tlb_all() as well -- which scenario 8 DOES
-! invoke for real. So neither is a link-only stub any more.
+! kernel TLB operations (ASID handling, S-I3) and, since the C1 fix,
+! by local_flush_tlb_all() as well -- which scenario 8 DOES invoke for real.
+! So neither is a link-only stub any more.
 !
 ! jcore_boot_tsb must therefore BE the TSB the hardware is pointed at
 ! (TSBBR, k_tsb below), not a separate buffer: if the kernel memset()s one

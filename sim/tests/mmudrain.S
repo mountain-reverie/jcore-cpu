@@ -590,9 +590,17 @@ qC_sent:        .long 0xB00BC0DE
 ! is where _tramp_D sits, and leaves r12 == _stub_D_base + 11*PAGE_SZ.
 !
 ! Fault accounting: 10 stub-entry IMISSes + 10 DMISS_Ws + 1 IMISS on _tramp_D
-! = 2*N_FAULTS + 1.  (The original task brief said 2*N_FAULTS; it overlooked
-! the trampoline page, which is unmapped like every other page above
-! _code_end.)
+! = 2*N_FAULTS + 1, MINUS the code-page D faults the I->D shadow fill removed
+! (see the layer-4 check for the measurement) = 16.
+!
+! Treat this number as EMPIRICAL, because it always was.  The "2*N_FAULTS + 1"
+! derivation above was never complete: this leg's window also contained D-side
+! faults on CODE pages -- the literal-pool reads of `start`'s page (which also
+! carries the handler), of _stub_A/_stub_C, and of _tramp_D.  Those were
+! invisible in the arithmetic and are exactly what changed.  Measured A/B with
+! the shadow fill forced off and on, over the whole run: I-side installs 17 in
+! both; D-side DEMAND installs 36 -> 30; the six that disappeared were
+! vpn 8 (x3), 9, 10 and 21 -- every one a code page, no data page affected.
 ! ===========================================================================
 ENTRY(_leg_D)
         FLUSH_TLB pD_
@@ -704,7 +712,12 @@ ENTRY(_verify_D)
         mov.l   qD_fc, r0
         mov.l   @r0, r12
         sub     r10, r12
-        mov     #(2 * N_FAULTS + 1), r0
+        ! 16, not 2*N_FAULTS+1 -- see the fault accounting note in this leg's
+        ! header.  The register and page-readback evidence (layers 1-3) is the
+        ! primary proof that every access ran exactly once; this layer is the
+        ! vacuity backstop, and its value moved because the shadow fill removed
+        ! code-page D faults that the old constant silently included.
+        mov     #16, r0
         cmp/eq  r0, r12
         mov     #0x13, r9
         bt      7f

@@ -217,6 +217,56 @@ and `DPROT_R`/`DPROT_W` discrimination), `mmureloc`/`mmurelocif`/
    §8.1 for the full multi-hit story, including the one case this dedup
    cannot reach and why the hardware still detects it.
 
+### 4.1 ITLB -> DTLB shadow fill (one-way)
+
+The ITLB and DTLB are two independent arrays (8 and 16 entries), and the
+hardware walker installs into the **faulting side only** -- with one deliberate
+exception: **an ITLB install also installs the same PTE into the DTLB, one cycle
+later.** The reverse never happens.
+
+The asymmetry is the design, not an oversight:
+
+- **Why I -> D.** SH code pages carry PC-relative literal pools. `MOV.L
+  @(disp,PC),Rn` reads the page it was just fetched from, a few cycles behind
+  the fetch, so an ITLB install is a strong predictor of an imminent D-side
+  access to the *same* page. Without the shadow fill that read costs a second
+  full TSB walk of the entry the walker has just fetched and still holds.
+- **Why not D -> I.** A data page can never be legally fetched, so the
+  prediction is always wrong, and the ITLB has half the DTLB's entries -- no
+  room to be wrong in.
+
+Two properties bound it, both in `core/tlb.vhd`'s `spec` input:
+
+1. **It never duplicates.** If the mapping is already resident and usable in the
+   DTLB -- the load-then-execute case, where a page was read before it was
+   executed -- the speculative install is skipped **entirely**: no write, no
+   slot consumed, and no demotion of the hot demand entry. (A *stale* resident
+   entry is still refreshed; it does not translate, so skipping would leave the
+   D side to miss anyway.)
+2. **It never outranks a demand entry.** A speculative install that does land
+   goes in `used = '0'`, i.e. as the next NRU victim. Note the exact semantics:
+   `used` is set only on install and the lookup path never touches it, so a
+   speculative entry does not promote itself when hit and stays first in line
+   for eviction for its whole life. Free slots are still preferred over it, so
+   speculative entries accumulate harmlessly until the array is full and are
+   then given up before any demand entry.
+
+Measured effect (`mmudrain`, whole-run A/B with the fill forced off/on): I-side
+installs 17 in both; D-side **demand** installs 36 -> 30. Every one of the six
+eliminated was a code page; no data page was affected.
+
+*Guards: `mmuishadow` (the fill happens: a literal-pool load after an I-side
+walk must not walk again), `mmudshadow` (both bounds -- a D-side install must
+still leave the ITLB to walk, and an I-side install onto an already-resident
+DTLB page must produce exactly +1 ITLB slot write and +0 DTLB slot writes),
+`mmusplit` (the arrays are still independent: D -> I must still walk twice).*
+
+Non-architectural instrumentation: **P4 `TLBINST` at `0xFF00_0058`**, read-only,
+`[31:16]` = ITLB slot writes, `[15:0]` = DTLB slot writes. It counts slots
+*actually written*, so a skipped speculative install is absent from it -- which
+is what makes "nothing happened on the DTLB side" observable from software at
+all.
+
 All MMU registers and instructions (`PTEH`, `PTEL`, `ASIDR`, `MMUCR`, `TSB*`,
 `LDTLB`, `LDTLB.RN`) are **privileged**: a user-mode access traps illegal-instruction.
 *Guards: `mmureg` (register round-trip + no cross-clobber), `mmuguard`/`privmode`
@@ -370,6 +420,9 @@ the design repository's `docs/mmu/security-review.md`.
 | Security / correctness property | Guard(s) |
 |---|---|
 | Basic VA→PA translation | `mmuxlate` |
+| ITLB and DTLB are independent arrays (D -> I still walks) | `mmusplit`, `mmudshadow` |
+| I -> D shadow fill happens (literal-pool load does not re-walk) | `mmuishadow` |
+| Shadow fill never duplicates or demotes a resident DTLB entry | `mmudshadow` |
 | Ordered delivery: older held D-side fault vs younger deferred I-fetch fault | `mmuidorder` |
 | I-side MULTI_HIT does not pre-empt an older in-flight D-side access | `mmumhorder` |
 | Handler residency invariant (§7.1) | **none — unguarded** |

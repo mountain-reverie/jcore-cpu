@@ -148,7 +148,14 @@ entity datapath is
 		     -- pass-through read port, not a new copy of the state. '0' on
 		     -- non-MMU builds (J1/J2 bit-identical).
 		     walk_cnt_walks_i : in std_logic_vector(15 downto 0) := (others => '0');
-		     walk_cnt_hits_i  : in std_logic_vector(15 downto 0) := (others => '0')
+		     walk_cnt_hits_i  : in std_logic_vector(15 downto 0) := (others => '0');
+		     -- TLB install counters, same pass-through arrangement as the
+		     -- walker counters above, read via P4_TLBINST. They count slots
+		     -- ACTUALLY written, so a speculative I->D shadow fill that finds
+		     -- the page already resident is absent from both -- which is the
+		     -- property guard mmudshadow exists to observe.
+		     tlb_cnt_iwr_i : in std_logic_vector(15 downto 0) := (others => '0');
+		     tlb_cnt_dwr_i : in std_logic_vector(15 downto 0) := (others => '0')
 	     );
 end entity datapath;
 
@@ -1753,6 +1760,10 @@ end generate;
                 -- read the counters; the earlier P2 debug window at
                 -- 0xABCD0F00 has been retired.
                 elsif ma_ad(7 downto 0) = x"54" then p4_sel_v := P4_TSBCNT;
+                -- 0x58 TLBINST: read-only, [31:16]=ITLB slot writes
+                -- [15:0]=DTLB slot writes. Anti-vacuity instrumentation for
+                -- the I->D shadow fill; not architectural.
+                elsif ma_ad(7 downto 0) = x"58" then p4_sel_v := P4_TLBINST;
                 end if;
               end if;
               if PRIV_ARCH and seg_v = SEG_P4 then
@@ -1812,6 +1823,8 @@ end generate;
                     when P4_ASIDR => this.m_dr_next := this.mmu.asidr;
                     when P4_TSBCNT =>
                       this.m_dr_next := walk_cnt_walks_i & walk_cnt_hits_i;
+                    when P4_TLBINST =>
+                      this.m_dr_next := tlb_cnt_iwr_i & tlb_cnt_dwr_i;
                     -- P4_TSBVSEED is WRITE-ONLY: no read case, so it falls to
                     -- `others` and reads back a hard zero. See the decode.
                     when others    => this.m_dr_next := (others => '0');

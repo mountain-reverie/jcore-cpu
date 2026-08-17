@@ -203,8 +203,28 @@ architecture stru of cpu is
   signal walk_cnt_hits  : unsigned(15 downto 0);
   -- TLB install-port write enables, one PER ARRAY: the hardware walker is the
   -- sole installer and installs only into the side that faulted.
-  signal itlb_wr     : std_logic;
-  signal dtlb_wr     : std_logic;
+  signal itlb_wr : std_logic;
+  signal dtlb_wr : std_logic;
+  -- I->D shadow fill (see p_tlb_shadow). The install data is latched here for
+  -- the cycle after an ITLB install rather than re-read from the walker.
+  signal dtlb_spec   : std_logic;
+  signal dtlb_vpn    : std_logic_vector(31 downto 12);
+  signal dtlb_ptel   : std_logic_vector(31 downto 0);
+  signal dtlb_asid   : std_logic_vector(15 downto 0);
+  signal shadow_wr   : std_logic;
+  signal shadow_vpn  : std_logic_vector(31 downto 12);
+  signal shadow_ptel : std_logic_vector(31 downto 0);
+  signal shadow_asid : std_logic_vector(15 downto 0);
+  -- Install counters (anti-vacuity, non-architectural; P4 TLBINST at
+  -- 0xFF000058). They count ACTUAL slot writes, which is why they are driven
+  -- from each array's `wrote` pulse and not from itlb_wr/dtlb_wr: a
+  -- speculative shadow install that finds the page already resident asserts
+  -- dtlb_wr and writes nothing, and telling those two cases apart is exactly
+  -- what guard mmudshadow needs to observe.
+  signal itlb_wrote  : std_logic;
+  signal dtlb_wrote  : std_logic;
+  signal cnt_itlb_wr : unsigned(15 downto 0) := (others => '0');
+  signal cnt_dtlb_wr : unsigned(15 downto 0) := (others => '0');
   signal tlb_ptel_mx : std_logic_vector(31 downto 0);
   signal tlb_vpn_mx  : std_logic_vector(19 downto 0);
   -- Dynamic delay-slot flag (decode->datapath): lets a delay-slot D-side TLB
@@ -468,7 +488,10 @@ begin
       ex_if_pc           => dec_ex_if_pc,
       -- Walker counters' P4 alias (P4_TSBCNT at 0xFF000054).
       walk_cnt_walks_i => std_logic_vector(walk_cnt_walks),
-      walk_cnt_hits_i  => std_logic_vector(walk_cnt_hits)
+      walk_cnt_hits_i  => std_logic_vector(walk_cnt_hits),
+      -- TLB install counters' P4 alias (P4_TLBINST at 0xFF000058).
+      tlb_cnt_iwr_i => std_logic_vector(cnt_itlb_wr),
+      tlb_cnt_dwr_i => std_logic_vector(cnt_dtlb_wr)
     );
 
   -- Withhold ack from the core while the walker owns the bus. The core keeps
@@ -911,8 +934,87 @@ begin
     -- write BOTH arrays because the ISA gave it no side selector, which meant
     -- every pure-data page it installed also consumed an ITLB entry it could
     -- never legally use.
+    -- SHADOW FILL, one way only: I -> D. An ITLB install is a strong predictor
+    -- of an imminent D-side access to the SAME page, because SH code pages
+    -- carry PC-relative literal pools -- `MOV.L @(disp,PC),Rn` reads the page
+    -- it was just fetched from, a few cycles behind the fetch. Under pure
+    -- side-only routing that read is a second full TSB walk of the entry the
+    -- walker has just fetched and still holds. The shadow fill installs it
+    -- into the DTLB as well, one cycle later. (guard mmuishadow)
+    --
+    -- NOT symmetric, and the asymmetry is the point. A D-side install must
+    -- never touch the ITLB: a data page can never be legally fetched, so the
+    -- prediction is always wrong, and the ITLB has 8 entries against the
+    -- DTLB's 16 -- no room to be wrong in. The DTLB is already sized 2x partly
+    -- because it carries this literal-pool traffic (see u_dtlb's generic).
+    --
+    -- DELAYED ONE CYCLE, which costs nothing: the load is several cycles
+    -- behind the fetch by the nature of the ISA. It buys two things -- the two
+    -- arrays are never written in the same cycle, so the shared install
+    -- fan-out is unchanged, and no arbitration is needed against a real
+    -- dtlb_wr, which cannot occur here (a new walk needs >= 4 cycles to reach
+    -- st_install, so the OR below can never see both terms at once).
+    --
+    -- The data is LATCHED rather than re-read from walk_va_r/walk_ptel in the
+    -- shadow cycle. Those do happen to still hold in that cycle today -- ptel_r
+    -- is written only in st_data and va_reg only on arming, whose earliest
+    -- effect is one edge later -- but that is a property of tlb_walk's re-arm
+    -- timing, not a contract it offers. A future change to st_install would
+    -- silently shadow-install the right PTE under the wrong VPN, which is a
+    -- wrong-translation bug, not a performance one.
+    p_tlb_install_cnt : process (clk) is
+    begin
+
+      if rising_edge(clk) then
+        if (rst = '1') then
+          cnt_itlb_wr <= (others => '0');
+          cnt_dtlb_wr <= (others => '0');
+        else
+          if (itlb_wrote = '1') then
+            cnt_itlb_wr <= cnt_itlb_wr + 1;
+          end if;
+          if (dtlb_wrote = '1') then
+            cnt_dtlb_wr <= cnt_dtlb_wr + 1;
+          end if;
+        end if;
+      end if;
+
+    end process p_tlb_install_cnt;
+
+    p_tlb_shadow : process (clk) is
+    begin
+
+      if rising_edge(clk) then
+        if (rst = '1') then
+          shadow_wr <= '0';
+        else
+          shadow_wr   <= walk_install and walk_side_i;
+          shadow_vpn  <= tlb_vpn_mx;
+          shadow_ptel <= tlb_ptel_mx;
+          -- ASIDR is latched for the same reason as the VPN: the shadow
+          -- install must stamp the context the WALK ran in. The two arrays
+          -- would otherwise disagree about which ASID owns the page if ASIDR
+          -- changed in between -- an aliasing bug, and a silent one.
+          shadow_asid <= dp_mmu_regs.asidr(15 downto 0);
+        end if;
+      end if;
+
+    end process p_tlb_shadow;
+
     itlb_wr <= walk_install and walk_side_i;
-    dtlb_wr <= walk_install and not walk_side_i;
+    dtlb_wr <= (walk_install and not walk_side_i) or shadow_wr;
+    -- Speculative: installed as the next NRU victim, and skipped outright if
+    -- the page is already resident in the DTLB. See tlb.vhd's `spec` port --
+    -- the "already resident" case is a load-then-execute page, where the DTLB
+    -- entry the shadow fill would write is one a demand fill already placed.
+    dtlb_spec <= shadow_wr;
+
+    dtlb_vpn  <= shadow_vpn when shadow_wr = '1' else
+                 tlb_vpn_mx;
+    dtlb_ptel <= shadow_ptel when shadow_wr = '1' else
+                 tlb_ptel_mx;
+    dtlb_asid <= shadow_asid when shadow_wr = '1' else
+                 dp_mmu_regs.asidr(15 downto 0);
 
     u_itlb : entity work.tlb
       generic map (
@@ -962,7 +1064,10 @@ begin
         -- Install data, not the CSR: the walker's fetched PTE.
         ptel  => tlb_ptel_mx,
         asidr => dp_mmu_regs.asidr(15 downto 0),
-        ti    => dp_mmu_regs.mmucr(2)
+        -- Every ITLB install is a demand fill: nothing shadows INTO the I side.
+        spec  => '0',
+        ti    => dp_mmu_regs.mmucr(2),
+        wrote => itlb_wrote
       );
 
     u_dtlb : entity work.tlb
@@ -989,10 +1094,14 @@ begin
         md        => dp_sr.md,
         at        => dp_mmu_regs.mmucr(0),
         tlb_wr    => dtlb_wr,
-        pteh_vpn  => tlb_vpn_mx,
-        ptel      => tlb_ptel_mx,
-        asidr     => dp_mmu_regs.asidr(15 downto 0),
-        ti        => dp_mmu_regs.mmucr(2)
+        -- Muxed, not tlb_vpn_mx directly: a shadow fill replays the LATCHED
+        -- install of the previous cycle. See p_tlb_shadow.
+        pteh_vpn => dtlb_vpn,
+        ptel     => dtlb_ptel,
+        asidr    => dtlb_asid,
+        spec     => dtlb_spec,
+        ti       => dp_mmu_regs.mmucr(2),
+        wrote    => dtlb_wrote
       );
 
     mmu_o.i_pa_tag <= tlb_i_pa;

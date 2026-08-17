@@ -229,20 +229,25 @@ ENTRY(_after_ifetch2)
         mov.l   v_sent_spc, r1
         cmp/eq  r0, r1 ; mov #13, r9 ; bf _fail
 
-        ! ---- 15: the walker's own cnt_hits advanced by exactly 2 for that
+        ! ---- 15: the walker's own cnt_hits advanced by exactly 1 for that
         ! fetch -- the positive half, so 13 cannot pass by the fetch never
         ! happening at all.
-        ! WHY 2 AND NOT 1 (was 1 before the ITLB/DTLB split): the ITLB and the
-        ! DTLB are separate arrays, so the code page needs an entry in EACH.
-        ! The warm leg's TI flush empties both; the jmp takes an I-miss walked
-        ! into the ITLB (hit #1), and the stub's very first instruction is
-        ! `mov.l 9f, r3` -- a PC-RELATIVE LOAD, i.e. a D-side access to the same
-        ! code page -- which takes a D-miss walked into the DTLB (hit #2).
-        ! Under the old unified TLB the I-side install served that literal load
-        ! too, so one hit covered both. Both walks are warm TSB hits, which is
-        ! precisely what this check is asserting.
+        ! THE HISTORY OF THIS CONSTANT IS THE POINT, so keep it: it was 1
+        ! before the ITLB/DTLB split, 2 after it, and 1 again now.
+        !   1  unified TLB: one install served fetch and literal load alike.
+        !   2  split arrays, walker installs into the FAULTING side only: the
+        !      warm leg's TI flush empties both, the jmp takes an I-miss walked
+        !      into the ITLB (hit #1), and the stub's very first instruction is
+        !      `mov.l 9f, r3` -- a PC-RELATIVE LOAD, i.e. a D-side access to
+        !      the same code page -- taking a second walk into the DTLB.
+        !   1  split arrays + I->D SHADOW FILL (cpu.vhd p_tlb_shadow): the
+        !      ITLB install now populates the DTLB too, so that literal load
+        !      hits and hit #2 is gone. The arrays are still separate -- one
+        !      walk filling two entries, not a re-merged TLB (guard mmusplit
+        !      still requires the D->I direction to walk twice).
+        ! The surviving walk is a warm TSB hit, which is what this asserts.
         mov.l   k_walkcnt, r0 ; mov.l @r0, r2 ; mov.l k_mask16, r3 ; and r3, r2
-        sub     r13, r2 ; mov #2, r3 ; cmp/eq r3, r2 ; mov #15, r9 ; bf _fail
+        sub     r13, r2 ; mov #1, r3 ; cmp/eq r3, r2 ; mov #15, r9 ; bf _fail
 
         ! Cold sentinel still present.
         mov.l   k_ranf, r0 ; mov.l @r0, r2

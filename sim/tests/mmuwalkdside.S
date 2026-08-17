@@ -55,7 +55,7 @@
 !      damage from a demote keyed on the global fault signal)
 !   4  sub-test B: the YOUNGER, faulting store was lost
 !   5  an exception was taken (SPC moved) -- the walker did not resolve it
-!   6  the walk counters do not read 4 walks / 4 hits (2 for this guard's own
+!   6  the walk counters do not read 3 walks / 3 hits (2 for this guard's own
 !      data accesses, 2 for the code page -- I-side fetch and D-side literal
 !      load, which are separate arrays under walker-only install)
 !   7  a TSB tag was overwritten -- the walker's own probe address leaked onto
@@ -238,9 +238,17 @@ ENTRY(start)
         ! ---- software install covered the code page for instruction fetch AND
         ! ---- for the PC-relative literal loads out of that same page. The
         ! ---- walker installs demand-driven into ONE array (walk_side_i), so
-        ! ---- the code page is now walked twice: once I-side for the fetch and
-        ! ---- once D-side for the first literal-pool load. The guard's own two
-        ! ---- data walks are unchanged. Measured, not assumed: 0x00040004.
+        ! ---- the code page WAS walked twice: once I-side for the fetch and
+        ! ---- once D-side for the first literal-pool load.
+        ! ----
+        ! ---- The I->D SHADOW FILL (cpu.vhd p_tlb_shadow) removed that second
+        ! ---- walk again, and this constant went 0x00040004 -> 0x00030003. The
+        ! ---- literal-pool load is exactly the access the shadow fill exists to
+        ! ---- serve, so the count returned to the LDTLB-era code-page cost of
+        ! ---- one walk -- by a completely different mechanism, and only for the
+        ! ---- side that can use it. The guard's own two data walks are
+        ! ---- unchanged throughout, which is what makes the delta attributable.
+        ! ---- Measured, not assumed: 0x00030003.
         mov.l   p_walkcnt, r0
         mov.l   @r0, r1
         mov.l   p_expect_cnt, r2
@@ -294,7 +302,7 @@ p_pat_b:        .long 0x7E7E7E7E
 p_notyet:       .long 0x11111111
 p_sent_spc:     .long 0xDEADBE00
 p_walkcnt:      .long 0xFF000054        ! cnt_walks(31:16) : cnt_hits(15:0)
-p_expect_cnt:   .long 0x00040004
+p_expect_cnt:   .long 0x00030003
 
 #else
         bra     _done

@@ -194,11 +194,23 @@ ENTRY(start)
         tsb_fill r13, r1, r2, r3
 
         ! ---- From here to the test load: no cacheable data access. ----
+        ! Non-vacuity snapshot, taken BEFORE AT goes on -- see check 5. It has
+        ! to be here rather than just before the test load: once AT is on, the
+        ! first translated fetch arms the code page's own I-side walk, and a
+        ! snapshot taken inside that window samples the counters on the far
+        ! side of the walk the check is trying to bracket. Measured: with the
+        ! I->D shadow fill enabled, a snapshot placed after AT-on reads the
+        ! SAME value before and after the test load, even behind a 24-nop
+        ! fence, and the check goes red on a machine that is demonstrably
+        ! translating correctly (check 1 passes and the RTL installs a DTLB
+        ! entry for this very VPN in response to this very access).
+        mov     r5, r10                 ! r10 = 0xFF000058, P4 TLBINST
+        add     #4, r10
+        mov.l   @r10, r11               ! DTLB installs before  (P4, uncached)
+        extu.w  r11, r11
         mov.l   r7, @r6                 ! AT on               (P4, uncached)
         .word   0x804E                  ! LDC r8,  SPC
         .word   0xE03E                  ! LDC r14, SSR
-        mov.l   @r5, r11                ! cnt_hits before     (P4, uncached)
-        extu.w  r11, r11
 
         ! ---- Take the miss: the walker must resolve it from the row software
         ! ---- wrote LAST, not the superseded one. ----
@@ -231,9 +243,24 @@ ENTRY(start)
         mov     #4, r9
         bf      _fail_at
 
-        ! ---- 5: did the walker actually resolve THIS access? ----
-        mov.l   p_walkcnt, r0
-        mov.l   @r0, r1
+        ! ---- 5: did the walker actually install anything at all? ----
+        ! Measured on the DTLB INSTALL counter (P4 TLBINST 0xFF000058, low
+        ! half) across the whole AT-on-plus-load window, NOT on cnt_hits
+        ! across the load alone.
+        !
+        ! WHY NOT cnt_hits: it counts every walk the machine performs,
+        ! including the D-side walk that used to be needed for the first
+        ! PC-relative literal load out of this guard's own code page -- a walk
+        ! the I->D shadow fill (cpu.vhd p_tlb_shadow) legitimately removed.
+        ! Bracketing one access with it made this check a hostage to unrelated
+        ! walk accounting.
+        !
+        ! WHY THE WIDE WINDOW: see the snapshot's own comment above. This is
+        ! still a real non-vacuity check -- it is zero on a machine whose
+        ! walker never installs, which is the failure mode ("the pages were
+        ! accidentally mapped and nothing ever walked") the check exists for --
+        ! it simply no longer depends on WHERE in the window the snapshot lands.
+        mov.l   @r10, r1
         extu.w  r1, r1
         cmp/eq  r11, r1
         mov     #5, r9

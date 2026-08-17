@@ -22,8 +22,19 @@
 ! Both directions are tested, because install routing can be wrong in either:
 !   D -> I : a D load walks the page into the DTLB, then a jmp to that VA must
 !            STILL walk (into the ITLB).  [code 3]
-!   I -> D : after a TI flush, the I-fetch walks the page into the ITLB, then a
-!            D load from that VA must STILL walk (into the DTLB).  [code 4]
+!   I -> D : after a TI flush, the I-fetch walks the page into the ITLB, and a
+!            D load from that VA must then NOT walk -- the ITLB install
+!            SHADOWS into the DTLB (cpu.vhd p_tlb_shadow).  [code 4]
+!
+!            NOTE THE ASYMMETRY, which is deliberate and is the whole design:
+!            I->D shadows, D->I does not. This leg asserted the opposite until
+!            the shadow fill landed, because back then the walker installed
+!            into the faulting side ONLY. It is still an INDEPENDENCE check --
+!            two arrays, two entries -- but the I-side install now populates
+!            both of them in one go, so the second walk is gone. The direction
+!            that must still walk is D->I, above; if BOTH legs stop walking,
+!            the arrays have quietly been merged and this guard has lost its
+!            subject. Guards mmuishadow/mmudshadow pin the shadow fill itself.
 ! Each direction is paired with a positive sanity check that the FIRST access
 ! really walked (codes 2 and 6), so neither direction can pass by nothing
 ! happening at all.
@@ -46,7 +57,8 @@
 !   3  D->I INDEPENDENCE FAILED: after the D-side walk installed the page, the
 !      I-fetch of the same VA did not walk -- it was served from the D array,
 !      so the two arrays are not independent (or the walker installs into both)
-!   4  I->D INDEPENDENCE FAILED: the mirror image of 3
+!   4  I->D SHADOW FILL MISSING: the D read after the I-side walk walked
+!      again, so the ITLB install did not shadow into the DTLB
 !   5  SPC moved -- an exception was taken where the walker should have resolved
 !   6  I->D setup: after the TI flush the I-fetch did NOT walk
 !   7  the TLB-miss vector was reached at all
@@ -323,12 +335,14 @@ _target:
         bra     _t_exit_fail
         nop
 3:
-        ! ---- 4: I -> D INDEPENDENCE. The I-side walk above installed this
-        ! ---- page into the ITLB only, so the D read had to walk it in again.
+        ! ---- 4: I -> D SHADOW FILL. The I-side walk above installed this page
+        ! ---- into the ITLB *and* shadowed it into the DTLB one cycle later,
+        ! ---- so the D read must NOT have walked: delta EXACTLY 0.
+        ! ---- Exactly 0, not "<= 1": a delta of 1 is the pre-shadow behaviour
+        ! ---- this leg used to require, and it is precisely what must now fail.
         mov     r12, r2
         sub     r10, r2
-        mov     #1, r3
-        cmp/eq  r3, r2
+        tst     r2, r2
         bt      4f
         mov     #4, r9
         bra     _t_exit_fail

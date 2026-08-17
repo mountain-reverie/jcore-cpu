@@ -39,7 +39,10 @@ package datapath_pack is
     -- plus the walker counter window's P4 home (P3.2). Both the STC
     -- read path and these aliases answer simultaneously for now; nothing
     -- is retired by this change.
-    p4_pteh, p4_ptel, p4_asidr, p4_tsbcnt
+    p4_pteh, p4_ptel, p4_asidr, p4_tsbcnt,
+    -- TLB install counters (P4 0x58). Anti-vacuity instrumentation for the
+    -- I->D shadow fill; see core/cpu.vhd's p_tlb_install_cnt.
+    p4_tlbinst
   );
 
   function seg_decode (
@@ -202,7 +205,12 @@ package datapath_pack is
       if_pc              : out   std_logic_vector(31 downto 0);
       ex_if_pc           : in    std_logic_vector(31 downto 0) := (others => '0');
       walk_cnt_walks_i   : in    std_logic_vector(15 downto 0) := (others => '0');
-      walk_cnt_hits_i    : in    std_logic_vector(15 downto 0) := (others => '0')
+      walk_cnt_hits_i    : in    std_logic_vector(15 downto 0) := (others => '0');
+      -- TLB install counters (P4_TLBINST, 0xFF000058). Must mirror the entity
+      -- in core/datapath.vhm -- this component declaration is what cpu.vhd
+      -- binds against, so a port added only to the .vhm fails to elaborate.
+      tlb_cnt_iwr_i : in    std_logic_vector(15 downto 0) := (others => '0');
+      tlb_cnt_dwr_i : in    std_logic_vector(15 downto 0) := (others => '0')
     );
   end component datapath;
 

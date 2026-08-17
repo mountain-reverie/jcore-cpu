@@ -71,7 +71,46 @@ entity tlb is
     pteh_vpn : in    std_logic_vector(31 downto 12); -- VPN to install
     ptel     : in    std_logic_vector(31 downto 0);  -- PPN + flags to install
     asidr    : in    std_logic_vector(15 downto 0);  -- ASID_TAG to stamp on install
-    ti       : in    std_logic                       -- 1 => flush all entries
+    -- 1 => this install is SPECULATIVE (the I->D shadow fill in cpu.vhd), not
+    -- a demand fill resolving an access that is happening now. Two effects,
+    -- both confined to this process:
+    --
+    --   * if the mapping is ALREADY RESIDENT and usable, the install is
+    --     skipped ENTIRELY -- no write, no slot consumed, no `used` change.
+    --     Without this a page that was loaded from before it was executed
+    --     would have its (hot, demand-installed) DTLB entry rewritten by the
+    --     shadow fill and DEMOTED to the speculative `used` = '0' below --
+    --     a speculative fill actively evicting the very entry it duplicates.
+    --     The dedup scan needed to detect this is the one already run below,
+    --     so this costs a gate, not a comparator.
+    --
+    --   * otherwise it installs NOT-recently-used, i.e. as the next NRU
+    --     victim, because a prediction must not be allowed to evict a hot
+    --     entry when it turns out wrong.
+    --
+    -- Tie to '0' for a demand-only port.
+    --
+    -- NOTE the exact `used` semantics, which are stronger than "LRU-ish": it is
+    -- set ONLY on install and cleared only by the all-used sweep or TI -- the
+    -- lookup path never touches it, so this array's NRU is really "not recently
+    -- INSTALLED" and a speculative entry does NOT promote itself when it is
+    -- hit. It stays first-in-line for eviction for its whole life. That is the
+    -- intended bound and not a defect: the load the shadow fill exists to serve
+    -- is a handful of cycles behind the fetch, far inside the window before any
+    -- other install needs a slot, and free slots are still preferred over it
+    -- (the NRU scan takes an invalid slot first), so speculative entries
+    -- accumulate harmlessly until the array is full and are then given up
+    -- before any demand entry. Adding hit-driven promotion would mean a write
+    -- into `ram` from the combinational lookup, on the path the 8+16 sizing was
+    -- chosen to protect; it is deliberately not done here.
+    spec : in    std_logic := '0';
+    ti   : in    std_logic; -- 1 => flush all entries
+    -- One-cycle pulse: an install ACTUALLY wrote a slot this cycle. Not the
+    -- same as tlb_wr, which a skipped speculative install also asserts -- and
+    -- the difference is the whole point, so it is exported rather than
+    -- reconstructed by the caller. Anti-vacuity instrumentation only (it feeds
+    -- the P4 install counters); nothing architectural reads it.
+    wrote : out   std_logic := '0'
   );
 end entity tlb;
 
@@ -298,15 +337,21 @@ begin
   -- soft-invalidated.
   process (clk) is
 
-    variable idx       : integer range 0 to entries - 1;
-    variable nru_idx   : integer range 0 to entries - 1;
-    variable dedup     : boolean;
+    variable idx     : integer range 0 to entries - 1;
+    variable nru_idx : integer range 0 to entries - 1;
+    variable dedup   : boolean;
+    -- dedup match that is also USABLE (not soft-invalidated). Only a
+    -- speculative install consults it; see the `spec` port. `dedup` itself
+    -- must keep ignoring `stale`, for the reason given at its use below.
+    variable resident  : boolean;
     variable nru_found : boolean;
     variable all_used  : boolean;
 
   begin
 
     if rising_edge(clk) then
+      wrote <= '0';
+
       if (ti = '1') then
 
         for k in 0 to entries - 1 loop
@@ -350,7 +395,7 @@ begin
         -- Absent a dedup match, fall back to NRU: first invalid slot, else
         -- first unused; if all valid+used, clear used bits and take slot 0.
         idx      := 0; nru_idx := 0; dedup := false; nru_found := false;
-        all_used := true;
+        all_used := true; resident := false;
 
         for k in 0 to entries - 1 loop
 
@@ -362,6 +407,14 @@ begin
               and (ram(k).global = '1' or ptel(2) = '1'
                     or ram(k).asid_tag = asidr)) then
             idx := k; dedup := true;
+            -- A STALE dedup match is still a dedup (the entry occupies the
+            -- range and must be overwritten in place), but it is NOT resident
+            -- for the purpose of skipping a speculative install: a stale entry
+            -- does not translate, so skipping would leave the D side to miss
+            -- and walk after all. Refreshing it is exactly what we want.
+            if (ram(k).stale = '0') then
+              resident := true;
+            end if;
           end if;
 
           if (not nru_found) then
@@ -391,19 +444,25 @@ begin
             idx := nru_idx;
           end if;
         end if;
-        ram(idx).valid     <= '1';
-        ram(idx).used      <= '1';
-        ram(idx).vpn       <= pteh_vpn;
-        ram(idx).asid_tag  <= asidr;
-        ram(idx).page_mask <= ptel(11 downto 8);
-        ram(idx).ppn       <= ptel(31 downto 10);
-        ram(idx).w         <= ptel(7);
-        ram(idx).x         <= ptel(6);
-        ram(idx).u         <= ptel(5);
-        ram(idx).d         <= ptel(4);
-        ram(idx).c         <= ptel(3);
-        ram(idx).global    <= ptel(2);
-        ram(idx).stale     <= ptel(1);
+        -- A speculative install whose mapping is already resident and usable
+        -- does nothing at all: no write, no slot consumed, and crucially no
+        -- demotion of a hot demand entry to `used` = '0'. See the `spec` port.
+        if (not (spec = '1' and resident)) then
+          wrote              <= '1';
+          ram(idx).valid     <= '1';
+          ram(idx).used      <= not spec;
+          ram(idx).vpn       <= pteh_vpn;
+          ram(idx).asid_tag  <= asidr;
+          ram(idx).page_mask <= ptel(11 downto 8);
+          ram(idx).ppn       <= ptel(31 downto 10);
+          ram(idx).w         <= ptel(7);
+          ram(idx).x         <= ptel(6);
+          ram(idx).u         <= ptel(5);
+          ram(idx).d         <= ptel(4);
+          ram(idx).c         <= ptel(3);
+          ram(idx).global    <= ptel(2);
+          ram(idx).stale     <= ptel(1);
+        end if;
       end if;
     end if;
 

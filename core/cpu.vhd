@@ -313,6 +313,33 @@ begin
     event_i_gated <= event_i;
   end generate g_no_dblflt;
 
+  -- Tie off the MMU-only counter signals when the MMU is absent.
+  --
+  -- walk_cnt_walks/walk_cnt_hits (the walker's) and cnt_itlb_wr/cnt_dtlb_wr
+  -- (the TLB install counters) are driven inside g_mmu, but the datapath port
+  -- map above reads all four UNCONDITIONALLY -- it is a single instantiation,
+  -- not one per variant -- so on a PRIV_ARCH = false build they would have no
+  -- driver at all.
+  --
+  -- A signal INITIALISER IS NOT A DRIVER. It settles simulation and nothing
+  -- else: synthesis sees an undriven wire, i.e. a don't-care, not a constant
+  -- zero. The resulting don't-care propagation is not confined to the dead
+  -- port either -- it changes ABC's mapping decisions across the whole design.
+  -- Measured on j2 (`synth/cpu_synth.sh ecp5-block`, deterministic, both
+  -- numbers reproduced twice): adding just the two install counters to the
+  -- port map moved `mult` 603 -> 909 LUT4 and `shifter` 5630 -> 5893, two
+  -- blocks this file does not otherwise touch, for +526 LUT4 total on a
+  -- variant that has no MMU at all. Tying them off puts every one of those
+  -- back exactly. The walker's two counters had the same latent defect before
+  -- the install counters existed and are fixed here with them.
+
+  g_no_mmu_counters : if not PRIV_ARCH generate
+    walk_cnt_walks <= (others => '0');
+    walk_cnt_hits  <= (others => '0');
+    cnt_itlb_wr    <= (others => '0');
+    cnt_dtlb_wr    <= (others => '0');
+  end generate g_no_mmu_counters;
+
   -- H-M3 defense-in-depth invariant: the banked exception state (RB=1) must
   -- never be live in user mode (MD=0) -- if any future path reached this it
   -- would mean untrusted code could observe/abuse bank-1 registers. Sim-only

@@ -189,6 +189,8 @@ package datapath_pack is
       mmu_regs_o         : out   mmu_reg_t := MMU_REG_RESET;
       sr_o               : out   sr_t;
       tlb_squash_o       : out   std_logic := '0';
+      p4_viol_o          : out   std_logic := '0';
+      p4_viol_wr_o       : out   std_logic := '0';
       tlb_exc_pend       : in    std_logic := '0';
       tlb_fault_va       : in    std_logic_vector(31 downto 0) := (others => '0');
       tlb_exc_expevt     : in    std_logic_vector(11 downto 0) := (others => '0');

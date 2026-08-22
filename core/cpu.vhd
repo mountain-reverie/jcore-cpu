@@ -131,7 +131,17 @@ architecture stru of cpu is
   signal tlb_fault_va       : std_logic_vector(31 downto 0);
   -- D-store-on-bus is itself faulting (drives the external demote-to-read).
   signal d_store_faulting : std_logic;
-  signal tlb_exc_expevt   : std_logic_vector(11 downto 0);
+  -- P4 privilege violation, from the datapath: a user-mode (SR.MD='0') data
+  -- access to the supervisor-only P4 control-register segment was refused.
+  -- Registered in the datapath and therefore already one cycle behind the
+  -- access -- the same pipeline point at which a D-side TLB fault is detected
+  -- here (this process reads sig_db_o, the registered bus request). The
+  -- faulting VA is not a separate wire: the datapath parks it in TEA at the
+  -- refusal and it is read back below out of dp_mmu_regs. See the p4_viol_o
+  -- port declaration in core/datapath.vhm.
+  signal dp_p4_viol     : std_logic;
+  signal dp_p4_viol_wr  : std_logic;
+  signal tlb_exc_expevt : std_logic_vector(11 downto 0);
   -- MMUFSR composition (KIND/USER/PROT/ITLB/WRITE nibble+bits, no VALID --
   -- datapath ORs in VALID on capture). tlb_exc_kind is not a datapath port,
   -- so cpu.vhd composes this word here and passes it in, mirroring
@@ -498,6 +508,8 @@ begin
       mmu_regs_o         => dp_mmu_regs,
       sr_o               => dp_sr,
       tlb_squash_o       => dp_tlb_squash,
+      p4_viol_o          => dp_p4_viol,
+      p4_viol_wr_o       => dp_p4_viol_wr,
       tlb_exc_pend       => tlb_exc_pend,
       inst_fault         => inst_fault,
       inst_fault_prot    => inst_fault_prot,
@@ -1233,7 +1245,8 @@ begin
              sig_inst_o, sig_db_o,
              tlb_i_hit, tlb_i_prot, tlb_i_multihit,
              tlb_d_hit, tlb_d_prot, tlb_d_multihit,
-             i_va_32, d_va_32, dp_sr, walk_supp_i, walk_supp_d) is
+             i_va_32, d_va_32, dp_sr, walk_supp_i, walk_supp_d,
+             dp_p4_viol, dp_p4_viol_wr, dp_mmu_regs) is
 
       variable exc_en   : std_logic;
       variable exc_kind : tlb_exc_kind_t;
@@ -1325,6 +1338,61 @@ begin
         end if;
       end if;
 
+      -- P4 PRIVILEGE VIOLATION (SH-4 CPU address error). A user-mode data
+      -- access to the supervisor-only P4 segment, already detected and REFUSED
+      -- one cycle ago by the datapath; all that is left here is to raise the
+      -- exception for it.
+      --
+      -- It is a D-side fault and sits with the D-side arm's priority: gated on
+      -- exc_en = '0' so a live I-fetch or TLB fault still wins (an I-fetch
+      -- fault belongs to a younger instruction, but the existing arms above
+      -- already resolve that ordering and this must not perturb it), and on
+      -- dp_sr.rb = '0' for the same reason every other arm is -- see the
+      -- nested-entry comment at the top of this process. Suppressing at RB='1'
+      -- costs nothing in safety: the ACCESS is refused unconditionally in the
+      -- datapath, with no dependence on this exception being delivered.
+      --
+      -- The VA comes from dp_mmu_regs.tea, which the datapath wrote at the
+      -- refusal (it is the only point holding the address). dp_mmu_regs is
+      -- driven from the REGISTERED CSRs, so this is a flop output and closes no
+      -- loop; and the tlb_exc_pend capture triggered by exc_en below writes the
+      -- same value straight back into TEA.
+      --
+      -- KNOWN, BOUNDED LIMITATION -- the request is a ONE-SHOT. dp_p4_viol
+      -- pulses for a single cycle, where a D-side TLB fault re-asserts every
+      -- cycle its access is held on the bus. So if this cycle is lost -- an
+      -- I-fetch fault takes it through exc_en above (reachable only with
+      -- MMUCR.AT = 1), or decode_core's texc_req is still holding an older
+      -- undispatched request -- the exception can be DROPPED rather than
+      -- re-raised, and the refused instruction is not necessarily re-executed
+      -- to raise it again.
+      --
+      -- That costs nothing in SAFETY, which is the point: the datapath refuses
+      -- the access unconditionally, with no dependence whatever on this
+      -- exception being delivered. No CSR is written, no read side effect runs,
+      -- and a refused load yields a hard zero. The worst outcome is a silently
+      -- swallowed address error -- a missing signal, never a leak or an escape.
+      -- It is not quite free, though: the refusal writes TEA unconditionally,
+      -- so a swallowed violation leaves the P4 VA in TEA over an older
+      -- undispatched fault's address, and that fault's handler then reads the
+      -- wrong faulting address. Confined to diagnosis -- no privileged state is
+      -- exposed and no access is granted -- but not merely a missing signal.
+      --
+      -- Turning it into a held request needs an ack path back from decode_core
+      -- AND a frozen copy of the restart context: tlb_exc_pc is derived from the
+      -- LIVE ex_if_pc inside the shared capture block, so a delayed raise would
+      -- silently produce the wrong SPC. Worth doing, deliberately not done here,
+      -- and not on the security path.
+      if (exc_en = '0' and dp_p4_viol = '1' and dp_sr.rb = '0') then
+        exc_en := '1';
+        if (dp_p4_viol_wr = '1') then
+          exc_kind := P4_USER_W;
+        else
+          exc_kind := P4_USER_R;
+        end if;
+        fva := dp_mmu_regs.tea;
+      end if;
+
       -- Same I-side condition the branch above uses, exported for the datapath
       -- to RECORD with the fetched instruction (deferred delivery, step 1).
       -- IMISS/IPROT only -- NOT every I-fetch fault. An I-side MULTI_HIT also
@@ -1372,14 +1440,29 @@ begin
 
     end process;
 
-    -- SH-4 EXPEVT code for the detected fault kind, captured into EXPEVT as a
-    -- datapath hardware side-effect (see datapath.vhm). IMISS=0x040 DMISS_R=0x060
+    -- SH-4 EXPEVT code for the detected fault kind.
+    --
+    -- TODO: remove this port and mux; kept only as documentation.
+    --
+    -- CAVEAT, verified 2026-08-21: this signal has NO READER. It reaches
+    -- datapath.vhm only as the tlb_exc_expevt port and that port is never read
+    -- there (it appears in the process sensitivity list and nowhere else), so
+    -- it drives nothing. The code software actually observes is written by the
+    -- dispatched exception microcode from its own system-plane immediate
+    -- (decode/gen-go/spec/sh4/exceptions.toml, the `xbus = "<code>"` line on
+    -- each entry). The table below is kept in step with those immediates so it
+    -- does not become a second, contradicting source of truth -- but changing a
+    -- value here changes nothing on its own. Do NOT hang design rationale off
+    -- these arms; they are dead.
+    --
+    -- IMISS=0x040 DMISS_R=0x060
     -- DMISS_W=0x080 IPROT=0x0A0 DPROT_R/W=0x0C0. MULTI_HIT does NOT dispatch
     -- through this EXPEVT-driven path (it dispatches to the existing General
     -- Illegal register-model exception, which writes its own EXPEVT=0x180 via
-    -- microcode) -- decoder imm-field capacity is full
-    -- (see components_pkg.vhd tlb_exc_kind_t comment), so no code is minted
-    -- for it here; "others" is a required exhaustive arm, not a real dispatch.
+    -- microcode), so no code is minted for it here; "others" is a required
+    -- exhaustive arm, not a real dispatch. (This used to add "because decoder
+    -- imm-field capacity is full"; that is false -- components_pkg.vhd,
+    -- tlb_exc_kind_t.)
     with tlb_exc_kind select tlb_exc_expevt <=
       x"040" when IMISS,
       x"060" when DMISS_R,
@@ -1387,6 +1470,11 @@ begin
       x"0A0" when IPROT,
       x"0C0" when DPROT_R,
       x"0C0" when DPROT_W,
+      -- P4 privilege violation: 0x0C0, matching the DPROT entries it dispatches
+      -- through. Why not SH-4's 0x0E0/0x100, and what it would cost to use
+      -- them: components_pkg.vhd, tlb_exc_kind_t.
+      x"0C0" when P4_USER_R,
+      x"0C0" when P4_USER_W,
       (others => '0') when others;
 
     -- MMUFSR partial word (KIND/PROT/ITLB/WRITE; bits 12=VALID and 4=USER are
@@ -1433,6 +1521,21 @@ begin
         when MULTI_HIT =>
 
           kind_nibble := x"7"; prot_b := '0'; itlb_b := '0'; write_b := '0';
+
+        -- P4 privilege violation. KIND 8/9 extend the MMUFSR kind space past
+        -- the seven TLB causes; PROT=1 (it IS a protection failure, just a
+        -- segment-level rather than a page-level one), ITLB=0 (D-side by
+        -- construction), WRITE from the direction. USER is not set here: the
+        -- datapath ORs bit 4 in from this.sr.md at capture time and, since
+        -- reaching this kind at all requires SR.MD='0', it always lands as 1.
+
+        when P4_USER_R =>
+
+          kind_nibble := x"8"; prot_b := '1'; itlb_b := '0'; write_b := '0';
+
+        when P4_USER_W =>
+
+          kind_nibble := x"9"; prot_b := '1'; itlb_b := '0'; write_b := '1';
 
         when others =>
 

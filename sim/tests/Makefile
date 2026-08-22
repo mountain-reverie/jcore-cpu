@@ -354,6 +354,7 @@ mmuwalkasid.elf: mmuwalkasid.o
 mmutsbvictim.elf: mmutsbvictim.o
 mmuwalkway1.elf: mmuwalkway1.o
 mmup4alias.elf: mmup4alias.o
+mmup4priv.elf: mmup4priv.o
 # mmuwalkiside, mmusplit, mmuishadow and mmudshadow need code at a VA absent from the TLB,
 # so they link with their own script (sh32_tlbtext.x = sh32.x + a .tlbtext
 # section fixed at VA 0x00008000).

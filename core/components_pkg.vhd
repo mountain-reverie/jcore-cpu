@@ -166,15 +166,80 @@ package cpu2j0_components_pack is
   -- priority over hit_found so a fault is raised instead of silently picking
   -- one of the matching PAs. Dispatches to the EXISTING "General Illegal"
   -- register-model exception (EXPEVT=0x180, PC<-VBR+0x100; see
-  -- decode_core.vhm) rather than minting a new dedicated EXPEVT/vector pair:
-  -- the decoder's system-plane immediate field is already at capacity
-  -- (32/32), so a new distinct constant would force an unrelated
-  -- ROM-imm-field-width regen (see decode/gen-go/internal/model/extraimm.go).
+  -- decode_core.vhm) rather than minting a new dedicated EXPEVT/vector pair.
   -- 0x180 still satisfies "distinct from the 5 TLB codes" and is fully
   -- observable via the normal exception-entry/EXPEVT path.
   -- See core/tlb.vhd, docs/architecture/tlb.md §3.
+  --
+  -- CORRECTION (measured 2026-08-22). This comment used to justify the reuse
+  -- with "the decoder's system-plane immediate field is already at capacity
+  -- (32/32), so a new constant would force a ROM-imm-field-width regen". That
+  -- is NOT TRUE and has not been for some time. Measure it on the GENERATED J4
+  -- decoder, not the tracked base one: sim/gen/j4-w72/decode/ is a build
+  -- artifact (gitignored -- regenerate with any j4 sim build, e.g.
+  -- sim/mmu_sim.sh). There, `ex.imm_val` selects on 5 bits with 29 explicit
+  -- arms plus `others` (which serves IMM_ZERO), and that decode_pkg.vhd
+  -- declares 30 immval_t literals: 30 of 32, with codes 11110 and 11111 FREE.
+  -- The TRACKED decode/decode_pkg.vhd declares only 19 -- it is the base J2
+  -- decoder and is the wrong file to count. extraimm.go's buildExtraImmConsts generates a mux arm for
+  -- any non-predefined literal automatically -- that is how IMM_P1024 and
+  -- IMM_P1536 arrived -- and its romImmFieldBits=5 check fails only ABOVE 32.
+  -- So minting a dedicated code is a spec+regen change, not a template
+  -- rewrite. The reuse may still be the right call on its own merits; it is
+  -- not forced by capacity. Do not re-derive a blocking claim from this text.
 
-  type tlb_exc_kind_t is (imiss, dmiss_r, dmiss_w, iprot, dprot_r, dprot_w, multi_hit);
+  -- p4_user_r / p4_user_w: a USER-mode (SR.MD = 0) DATA access to the P4
+  -- privileged control-register segment -- SH-4's "CPU address error", which
+  -- P4's supervisor-only rule (docs/soc/p4-mmio-map.md §1: "accessible only
+  -- with SR.MD = 1") makes an architectural requirement. These are NOT TLB
+  -- faults: P4 is never translated (cpu.vhd asserts *_at_translated only for
+  -- P0/P3), so no TLB lookup and no protection bit is involved. They ride
+  -- tlb_exc_kind_t because D-SIDE FAULT DELIVERY is what they need and that
+  -- path already exists here, fully guarded: squash_arm, the ex_if_pc-derived
+  -- restart PC, the @Rn+/@-Rn base restore and the TEA/PTEH/MMUFSR capture are
+  -- all keyed off tlb_exc_pend and are correct for this fault verbatim.
+  --
+  -- DELIVERY: decode_core.vhm dispatches them through the EXISTING
+  -- system_op(TLB_DPROT_R/W) microcode, so they inherit PC <- VBR+0x100 and
+  -- SPC = the faulting instruction. VBR+0x100 is where
+  -- docs/priv-arch/design-spec.md §4.5 puts address error ("General exception |
+  -- VBR + 0x100 | illegal insn, TRAPA, address error"), matching SH-4 exactly,
+  -- so the shared vector is the CORRECT one and not merely a convenient one.
+  --
+  -- EXPEVT is consequently 0x0C0, shared with DPROT_R/W, where SH-4 would
+  -- report 0x0E0 (read) / 0x100 (write). This is DEFERRED BY CHOICE, and the
+  -- distinction matters: it is NOT forced by the hardware.
+  --
+  -- EXPEVT is written from the dispatched microcode's own system-plane
+  -- immediate (decode/gen-go/spec/sh4/exceptions.toml, `xbus = "192"` on the
+  -- two DPROT entries), so distinct codes need distinct microcode entries. The
+  -- cost of that, MEASURED 2026-08-22 rather than assumed:
+  --   * 0x100 needs NO new immediate at all -- IMM_P256 = x"00000100" already
+  --     exists in the imm mux (rom code 10100).
+  --   * 0x0E0 would be one new constant, and the 5-bit imm field has 30 of 32
+  --     codes used with 11110/11111 free (see the CORRECTION above).
+  --   * extraimm.go generates the new mux arm automatically, and
+  --     exceptions.toml has unused system-plane opcode nibbles.
+  -- So the true SH-4 codes are a spec+regen change of ordinary size. They are
+  -- not done HERE because this change is a security fix on the detection and
+  -- delivery path, and a decoder-ROM regen is a separate blast radius
+  -- (Fmax/table churn) that would need its own verification.
+  --
+  -- What the deviation costs today is bounded: the VECTOR is already correct
+  -- (VBR+0x100), the fault is precise with the right SPC, and the direction is
+  -- not lost -- it is carried in MMUFSR, which is exactly what MMUFSR exists
+  -- for (§2.11: "EXPEVT alone cannot distinguish every fault cause", written
+  -- of DPROT_R/W, which likewise share 0x0C0). These two kinds take MMUFSR
+  -- KIND 8 and 9, extending the seven TLB causes, with USER=1 and PROT=1.
+  -- Guard: mmup4priv.
+  --
+  -- Note that cpu.vhd's tlb_exc_expevt mux does NOT decide any of this: that
+  -- port has no reader in datapath.vhm at all.
+  --
+  -- Taking the deviation out later touches the decoder spec and this comment,
+  -- and nothing in this fault's detection or delivery has to move for it.
+
+  type tlb_exc_kind_t is (imiss, dmiss_r, dmiss_w, iprot, dprot_r, dprot_w, multi_hit, p4_user_r, p4_user_w);
 
   -- if size becomes part of the bus, mem_size_t will move into cpu2j0_pack
 

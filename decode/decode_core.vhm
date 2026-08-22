@@ -802,17 +802,30 @@ begin
     system_op(TLB_IPROT)
       when PRIV_ARCH and if_fault = '1' and if_fault_prot = '1'
            and texc_req = '0' else
+    -- P4_USER_R / P4_USER_W (a user-mode access to the supervisor-only P4
+    -- segment -- SH-4 CPU address error) share the DPROT microcode. That
+    -- microcode is exactly what they need and nothing in it is TLB-specific:
+    -- it vectors to VBR+0x100 -- which is where docs/priv-arch/design-spec.md
+    -- §4.5 puts address error -- and saves SPC as the faulting-instruction
+    -- restart PC. Sharing the dispatch costs no decoder entry and no ROM
+    -- regeneration; the price is that EXPEVT is 0x0C0 for these kinds too,
+    -- since it comes from this entry's own immediate, where SH-4 would say
+    -- 0x0E0/0x100. That price is accepted by choice, not forced -- rationale
+    -- and measurement in components_pkg.vhd, tlb_exc_kind_t. MMUFSR KIND 8/9
+    -- discriminates meanwhile. Guard: mmup4priv.
     system_op(TLB_DPROT_R)
-      when PRIV_ARCH and texc_req = '1' and texc_kind_held = DPROT_R else
+      when PRIV_ARCH and texc_req = '1'
+           and (texc_kind_held = DPROT_R or texc_kind_held = P4_USER_R) else
     system_op(TLB_DPROT_W)
-      when PRIV_ARCH and texc_req = '1' and texc_kind_held = DPROT_W else
+      when PRIV_ARCH and texc_req = '1'
+           and (texc_kind_held = DPROT_W or texc_kind_held = P4_USER_W) else
     -- S-I5: multiple-TLB-match (duplicate VPN+ASID install, a kernel bug) is
     -- a defined non-recoverable fault, never a silent last-match-wins PA
     -- pick. Routed to the EXISTING General Illegal register-model exception
     -- (EXPEVT=0x180, PC<-VBR+0x100) rather than minting a new dedicated
-    -- EXPEVT/vector pair -- see components_pkg.vhd tlb_exc_kind_t for why
-    -- (the decoder's system-plane immediate field is already at capacity,
-    -- 32/32). 0x180 is still "distinct from 0x040/060/080/0A0/0C0" (the
+    -- EXPEVT/vector pair -- see components_pkg.vhd tlb_exc_kind_t, which also
+    -- retracts the old "imm field is at capacity, 32/32" rationale for it.
+    -- 0x180 is still "distinct from 0x040/060/080/0A0/0C0" (the
     -- brief's only hard requirement) and observable/testable the same way
     -- every other TLB fault is; the kernel's General-Illegal handler is
     -- fatal, so a duplicate-install bug still ends in a defined panic, never

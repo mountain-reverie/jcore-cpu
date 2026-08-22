@@ -79,6 +79,31 @@ entity datapath is
 		     -- mach/macl accumulate-commit so MAC @Rm+,@Rn+ stays precise across a
 		     -- D-side TLB fault. '0' when not PRIV_ARCH (J1/J2 bit-identical).
 		     tlb_squash_o : out std_logic := '0';
+		     -- P4 PRIVILEGE VIOLATION export (J4+PRIV_ARCH; constant '0'
+		     -- otherwise, so J1/J2 see a tied-off port exactly like
+		     -- tlb_squash_o). p4_viol_o pulses for one cycle, ONE CYCLE AFTER a
+		     -- user-mode (SR.MD='0') data access to P4 was launched and refused
+		     -- by the MMU-register block below; p4_viol_wr_o carries its
+		     -- direction ('1' = store). cpu.vhd turns the pulse into a
+		     -- P4_USER_R/P4_USER_W exception.
+		     --
+		     -- REGISTERED, not combinational, and that is load-bearing twice
+		     -- over. (1) cpu.vhd feeds tlb_exc_pend straight back INTO this
+		     -- process, so a combinational export would close a combinational
+		     -- loop through cpu.vhd's exception process. (2) A D-side TLB fault
+		     -- is likewise detected one cycle after its launch (cpu.vhd sees
+		     -- sig_db_o, the REGISTERED bus request), so a one-cycle delay puts
+		     -- this fault at exactly the pipeline point squash_arm and the
+		     -- ex_if_pc restart-PC derivation already expect.
+		     --
+		     -- There is deliberately NO faulting-VA port beside these: the
+		     -- refusal writes the VA to TEA in the same evaluation that raises
+		     -- p4_viol_c, and cpu.vhd reads it back out of the existing
+		     -- mmu_regs_o bundle. mmu_regs_o is driven from this'register.mmu
+		     -- (the REGISTERED CSRs), so that read is a flop output and adds no
+		     -- loop -- and it costs no new 32-bit port.
+		     p4_viol_o    : out std_logic := '0';
+		     p4_viol_wr_o : out std_logic := '0';
 		     -- TLB fault side-effects: when tlb_exc_pend='1', write TEA, PTEH[31:14]
 		     -- and EXPEVT (the latter selected from the fault kind by cpu.vhd).
 		     tlb_exc_pend   : in std_logic := '0';
@@ -268,6 +293,16 @@ signal manip_sel : std_logic_vector(31 downto 0);
 	-- back-to-back accesses show no 0->1 edge on the registered bit at all.
 	-- Assigned only under PRIV_ARCH, so J1/J2 see a constant '0'.
 	signal ma_launch : std_logic;
+	-- Combinational form of the P4 privilege violation, driven from INSIDE the
+	-- datapath process at the refusal statement itself (same technique, and for
+	-- the same reason, as ma_launch above: the launch condition tests
+	-- this.data_o.en as a mid-evaluation VARIABLE and cannot be re-expressed as
+	-- a concurrent assignment). g_p4_viol below flops these onto the p4_viol_o /
+	-- p4_viol_wr_o ports; see their declaration for why the flop is required.
+	-- Defaulted unconditionally at the top of the process, so on J1/J2 both are
+	-- constant '0' with no consumer and prune away.
+	signal p4_viol_c    : std_logic;
+	signal p4_viol_wr_c : std_logic;
 	-- Registered tlb_squash, made readable INSIDE the process (this'register is
 	-- only usable in the concurrent assignments below). Used to suppress new
 	-- memory transactions issued in the fault shadow, symmetrically with the
@@ -1223,6 +1258,15 @@ end generate;
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
           variable seg_v   : segment_t;
           variable p4_sel_v : p4_sel_t;
+          -- SINGLE SOURCE OF TRUTH for "this access is a P4 CSR access the
+          -- privilege gate REFUSES / SERVES" (J4+PRIV_ARCH). THREE sites must
+          -- agree on this one invariant -- the refusal arm, the serve arm, and
+          -- the restart-shadow condition, which needs it INVERTED -- and three
+          -- hand-written copies of a predicate (one of them negated) is the
+          -- silent-regression hazard squash_arm was factored out to avoid.
+          -- Defaulted every visit for the same read-before-write reason
+          -- p4_sel_v is (see its default below).
+          variable p4_refuse_v, p4_serve_v : boolean;
           -- MMUFSR partial word (KIND/PROT/ITLB/WRITE) for the DEFERRED I-fetch
           -- fault. cpu.vhd's tlb_exc_fsr is a function of the LIVE tlb_exc_kind
           -- and is long stale by deferred-delivery time, so the two I-side rows
@@ -1235,6 +1279,12 @@ end generate;
           -- Default for the access-launch export (see the ma_launch declaration);
           -- overridden to '1' at the single statement that writes the ma_* shadow.
           ma_launch <= '0';
+          -- Defaults for the P4-privilege-violation export (see its
+          -- declaration); overridden at the single refusal statement below.
+          p4_viol_c    <= '0';
+          p4_viol_wr_c <= '0';
+          p4_refuse_v  := false;
+          p4_serve_v   := false;
 
           -- TLB fault hardware side-effects (J4): on the first cycle a
           -- fault is detected (tlb_exc_pend='1') capture TEA and PTEH[31:14] from
@@ -1705,6 +1755,11 @@ end generate;
                 -- PTEH/PTEL/ASIDR are P4-MMIO selected for READS ONLY (Phase 3
                 -- Task 1); the LDC write path remains their only write path.
                 p4_sel_v := P4_NONE;
+                -- Derive the gate predicate ONCE, here, from the freshly
+                -- decoded segment and the committed SR. Everything below reads
+                -- these, never seg_v/sr.md again.
+                p4_refuse_v := seg_v = SEG_P4 and this.sr.md = '0';
+                p4_serve_v  := seg_v = SEG_P4 and this.sr.md = '1';
                 -- PTEH/PTEL/ASIDR read-only aliases (Phase 3): stock SH-4
                 -- offsets for PTEH/PTEL, J-core-chosen 0x38 for ASIDR
                 -- (0x34 stays reserved for the proposed PTEU). These are now
@@ -1766,7 +1821,39 @@ end generate;
                 elsif ma_ad(7 downto 0) = x"58" then p4_sel_v := P4_TLBINST;
                 end if;
               end if;
-              if PRIV_ARCH and seg_v = SEG_P4 then
+              -- PRIVILEGE GATE. P4 is the SH-4 privileged control-register
+              -- segment: "Accesses are untranslated (no MMU lookup), uncached,
+              -- and accessible only with SR.MD = 1"
+              -- (docs/soc/p4-mmio-map.md §1). NOTHING else enforces that here
+              -- -- P4 is not TLB-translated (cpu.vhd asserts d_at_translated
+              -- only for SEG_P0/SEG_P3), so no protection bit can intervene,
+              -- and the block below is the whole implementation of every MMU
+              -- CSR. Without this arm a user-mode `MOV.L Rm,@Rn` to
+              -- 0xFF000010/0xFF000014 wrote MMUCR (disabling translation) or
+              -- TSBBR (repointing the hardware TSB walker at attacker memory)
+              -- -- a complete user->supervisor escape. Guard: mmup4priv.
+              if PRIV_ARCH and p4_refuse_v then
+                -- REFUSE. No CSR is written and no read-side effect runs --
+                -- TSBVICT's LFSR step included, which is why the refusal is a
+                -- separate arm ahead of the decode rather than a mask applied
+                -- inside it. A refused load completes with a hard zero rather
+                -- than stalling: the exception raised one cycle from now
+                -- squashes the writeback (squash_arm, via tlb_exc_pend), and
+                -- zero rather than stale/privileged data is what the register
+                -- would see if that squash were ever defeated.
+                if mem.wr = '0' then
+                  this.m_dr_next := (others => '0');
+                  this.m_en      := '1';
+                end if;
+                -- TEA <- the refused VA, written HERE because this is the only
+                -- point that has it. cpu.vhd reads it back through mmu_regs_o
+                -- as this fault's VA (see the p4_viol_o declaration), and the
+                -- tlb_exc_pend capture block one cycle later rewrites TEA with
+                -- the identical value -- so this is idempotent, not a race.
+                this.mmu.tea := ma_ad;
+                p4_viol_c    <= '1';
+                p4_viol_wr_c <= mem.wr;
+              elsif PRIV_ARCH and p4_serve_v then
                 if mem.wr = '1' then
                   case p4_sel_v is
                     when P4_MMUCR =>
@@ -1833,44 +1920,57 @@ end generate;
                 end if;
               else
                 this.data_o := to_data_o(mem, coproc, ma_ad, ma_dw);
-                -- Shadow the architectural PC of the instruction launching this
-                -- data access (a fixed pipeline point). On a later fault this is
-                -- the faulting instruction's PC, independent of how far the fetch
-                -- pointer has since advanced. (J4+PRIV_ARCH only.)
-                if PRIV_ARCH then
-                  -- Export the launch itself (see the ma_launch declaration):
-                  -- g_restore2's second base-restore entry keys off exactly this
-                  -- pipeline point, so it is published from here rather than
-                  -- reconstructed outside the process.
-                  ma_launch <= '1';
-                  this.ma_pc := this.pc;
-                  -- Shadow the (bank-remapped) base register (Rm = num_x in the
-                  -- @Rm+ access slot) and the post-increment marker of the
-                  -- instruction launching this access, at the same fixed pipeline
-                  -- point as ma_pc, so a later fault can restore the pre-increment
-                  -- base of the faulting @Rm+ load.
-                  this.ma_numz    := num_x_r;
-                  -- mem_autoinc1 (single-slot @Rm+ MACH/MACL load) restores the
-                  -- same way as mem_autoupd: faulting VA = original Rm.
-                  this.ma_autoupd := mem_autoupd or mem_autoinc1;
-                  -- @-Rn pre-decrement store: also shadow the marker and the
-                  -- ORIGINAL pre-decrement base (xbus = Rn, read this slot before
-                  -- the decrement z-write commits). On a fault this restores Rn so
-                  -- the RTE-restart re-applies the decrement exactly once.
-                  this.ma_predec  := mem_predec;
-                  this.ma_base    := xbus;
-                  -- Shadow the delay-slot condition of the access-launching
-                  -- instruction (same fixed pipeline point as ma_pc) so a later
-                  -- D-fault selects the branch-restart bias below.
-                  this.ma_dslot   := delay_slot;
-                  -- Shadow the access-launching instruction's OWN PC (EX-aligned
-                  -- ex_if_pc from decode) so the D-fault restart is derived from
-                  -- the instruction's PC, not the run-ahead this.pc (ma_pc). For a
-                  -- delay-slot load ex_if_pc = delay_slot_PC (= branch+2) whereas
-                  -- ma_pc is the branch target.
-                  -- DEAD STATE: no readers left. See components_pkg.vhd.
-                  this.ma_if_pc   := ex_if_pc;
-                end if;
+              end if;
+              -- Shadow the architectural PC of the instruction launching this
+              -- data access (a fixed pipeline point). On a later fault this is
+              -- the faulting instruction's PC, independent of how far the fetch
+              -- pointer has since advanced. (J4+PRIV_ARCH only.)
+              --
+              -- Written for the ordinary bus path AND for a REFUSED user-mode
+              -- P4 access -- i.e. for everything except a SERVED P4 CSR access,
+              -- which is why this reads `not p4_serve_v` rather than simply
+              -- `PRIV_ARCH`. A refused access faults one cycle later,
+              -- so it needs its restart context captured exactly like any
+              -- other faulting access; leaving the shadow untouched would let
+              -- the capture block read a PREVIOUS access's ma_dslot (wrong
+              -- restart-PC arm) and ma_autoupd/ma_predec (a bogus base
+              -- restore writing the P4 VA into an unrelated GPR) -- the same
+              -- stale-shadow hazard documented on the tlb_exc_ifetch gate in
+              -- the capture block. A SERVED P4 CSR access is excluded because
+              -- it cannot fault, which is how it has always behaved.
+              if PRIV_ARCH and not p4_serve_v then
+                -- Export the launch itself (see the ma_launch declaration):
+                -- g_restore2's second base-restore entry keys off exactly this
+                -- pipeline point, so it is published from here rather than
+                -- reconstructed outside the process.
+                ma_launch <= '1';
+                this.ma_pc := this.pc;
+                -- Shadow the (bank-remapped) base register (Rm = num_x in the
+                -- @Rm+ access slot) and the post-increment marker of the
+                -- instruction launching this access, at the same fixed pipeline
+                -- point as ma_pc, so a later fault can restore the pre-increment
+                -- base of the faulting @Rm+ load.
+                this.ma_numz    := num_x_r;
+                -- mem_autoinc1 (single-slot @Rm+ MACH/MACL load) restores the
+                -- same way as mem_autoupd: faulting VA = original Rm.
+                this.ma_autoupd := mem_autoupd or mem_autoinc1;
+                -- @-Rn pre-decrement store: also shadow the marker and the
+                -- ORIGINAL pre-decrement base (xbus = Rn, read this slot before
+                -- the decrement z-write commits). On a fault this restores Rn so
+                -- the RTE-restart re-applies the decrement exactly once.
+                this.ma_predec  := mem_predec;
+                this.ma_base    := xbus;
+                -- Shadow the delay-slot condition of the access-launching
+                -- instruction (same fixed pipeline point as ma_pc) so a later
+                -- D-fault selects the branch-restart bias below.
+                this.ma_dslot   := delay_slot;
+                -- Shadow the access-launching instruction's OWN PC (EX-aligned
+                -- ex_if_pc from decode) so the D-fault restart is derived from
+                -- the instruction's PC, not the run-ahead this.pc (ma_pc). For a
+                -- delay-slot load ex_if_pc = delay_slot_PC (= branch+2) whereas
+                -- ma_pc is the branch target.
+                -- DEAD STATE: no readers left. See components_pkg.vhd.
+                this.ma_if_pc   := ex_if_pc;
               end if;
             end if;
             if instr.issue = '1' then
@@ -2062,6 +2162,30 @@ end generate;
 	mmu_regs_o <= mmu_regs;
 	sr_o       <= sr;
 	tlb_squash_r <= this'register.tlb_squash when PRIV_ARCH else '0';
+	-- Flop the P4-privilege-violation export onto its ports. See the
+	-- p4_viol_o port declaration for why this must be registered rather than
+	-- passed straight out (combinational loop through cpu.vhd's exception
+	-- process, and pipeline alignment with the D-side TLB fault it reuses).
+	g_p4_viol : if PRIV_ARCH generate
+	begin
+	  process(clk, rst)
+	  begin
+	    if rst = '1' then
+	      p4_viol_o    <= '0';
+	      p4_viol_wr_o <= '0';
+	    elsif clk = '1' and clk'event then
+	      p4_viol_o    <= p4_viol_c;
+	      p4_viol_wr_o <= p4_viol_wr_c;
+	    end if;
+	  end process;
+	end generate g_p4_viol;
+	-- J1/J2: driven to a constant '0' HERE (not left to the port default), so the
+	-- J1/J2 datapath exports a hard constant and no flop is instantiated -- same
+	-- shape as g_squash_ifetch_off and the other PRIV_ARCH-only exports.
+	g_p4_viol_off : if not PRIV_ARCH generate
+	  p4_viol_o    <= '0';
+	  p4_viol_wr_o <= '0';
+	end generate g_p4_viol_off;
 	-- SINGLE SOURCE OF TRUTH for "the precise-exception squash arms on this
 	-- clock edge" (J4+PRIV_ARCH). TWO sites must agree on this predicate: the
 	-- process branch that sets this.tlb_squash, and g_wb_grace (which must

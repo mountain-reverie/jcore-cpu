@@ -385,16 +385,19 @@
 #   EXPEVT still distinguishes the six causes; SPC/SSR capture still differs by
 #   fault stage (I-side live PC vs D-side latched TLBPC/TLBSR) -- unchanged.
 #
-# S-I5 (multiple-TLB-match, see tlb.vhd i_multihit/d_multihit): the decoder's
-# system-plane immediate-value field (ROM imm-value selector, 5 bits) is
-# already at capacity (32/32 distinct constants) -- adding a dedicated
-# MULTIHIT EXPEVT+vector pair would need a 6-bit field and a rom template
-# regen (see internal/model/extraimm.go's romImmFieldBits guard, which fails
-# loudly on this). Rather than take on that unrelated decoder-widening
-# project, S-I5 is routed to the EXISTING General Illegal register-model
-# exception (EXPEVT=0x180, PC<-VBR+0x100; system.toml) -- see cpu.vhd's
-# tlb_exc_kind_t dispatch and decode_core.vhm. Zero new immval literals,
-# zero new opcodes.
+# S-I5 (multiple-TLB-match, see tlb.vhd i_multihit/d_multihit) is routed to the
+# EXISTING General Illegal register-model exception (EXPEVT=0x180,
+# PC<-VBR+0x100; system.toml) -- see cpu.vhd's tlb_exc_kind_t dispatch and
+# decode_core.vhm. Zero new immval literals, zero new opcodes.
+#
+# CORRECTION (measured 2026-08-22). This paragraph used to justify that reuse
+# with "the ROM imm-value selector, 5 bits, is already at capacity (32/32
+# distinct constants)". That is FALSE -- 30 of 32 are used and two codes are
+# free -- and THIS FILE is where the claim originated before propagating into
+# components_pkg.vhd, cpu.vhd, decode_core.vhm and docs/mmu/hardware-spec.md.
+# The measurement, and what minting a dedicated code would actually cost, live
+# in ONE place: jcore-cpu/core/components_pkg.vhd, the tlb_exc_kind_t comment.
+# Do not restate it here -- restating it is how it drifted the first time.
 
 [[instr]]
   name = "TLB IMISS"

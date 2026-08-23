@@ -804,6 +804,32 @@ else
   # stay free of every cacheable data access, literal-pool loads included.
   run_guard mmutsbcoh "" 100us
   run_guard mmutsbcoh cpu_cache_tb 200us
+
+  # ---- TLB UNIT TESTBENCH ------------------------------------------------
+  # NOT a run_guard: tlb_tb is a VHDL TOP, not an image, and reports
+  # "tlb_tb PASSED" rather than "Test Passed". It drives core/tlb.vhd on its
+  # own -- no datapath, no cosim -- which is the only way to reach properties
+  # the CPU cannot present to software. Chiefly WARM RESET (cases 24/25): the
+  # cosim drives `rst <= '1', '0' after 10 ns` and has no warm-reset path at
+  # all, so no .S guard can assert that a reset revokes resident translations.
+  #
+  # It is invoked here because until 2026-08-23 it was invoked NOWHERE -- it
+  # sat in sim/Makefile's VHDL_TOPS and in no script, and had been stale
+  # against the ITLB/DTLB split since f155124 without anything noticing, since
+  # the mcode GHDL flow only COMPILES the tops it is asked to run.
+  echo "== TLB unit testbench (tlb_tb) =="
+  if ! tb_build="$(make CPU_VARIANT=j4 tlb_tb 2>&1)"; then
+    echo "  FAIL  tlb_tb (build)"; echo "$tb_build" | tail -10; fail=1
+  else
+    tb_out="$(timeout 120 ./tlb_tb --ieee-asserts=disable 2>&1 || true)"
+    if echo "$tb_out" | grep -q 'tlb_tb PASSED'; then
+      echo "  PASS  tlb_tb"
+    else
+      echo "  FAIL  tlb_tb"
+      echo "$tb_out" | grep -E 'FAIL|error' | tail -5
+      fail=1
+    fi
+  fi
 fi
 
 if [ "$fail" = 0 ]; then echo "==> all guards PASSED"; else echo "==> FAILURES above" >&2; exit 1; fi

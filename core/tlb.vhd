@@ -51,6 +51,10 @@ entity tlb is
   );
   port (
     clk : in    std_logic;
+    -- Synchronous reset. Revokes every entry, exactly as MMUCR.TI does -- see
+    -- the flush process at the bottom of this file for why the `ram` signal's
+    -- initialiser is not a substitute.
+    rst : in    std_logic;
     -- Lookup: VA in, translation + status out. we=1 marks the access a store
     -- (D side only; ignored when side_is_i).
     va        : in    std_logic_vector(31 downto 0);
@@ -326,8 +330,8 @@ begin
 
   end process;
 
-  -- Clocked install (hardware walker) + MMUCR.TI flush. TI clears VALID (and the
-  -- NRU "used" state) on every entry -> a full revocation
+  -- Clocked install (hardware walker) + RESET / MMUCR.TI flush. Either clears
+  -- VALID (and the NRU "used" state) on every entry -> a full revocation
   -- (docs/architecture/tlb.md section 6). An install latches the whole entry
   -- atomically from {asidr, pteh_vpn, ptel} into one NRU-chosen slot (no
   -- half-written, matchable entry). NRU replacement: prefer an invalid slot,
@@ -350,9 +354,117 @@ begin
   begin
 
     if rising_edge(clk) then
+      -- Default-off every cycle, so `wrote` pulses only on a cycle that
+      -- actually writes a slot. It sits AHEAD of the reset arm deliberately:
+      -- a reset flush is a revocation, not an install, and must not be
+      -- counted as one by the P4 TLBINST instrumentation.
       wrote <= '0';
 
-      if (ti = '1') then
+      -- RESET FLUSH. Revokes every entry, exactly as MMUCR.TI does below.
+      --
+      -- WHY IT IS NEEDED AT ALL, given `signal ram := (others =>
+      -- TLB_ENTRY_RESET)` above. That declaration is a power-on INITIALISER,
+      -- not a reset: simulation honours it and FPGA BRAM inference can, but
+      -- ASIC synthesis ignores it outright and core/cpu_asic.vhd is a real
+      -- target. And nothing anywhere covers an `rst` asserted MID-RUN -- a
+      -- warm reset used to leave every valid entry, with its ASID tag and its
+      -- permissions, resident and matchable.
+      --
+      -- That was defence-in-depth rather than a live escape, and it is worth
+      -- being exact about why: mmu_reg_reset (core/components_pkg.vhd) zeroes
+      -- MMUCR, so MMUCR.AT comes out of reset at 0 and the stale entries are
+      -- not consulted until software sets AT=1. But it left the isolation
+      -- boundary of docs/architecture/tlb.md resting entirely on software
+      -- issuing MMUCR.TI before it next enables translation -- across a reset
+      -- which, by definition, may be recovery from a state in which software
+      -- was not behaving. The hardware states the invariant itself now.
+      --
+      -- IT IS STILL A COMPLETE REVOCATION UNDER THE I->D SHADOW FILL. Two
+      -- things had to be checked when that landed, because a flush that misses
+      -- one entry is worse than no flush -- it looks correct.
+      --   * The shadow fill adds NO per-entry state: `spec` only selects the
+      --     `used` value and gates the write, and `resident` is a process
+      --     VARIABLE recomputed from `ram` every install. Clearing `valid`
+      --     still unmatches every slot, since tlb_match above requires
+      --     valid = '1' before anything else is consulted. A speculative entry
+      --     is revoked by exactly the same two assignments as a demand one.
+      --   * A shadow install cannot land in the cycle AFTER the flush and
+      --     resurrect a translation. p_tlb_shadow (core/cpu.vhd) clears
+      --     shadow_wr under the same `rst`, on the same clock, so dtlb_wr's
+      --     shadow term is already '0' when the flush releases -- and during
+      --     the reset cycle itself this arm outranks the install anyway (case
+      --     25 of sim/tlb_tb.vhd, and see the priority note at the end of this
+      --     comment).
+      --
+      -- AREA. MEASURED, SYNTH_VARIANT=j4, yosys 0.44 (deterministic here -- a
+      -- repeated identical run reproduces the counts exactly). Four trees, all
+      -- built from REAL COMMITS rather than hand mutations, each synthesised in
+      -- a throwaway `git archive` copy: synth/cpu_synth.sh regenerates the J4
+      -- overlay into TRACKED decode/*.vhd behind a `|| true` restore, so it
+      -- must never be run in a tree whose diff matters.
+      --
+      --   tree                        assert flush |  ECP5             | ASIC
+      --                                            | LUT4   FF  cells  | gates ff
+      --   N0  6475932 (base)            no    no   | 9751 3078  15758  | 35579 2696
+      --   N1  6475932 + this change     no    yes  | 9670 3078  15638  | 35605 2696
+      --   A0  7423e18 (the assertion)   yes   no   |10292 3078  16793  | 35568 2697
+      --   A1  this branch's HEAD        yes   yes  | 9956 3078  16154  | 35593 2697
+      --
+      -- THE RESET FLUSH IS LUT4-NEGATIVE, in both controlled pairs:
+      --   N0 -> N1   -81 LUT4   -120 cells   +26 generic gates
+      --   A0 -> A1  -336 LUT4   -639 cells   +25 generic gates
+      -- It adds 25-26 gates to the generic netlist (0.07%) and hands the
+      -- mapper a dedicated clear path in exchange, which it spends well. Flop
+      -- count is identical in all four -- no state is added, only that clear
+      -- path -- and nothing here touches the combinational LOOKUP process
+      -- above, which is where this block's Fmax actually lives. A post-place-
+      -- and-route Fmax A/B (scripts/fmax_ab.sh) has NOT been run.
+      --
+      -- ITS OWN ARM, NOT `rst = '1' or ti = '1'`, AND THE DUPLICATED LOOP IS
+      -- THE POINT. That is the comparison the choice actually rests on, and it
+      -- is properly controlled: two trees byte-identical except for the arm
+      -- structure, both carrying the assertion and the rst port.
+      --
+      --   THIS FORM (rst's own arm)  9956 LUT4  16154 cells  35593 gates
+      --   `rst = '1' or ti = '1'`   10420 LUT4  17064 cells  35570 gates
+      --   `ti = '1' or rst = '1'`   10420 LUT4  17064 cells      --
+      --
+      -- -464 LUT4 for +23 generic gates. With rst in its own leading arm the
+      -- mapper can reach the flops' own reset instead of widening a shared
+      -- enable term; folded in, it cannot. Operand order buys nothing --
+      -- swapping the two terms reproduces the folded numbers to the cell.
+      --
+      -- TWO WAYS TO GET THIS WRONG, both of which an earlier revision of this
+      -- note did get wrong, in the same table:
+      --   * NEVER build an area table across trees that differ in ASSERTION
+      --     COUNT. p_walk_takeover in core/cpu.vhd is worth +286 to +541 LUT4
+      --     (N1->A1 and N0->A0) and one generic flop (2696 -> 2697), because
+      --     synth/cpu_synth.sh deletes the $check cell only AFTER mapping.
+      --     The earlier table took its baseline from a tree without the
+      --     assertion and charged that whole swing to the flush, which
+      --     INVERTED THE SIGN of the result: it read +2.0%, not -0.8%.
+      --   * NEVER synthesise a "baseline" by DELETING the term under test and
+      --     leaving the port behind. That tree -- rst connected, flush term
+      --     gone -- measures 9757 LUT4, which is 535 BELOW A0, the honest
+      --     no-flush tree, while its generic netlist is IDENTICAL to A0's at
+      --     35568 gates. A dangling input changes no logic and moves the LUT
+      --     mapping by more than the change under test; the same effect
+      --     core/datapath.vhm records at +/-464 LUT4 on J1 from signals merely
+      --     tied off. Baselines come from commits.
+      --
+      -- Priority over the install is intentional and is locked by case 25 of
+      -- sim/tlb_tb.vhd: a reset landing on the same edge as a walker install
+      -- must leave nothing behind, not resurrect the newest entry.
+      if (rst = '1') then
+
+        for k in 0 to entries - 1 loop
+
+          ram(k).valid <= '0';
+          ram(k).used  <= '0';
+
+        end loop;
+
+      elsif (ti = '1') then
 
         for k in 0 to entries - 1 loop
 

@@ -307,7 +307,7 @@ mode in this repo, not an exotic one. Before trusting green:
   write, so it is the most common way an MMU guard tests nothing. Choose
   `PA != VA` and read back through the P2 physical alias: a missing
   translation then reads the wrong bytes. This works under **every** top —
-  `g_dstore_squash` / `g_inst_p1_fold` (`core/cpu.vhd:761-847`, both under
+  `g_dstore_squash` / `g_inst_p1_fold` (`core/cpu.vhd:811-897`, both under
   `if PRIV_ARCH generate`, which `sim/cpu_tb.vhd` sets) splice the PPN into
   the *external* `db_o.a` / `inst_o.a`, so relocation happens inside the core;
   `*_pa_tag` only carries the PIPT caches' tag. Identity **is** forced for

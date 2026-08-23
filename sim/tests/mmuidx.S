@@ -19,7 +19,7 @@
 !
 ! CORRECTION (2026-08-21): the parenthetical here used to read "this MMU emits
 ! PA tags, not bus relocation; all guards use identity". BOTH halves are false.
-! cpu.vhd's g_dstore_squash (:761-816) / g_inst_p1_fold (:822-847) splice the
+! cpu.vhd's g_dstore_squash (:811-866) / g_inst_p1_fold (:872-897) splice the
 ! PPN into the external db_o.a / inst_o.a under PRIV_ARCH, so the bus IS
 ! relocated under every top; and mmuwalkdside, mmupagereloc16k, mmureloc and
 ! mmuboot all map non-identity. Identity is a CHOICE here -- what carries this

@@ -210,7 +210,7 @@ ENTRY(_after_ifetch)
         !
         ! NOTE (2026-08-21): this block used to open "the MMU emits PA tags and
         ! does NOT relocate the instruction bus". That was FALSE -- cpu.vhd's
-        ! g_inst_p1_fold (:822-847) splices the PPN into the external inst_o.a
+        ! g_inst_p1_fold (:872-897) splices the PPN into the external inst_o.a
         ! under PRIV_ARCH, so a non-identity workload page WOULD be observable.
         ! Identity is a CHOICE here (the bench measures a fixed hot path and
         ! wants the simplest possible map); the SPC + cnt_hits witnesses are

@@ -260,14 +260,6 @@ jobs:
                    j4_illegal_trap slotillset; do
             run_guard "$t"
           done
-          # I-side cacheability: instruction fetches run through the live I-cache
-          # (cpu_cache_tb); proves a C=0 translated page bypasses the icache (fresh
-          # self-modified code) vs a C=1 page caches (stale). 400us to complete.
-          # Covers "walker install + cache + store": mmuwalkdside resolves a
-          # faulting D-store through a non-identity mapping with a
-          # walker-installed code page. (It was written when it was the ONLY
-          # guard doing so without LDTLB; every guard is walker-only now.) It already runs under cpu_tb above; this adds the CACHED
-          # top. Verified passing 2026-08-12.
           echo "== Group-C contract locks (pagemask-walker-contract.md 7.2) =="
           # Pass on today's RTL; they exist to turn RED on the named wrong fix.
           # Non-vacuity is the stated mutation (contract P4), recorded per guard
@@ -281,6 +273,14 @@ jobs:
           run_guard mmupmrawvpn      "cpu_tb" 120us
           run_guard mmupmmixzero     "cpu_tb" 120us
           run_guard mmupmreservedpm  "cpu_tb" 120us
+          # I-side cacheability: instruction fetches run through the live I-cache
+          # (cpu_cache_tb); proves a C=0 translated page bypasses the icache (fresh
+          # self-modified code) vs a C=1 page caches (stale). 400us to complete.
+          # Covers "walker install + cache + store": mmuwalkdside resolves a
+          # faulting D-store through a non-identity mapping with a
+          # walker-installed code page. (It was written when it was the ONLY
+          # guard doing so without LDTLB; every guard is walker-only now.) It already runs under cpu_tb above; this adds the CACHED
+          # top. Verified passing 2026-08-12.
           run_guard mmuwalkdside cpu_cache_tb 300us
           run_guard mmuicolor cpu_cache_tb 400us
           # D-side: a translated C=1 page caches a data read (stale after a P2

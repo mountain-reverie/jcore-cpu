@@ -210,7 +210,7 @@ environmental and one about attribution.**
    `JCORE_TSB_TAG_MASK` change, a guard asserting the canonical tag there is
    RED — which is the correct Group-B behaviour, but it is A1a's red, not a
    Group-C lock. CI's `LINUX_SRC` is a fresh checkout of `mountain-reverie/linux`
-   (`.github/workflows/full-regression.yml:148-153`), so landing such a guard
+   at ref `jcore` (`.github/workflows/full-regression.yml:148-153`), so landing such a guard
    from this branch would break CI until A1a's kernel change merges. A1b's
    warning — "a guard written there would have encoded the bug as its expected
    value" — does **not** dissolve on this branch, because this branch is a

@@ -833,6 +833,17 @@ else
   # sat in sim/Makefile's VHDL_TOPS and in no script, and had been stale
   # against the ITLB/DTLB split since f155124 without anything noticing, since
   # the mcode GHDL flow only COMPILES the tops it is asked to run.
+  #
+  # HOW TO QUOTE THIS SCRIPT'S RESULT, because this branch's own commit
+  # messages got it wrong. Everything mmu_sim.sh prints is above: one
+  # "  PASS  <name>" / "  FAIL  <name>" line per guard, the "  SKIP  tlb_tb"
+  # line below, and one trailing "==> all guards PASSED". It prints NO
+  # aggregate -- no total, no ratio, no "0 FAIL", no "0 SKIP". The commit
+  # messages on this branch record the suite as "109/109 PASS, 0 FAIL, 0 SKIP"
+  # (and "106/106", "105/105" against earlier bases). Those totals are hand
+  # tallies of the guard list and the arithmetic is sound, but the FORM is one
+  # this script cannot produce, and they must not be read as a capture. If you
+  # need the number, count it and say so: `... | grep -c '^  PASS'`.
   echo "== TLB unit testbench (tlb_tb) =="
   if [ "$BUILD" = 0 ]; then
     # -n means "reuse the existing build". tlb_tb is a SEPARATE top with its own

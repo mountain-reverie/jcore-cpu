@@ -154,7 +154,7 @@
 ! ---------------------------------------------------------------------------
 !   0x00020000  PGD table        (P1 0x80020000)
 !   0x00024000  PTE table        (P1 0x80024000) -- covers pgd[0]
-!   0x00028000  TSB              (2 KB: TSBCFG 0x61 => 64 sets x 32 B)
+!   0x00028000  TSB              (512 B: TSBBR[3:0]=4 => 16 sets x 32 B)
 !   0x00029000  scratch globals
 !   0x0002A000  stack (SP near top)
 !   0x0010C000 / 0x005FC000 / 0x00FFC000 / 0x00FF8000  the four sentinels
@@ -266,9 +266,23 @@ kmain:
         mov.l   k_ptetbl, r1
         mov.l   r1, @r0
 
-        ! ---- Zero the WHOLE TSB: TSBCFG 0x61 => v_shift 6 => 64 sets x 32 B
-        ! == 2 KB == 512 words. (mmuhuge.S zeroes only 128 words and gets away
-        ! with it because the cosim's anon backing is already zero.) ----
+        ! ---- Zero the WHOLE TSB.
+        !
+        ! The set count comes from TSBBR[3:0], NOT from TSBCFG:
+        ! core/datapath_pkg.vhd's tsb_ptr() does
+        !   v_size := to_integer(unsigned(tsbbr(3 downto 0)));
+        !   v_mask := shift_left(to_unsigned(1, 32), v_size) - 1;
+        ! so v_tsbbr's low nibble 4 gives 1<<4 == 16 sets x 32 B == 512 B ==
+        ! 128 words. This is the same TSB_SIZE_LOG=4 that mmulinux.S:805
+        ! annotates.
+        !
+        ! TSBCFG 0x61 does NOT size anything: [7:4] == 6 is only the XOR-fold
+        ! HASH SHIFT (v_shift, applied to the VPN when [3:0] == 1 selects hash
+        ! mode). An earlier version of this comment read the 6 as a size log
+        ! and zeroed 512 words -- harmless, since 0x80028000..0x80028800 is
+        ! still far below the scratch globals at 0x80029000, but it
+        ! misattributed a hardware register and would have misled the next
+        ! person to change TSBBR. ----
         mov.l   k_tsb,  r0
         mov.l   k_tsbwords, r2
         mov     #0,  r1
@@ -312,7 +326,9 @@ p_rbset:        .long 0x20000000        ! SR.RB bit (bank select)
 k_pgd:          .long 0x80020000
 k_ptetbl:       .long 0x80024000
 k_tsb:          .long 0x80028000
-k_tsbwords:     .long 512               ! 64 sets x 32 B / 4
+k_tsbwords:     .long 128               ! (1 << TSBBR[3:0]) sets x 32 B / 4
+                                        ! == 16 x 32 / 4. Coupled to v_tsbbr
+                                        ! below: change one, change both.
 k_wcnt:         .long 0x80029000
 k_faultcnt:     .long 0x80029004
 k_phase:        .long 0x80029008

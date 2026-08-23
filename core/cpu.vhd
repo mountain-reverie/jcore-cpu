@@ -615,7 +615,11 @@ begin
     -- .superpowers/sdd/2026-08-09-tsb-walker-phase1/task-7-8-report.md). This
     -- assertion is the protection instead: it re-states the invariant from the
     -- RAW conditions, so removing the gate makes it fire in EVERY simulation.
-    -- Simulation-only; assertions have no synthesis effect.
+    -- Simulation-only in BEHAVIOUR -- but see p_walk_takeover below before
+    -- concluding it is free in AREA. The claim that used to sit on this line,
+    -- "assertions have no synthesis effect", is measurably false for this
+    -- flow's area metric: the $check cell is deleted only after mapping, so
+    -- the assertion still steers what survives optimisation.
     walk_i_miss_raw <= '1' when i_at_translated = '1' and sig_inst_o.en = '1'
                                 and tlb_i_multihit = '0' and tlb_i_hit = '0' else
                        '0';
@@ -759,9 +763,12 @@ begin
     -- walk_own is REGISTERED (p_walk_own below), so it is still '0' on the very
     -- first walk_busy cycle, and db_o in g_dstore_squash below therefore still
     -- carries whatever sig_db_o the core presents that cycle rather than the
-    -- walker's bus_a/bus_en. On a D-SIDE walk that is the intended handshake:
-    -- the faulting access IS on the bus (walk_d_miss requires sig_db_o.en='1')
-    -- and the takeover waits for its external ack, as p_walk_own explains.
+    -- walker's bus_a/bus_en. On a D-SIDE walk that is the deliberate handshake
+    -- p_walk_own describes: the faulting access IS on the bus (walk_d_miss
+    -- requires sig_db_o.en='1') and the takeover waits for its external ack.
+    -- Deliberate is NOT the same as harmless -- see the DOUBLE-ISSUE HAZARD
+    -- note at p_walk_own below, which is a live constraint on the address map
+    -- rather than a settled property.
     --
     -- ON AN I-SIDE WALK THAT CYCLE IS PROVABLY EMPTY. It used to be recorded
     -- here as an UNVERIFIED double-commit window -- "if an OLDER, already
@@ -783,7 +790,10 @@ begin
     --      what the `walk_arm and walk_i_miss` term is for. With
     --      `dp_inst_i.ack <= inst_i.ack and not walk_supp_i` the datapath's
     --      inst ack is therefore '0' for the whole walk, the fetch is never
-    --      transferred, and slot_inst_en stays '1'.
+    --      transferred, and slot_inst_en stays '1'. It also cannot LAPSE and
+    --      be re-raised: this.inst_o is NULLed only on that same
+    --      `inst_i.ack = '1'` transfer, so an un-acked fetch stays presented
+    --      with en = '1' rather than being withdrawn and reissued.
     --  (4) So this.slot = '0' from the arming cycle to the end of the walk and
     --      no new D access can start; and walk_i_miss already required
     --      sig_db_o.en = '0' ON the arming cycle. sig_db_o.en is therefore '0'
@@ -795,11 +805,21 @@ begin
     -- double-commit -- not on MMIO, not on TAS.
     --
     -- MEASURED, not only argued. A temporary `severity warning` probe of
-    -- exactly p_walk_takeover's condition was swept over every image in
-    -- sim/tests (135 images, cpu_tb and cpu_cache_tb): ZERO hits. The same
-    -- expression with the walk_side_i term REMOVED fired 400+ times over the
-    -- same sweep (that is the D-side handshake), and I-side arms fired 600+
-    -- times -- so the zero is the property and not a dead probe.
+    -- exactly p_walk_takeover's condition was swept over sim/tests: 108
+    -- images under cpu_tb plus the 14 cache-top guards re-run under
+    -- cpu_cache_tb, 122 image-runs. ZERO hits. The probe is live in both
+    -- directions, by two INDEPENDENT single-term relaxations of the same
+    -- expression:
+    --   * drop the walk_side_i term  -> 768 hits (the D-side handshake:
+    --     712 under cpu_tb + 56 under cpu_cache_tb)
+    --   * count I-side ARMING cycles -> 953 hits (936 + 17)
+    -- Counting convention, because it is easy to quote a different number for
+    -- the same hardware: an "arm" is one rising-edge sample of
+    -- walk_i_arm_raw = '1', i.e. ONE pulse per I-side walk, not per busy
+    -- cycle; the 768 is likewise a count of CYCLES in which the un-owned
+    -- window was occupied, not of walks. So the zero is the property, not a
+    -- dead probe. (The four linux@jcore harnesses are absent from the sweep:
+    -- they need $(LINUX_SRC) kbuild objects a normal checkout does not have.)
     --
     -- p_walk_takeover below is the standing lock on steps (1)-(4). It has to
     -- be an RTL assertion: a double-committed bus transaction leaves NO
@@ -817,6 +837,27 @@ begin
     -- is still withheld from the datapath, so the access stays in flight for the
     -- core and replays later), and only then does the walker drive. The walker
     -- advances only on bus_ack, so it simply waits meanwhile.
+    --
+    -- DOUBLE-ISSUE HAZARD -- READ THIS BEFORE CHANGING THE ADDRESS MAP.
+    -- On a D-side walk this handshake ISSUES THE FAULTING ACCESS TWICE on the
+    -- external bus: once here (driven, and acked externally, which is what
+    -- releases the takeover) and once again on the replay, because
+    -- `dp_db_i.ack <= db_i.ack and not walk_busy` withholds that ack from the
+    -- datapath and keeps the access in flight. The transaction is NOT undone.
+    -- It is benign today for exactly two reasons, BOTH load-bearing and
+    -- neither of them a property of this process: (a) a faulting STORE is
+    -- demoted to a read by d_store_faulting above, so only one real write ever
+    -- reaches memory; and (b) d_at_translated is mmucr(0) only for SEG_P0 and
+    -- SEG_P3 and hard '0' everywhere else, so an access in P1/P2/P4 can never
+    -- be a walk's faulting access -- which is where all MMIO lives in this
+    -- design. Map a device into P0 or P3 and run it under AT=1 and it WILL see
+    -- the read twice; the same goes for anything read-sensitive reached
+    -- through a translated page. This is a real defect waiting on an address-
+    -- map decision, not a settled property, and nothing in the guard suite
+    -- would notice: on plain SRAM a repeated read is invisible. Unlike the
+    -- I-side window below it is NOT fixed and NOT asserted -- fixing it means
+    -- deferring the external issue until ownership is resolved, which the
+    -- bus-protocol paragraph above explains is not free.
     p_walk_own : process (clk) is
     begin
 
@@ -836,7 +877,24 @@ begin
     -- I-fetch be acked during a walk, drops the arming cycle from walk_supp_i,
     -- relaxes walk_i_miss's `sig_db_o.en = '0'` term, or lets datapath.vhm
     -- issue a D access without a slot, reopens the window and fires this.
-    -- Simulation-only; assertions have no synthesis effect.
+    --
+    -- NOT "free at synthesis", though it is usually written that way -- this
+    -- comment said exactly that, and so did the one at p_walk_order_assert
+    -- above, until both were measured. synth/cpu_synth.sh does run
+    -- `chformal -remove; delete t:$check t:$print`, but AFTER `synth_ecp5` /
+    -- `synth`, i.e. after mapping. The assertion CELL is gone from the written
+    -- netlist; the influence it had on how everything ELSE was mapped is not.
+    -- Its operands stay live through the whole optimisation pass, so nothing
+    -- feeding them can be pruned and abc9 is handed a different cone. Measured
+    -- on this design, with no functional change whatever: adding this process
+    -- moves mapped ECP5 LUT4 by several hundred, and adds one `reg` to the
+    -- generic ASIC netlist (2696 -> 2697). Figures and method are in the area
+    -- note in core/tlb.vhd.
+    --
+    -- The consequence is a measurement rule, not a reason to drop the
+    -- assertion: NEVER build an area A/B across two trees that differ in
+    -- assertion count -- it silently charges the assertion's mapping effect to
+    -- whatever else changed.
     --
     -- CLOCKED, not concurrent, for the same reason p_r1_assert is: walk_own is
     -- registered while its neighbours here are combinational, so a concurrent

@@ -139,15 +139,20 @@ VHDS += mem/cpu_sram.vhd mem/asymmetric_ram.vhd
 # core/dsp_arith.vhd above) rather than forcing the whole sim onto
 # CPU_VARIANT=j4.
 #
-# tlb_match_tb.vhd was RETIRED 2026-08-23. It was an 8-test subset of tlb_tb
-# and had rotted twice over, precisely because nothing ran it: stale against
-# the ITLB/DTLB split (f155124, it named the removed i_*/d_* port pairs), and
-# stale in SEMANTICS -- repaired to the split entity it fails its own T1,
-# "spurious prot on readable+executable entry", because that entry is U=1
-# fetched with MD=1, which is an SMEP violation the design now deliberately
-# raises (mmusmep, tlb.vhd's I-side leaf predicate). Its expectations pre-date
-# SMEP. Every property it checked is covered by tlb_tb, which is now wired
-# into sim/mmu_sim.sh and CI.
+# tlb_match_tb.vhd was RETIRED 2026-08-23. It was an 8-test bench that had
+# rotted twice over, precisely because nothing ran it: stale against the
+# ITLB/DTLB split (f155124, it named the removed i_*/d_* port pairs), and stale
+# in SEMANTICS -- repaired to the split entity it fails its own T1, "spurious
+# prot on readable+executable entry", because that entry is U=1 fetched with
+# MD=1, which is an SMEP violation the design now deliberately raises (mmusmep,
+# tlb.vhd's I-side leaf predicate). Its expectations pre-date SMEP.
+#
+# It was NOT a pure subset of tlb_tb, and the properties it alone held were
+# MOVED rather than dropped: T1/T1b (the C-bit export follows PTEL[3], in both
+# states, on both sides -- tlb_tb connected i_c/d_c but never checked them) and
+# T8 (concurrent I and D lookups of different entries return different PA tags)
+# are now tlb_tb cases 26 and 27. Everything else it checked tlb_tb already
+# covered. tlb_tb is wired into sim/mmu_sim.sh and CI.
 VHDS += ../core/tlb.vhd
 VHDS += tlb_tb.vhd
 VHDS += seg_decode_tb.vhd

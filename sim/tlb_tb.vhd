@@ -71,6 +71,30 @@
 -- Distinct defects produce distinct messages; none can be conflated with
 -- another's.
 --
+-- Cases 26 and 27 arrived with the RETIREMENT of sim/tlb_match_tb.vhd (see the
+-- note in sim/Makefile). That bench was not a pure subset of this one: it was
+-- the only place `i_c`/`d_c` were ever asserted -- this file connected them at
+-- the DUT and checked them nowhere -- and the only place concurrent I/D PA
+-- distinctness was asserted. Retiring it without these two would have dropped
+-- the properties rather than moved them, which is the failure mode the whole
+-- "orphaned testbench" story above is about, committed deliberately instead of
+-- by neglect. Both are cheap; neither is redundant with the other cases here.
+--
+-- MUTATION EVIDENCE for cases 26/27 (same harness and date as T1-T3 above):
+--
+--   T4  core/tlb.vhd: `leaf(k).c := entry.c` -> `leaf(k).c := '1'`, i.e. the
+--       TLB stops exporting PTEL[3]. RESULT: exactly two checks red, case 26's
+--       i_c and d_c C=0 legs. NOTHING ELSE in this file moves -- which is the
+--       measurement behind the claim that these were the only c assertions.
+--   T5  core/tlb.vhd: disable install dedup (`dedup := true` -> `false`).
+--       RESULT: case 26's multi-hit check red, alongside the pre-existing
+--       dedup cases (the re-install case, 16, 17, 18) -- same mutation, same
+--       mechanism, so the extra failures are expected rather than noise.
+--   T6  this file: mis-wire dut_d's pa_tag to the ITLB's output. RESULT: case
+--       27 red and nothing else. A testbench-level mutation because that is
+--       where the mistake it guards against would live -- post-split the two
+--       arrays are separate instances, so the risk is the WIRING, not tlb.vhd.
+--
 -- Retained cases test TLB BEHAVIOUR, which is identical in spirit between
 -- the split and unsplit designs: install, flush, ASID isolation, GLOBAL
 -- cross-ASID visibility, STALE suppression, superpages/page-mask handling,
@@ -999,6 +1023,66 @@ begin
     wait for 1 ns;
     check(i_hit = '0', "case 25: an install sampled on the same edge as rst must not reach the ITLB (rst outranks tlb_wr)");
     check(d_hit = '0', "case 25: an install sampled on the same edge as rst must not reach the DTLB (rst outranks tlb_wr)");
+
+    -- 26. The C (cacheable) export tracks PTEL[3], on both sides, in BOTH
+    -- states. Inherited from the retired sim/tlb_match_tb.vhd (its T1/T1b),
+    -- which was the only place `i_c`/`d_c` were ever asserted -- every other
+    -- case in this file leaves them connected and unchecked, so retiring that
+    -- bench without this would have dropped the property rather than moved it.
+    --
+    -- It is not otherwise unguarded: mmudcbit and mmuicolor exercise the same
+    -- bit end-to-end through the real caches. What they cannot isolate is the
+    -- TLB's own export -- they would also fail on a cacheability-mux change,
+    -- and they run under cpu_cache_tb rather than here -- so the unit check
+    -- earns its place.
+    flush_all;
+    asid <= x"0003";
+    md   <= '1';
+    d_we <= '0';
+    install(vpn       => x"00080", asid_tag => x"0003", ppn => x"000A0",
+            page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
+            g         => '0');
+    i_va <= x"00080000";
+    d_va <= x"00080000";
+    wait for 1 ns;
+    check(i_hit = '1', "case 26 precondition: the C=1 entry must hit on the I side");
+    check(d_hit = '1', "case 26 precondition: the C=1 entry must hit on the D side");
+    check(i_c = '1', "case 26: i_c must follow PTEL[3]=1 (cacheable) on a hit");
+    check(d_c = '1', "case 26: d_c must follow PTEL[3]=1 (cacheable) on a hit");
+
+    -- Same entry, C cleared. Re-installed rather than flushed first, so this
+    -- also rides the install path's dedup: same VPN+ASID overwrites in place.
+    install(vpn       => x"00080", asid_tag => x"0003", ppn => x"000A0",
+            page_mask => "0000", w => '1', x => '1', u => '0', c => '0',
+            g         => '0');
+    i_va <= x"00080000";
+    d_va <= x"00080000";
+    wait for 1 ns;
+    check(i_hit = '1', "case 26 precondition: the C=0 entry must still hit on the I side");
+    check(d_hit = '1', "case 26 precondition: the C=0 entry must still hit on the D side");
+    check(i_multihit = '0', "case 26: the C=0 re-install must dedup in place, not coexist with the C=1 entry");
+    check(i_c = '0', "case 26: i_c must follow PTEL[3]=0 (uncacheable) on a hit");
+    check(d_c = '0', "case 26: d_c must follow PTEL[3]=0 (uncacheable) on a hit");
+
+    -- 27. Simultaneous I-side and D-side lookups of DIFFERENT entries return
+    -- DIFFERENT PAs. Also inherited from tlb_match_tb (its T8). Structurally
+    -- near-trivial now that the arrays are separate instances -- which is
+    -- exactly why it is worth one check: the two are wired to a shared install
+    -- port here, and a routing mistake that fed one array's output to both
+    -- ports would leave every other case in this file green.
+    flush_all;
+    install(vpn       => x"00081", asid_tag => x"0003", ppn => x"000A1",
+            page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
+            g         => '0');
+    install(vpn       => x"00082", asid_tag => x"0003", ppn => x"000B2",
+            page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
+            g         => '0');
+    i_va <= x"00081000";
+    d_va <= x"00082000";
+    wait for 1 ns;
+    check(i_hit = '1', "case 27 precondition: the I-side VA must hit");
+    check(d_hit = '1', "case 27 precondition: the D-side VA must hit");
+    check(i_pa_tag /= d_pa_tag, "case 27: concurrent I and D lookups of different entries must return different PA tags");
 
     if (fail) then
       report "tlb_tb FAILED"

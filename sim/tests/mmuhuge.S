@@ -472,14 +472,33 @@ v_ptel_expect_h2: .long 0x002004B9      ! PFN(0x00200000)|PageMask(pm=4,0x400)|V
 ! page_offset_mask() makes ALL 16 bits of PPN[27:12] "in-page offset ->
 ! use VA" (see the file header): the PTE's PPN is architecturally inert
 ! for this size, so the translated PA is always VA & 0x0FFFFFFF. VA_H3 is
-! therefore chosen numerically equal to PA_H3 (0x00300000); pgd_index =
-! VA_H3>>26 == 0 (fits pgd[0], same table as H1/H2) and pte_index =
-! (VA_H3 >> 14) & 0xFFF == 0xC0 -> k_ptetbl + 0x300. VA_H3's own +0x4000
-! sub-page (VA 0x00304000) is pte_index 0xC1 -- deliberately left
-! un-populated. ----
+! therefore chosen numerically equal to PA_H3 (0x00300000).
+!
+! THE PTE GOES AT THE HUGE-ALIGNED INDEX, WHICH FOR 256 MB IS INDEX 0.
+! It used to be written at pte_index(VA_H3) == 0xC0 (k_ptetbl + 0x300), and
+! that is a page-table shape LINUX CANNOT PRODUCE: huge_pte_alloc() is only
+! ever called with the huge-page-ALIGNED address (mm/hugetlb.c aligns with
+! huge_page_mask() before every lookup), so the head slot of a 256 MB page
+! can only ever be pte_index(addr & ~0x0FFFFFFF) == 0. The old layout
+! survived only because the software walker indexed with the RAW faulting
+! address and so found the pte wherever it had been put -- which is exactly
+! the defect sim/tests/mmuhugefar.S now pins (contract obligation K7). Once
+! __jcore_tlb_walk() aligns before it looks, an unaligned huge pte is
+! correctly invisible and H3 goes red with r9=99.
+!
+! H1 (64 KB @ 0x00200000) and H2 (1 MB @ 0x00400000) needed no change:
+! each VA already happens to be aligned to its own size, so pte_index(VA)
+! IS pte_index(aligned VA) for them. Only H3 was wrong.
+!
+! Still only ONE slot is populated, deliberately -- that is this guard's
+! whole technique (see the file header). What changes is WHICH slot, not
+! how many. pgd_index(VA_H3) == VA_H3>>26 == 0, so index 0 is in the same
+! pgd[0] table as H1/H2 and is otherwise unused (H1 sits at +0x200, H2 at
+! +0x400). VA_H3's own pte_index 0xC0 and its +0x4000 sub-page's 0xC1 are
+! both left un-populated. ----
 va_h3:          .long 0x00300000
 va_h3b:         .long 0x00304000
-k_pte_h3:       .long 0x80024300
+k_pte_h3:       .long 0x80024000
 v_pte_h3:       .long 0x003034B9        ! PFN(0x00300000)|slot7(0x3400)|V|C|U|W|D(0xB9)
 k_backing_h3:   .long 0x80300000
 k_backing_h3b:  .long 0x80304000

@@ -21,6 +21,20 @@
 #   sim/mmu_sim.sh mmuxlate cpu_tb 120us # one guard, explicit top + stop-time
 #   sim/mmu_sim.sh -n mmuicolor          # reuse the existing build (skip rebuild)
 #
+#
+# GUARDS THIS SCRIPT DELIBERATELY DOES NOT RUN. The real-kernel-object
+# harnesses need linux@jcore kbuild outputs under $(LINUX_SRC), which this
+# script neither builds nor knows about, so `make -C tests <name>.img` would
+# simply fail here. They run from sim/linux_sim.sh and from
+# .github/workflows/full-regression.yml only. The list is repeated here so the
+# two guard inventories can actually be DIFFED (CLAUDE.md: they diverge in BOTH
+# directions, and nothing else in this file mentions them):
+#
+#   mmulinux  mmulinuxexc  mmuboot  mmuhuge
+#   mmupmsub4k  mmupmsubi  mmupmmix   -- TSB PageMask / tag-granularity
+#                                        contract Group B, see
+#                                        docs/mmu/pagemask-walker-contract.md
+#
 # Env: JCORE_SOC (default: sibling ../jcore-soc).
 set -uo pipefail
 

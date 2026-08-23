@@ -85,6 +85,15 @@
 !       under M6, as they must: the assertion is a global invariant, so it
 !       fires on the first walk of any image.
 !
+! The monitor's own PRECONDITION is asserted, not gated. It decodes the word
+! offset from bus_a(3 downto 2) and the way select from bus_a(4), which is the
+! entry layout only at entry_bytes = 16. That is checked by an unconditional
+! `severity failure` assertion in the same process rather than being folded
+! into the sample condition, because a gate would SILENTLY SWITCH THE MONITOR
+! OFF at any other width -- a guard that stops checking when its precondition
+! moves, which is the vacuity pattern this whole contract exists to eliminate.
+! Confirmed not to false-fire: the full suite is green with it in place.
+!
 ! SPECIFICITY -- every other mutation leaves this guard GREEN, so it is not a
 ! guard that simply dislikes RTL edits:
 !       M1 (coarse tag accepted)                     PASS
@@ -97,9 +106,10 @@
 ! All runs: docker ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
 ! SIM_TOP=cpu_tb, --stop-time=120us, measured 2026-08-22. Every mutation run
 ! REBUILT the cosim (never `-n`, which skips the build and measures stale
-! hardware). Mutations are applied and reverted by
-! /scratch/mut.py in the session log; the full cross-table is in
-! docs/mmu/group-c-locks.md.
+! hardware). To re-apply any mutation, follow the repro block in
+! docs/mmu/group-c-locks.md section 9; that file also carries the full
+! cross-table and, per row, whether it has been independently
+! reproduced or rests on this record alone.
 !
 !
 #include "sim_instr.h"

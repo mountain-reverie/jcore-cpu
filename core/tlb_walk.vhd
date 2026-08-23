@@ -424,6 +424,23 @@ begin
   begin
 
     if rising_edge(clk) then
+      -- The decode below reads the word offset from bus_a(3 downto 2) and the
+      -- way select from bus_a(4), which is the entry layout ONLY at
+      -- entry_bytes = 16 -- the normative layout (contract section 4) and the
+      -- only value cpu.vhd instantiates (core/cpu.vhd:638).
+      --
+      -- ASSERTED, DELIBERATELY NOT USED AS A GATE. An earlier revision carried
+      -- `and entry_bytes = 16` in the condition below, which would have
+      -- SILENTLY SWITCHED THIS MONITOR OFF at any other width instead of
+      -- failing -- a guard that stops checking when its precondition changes,
+      -- which is the exact vacuity pattern this whole contract exists to
+      -- eliminate. Widening the entry must break loudly here and be reworked.
+      assert entry_bytes = 16
+        report "WALK READ-ORDER MONITOR ASSUMES a 16-byte TSB entry: it "
+               & "decodes bus_a(4 downto 2). Rework p_walk_read_order in "
+               & "core/tlb_walk.vhd for the new entry_bytes."
+        severity failure;
+
       if (rst = '1') then
         v_seen := "000";
         v_have := '0';
@@ -436,7 +453,7 @@ begin
           v_have := '0';
         end if;
 
-        if (bus_en_int = '1' and bus_ack = '1' and entry_bytes = 16) then
+        if (bus_en_int = '1' and bus_ack = '1') then
           if (v_have = '0' or bus_a_int(31 downto 4) /= v_base) then
             v_seen := "000";
             v_base := bus_a_int(31 downto 4);

@@ -439,9 +439,11 @@ mmutsbvictim.elf: mmutsbvictim.o
 mmuwalkway1.elf: mmuwalkway1.o
 mmup4alias.elf: mmup4alias.o
 mmup4priv.elf: mmup4priv.o
-# mmuwalkiside, mmusplit, mmuishadow and mmudshadow need code at a VA absent from the TLB,
-# so they link with their own script (sh32_tlbtext.x = sh32.x + a .tlbtext
-# section fixed at VA 0x00008000).
+# mmuwalkiside, mmusplit, mmuishadow, mmudshadow and mmuwalkitakeover need code
+# at a VA absent from the TLB, so they link with their own script
+# (sh32_tlbtext.x = sh32.x + a .tlbtext section fixed at VA 0x00008000).
+# mmuwalkitakeover EXECUTES that section 4 KB higher, at VA 0x00009000, so its
+# page under test is not identity-mapped.
 mmuwalkiside.elf: mmuwalkiside.o
 	$(LD) -T sh32_tlbtext.x -Map main.map $^ $(LIBGCC) -o $@
 mmusplit.elf: mmusplit.o
@@ -449,4 +451,6 @@ mmusplit.elf: mmusplit.o
 mmuishadow.elf: mmuishadow.o
 	$(LD) -T sh32_tlbtext.x -Map main.map $^ $(LIBGCC) -o $@
 mmudshadow.elf: mmudshadow.o
+	$(LD) -T sh32_tlbtext.x -Map main.map $^ $(LIBGCC) -o $@
+mmuwalkitakeover.elf: mmuwalkitakeover.o
 	$(LD) -T sh32_tlbtext.x -Map main.map $^ $(LIBGCC) -o $@

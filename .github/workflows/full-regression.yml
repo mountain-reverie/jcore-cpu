@@ -273,6 +273,11 @@ jobs:
           run_guard mmupmrawvpn      "cpu_tb" 120us
           run_guard mmupmmixzero     "cpu_tb" 120us
           run_guard mmupmreservedpm  "cpu_tb" 120us
+          # DRIVER for core/cpu.vhd's p_walk_takeover monitor: an I-side TSB walk
+          # armed with a D store live in the branch's delay slot. The monitor is
+          # the detector -- a double-committed bus access is invisible to
+          # software on plain SRAM -- and this guard makes the shape happen.
+          run_guard mmuwalkitakeover "cpu_tb" 120us
           # I-side cacheability: instruction fetches run through the live I-cache
           # (cpu_cache_tb); proves a C=0 translated page bypasses the icache (fresh
           # self-modified code) vs a C=1 page caches (stale). 400us to complete.

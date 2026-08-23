@@ -537,11 +537,18 @@ package cpu2j0_components_pack is
     );
   end component shifter;
 
+  -- Kept in step with entity tlb_walk (core/tlb_walk.vhd) BY HAND. Nothing
+  -- currently elaborates through this declaration -- core/cpu.vhd instantiates
+  -- the walker directly (`entity work.tlb_walk`) -- so a mismatch here stays
+  -- silent until the day something does use it, and is then an elaboration
+  -- error a long way from its cause. `giveup_limit` had been added to the
+  -- entity and not here; see docs/mmu/pagemask-walker-contract.md R3.
   component tlb_walk is
     generic (
       tsb_ways       : natural := 1;
       entry_bytes    : natural := 16;
-      timeout_cycles : natural := 255
+      timeout_cycles : natural := 255;
+      giveup_limit   : natural := 4
     );
     port (
       clk          : in    std_logic;

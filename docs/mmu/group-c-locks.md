@@ -137,19 +137,30 @@ registered 120 µs is ~15× the slowest.
 every image in the suite, not only against its own driver. A full
 `sim/mmu_sim.sh` run on the pristine tree with the monitor in place:
 
-```
-111 PASS, 0 FAIL   ==> all guards PASSED     (2026-08-22, baseline)
-                   ==> all guards PASSED     (2026-08-22, re-run after the
-                                              entry_bytes precondition
-                                              assertion of section 2 landed)
-```
+**Baseline**, 2026-08-22, before the `entry_bytes` precondition assertion of
+§2 existed:
 
-The guard list did not change between the two runs, so the second is the same
-111 invocations; it is reported as the runner reported it rather than
-re-counted. Its point is narrower: the unconditional `entry_bytes` assertion
-does not false-fire anywhere in the suite.
+```
+111 PASS, 0 FAIL   ==> all guards PASSED
+```
 
 That is the whole local guard set — 104 pre-existing guards plus these seven.
+
+**Re-run**, same day, after that assertion landed:
+
+```
+==> all guards PASSED
+```
+
+**Note what the second capture does and does not say.** It carries no count:
+the runner emitted its `N PASS, 0 FAIL` line as usual, but the capture was
+piped through a `tail -6` and only the trailing `==> all guards PASSED`
+survived. The guard list did not change between the two runs, so the count is
+the same 111 — but that is **carried over from the baseline, not re-measured**,
+and it is written here as two separate captures rather than one block so the
+second is not read as having produced a count of its own. The claim the re-run
+does support is the narrower and sufficient one: the unconditional
+`entry_bytes` assertion does not false-fire anywhere in the suite.
 
 **Read that claim precisely.** A green suite proves the monitor does not
 false-fire on the walk shapes those images actually *take*. It says nothing
@@ -269,10 +280,17 @@ environmental and one about attribution.**
    the environment.** Reaching `update_mmu_cache()` through the generic fault
    path needs `handle_mm_fault()`, a live `mm_struct`, a vma tree, `current`,
    and the page allocator — i.e. a booted kernel. Every Lane-2 harness stubs
-   `jcore_handle_exception` for exactly that reason (`mmulinux.S:967`,
-   `mmuhuge.S:563`). §7.4 already records that "nothing in this environment
+   `jcore_handle_exception` for exactly that reason (`mmulinux.S:974`,
+   `mmuhuge.S:552-557`). §7.4 already records that "nothing in this environment
    boots a kernel". A harness that faked those structures would be testing the
    fake.
+
+   `mmuhuge.S:550-551` says the quiet part out loud, and it is the sharpest
+   single citation for this decision: it stubs `arch_local_irq_restore()` /
+   `arch_local_save_flags()` as *"referenced by `tlb-jcore.o`'s
+   `__update_tlb()`; **never actually called here**"*. So the fill site is
+   already linked into Lane 2 and already unreached — the gap §7.4 names is
+   confirmed from the harness side, not only inferred from the kernel side.
 2. **A guard for that fill site is a Group-B case, not a Group-C lock, and it
    belongs with A1a.** `__update_tlb()` writes the *second* of the two TSB fill
    sites **K1** governs. On any tree whose `LINUX_SRC` lacks A1a's

@@ -118,7 +118,7 @@ on the first walk of any image. Its evidential value is the named report
 string, which cannot be conflated with anything else:
 
 ```
-../core/tlb_walk.vhd:427:15:@3760ns:(assertion failure):
+../core/tlb_walk.vhd:444:@3760ns:(assertion failure):
 WALK READ ORDER VIOLATED: data (+8) read before ...
 instance: /cpu_tb/cpu1/g_tlb_walk/u_tlb_walk/p_walk_read_order
 ```

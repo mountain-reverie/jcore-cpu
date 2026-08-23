@@ -75,7 +75,7 @@
 !
 !       RESULT: the run ends at 3760 ns with
 !
-!         ../core/tlb_walk.vhd:427:15:@3760ns:(assertion failure):
+!         ../core/tlb_walk.vhd:444:@3760ns:(assertion failure):
 !         WALK READ ORDER VIOLATED: data (+8) read before ...
 !         instance: /cpu_tb/cpu1/g_tlb_walk/u_tlb_walk/p_walk_read_order
 !

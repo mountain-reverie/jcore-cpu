@@ -161,6 +161,9 @@ if [ $# -ge 1 ]; then
     mmurelocif) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmurelocbp) top="${top:-cpu_cache_tb}"; stop="${stop:-200us}" ;;
     mmupcprobe|mmudspcprobe) stop="${stop:-200us}" ;;
+    # Keep in step with the `run_guard mmuwalkitakeover` line below, so a
+    # single-guard invocation measures the same budget the suite does.
+    mmuwalkitakeover) top="${top:-cpu_tb}"; stop="${stop:-120us}" ;;
     m8_dside)   stop="${stop:-420us}" ;;
     # Keep in step with the budget on the `run_guard m8_dsdslot_0` line below.
     # Without this arm a single-guard invocation fell back to the 80us default

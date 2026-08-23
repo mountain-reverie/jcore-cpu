@@ -35,6 +35,18 @@
 #                                        contract Group B, see
 #                                        docs/mmu/pagemask-walker-contract.md
 #
+# AND THIS SCRIPT PRINTS NO TOTAL. Every commit message on this branch says
+# "sim/mmu_sim.sh full suite ... 107/107 PASS", which reads as a line the
+# script emitted. It is not one. The script prints "  PASS  <name>" or
+# "  FAIL  <name>" once per guard (:82) and, only when nothing failed, one
+# trailing "==> all guards PASSED" (:733). There is no aggregate in it: no
+# total, no N/N ratio, no "0 FAIL", no SKIP. The 107 is a hand tally of the
+# guard list, not a capture. Its arithmetic holds -- this branch adds no
+# run_guard call here, since all three of its new guards are in the Lane-2
+# list above and run elsewhere, so 104 -> 107 is master's mmuishadow,
+# mmudshadow and slotillset and nothing of this branch's. When the number is
+# wanted, count it and say so: `... | grep -c '^  PASS'`.
+#
 # Env: JCORE_SOC (default: sibling ../jcore-soc).
 set -uo pipefail
 

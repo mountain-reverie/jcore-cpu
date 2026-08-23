@@ -17,8 +17,8 @@
 ! relocate the bus -- the TLB emits PA tags only", and concluded from it that
 ! a non-identity map could not repair the vacuity. That is FALSE, and it
 ! misled a later audit into exempting every cpu_tb guard from the
-! no-identity-mapping rule. core/cpu.vhd's g_dstore_squash (:761-816) and
-! g_inst_p1_fold (:822-847), both under `if PRIV_ARCH generate`, splice the
+! no-identity-mapping rule. core/cpu.vhd's g_dstore_squash (:811-866) and
+! g_inst_p1_fold (:872-897), both under `if PRIV_ARCH generate`, splice the
 ! PPN into the EXTERNAL db_o.a / inst_o.a -- so relocation happens inside the
 ! core, under every top including cpu_tb (sim/cpu_tb.vhd passes
 ! PRIV_ARCH => true). The *_pa_tag port exists only to hand the PIPT caches

@@ -191,6 +191,22 @@ that nobody re-derives a fictional transcript from it. The 111 remains correct
 as an arithmetic tally of the old guard list; only its presentation as a
 capture was false.
 
+**The same correction applies to this branch's commit log, which the paragraph
+above did not reach.** Two messages still in history are wrong in the same way,
+and a reviewer reading `git log` will meet them:
+
+* `b9ccfcb` — "the full suite, not just its own driver: 111 PASS / 0 FAIL".
+* `2f831a5` — claims this file was fixed to say "plainly that its `N PASS /
+  0 FAIL` line was lost to a `tail -6`". **There was no such line to lose.**
+  That is the fabricated *explanation* built on top of the fabricated format,
+  and it is recorded here because it cannot be edited out of a message that is
+  already committed.
+
+Both are superseded by this section. The counts in them are sound arithmetic;
+the format, and `2f831a5`'s account of a truncated summary, are not.
+`35682a0`'s "114 PASS, 0 FAIL" is the same tally stated in the same unfortunate
+shape, though that message does at least say where the number comes from.
+
 That green run is also the empirical half of §4b's C3 argument: master's
 `mmuishadow` and `mmudshadow` are in it, so `p_walk_read_order` has now run
 against the shadow-fill guards themselves without firing.

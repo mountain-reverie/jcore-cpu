@@ -110,7 +110,7 @@
 !
 !         RESULT: the run ends at 720 ns with
 !
-!           ../core/cpu.vhd:901:9:@720ns:(assertion failure):
+!           ../core/cpu.vhd:914:9:@720ns:(assertion failure):
 !           I-SIDE WALK TAKEOVER WINDOW OCCUPIED: a core D ...
 !           instance: /cpu_tb/cpu1/g_tlb_walk/p_walk_takeover
 !
@@ -122,8 +122,20 @@
 !         to approach the window deliberately rather than incidentally.
 !         (Re-measured 2026-08-23 on the rebase onto master's I->D shadow
 !         fill: all three fire at exactly the same three times. Only the LINE
-!         moved, 786 -> 901, which is the point of quoting the instance path --
-!         it is the stable identifier and the line is not.)
+!         moved, which is the point of quoting the instance path -- it is the
+!         stable identifier and the line is not.
+!
+!         CORRECTION, and read it before trusting the line above. The revision
+!         that recorded the re-measurement wrote the line as 901 and said it
+!         had moved 786 -> 901. That was already wrong when it was written:
+!         901 was the assert's line in the PREVIOUS commit of this branch, and
+!         the very commit carrying that note added comment text above
+!         p_walk_takeover and pushed the assert to 914. The chain is
+!         786 -> 901 -> 914. The 720 ns, the report text and the instance path
+!         are the measured parts and are unchanged; the ":914:9:" above is
+!         READ OFF THE CURRENT core/cpu.vhd, not re-captured from a run, and it
+!         will rot again the next time anything above that process moves.
+!         Match on the instance path and the report, never on the line.)
 !
 #include "sim_instr.h"
 #include "mmuwalk_common.inc"

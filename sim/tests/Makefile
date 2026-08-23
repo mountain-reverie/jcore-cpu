@@ -331,6 +331,33 @@ m8_dsdslot_0.elf: m8_dsdslot_0.o tlbwalk.o
 # its own code overwritten by kmain's page-table setup -- silently, and with a
 # symptom (CPU reset loop / bus ACK timeout) that looks nothing like the cause.
 # That happened for real once; fail the build instead.
+# Two Group-C locks -- mmupmrawvpn and mmupmreservedpm -- map their CODE PAGE
+# at VPN 0 and carry NO trailing .balign 0x1000 / _pad_page, so the ENTIRE
+# image (.vect + .text + literal pools + the vector block) must fit in the one
+# 4 KB page at VA 0x0000..0x0FFF. mmupmrawvpn does it so that C5's stated
+# mutation cannot also kill the instruction stream; mmupmreservedpm because a
+# pm>=9 wildcard swallows the code page's DTLB entry and only survives if the
+# code page is identity. Overflow does not fail: it takes a silent IMISS storm
+# at run time, which looks like a hang and not like a build error.
+#
+# Checked HERE, on the LINKED address, and not with an in-file `.if . > 0x1000`:
+# gas rejects that outright -- `.` is not an absolute expression in a
+# relocatable section ("Error: non-constant expression in .if statement",
+# measured 2026-08-23) -- and even a symbol-difference form would have to
+# hard-code the 0x118 the linker puts ahead of .text for *(.vect). _etext is
+# the real end of the image and needs no fudge. Same shape as the M8 scratch
+# check above.
+SINGLE_PAGE_LIMIT = 0x1000
+mmupmrawvpn.img mmupmreservedpm.img: %.img: %.elf
+	@end=$$($(NM) -n $< | awk '/ _etext/{print $$1}'); \
+	 if [ $$((0x$$end)) -gt $$(($(SINGLE_PAGE_LIMIT))) ]; then \
+	   echo "ERROR: $< _etext=0x$$end overflows the single 4 KB code page"; \
+	   echo "       mapped at VPN 0 (limit $(SINGLE_PAGE_LIMIT)). Either shrink the"; \
+	   echo "       image or give it a second mapped page and a _pad_page."; \
+	   exit 1; \
+	 fi
+	$(OBJCOPY) -v -S -O binary --srec-forceS3 $< $@
+
 M8_SCRATCH_BASE = 0x10000
 m8_%.img: m8_%.elf
 	@end=$$($(NM) -n $< | awk '/ _edata/{print $$1}'); 	 if [ $$((0x$$end)) -ge $$(($(M8_SCRATCH_BASE))) ]; then 	   echo "ERROR: $< _edata=0x$$end reaches the M8 scratch block at $(M8_SCRATCH_BASE)." >&2; 	   echo "       Split the axis into more images, or move the block up." >&2; 	   exit 1; 	 fi

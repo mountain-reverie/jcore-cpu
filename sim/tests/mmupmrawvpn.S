@@ -223,7 +223,11 @@ p_vbr_val:      .long _v_gen - 0x100
 ! ---- jcore-cpu/CLAUDE.md rules out. At VPN 0 the code page is invariant under
 ! ---- every mask, so the mutation isolates the property under test.
 ! ---- The whole image therefore has to fit in VA 0x0000..0x0FFF; there is no
-! ---- trailing pad page, and sim/tests/Makefile's link map is the check.
+! ---- trailing pad page. That is ENFORCED, not merely intended:
+! ---- sim/tests/Makefile fails the build if this image's linked _etext passes
+! ---- SINGLE_PAGE_LIMIT. Do not add code here without re-reading that rule --
+! ---- overflow does not fail at run time, it takes a silent IMISS storm that
+! ---- looks like a hang.
 p_pteh_code:    .long 0x00000000
 p_ptel_code:    .long 0x000000CD
 p_tsbslot_reg:  .long 0xFF000048

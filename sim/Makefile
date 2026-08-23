@@ -134,12 +134,21 @@ VHDS += ../core/mult_seq.vhd
 VHDS += ../core/cpu_config_sim.vhd
 VHDS += mem/cpu_sram.vhd mem/asymmetric_ram.vhd
 # core/tlb.vhd is only a CPU_VHDS member for the j4 variant (variants.toml
-# extra_files); tlb_match_tb/tlb_tb directly instantiate `entity work.tlb` as
-# their DUT regardless of CPU_VARIANT, so analyze it unconditionally here
-# (same idiom as core/dsp_arith.vhd above) rather than forcing the whole sim
-# onto CPU_VARIANT=j4.
+# extra_files); tlb_tb directly instantiates `entity work.tlb` as its DUT
+# regardless of CPU_VARIANT, so analyze it unconditionally here (same idiom as
+# core/dsp_arith.vhd above) rather than forcing the whole sim onto
+# CPU_VARIANT=j4.
+#
+# tlb_match_tb.vhd was RETIRED 2026-08-23. It was an 8-test subset of tlb_tb
+# and had rotted twice over, precisely because nothing ran it: stale against
+# the ITLB/DTLB split (f155124, it named the removed i_*/d_* port pairs), and
+# stale in SEMANTICS -- repaired to the split entity it fails its own T1,
+# "spurious prot on readable+executable entry", because that entry is U=1
+# fetched with MD=1, which is an SMEP violation the design now deliberately
+# raises (mmusmep, tlb.vhd's I-side leaf predicate). Its expectations pre-date
+# SMEP. Every property it checked is covered by tlb_tb, which is now wired
+# into sim/mmu_sim.sh and CI.
 VHDS += ../core/tlb.vhd
-VHDS += tlb_match_tb.vhd
 VHDS += tlb_tb.vhd
 VHDS += seg_decode_tb.vhd
 VHDS += ddrc_cnt_pkg_stub.vhd
@@ -171,7 +180,7 @@ VHDS += dcache_snoop_cacheable_mux.vhd
 VHDS += cpu_dualcore_tb.vhh
 #UNISIM_VHDS := unisims/unisim_VCOMP.vhd unisims/unisim_VPKG.vhd $(wildcard unisims/primitive/*.vhd)
 
-VHDL_TOPS := cpu_tb cpu_pure_tb tlb_match_tb tlb_tb seg_decode_tb is_cacheable_tb dcache_color_tb icache_cacheable_mux_tb cpu_cache_tb cpu_dualcore_tb
+VHDL_TOPS := cpu_tb cpu_pure_tb tlb_tb seg_decode_tb is_cacheable_tb dcache_color_tb icache_cacheable_mux_tb cpu_cache_tb cpu_dualcore_tb
 #VHDL_LIBS := unisim work
 VHDL_LIBS := work
 

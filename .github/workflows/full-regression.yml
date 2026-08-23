@@ -455,6 +455,23 @@ jobs:
           #   run_guard mmulinux_exhaustive "" 400us 240
           # fi
 
+          # TLB UNIT TESTBENCH. Not a run_guard: tlb_tb is a VHDL TOP, not an
+          # image, and reports "tlb_tb PASSED". It drives core/tlb.vhd with no
+          # datapath, which is the only way to reach WARM RESET (cases 24/25) --
+          # the cosim drives `rst <= '1', '0' after 10 ns` and has no warm-reset
+          # path, so no .S guard can assert that a reset revokes translations.
+          # Mirrors the block at the end of sim/mmu_sim.sh; keep both in step.
+          echo "== TLB unit testbench (tlb_tb) =="
+          make TOOLS_DIR="$TOOLS_DIR" JCORE_SOC="$JCORE_SOC" CPU_VARIANT=j4 tlb_tb >/dev/null
+          tb_out="$(timeout 120 ./tlb_tb --ieee-asserts=disable 2>&1 || true)"
+          if echo "$tb_out" | grep -q 'tlb_tb PASSED'; then
+            echo "  PASS  tlb_tb"
+          else
+            echo "  FAIL  tlb_tb"
+            echo "$tb_out" | grep -E 'FAIL|error' | tail -5
+            fail=1
+          fi
+
           [ "$fail" = 0 ] || { echo "==> functional guards FAILED" >&2; exit 1; }
           # Deliberately NOT a hardcoded count. It used to read "all 50", which
           # was already wrong before this job grew the tag-granularity guards --

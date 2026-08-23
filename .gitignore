@@ -2,6 +2,10 @@
 sim/cpu_ctb
 sim/cpu_tb
 sim/cpu_pure_tb
+# ghdl.mk mcode wrapper script for the TLB unit testbench top. It only began
+# appearing when sim/mmu_sim.sh started building and running tlb_tb
+# (2026-08-23); before that nothing built the top, so nothing produced it.
+sim/tlb_tb
 sim/pinst
 sim/decodeop
 sim/ram.img

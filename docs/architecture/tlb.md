@@ -325,6 +325,20 @@ ways:
   a single mapping. **Hardware enforces it** — a `STALE=1` entry never hits, so the
   next access faults back into the trusted miss handler. *Guard: `mmustale`.*
 
+There is a third, non-software path: **`rst` revokes every entry**, on its own
+arm of the same flush process as `MMUCR.TI` (`core/tlb.vhd`). §4's table has
+always said `V` is "cleared by reset", but until 2026-08-23 the RTL had no `rst`
+branch at all — only a `signal ram := (others => TLB_ENTRY_RESET)` power-on
+initialiser, which ASIC synthesis ignores and which says nothing about a reset
+asserted mid-run. A warm reset therefore left every valid entry resident, with
+its `ASID_TAG` and permissions intact. It was not a live escape — `mmu_reg_reset`
+zeroes `MMUCR`, so `AT` comes out of reset at 0 — but it left the invariant below
+resting on software issuing `TI` before it next enables translation, across a
+reset that may be recovery from a state in which software was not behaving.
+*Guard: `sim/tlb_tb.vhd` cases 24 and 25. It has to be a unit testbench: the
+cosim drives `rst <= '1', '0' after 10 ns` and has no warm-reset path, so no
+`.S` guard can reach this property.*
+
 **Critical invariant:** before a physical page is reassigned to a different tenant,
 every TLB entry that maps it **must** be flushed or marked `STALE`. The hardware
 does *not* auto-invalidate on page-table edits; a forgotten invalidation is a

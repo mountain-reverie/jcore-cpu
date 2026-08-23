@@ -1144,6 +1144,7 @@ begin
       )
       port map (
         clk => clk,
+        rst => rst,
         va  => i_va_32,
         -- An instruction fetch is never a store, so the W-permission check the
         -- D side makes on `we` has no I-side counterpart (the I side checks X /
@@ -1181,6 +1182,7 @@ begin
       )
       port map (
         clk       => clk,
+        rst       => rst,
         va        => d_va_32,
         we        => sig_db_o.wr,
         pa_tag    => tlb_d_pa,

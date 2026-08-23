@@ -24,6 +24,32 @@
 -- probe/install arbitration race -- master has no shared array), #22
 -- (pend_wr-only queued-drain path -- master has no pend_wr).
 --
+-- REPAIRED AND WIRED IN (2026-08-23). Two things were wrong at once, and the
+-- second is why the first went unnoticed:
+--   * STALE. commit f155124 split core/tlb.vhd into independent ITLB and DTLB
+--     arrays (one `va`/`hit`/... port set plus a `side_is_i` generic, instead
+--     of the old i_*/d_* pairs). This bench still instantiated the dual-ported
+--     entity, so it could no longer elaborate at all.
+--   * ORPHANED. Nothing ran it. It is in sim/Makefile's VHDL_TOPS and in no
+--     script -- not sim/mmu_sim.sh, not any workflow -- and the mcode GHDL
+--     flow only COMPILES the tops it is asked to run (`ghdl -i` merely imports
+--     file names), so a broken top costs nothing at build time and reports
+--     nothing. The same trap the "orphaned guards" note in sim/mmu_sim.sh
+--     describes, one level up.
+-- Both are fixed: the DUT is two instances below, and the bench is invoked
+-- from sim/mmu_sim.sh and .github/workflows/full-regression.yml.
+--
+-- DEPTH. Both instances are `entries => 32`, which is what the pre-split block
+-- was and what the retained cases were written against -- case 17's NRU-overflow
+-- canary in particular depends on the depth. core/cpu.vhd ships 8 (ITLB) and 16
+-- (DTLB). That difference is deliberate and harmless here: every property below
+-- is per-entry or a loop over `entries`, none is a capacity property.
+--
+-- Cases 24 and 25 (added with that repair) cover WARM RESET, which nothing in
+-- the tree tested: the cosim drives `rst <= '1', '0' after 10 ns` and has no
+-- warm-reset path at all, so no .S guard can reach this property. See case 24's
+-- own comment for why the `ram` signal initialiser is not the same thing.
+--
 -- Retained cases test TLB BEHAVIOUR, which is identical in spirit between
 -- the split and unsplit designs: install, flush, ASID isolation, GLOBAL
 -- cross-ASID visibility, STALE suppression, superpages/page-mask handling,
@@ -87,6 +113,11 @@ end entity tlb_tb;
 architecture beh of tlb_tb is
 
   signal clk               : std_logic                     := '0';
+  -- Starts ASSERTED. Case 1 ("empty TLB must miss") is therefore a check on
+  -- the RESET flush, not on the `ram` signal's VHDL initialiser -- which is
+  -- simulation/BRAM-inference only and is ignored by ASIC synthesis, so it is
+  -- exactly the thing that must not be the reason a lookup misses at t=0.
+  signal rst               : std_logic                     := '1';
   signal i_va,        d_va : std_logic_vector(31 downto 0) := (others => '0');
   signal asid              : std_logic_vector(15 downto 0) := (others => '0');
   signal md                : std_logic                     := '0';
@@ -121,34 +152,72 @@ begin
   clk <= not clk after 5 ns when not done else
          clk;
 
-  dut : entity work.tlb
+  -- TWO instances, not one. core/tlb.vhd used to be a single dual-ported
+  -- 32-entry block with i_*/d_* port pairs; commit f155124 (S1) split it into
+  -- two independent single-port arrays selected by the `side_is_i` generic, and
+  -- core/cpu.vhd instantiates it twice. This testbench was not updated with it
+  -- and stopped elaborating -- silently, because `ghdl -i`/mcode only compiles
+  -- the tops actually run, and nothing ran this one (it is in sim/Makefile's
+  -- VHDL_TOPS and in no script). It is wired into sim/mmu_sim.sh and the CI
+  -- guard list now, so that cannot recur.
+  --
+  -- Both instances see the SAME install and flush ports, which reproduces the
+  -- old shared block's behaviour for every case below: cases 1-23 are unchanged
+  -- in construction and in meaning. The split's own routing rule (cpu.vhd sends
+  -- an install to the FAULTING side only) is a cpu.vhd property, not a tlb.vhd
+  -- one, and is not what this bench tests.
+  dut_i : entity work.tlb
+    generic map (
+      entries   => 32,
+      side_is_i => true
+    )
     port map (
-      clk         => clk,
-      i_va        => i_va,
-      i_pa_tag    => i_pa_tag,
-      i_pa12      => i_pa12,
-      i_page_mask => i_page_mask,
-      i_c         => i_c,
-      i_hit       => i_hit,
-      i_prot      => i_prot,
-      i_multihit  => i_multihit,
-      d_va        => d_va,
-      d_we        => d_we,
-      d_pa_tag    => d_pa_tag,
-      d_pa12      => d_pa12,
-      d_page_mask => d_page_mask,
-      d_c         => d_c,
-      d_hit       => d_hit,
-      d_prot      => d_prot,
-      d_multihit  => d_multihit,
-      asid        => asid,
-      md          => md,
-      at          => at,
-      tlb_wr      => tlb_wr,
-      pteh_vpn    => pteh_vpn,
-      ptel        => ptel,
-      asidr       => asidr,
-      ti          => ti
+      clk       => clk,
+      rst       => rst,
+      va        => i_va,
+      we        => '0',                  -- a fetch is never a store
+      pa_tag    => i_pa_tag,
+      pa12      => i_pa12,
+      page_mask => i_page_mask,
+      c         => i_c,
+      hit       => i_hit,
+      prot      => i_prot,
+      multihit  => i_multihit,
+      asid      => asid,
+      md        => md,
+      at        => at,
+      tlb_wr    => tlb_wr,
+      pteh_vpn  => pteh_vpn,
+      ptel      => ptel,
+      asidr     => asidr,
+      ti        => ti
+    );
+
+  dut_d : entity work.tlb
+    generic map (
+      entries   => 32,
+      side_is_i => false
+    )
+    port map (
+      clk       => clk,
+      rst       => rst,
+      va        => d_va,
+      we        => d_we,
+      pa_tag    => d_pa_tag,
+      pa12      => d_pa12,
+      page_mask => d_page_mask,
+      c         => d_c,
+      hit       => d_hit,
+      prot      => d_prot,
+      multihit  => d_multihit,
+      asid      => asid,
+      md        => md,
+      at        => at,
+      tlb_wr    => tlb_wr,
+      pteh_vpn  => pteh_vpn,
+      ptel      => ptel,
+      asidr     => asidr,
+      ti        => ti
     );
 
   stim : process is
@@ -218,13 +287,33 @@ begin
 
     end procedure flush_all;
 
+    -- A WARM reset: one clocked reset cycle in the middle of a running
+    -- machine, which is the case core/tlb.vhd's `ram` initialiser does NOT
+    -- cover. Shaped exactly like flush_all, because in the hardware it IS the
+    -- same flush arm (`rst = '1' or ti = '1'`).
+
+    procedure warm_reset is
+    begin
+
+      rst <= '1';
+      wait until rising_edge(clk);
+      rst <= '0';
+      wait for 1 ns;
+
+    end procedure warm_reset;
+
   begin
 
     at <= '1';
     md <= '1';
+    -- rst starts ASSERTED (see its declaration); give it one edge to flush,
+    -- then release it. Case 1 below is what observes the result.
+    wait until rising_edge(clk);
+    rst <= '0';
     wait until rising_edge(clk);
 
-    -- 1. miss on an empty TLB
+    -- 1. miss on an empty TLB -- and, since rst was asserted over the edge
+    -- above, on a RESET TLB.
     i_va <= x"00001000";
     wait for 1 ns;
     check(i_hit = '0', "empty TLB must miss");
@@ -783,6 +872,112 @@ begin
     wait for 1 ns;
     check(d_hit = '1', "case 23: load precondition: non-writable page must still report a hit");
     check(d_prot = '0', "case 23: a LOAD from the same non-writable page must NOT fault (D-side leaf protection predicate, core/tlb.vhd)");
+
+    -- 24. A WARM RESET revokes every resident translation, on BOTH arrays.
+    --
+    -- This is the property core/tlb.vhd's `signal ram := (others =>
+    -- TLB_ENTRY_RESET)` does NOT provide. That is a power-on INITIALISER: it
+    -- is honoured by simulation and by FPGA BRAM inference, and ignored
+    -- outright by ASIC synthesis (core/cpu_asic.vhd is a real target). Even in
+    -- simulation it says nothing about an `rst` asserted mid-run.
+    --
+    -- Before the flush arm learned about rst, a warm reset left every valid
+    -- entry -- including its ASID tag and permissions -- resident and
+    -- matchable. Nothing in the machine consulted them straight away, because
+    -- mmu_reg_reset (core/components_pkg.vhd) zeroes MMUCR and therefore
+    -- MMUCR.AT: that made it defence-in-depth rather than a live escape. But
+    -- it left the isolation boundary of docs/architecture/tlb.md resting
+    -- entirely on software remembering to issue MMUCR.TI before it next sets
+    -- AT=1 -- across a reset that, by definition, may be a recovery from a
+    -- state in which software was not behaving. Four entries, not one: the
+    -- flush is a loop over every slot and a one-entry check would pass on a
+    -- flush that cleared only the slot it was given.
+    flush_all;
+    md   <= '1';
+    d_we <= '0';
+    asid <= x"0007";
+    install(vpn       => x"00070", asid_tag => x"0007", ppn => x"00090",
+            page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
+            g         => '0');
+    install(vpn       => x"00071", asid_tag => x"0007", ppn => x"00091",
+            page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
+            g         => '0');
+    install(vpn       => x"00072", asid_tag => x"0007", ppn => x"00092",
+            page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
+            g         => '0');
+    install(vpn       => x"00073", asid_tag => x"0007", ppn => x"00093",
+            page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
+            g         => '0');
+
+    -- Precondition. Without these the reset checks below are satisfied by a
+    -- TLB that never installed anything, which is the vacuity that matters
+    -- here: every post-reset assertion is a NEGATIVE one.
+    i_va <= x"00070000";
+    d_va <= x"00070000";
+    wait for 1 ns;
+    check(i_hit = '1', "case 24 precondition: entry 0 must be resident in the ITLB before the reset");
+    check(d_hit = '1', "case 24 precondition: entry 0 must be resident in the DTLB before the reset");
+    i_va <= x"00073000";
+    d_va <= x"00073000";
+    wait for 1 ns;
+    check(i_hit = '1', "case 24 precondition: entry 3 must be resident in the ITLB before the reset");
+    check(d_hit = '1', "case 24 precondition: entry 3 must be resident in the DTLB before the reset");
+
+    warm_reset;
+
+    i_va <= x"00070000";
+    d_va <= x"00070000";
+    wait for 1 ns;
+    check(i_hit = '0', "case 24: a warm reset must revoke ITLB entry 0 (rst arm of the flush process, core/tlb.vhd)");
+    check(d_hit = '0', "case 24: a warm reset must revoke DTLB entry 0 (rst arm of the flush process, core/tlb.vhd)");
+    i_va <= x"00071000";
+    d_va <= x"00071000";
+    wait for 1 ns;
+    check(i_hit = '0', "case 24: a warm reset must revoke ITLB entry 1 -- the flush is over EVERY slot, not one");
+    check(d_hit = '0', "case 24: a warm reset must revoke DTLB entry 1 -- the flush is over EVERY slot, not one");
+    i_va <= x"00072000";
+    d_va <= x"00072000";
+    wait for 1 ns;
+    check(i_hit = '0', "case 24: a warm reset must revoke ITLB entry 2 -- the flush is over EVERY slot, not one");
+    check(d_hit = '0', "case 24: a warm reset must revoke DTLB entry 2 -- the flush is over EVERY slot, not one");
+    i_va <= x"00073000";
+    d_va <= x"00073000";
+    wait for 1 ns;
+    check(i_hit = '0', "case 24: a warm reset must revoke ITLB entry 3 -- the flush is over EVERY slot, not one");
+    check(d_hit = '0', "case 24: a warm reset must revoke DTLB entry 3 -- the flush is over EVERY slot, not one");
+
+    -- ... and the array still works afterwards. A flush that wedged the write
+    -- port would satisfy every negative check above.
+    install(vpn       => x"00070", asid_tag => x"0007", ppn => x"00090",
+            page_mask => "0000", w => '1', x => '1', u => '0', c => '1',
+            g         => '0');
+    i_va <= x"00070000";
+    d_va <= x"00070000";
+    wait for 1 ns;
+    check(i_hit = '1', "case 24: the ITLB must still install after a reset -- the reset flushes, it does not wedge");
+    check(d_hit = '1', "case 24: the DTLB must still install after a reset -- the reset flushes, it does not wedge");
+
+    -- 25. rst has PRIORITY over a simultaneous install. In core/tlb.vhd the
+    -- install is an `elsif` under the flush arm, so an install sampled on the
+    -- same edge as a reset must leave nothing behind -- otherwise a reset
+    -- landing on an in-flight walker install would resurrect exactly one
+    -- entry, and it would be the newest one. Written inline because install()
+    -- cannot co-assert rst.
+    flush_all;
+    pteh_vpn <= x"00075";
+    asidr    <= x"0007";
+    ptel     <= x"00095" & "0000" & '1' & '1' & '0' & '0' & '1' & '0' & '0' & '0';
+    tlb_wr   <= '1';
+    rst      <= '1';
+    wait until rising_edge(clk);
+    tlb_wr   <= '0';
+    rst      <= '0';
+    wait for 1 ns;
+    i_va     <= x"00075000";
+    d_va     <= x"00075000";
+    wait for 1 ns;
+    check(i_hit = '0', "case 25: an install sampled on the same edge as rst must not reach the ITLB (rst outranks tlb_wr)");
+    check(d_hit = '0', "case 25: an install sampled on the same edge as rst must not reach the DTLB (rst outranks tlb_wr)");
 
     if (fail) then
       report "tlb_tb FAILED"

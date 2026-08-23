@@ -192,20 +192,45 @@ as an arithmetic tally of the old guard list; only its presentation as a
 capture was false.
 
 **The same correction applies to this branch's commit log, which the paragraph
-above did not reach.** Two messages still in history are wrong in the same way,
-and a reviewer reading `git log` will meet them:
+above did not reach.** Three messages carried the same defect. They are named
+below by **subject line**, not by hash, because all three have since been
+reworded and the short SHAs this section used to give (`b9ccfcb`, `2f831a5`,
+`35682a0`) no longer resolve — they are listed here only as an indication of
+what the old text pointed at.
 
-* `b9ccfcb` — "the full suite, not just its own driver: 111 PASS / 0 FAIL".
-* `2f831a5` — claims this file was fixed to say "plainly that its `N PASS /
+* *"docs(mmu): record the whole-suite result for the read-order monitor"* —
+  "the full suite, not just its own driver: 111 PASS / 0 FAIL".
+* *"docs(mmu): make the suite captures and the Lane-2 citations say what is
+  true"* — claimed this file was fixed to say "plainly that its `N PASS /
   0 FAIL` line was lost to a `tail -6`". **There was no such line to lose.**
-  That is the fabricated *explanation* built on top of the fabricated format,
-  and it is recorded here because it cannot be edited out of a message that is
-  already committed.
+  That is the fabricated *explanation* built on top of the fabricated format.
+* *"docs(mmu): re-measure every Group-C number on the shadow-fill base"* —
+  "Whole suite: 114 PASS, 0 FAIL (107 pre-existing + these seven)". The same
+  hand tally in the same unfortunate shape.
 
-Both are superseded by this section. The counts in them are sound arithmetic;
-the format, and `2f831a5`'s account of a truncated summary, are not.
-`35682a0`'s "114 PASS, 0 FAIL" is the same tally stated in the same unfortunate
-shape, though that message does at least say where the number comes from.
+All three are superseded, in this section and in the messages themselves. The
+counts in them are sound arithmetic; the format, and the second one's account
+of a truncated summary, are not. Each message has been reworded to state its
+run as `==> all guards PASSED` and to give its number as a count over the
+runner's per-guard `  PASS` lines, and each **quotes the form it withdraws**
+rather than deleting it — the supersession is meant to be visible from `git
+log` alone. The wrong forms are quoted here as well, which is the copy that
+survives any further rebase.
+
+An earlier revision of this section let the third one stand, on the grounds
+that its message at least said where the number came from. **That was the
+wrong call**, and it is recorded rather than quietly dropped: a mitigated
+fabricated format is still a fabricated format, and "114 PASS, 0 FAIL" is
+still a line `sim/mmu_sim.sh` cannot emit. It has been reworded like the other
+two. No number moved — 114 is the same count it always was.
+
+**Convention, and the reason this section needed a second pass.** Do not cite
+a commit SHA from inside a tracked file. A rebase or a reword invalidates it
+silently: the file goes on reading as though the reference were checkable, and
+the reader who checks finds nothing and cannot tell which side is stale. Cite
+the **subject line**, or describe the change ("the commit that introduced the
+Group-B guards"). A SHA already merged to master is the exception, and is
+worth marking as one where it appears.
 
 That green run is also the empirical half of §4b's C3 argument: master's
 `mmuishadow` and `mmudshadow` are in it, so `p_walk_read_order` has now run

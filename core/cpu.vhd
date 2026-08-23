@@ -571,6 +571,13 @@ begin
   -- collateral-damage such a non-faulting in-flight store (back-to-back fault:
   -- a resumed store followed by another faulting access loses its write). Key
   -- the demote on the D-side's own hit/prot status instead.
+  --
+  -- SECOND CONSUMER, easy to miss from here: this demotion is precondition (a)
+  -- of the DOUBLE-ISSUE HAZARD note at p_walk_own below. A D-side walk drives
+  -- its faulting access on the external bus AND replays it, so that access
+  -- issues TWICE; demoting a faulting store to a read here is the only reason
+  -- that is one write rather than two. Narrowing or removing it turns a
+  -- doubled read into a doubled WRITE. Re-read that note first.
   d_store_faulting <= '1' when priv_arch and d_at_translated = '1'
                                and sig_db_o.en = '1' and sig_db_o.wr = '1'
                                and (tlb_d_hit = '0' or tlb_d_prot = '1') else
@@ -1051,6 +1058,16 @@ begin
 
     -- AT-translated: address translation is active for P0 and P3 segments.
     -- P1/P2 are fixed-translate (no TLB); P4 is kernel-only MMIO.
+    --
+    -- THIS SEGMENT LIST IS A SAFETY PRECONDITION, not just a decode. It is
+    -- precondition (b) of the DOUBLE-ISSUE HAZARD note at p_walk_own: only an
+    -- AT-translated access can be a walk's faulting access, and a walk's
+    -- faulting access is issued TWICE on the external bus. Because MMIO in
+    -- this design lives in P1/P2/P4 -- all hard '0' here -- no device can be
+    -- the access that gets doubled. Widening d_at_translated to a segment
+    -- that carries devices, or mapping a device into P0/P3 and running it
+    -- under AT=1, makes that hazard live. Read the note before changing this
+    -- list; nothing else in the file will remind you.
     i_at_translated <= dp_mmu_regs.mmucr(0) when
                                                  (seg_decode(i_va_32) = SEG_P0 or seg_decode(i_va_32) = SEG_P3) else
                        '0';

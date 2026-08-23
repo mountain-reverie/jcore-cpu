@@ -821,7 +821,14 @@ else
   # against the ITLB/DTLB split since f155124 without anything noticing, since
   # the mcode GHDL flow only COMPILES the tops it is asked to run.
   echo "== TLB unit testbench (tlb_tb) =="
-  if ! tb_build="$(make CPU_VARIANT=j4 tlb_tb 2>&1)"; then
+  if [ "$BUILD" = 0 ]; then
+    # -n means "reuse the existing build". tlb_tb is a SEPARATE top with its own
+    # make target, so building it here would compile the CURRENT RTL and report
+    # it in the same summary as guards that ran against the STALE cosim -- two
+    # hardware revisions, one PASS list, and nothing in the output saying so.
+    # Skip it: under -n this run is already not an RTL measurement.
+    echo "  SKIP  tlb_tb (-n: would build fresh RTL beside a stale cosim)"
+  elif ! tb_build="$(make CPU_VARIANT=j4 tlb_tb 2>&1)"; then
     echo "  FAIL  tlb_tb (build)"; echo "$tb_build" | tail -10; fail=1
   else
     tb_out="$(timeout 120 ./tlb_tb --ieee-asserts=disable 2>&1 || true)"

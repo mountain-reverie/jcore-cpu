@@ -434,23 +434,16 @@ begin
       -- enable term; folded in, it cannot. Operand order buys nothing --
       -- swapping the two terms reproduces the folded numbers to the cell.
       --
-      -- TWO WAYS TO GET THIS WRONG, both of which an earlier revision of this
-      -- note did get wrong, in the same table:
-      --   * NEVER build an area table across trees that differ in ASSERTION
-      --     COUNT. p_walk_takeover in core/cpu.vhd is worth +286 to +541 LUT4
-      --     (N1->A1 and N0->A0) and one generic flop (2696 -> 2697), because
-      --     synth/cpu_synth.sh deletes the $check cell only AFTER mapping.
-      --     The earlier table took its baseline from a tree without the
-      --     assertion and charged that whole swing to the flush, which
-      --     INVERTED THE SIGN of the result: it read +2.0%, not -0.8%.
-      --   * NEVER synthesise a "baseline" by DELETING the term under test and
-      --     leaving the port behind. That tree -- rst connected, flush term
-      --     gone -- measures 9757 LUT4, which is 535 BELOW A0, the honest
-      --     no-flush tree, while its generic netlist is IDENTICAL to A0's at
-      --     35568 gates. A dangling input changes no logic and moves the LUT
-      --     mapping by more than the change under test; the same effect
-      --     core/datapath.vhm records at +/-464 LUT4 on J1 from signals merely
-      --     tied off. Baselines come from commits.
+      -- THE TWO MEASUREMENT RULES this table exists to illustrate live in
+      -- synth/README.md, "Running an area A/B" -- they are not about the TLB,
+      -- and the next person who needs them will be measuring something else.
+      -- Both were learned here: an earlier revision of this note took its
+      -- baseline from a tree WITHOUT p_walk_takeover while every other row had
+      -- it (+286..+541 LUT4, plus the 2696 -> 2697 flop -- N0->A0 and N1->A1
+      -- above), and built its no-flush arm by DELETING the flush term while
+      -- leaving the rst port connected (9757 LUT4, 535 below A0, on a generic
+      -- netlist identical to A0's at 35568 gates). Together they INVERTED THE
+      -- SIGN: the published result read +2.0% instead of -0.8%.
       --
       -- Priority over the install is intentional and is locked by case 25 of
       -- sim/tlb_tb.vhd: a reset landing on the same edge as a walker install

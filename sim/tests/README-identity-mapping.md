@@ -44,13 +44,14 @@ Two live findings motivated writing this down:
   invisible — precisely because nothing forced the translation to be
   observable.
 
-`mmuxlate.S:5-17` and `mmuirun.S:192-206` already describe this hazard in their
+`mmuxlate.S:6-31` and `mmuirun.S:192-212` already describe this hazard in their
 own headers, having been repaired for it individually. The rule generalises
-what those two guards learned.
+what those two guards learned — while discarding the false mechanism they
+attributed it to (see "Not a reason", below).
 
 ### When identity is forced
 
-Two distinct cases, and the second is easy to miss:
+Two cases:
 
 **(a) Large PageMask inside the backed window.** For `pm >= 6`,
 `page_offset_mask()` (`core/components_pkg.vhd:628-675`) marks PA bits 12..23
@@ -60,19 +61,46 @@ The cosim backs physical memory only in `[0, 0x0100_0000)` (`sim/cpu_ctb.c`
 bits must be zero — and the translation degenerates to identity. A `pm >= 6`
 entry also spans the entire backed window, so it is necessarily SOLO.
 
-**(b) Any guard running under `cpu_tb`.** The MMU's physical address is
-delivered *only to the caches*: `cpu_cache_tb.vhd:230,248` wire
-`cpu_mmu.d_pa_tag` / `cpu_mmu.i_pa_tag` into `mmu_cache_i_t`, and `cpu_tb.vhd`
-has no cache and no MMU wiring at all. Under `cpu_tb` the bus address is the
-VA, so **no** mapping — identity or not — is observable in the returned data.
-`mmuxlate.S:9-17` states this: *"this MMU does not relocate the bus... A
-non-identity map cannot repair this."*
+**(b) A load-bearing image layout.** Some guards pin a specific instruction or
+zero-page at a fixed *physical* address, and the VA that must fetch it is
+determined by the same layout arithmetic. `mmuidslot.S` and
+`mmuimiss_illegal.S` are both like this: making them non-identity means moving
+the backing page, which perturbs the VBR/handler offsets the guard is built
+on. That is a real constraint, so it earns the carve-out — but it demands a
+witness like any other forced identity.
 
-The practical consequence: `PA != VA` is a real, cheap witness **only** for the
-`cpu_cache_tb` guards (`mmureloc`, `mmurelocif`, `mmurelocbp`, `mmupage4k`,
-`mmupagemix*`, `mmupagereloc16k`, `mmupagewalk`, `mmudcbit`, `mmuicolor`,
-`mmuwalkdside`). Everything in the `cpu_tb` loop must witness translation some
-other way.
+### Not a reason: "the bus is not relocated"
+
+An earlier revision of this file (and of four guard headers) claimed that the
+MMU emits PA tags only, does not relocate the bus, and that `PA != VA` is
+therefore observable only under `cpu_cache_tb`. **That is false**, and it is
+worth stating plainly because it hands out a blanket exemption from the rule.
+
+Relocation happens **inside the core**, upstream of any testbench:
+
+* `core/cpu.vhd:761-816` — `g_dstore_squash`, under `if PRIV_ARCH generate`:
+  `db_o.a(27 downto 12) <= (ppn_lo and not offm) or (sig_db_o.a(27 downto 12) and offm);`
+* `core/cpu.vhd:822-847` — `g_inst_p1_fold`, the identical splice on
+  `inst_o.a(27 downto 12)`.
+
+Both rewrite the **external** bus. `sim/cpu_tb.vhd:212-217` passes
+`PRIV_ARCH => true`, and `sim/mmu_sim.sh:54` hard-fails the build unless
+`cpu_tb.vhh` contains it — so both generates are live under `cpu_tb`. The
+`*_pa_tag` port exists only to hand the PIPT caches their tag;
+`cache/dcache_ccl.vhm:255` says so: *"PIPT: cpu.vhd relocates the address
+upstream of the cache, so a.a is already a PA."*
+
+A green guard settles it: `mmuwalkdside.S` runs in `mmu_sim.sh`'s default
+`cpu_tb` loop (`:131`), maps VA `0x42000`→PA `0x44000` and VA `0x43000`→PA
+`0x45000`, and at `:186-209` asserts the stores landed at the **PAs** while the
+VA-as-physical words still read `0x11111111`. `mmuboot.S:9-11,139-141` makes
+the same construction under the same top.
+
+**So `PA != VA` is a real, cheap witness for every guard under every top.** The
+stale claim survived in `mmuxlate.S`, `mmuirun.S`, `mmubenchi.S` and
+`mmuidx.S`; all four headers are corrected in the same commit as this file.
+None of those guards is *broken* by it — their witnesses are sound — but the
+comments caused exactly one wrong audit already.
 
 ### Witnesses that count
 
@@ -84,7 +112,8 @@ other way.
   `TEA` / `SPC` value that only a delivered exception can produce.
 * The walker's PTEL image read back out of the TSB row.
 * An effect only a correct PageMask can produce.
-* A `PA != VA` read-back, **under `cpu_cache_tb` only**.
+* A `PA != VA` read-back — available under every top, and usually the cheapest
+  fix.
 
 ---
 
@@ -100,26 +129,33 @@ read in full and confirmed by hand.
 | `mmuidslot.S` | `cpu_tb` | `Hptel1 = 0x000010C9` maps VA `0x1000` → PA `0x1000`, and the delay-slot instruction `mov #0x55, r3` is *physically laid out* at `0x1000` (`:257`). With AT off the delay-slot fetch reads the same instruction untranslated, no IMISS fires, `bra idl_target` is taken anyway, and the sole check `r3 == 0x55` (`:228-233`) passes. Handler markers go to the PIO port and are printed, never asserted. |
 | `mmuimiss_illegal.S` | `cpu_tb` | `_zero_page` is padded to land at **PA `0x1000` == VA `0x1000`** (`:252-253`, `Hzero_page_pte` `:233`). With AT off the `jmp` to VA `0x1000` fetches `0x0000` directly, raising the same GENERAL_ILLEGAL, and the sole assertion `EXPEVT == 0x180` (`:176-182`) passes. The subject — that I-side IMISS suppression is *transient* — never occurs. |
 | `mmupage16k.S` | `cpu_cache_tb` | `PTEL 0x000101E9` → PPN `0x10000` == VA base, so VA `0x11000` resolves to PA `0x11000`. The walk-counter snapshot is taken **after** the step-1 install (`:165-167`) and result 3 only asserts the counter *did not move again* (`:189-194`). With AT off: the store lands at PA `0x11000` (fail 1 passes), PA `0x10000` stays 0 (fail 2 passes), the counter never moves (fail 3 passes). Fully green with the MMU inert. |
-| `mmupage64k.S` | `cpu_cache_tb` | Same shape: identity `PTEL 0x000202E9` (`:130`), snapshot after install (`:148`), equality-only counter check (`:173-176`). |
-| `mmupage1m.S` | `cpu_cache_tb` | Same shape: identity `PTEL 0x001004E9` (`:131`), snapshot after install (`:149`), equality-only counter check (`:174-177`). `pm=4` (1 MB) is well below the `pm >= 6` threshold, so this identity is *chosen*, not forced. |
+| `mmupage64k.S` | `cpu_cache_tb` | Same defect: identity `PTEL 0x000202E9` (`:130`), snapshot after install (`:148`), equality-only counter check (`:173-176`). **Not quite the same construction** — unlike `mmupage16k`, it still carries a sub-page TSB row at `:131`, so its repair patch will differ. |
+| `mmupage1m.S` | `cpu_cache_tb` | Same defect: identity `PTEL 0x001004E9` (`:131`), snapshot after install (`:149`), equality-only counter check (`:174-177`). Also still carries a sub-page TSB row (`:132`). `pm=4` (1 MB) is well below the `pm >= 6` threshold, so this identity is *chosen*, not forced. |
 | `mmupagewalk.S` | `cpu_cache_tb` | The handler installs `PTEL 0x000101E9`, PA `0x10000` for VA `0x10000-0x13FFF`, so the sub-page store to VA `0x11000` targets PA `0x11000`. Both assertions are P2 read-backs of identity addresses (`:146-158`) and there is no counter, no fault count, and no handler-ran flag anywhere in the file. With AT off the store goes straight to PA `0x11000` and both checks pass, so the "realistic miss handler" it exists to exercise need never run. |
 
 ### Suggested repairs
 
-* `mmupage16k` / `mmupage64k` / `mmupage1m` are the cheapest: move the existing
-  `q_walkcnt` snapshot to *before* step 1 and add a positive-delta assertion
-  (a new result code) alongside the existing equality check. Both properties
-  then hold — the base access must walk, the sub-page access must not.
-  `mmup4alias.S:156-164` and `mmuwalkhit.S:155-197` are the pattern.
-* `mmupagewalk` runs under `cpu_cache_tb`, so the direct fix is available:
-  give the handler a non-identity PPN and read back through the P2 alias of
-  the *relocated* PA. `mmupagereloc16k.S:122` is the pattern.
-* `mmuainc` / `mmuainc2` / `mmuidslot` / `mmuimiss_illegal` are `cpu_tb`
-  guards, so `PA != VA` is not available. They need a handler-entry count
-  asserted `== 1` on the pass path — the pattern `mmudslot.S:161-168` and
-  `mmupcprobe.S:234-247` already use. For `mmuidslot` and `mmuimiss_illegal`
-  the identity is also load-bearing to the image layout, so the counter is the
-  only practical route.
+* `mmupage16k` / `mmupage64k` / `mmupage1m`: move the existing `q_walkcnt`
+  snapshot to *before* step 1 and add a positive-delta assertion (a new result
+  code) alongside the existing equality check. Both properties then hold — the
+  base access must walk, the sub-page access must not.
+  `mmup4alias.S:156-164` and `mmuwalkhit.S:155-197` are the pattern. Note this
+  is **stronger** than merely asserting the counter is nonzero: both catch an
+  inert MMU, but only a before/after delta localizes the walk to step 1.
+  `mmupage64k` / `mmupage1m` additionally still carry the sub-page TSB row
+  that `mmupage16k` deleted, so their patches are not identical.
+* `mmupagewalk`: give the handler a non-identity PPN and read back through the
+  P2 alias of the *relocated* PA. `mmupagereloc16k.S:122` is the pattern.
+* `mmuainc` / `mmuainc2`: `PA != VA` is the cheapest fix and is available —
+  point `v_pteA` at a frame other than `0x00100000` and seed `k_bkA` there.
+  Both assertions then fail outright if the mapping is absent.
+* `mmuidslot` / `mmuimiss_illegal`: here the identity is genuinely load-bearing
+  to the *image layout* — the faulting instruction / zero-page is pinned at a
+  fixed PA that the VBR and handler-offset arithmetic depend on. Moving it is
+  invasive, so the right fix is a handler-entry count asserted `== 1` on the
+  pass path, the pattern `mmudslot.S:161-168` and `mmupcprobe.S:234-247`
+  already use. (This is a layout constraint, **not** a consequence of the top
+  they run under — `PA != VA` would be observable if the layout allowed it.)
 
 ---
 
@@ -133,10 +169,15 @@ read in full and confirmed by hand.
 example of a header that states the forcing and names its witness; it is the
 model to copy.
 
-**Caveat:** `mmuhuge.S` is one of three `mmu*.S` guards wired into **neither**
-`sim/mmu_sim.sh` nor `sim/linux_sim.sh` — the others are `mmuboot.S` and
-`mmulinuxexc.S`. An unrun guard's identity exposure is moot until it is wired
-in; wire-in should not happen without checking this rule first.
+**Where it runs:** `mmuhuge.S` is absent from `sim/mmu_sim.sh`'s auto-run
+lists, but it **does** run in CI. `.github/workflows/full-regression.yml:394`
+invokes it by name, and `sim/linux_sim.sh:49` is `name="${1:-mmulinux}"`, so it
+is invocable as `sim/linux_sim.sh mmuhuge`. The same holds for `mmulinux`
+(`:373`), `mmulinuxexc` (`:380`) and `mmuboot` (`:386`); `pr-quick.yml:102-104`
+states it explicitly. Searching only the two shell scripts for literal guard
+names misses all four — that is how an earlier revision of this file wrongly
+called them unrun. (Those other three are classified in §4, not here; only
+`mmuhuge` is forced-identity.)
 
 ---
 
@@ -148,16 +189,16 @@ Grouped by what carries them. None needs work for this rule.
 the rule does not apply: `mmucmpcsr`, `mmudblflt`, `mmuguard`, `mmureg`,
 `mmunest_slotill`, `mmunest_trapa`, `mmutsbslot`, `mmuwalkasid`.
 
-**Non-identity on the asserted path** (`cpu_cache_tb` guards, where the
-relocated PA is observable): `mmupage4k` (VA `0x11000` → PA `0x55000`),
+**Non-identity on the asserted path** (the relocated PA is observable under
+every top): `mmupage4k` (VA `0x11000` → PA `0x55000`),
 `mmupagemix`, `mmupagemix2` (VA `0x14000` → PA `0x44000`), `mmupagereloc16k`
 (VA `0x10000` → PA `0x40000`), `mmureloc`, `mmurelocbp`, `mmurelocif` (VA
 `0x4000` → PA `0x6000`), `mmuwalkdside` (VA `0x42000` → PA `0x44000`; its
 header at `:11-21` records that an identity version of this very guard stayed
 green with the demote logic deleted). Also `mmuboot` (VA `0x00100000` → PA
 `0x00071000`), `mmulinux`, `mmulinuxexc`, `mmumultihit`, `mmuremap` — these
-carry counter or fault witnesses too, which is what actually covers them under
-`cpu_tb`.
+carry counter or fault witnesses on top of the non-identity map, so they are
+doubly covered.
 
 **Walker-counter delta across the access under test** (`0xFF000054`):
 `mmubenchi`, `mmuirun`, `mmup4alias`, `mmurun`, `mmusplit`, `mmustale`,
@@ -200,13 +241,25 @@ live in the current `.word 0x6CD2` build. It does not change the verdict
 * **85** `mmu*.S` files exist. **80** are distinct guards; the other 5
   (`mmudspcprobe_late{b,c,m,mw,w}.S`) are `#define` + `#include` shims over
   `mmudspcprobe_late.S` and inherit its verdict.
-* All 80 were examined — header, `PTEH`/`PTEL` constants, and assertion
-  sequence — and every verdict is backed by a cited line. No file was left
-  `UNKNOWN`.
-* All 8 exposed guards were then re-read and confirmed independently.
-* **Not covered:** non-`mmu*` guards (`m8_*`, `exctest`, `banktest`, …), the
-  `dualcore/` images, and Lane 2's kernel-object path. `m8_*` guards in
-  particular map pages and were not surveyed.
+* All 80 were classified, and none was left `UNKNOWN`. **The evidence behind
+  those verdicts is not uniform**, and the difference matters when acting on
+  this file:
+  * The 8 exposed guards in §2, plus the named guards cited with line numbers
+    in §3 and §4 (`mmupage4k`, `mmupagemix`, `mmuwalkdside`, `mmuxlate`,
+    `mmuhuge`, `mmutsbvictim`, `mmuwalkiside`, `mmuidorder`, `mmudcbit`), were
+    read in full and hand-verified against their `PTEH`/`PTEL` constants and
+    assertion sequences.
+  * The remaining ~60 appear as bare names in the §4 prose groups. They were
+    bucketed by witness class in a delegated pass and spot-checked, **not**
+    individually line-cited. Treat those as a well-founded classification, not
+    as a per-guard proof. Anyone repairing or re-auditing a specific guard from
+    §4 should re-derive it.
+* **Not covered:** the `m8_*` guards, `exctest`, `banktest`, the `dualcore/`
+  images, and Lane 2's kernel-object path.
+* **Named follow-up: the `m8_*` guards are a real nine-guard gap.** 9 of the 12
+  do TSB/PTEL work and are in scope for this rule but were not surveyed:
+  `m8_idslot_{0,1,2}`, `m8_ifetch_{0,1,2}`, `m8_dside`, `m8_dsdslot_0`,
+  `m8_multihit_ifetch`. They should get the same pass.
 * Nothing was simulated. Every verdict is by construction from the source, not
   from a mutation run. Confirming an exposed guard is *actually* vacuous means
   deleting the `MMUCR.AT` enable and observing it stay green — that is the

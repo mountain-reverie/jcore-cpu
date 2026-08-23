@@ -317,6 +317,11 @@ ENTRY(_done)
         bra     _done
         nop
 ENTRY(_fail)
+        ! `mov #imm, Rn` SIGN-EXTENDS 8 bits, and this guard's codes reach into
+        ! the 0x80/0x90 band, so 0x85 would otherwise be reported as
+        ! 0xFFFFFF85. Normalise here rather than at every use site; every code
+        ! this file can emit fits in a byte.
+        extu.b  r9, r9
         mov.l   p_test_result, r0
         tst     r9, r9
         bf      1f

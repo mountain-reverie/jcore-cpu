@@ -354,6 +354,7 @@ mmupmtlbmask.elf: mmupmtlbmask.o
 mmupmrawvpn.elf: mmupmrawvpn.o
 mmupmmixzero.elf: mmupmmixzero.o
 mmuwalkreadorder.elf: mmuwalkreadorder.o
+mmupmreservedpm.elf: mmupmreservedpm.o
 mmutsbcoh.elf: mmutsbcoh.o
 mmuwalkstale.elf: mmuwalkstale.o
 mmuwalktorn.elf: mmuwalktorn.o

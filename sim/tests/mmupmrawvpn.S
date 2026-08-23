@@ -44,8 +44,10 @@
 ! three untranslated addresses (PA 0x0060_0000 / 0x0060_3000 / 0x0068_0000) are
 ! seeded with poison, so an inert MMU fails checks 0x41 / 0x43 / 0x45 instead
 ! of passing. The frame moves by editing p_ptel_data alone. The CODE page
-! (VA 0x1000 -> PA 0x1000) is identity, forced by the flat image load
-! (README-identity-mapping.md category (b)); no assertion depends on it.
+! (VA 0x0000 -> PA 0x0000, the whole image) is identity, forced by the flat
+! image load (README-identity-mapping.md category (b)); no assertion depends on
+! it. See the note at p_pteh_code for why this guard maps the code page at
+! VPN 0 rather than at `start`'s own page the way its siblings do.
 !
 ! P5 (VA-backing). 0x0060_3000, 0x0060_0000, 0x0068_0000 and the code page are
 ! all inside the 16 MB backed window; phase 1 misses, so its raw VA reaches the
@@ -161,8 +163,21 @@ ENTRY(start)
         .align 2
 p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_gen - 0x100
-p_pteh_code:    .long start
-p_ptel_code:    .long start + 0x000000CD
+! ---- The code page is deliberately mapped at VPN 0 (VA 0x0000_0000 ->
+! ---- PA 0x0000_0000, identity, forced by the flat image load) rather than at
+! ---- `start`'s own 4 KB page the way this guard's siblings do. THIS IS
+! ---- LOAD-BEARING FOR C5'S MUTATION PROOF, not a style choice: the mutation
+! ---- is "mask tlb_vpn_mx before the install", and any mask coarse enough to
+! ---- break the pm=4 entry under test also clears the low VPN bits of the
+! ---- HARNESS'S OWN code page. At VPN 1 that kills the instruction stream and
+! ---- the machine wedges before any guard can report -- a mutation artifact,
+! ---- and exactly the timeout-instead-of-a-result-code failure
+! ---- jcore-cpu/CLAUDE.md rules out. At VPN 0 the code page is invariant under
+! ---- every mask, so the mutation isolates the property under test.
+! ---- The whole image therefore has to fit in VA 0x0000..0x0FFF; there is no
+! ---- trailing pad page, and sim/tests/Makefile's link map is the check.
+p_pteh_code:    .long 0x00000000
+p_ptel_code:    .long 0x000000CD
 p_tsbslot_reg:  .long 0xFF000048
 p_tsbbr_addr:   .long 0xFF000014
 p_tsbbr_val:    .long 0x00010006
@@ -320,9 +335,5 @@ _v_fault:                               ! = VBR + 0x400
 
         .align 2
 H_trip:         .long 0x000000E7
-
-        .balign 0x1000
-_pad_page:
-        .space 0x1000, 0
 
 #endif  ! CONFIG_PRIV_ARCH

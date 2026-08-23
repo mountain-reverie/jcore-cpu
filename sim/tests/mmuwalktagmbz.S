@@ -27,8 +27,9 @@
 ! M2 -- the `bus_d(11 downto 0) = x"000"` term deleted from st_tag_hi
 !       (contract R2's exact wording):
 !         mmuwalktagmbz     RED, Result=33 (0x21)  <- ITS OWN CODE
-!         mmuwalkcoarsetag  PASS   mmupmtlbmask  PASS
-!         mmupmrawvpn       PASS   mmupmmixzero  PASS
+!         mmuwalkcoarsetag  PASS   mmupmtlbmask     PASS
+!         mmupmrawvpn       PASS   mmupmmixzero     PASS
+!         mmuwalkreadorder  PASS   mmupmreservedpm  PASS
 !
 ! M1 -- st_tag_hi ALSO accepts a 16 KB-granular tag (C1's mutation):
 !       mmuwalktagmbz PASS. Correct and worth stating: this row's tag is the
@@ -37,17 +38,20 @@
 !
 ! M3 -- page_mask hardwired to "0000": RED, Result=39 (0x27), phase 2 data.
 ! M4 -- vpn_compare_mask("0000") off n=0: PASS.
+! M7 -- the two mask functions agree above pm=8: PASS.
 ! M6 -- data read before tag_hi: RED via p_walk_read_order (global invariant).
 !
 ! RESTORED: pristine RTL, PASS.
 ! All runs: docker ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
-! SIM_TOP=cpu_tb, --stop-time=120us, measured 2026-08-22. Every mutation run
-! REBUILT the cosim (never `-n`, which skips the build and measures stale
-! hardware). To re-apply any mutation you need BOTH halves of
-! docs/mmu/group-c-locks.md: section 3 (the edits, one row per mutation)
-! and section 9 (the run). That file also carries the full cross-table
-! and, per row, whether it has been independently reproduced or rests on
-! this record alone.
+! SIM_TOP=cpu_tb, --stop-time=120us. First measured 2026-08-22 on base 6475932;
+! EVERY line above RE-MEASURED FROM SOURCE on 2026-08-23 after the rebase onto
+! 9fdfaf6, which carries a68c765's I->D shadow fill. Every result code came out
+! identical. Only run-time timings moved; those are A/B'd against the shadow
+! fill in docs/mmu/group-c-locks.md section 4b. Every mutation run REBUILT the
+! cosim (never `-n`, which skips the build and measures stale hardware). To
+! re-apply any mutation you need BOTH halves of docs/mmu/group-c-locks.md:
+! section 3 (the edits, one row per mutation) and section 9 (the run). That
+! file also carries the full cross-table, which now has no unmeasured cell.
 !
 !
 #define CTAG_BASE   0x20

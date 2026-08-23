@@ -389,7 +389,7 @@ begin
       -- The decode below reads the word offset from bus_a(3 downto 2) and the
       -- way select from bus_a(4), which is the entry layout ONLY at
       -- entry_bytes = 16 -- the normative layout (contract section 4) and the
-      -- only value cpu.vhd instantiates (core/cpu.vhd:638).
+      -- only value cpu.vhd instantiates (core/cpu.vhd:688).
       --
       -- ASSERTED, DELIBERATELY NOT USED AS A GATE. An earlier revision carried
       -- `and entry_bytes = 16` in the condition below, which would have

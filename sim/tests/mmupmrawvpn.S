@@ -85,8 +85,20 @@
 ! M5c -- THE CONTRACT'S STATED MUTATION, "mask tlb_vpn_mx by anything", taken
 !        literally: `and vpn_compare_mask("0101")` (a hardwired 4 MB mask,
 !        coarser than the entry's own pm=4). THIS DOES NOT PRODUCE A RESULT
-!        CODE. It produces a WEDGE: the run stalls at 1.49us with
+!        CODE. It produces a WEDGE: the run stalls at 1.32us with
 !        "Address changed but did not see ACK" and never reports.
+!
+!        THAT ONSET MOVED WITH a68c765 and the new value is measured, not
+!        adjusted to fit. Before the I->D shadow fill it was 1.49us; with the
+!        fill it is 1.32us. Proven by A/B on this tree: with the mutation held
+!        and `dtlb_wr` reduced to `walk_install and not walk_side_i` (shadow
+!        fill off) the warning is back at exactly 1490ns; with the shadow fill
+!        on it is 1320ns. The mechanism is direct -- the shadow fill installs
+!        the mis-masked entry into the DTLB one cycle after the ITLB install
+!        instead of waiting for a literal-pool load's own walk, so the D-side
+!        access that can never match replays sooner and the unbounded
+!        install-then-still-miss re-arm loop below stalls the bus ~170ns
+!        earlier. The WEDGE ITSELF IS UNCHANGED; only when it starts moved.
 !
 !        Root cause, and it is a finding rather than a harness problem. Any
 !        mask COARSER than the entry's own makes the installed entry fail to
@@ -106,18 +118,20 @@
 !        the entry under test (see the note at p_pteh_code); at VPN 1 the
 !        instruction stream dies too and the wedge tells you even less.
 !
-! SPECIFICITY: M1 PASS, M2 PASS, M4 PASS, M5a PASS.
+! SPECIFICITY: M1 PASS, M2 PASS, M4 PASS, M5a PASS, M7 PASS.
 ! M6 (data before tag_hi) RED via p_walk_read_order, the global invariant.
 !
 ! RESTORED: pristine RTL, PASS.
 ! All runs: docker ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
-! SIM_TOP=cpu_tb, --stop-time=120us, measured 2026-08-22. Every mutation run
-! REBUILT the cosim (never `-n`, which skips the build and measures stale
-! hardware). To re-apply any mutation you need BOTH halves of
-! docs/mmu/group-c-locks.md: section 3 (the edits, one row per mutation)
-! and section 9 (the run). That file also carries the full cross-table
-! and, per row, whether it has been independently reproduced or rests on
-! this record alone.
+! SIM_TOP=cpu_tb, --stop-time=120us. First measured 2026-08-22 on base 6475932;
+! EVERY line above RE-MEASURED FROM SOURCE on 2026-08-23 after the rebase onto
+! 9fdfaf6, which carries a68c765's I->D shadow fill. Every result code came out
+! identical. Only run-time timings moved; those are A/B'd against the shadow
+! fill in docs/mmu/group-c-locks.md section 4b. Every mutation run REBUILT the
+! cosim (never `-n`, which skips the build and measures stale hardware). To
+! re-apply any mutation you need BOTH halves of docs/mmu/group-c-locks.md:
+! section 3 (the edits, one row per mutation) and section 9 (the run). That
+! file also carries the full cross-table, which now has no unmeasured cell.
 !
 !
 #include "sim_instr.h"

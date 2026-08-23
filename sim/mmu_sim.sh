@@ -172,10 +172,13 @@ else
   # trustworthiness"), so none of them depends on a Group-B guard for its
   # non-vacuity and P1g was not needed.
   #
-  # Stop time 120us against measured completions of 2.4-8.0us (VCD final
-  # timestamps, 2026-08-22): coarsetag 2.66, tagmbz 2.69, tlbmask ~3,
-  # rawvpn 2.38, readorder 6.46, mixzero 7.96, reservedpm 4.37. ~15x margin on
-  # the slowest.
+  # Stop time 120us against measured completions of 2.2-8.6us (VCD final
+  # timestamps, RE-MEASURED 2026-08-23 on base 9fdfaf6, i.e. WITH the I->D
+  # shadow fill of a68c765): coarsetag 2.55, tagmbz 2.56, tlbmask 2.45,
+  # rawvpn 2.20, readorder 6.37, mixzero 8.53, reservedpm 4.03. ~14x margin on
+  # the slowest. Six of the seven got FASTER (the shadow fill removes
+  # literal-pool D-side walks); mixzero got SLOWER, 7.95 -> 8.53, measured by
+  # A/B with the fill off. See docs/mmu/group-c-locks.md section 4b.
   run_guard mmuwalkcoarsetag "cpu_tb" 120us   # C1  canonical 4 KB tag
   run_guard mmuwalktagmbz    "cpu_tb" 120us   # C2  tag_hi[11:0] MBZ (R2)
   run_guard mmuwalkreadorder "cpu_tb" 120us   # C3  driver for p_walk_read_order

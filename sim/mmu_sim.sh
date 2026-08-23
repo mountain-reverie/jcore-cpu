@@ -221,6 +221,12 @@ else
   run_guard mmupmrawvpn      "cpu_tb" 120us   # C5  raw VPN, masked at match time
   run_guard mmupmmixzero     "cpu_tb" 120us   # C7g pm=0 + 1 + 2 + 4 co-resident
   run_guard mmupmreservedpm  "cpu_tb" 120us   # C6g reserved PageMask 9..15 (C8)
+  # DRIVER for core/cpu.vhd's p_walk_takeover monitor: an I-side TSB walk armed
+  # with a D store live in the branch's delay slot. The monitor is the detector
+  # -- a double-committed bus access is invisible to software on the plain SRAM
+  # this suite runs on -- and this guard is what makes the shape happen at all.
+  # See the file's own header for the proof it drives and the mutation evidence.
+  run_guard mmuwalkitakeover "cpu_tb" 120us
   # LANE-2 INVENTORY MIRROR (contract P3). The real-kernel-object harnesses are
   # not referenced by this script at all -- they run only under
   # sim/linux_sim.sh and in CI -- so they are listed here as a comment to keep

@@ -756,21 +756,55 @@ begin
     -- itself is not allowed to see) would otherwise be latched by the walker as
     -- a TSB word -- it would compare the core's own load data against the tag.
     --
-    -- walk_own is REGISTERED (p_walk_own below), so it is still '0' on the
-    -- very first walk_busy cycle. For an I-SIDE walk that first cycle is the
-    -- one bounded gap in the bus-takeover story: db_o in g_dstore_squash below
-    -- still carries whatever sig_db_o the core itself presents that cycle, not
-    -- the walker's bus_a/bus_en, because the `walk_own = '1'` mux arm has not
-    -- fired yet. If an OLDER, already-in-flight D-side store happened to be the
-    -- access on the bus in that exact cycle, it commits externally and is then
-    -- replayed once ack is restored after the walk -- it is NOT demoted, since
-    -- d_store_faulting only demotes a D-side TLB fault, not this ordering case.
-    -- Harmless on plain SRAM (idempotent replay); not necessarily harmless on
-    -- MMIO or TAS, same class as the walk_i_miss ordering caveat above. The
-    -- window is bounded to exactly this one cycle (walk_own is '1' from the
-    -- next cycle on for the rest of the walk). It is UNVERIFIED whether the
-    -- pipeline can actually have a D access in flight on that specific cycle
-    -- of an I-side walk's arming -- not fixed here, only recorded.
+    -- walk_own is REGISTERED (p_walk_own below), so it is still '0' on the very
+    -- first walk_busy cycle, and db_o in g_dstore_squash below therefore still
+    -- carries whatever sig_db_o the core presents that cycle rather than the
+    -- walker's bus_a/bus_en. On a D-SIDE walk that is the intended handshake:
+    -- the faulting access IS on the bus (walk_d_miss requires sig_db_o.en='1')
+    -- and the takeover waits for its external ack, as p_walk_own explains.
+    --
+    -- ON AN I-SIDE WALK THAT CYCLE IS PROVABLY EMPTY. It used to be recorded
+    -- here as an UNVERIFIED double-commit window -- "if an OLDER, already
+    -- in-flight D-side store happened to be on the bus in that exact cycle it
+    -- commits externally and is then replayed; harmless on plain SRAM, not
+    -- necessarily harmless on MMIO or TAS". It cannot happen. Proof, in four
+    -- steps, each a property of a named line elsewhere:
+    --
+    --  (1) A new D-bus access is launched ONLY from the "start new memory
+    --      transactions" block in core/datapath.vhm, which is gated on
+    --      `this.slot = '1'`. Nothing else drives this.data_o.en to '1'.
+    --  (2) `this.slot` is set to '1' only inside the block gated on
+    --      `this.data_o.en = '0' and slot_inst_en = '0' and ...`
+    --      (core/datapath.vhm) -- so a slot needs the instruction bus either
+    --      IDLE or ACKED this cycle, since slot_inst_en is this.inst_o.en and
+    --      is cleared only on the `inst_i.ack = '1'` transfer.
+    --  (3) An I-side walk requires sig_inst_o.en = '1' (walk_i_miss above) and
+    --      holds walk_supp_i = '1' from the ARMING cycle onwards -- that is
+    --      what the `walk_arm and walk_i_miss` term is for. With
+    --      `dp_inst_i.ack <= inst_i.ack and not walk_supp_i` the datapath's
+    --      inst ack is therefore '0' for the whole walk, the fetch is never
+    --      transferred, and slot_inst_en stays '1'.
+    --  (4) So this.slot = '0' from the arming cycle to the end of the walk and
+    --      no new D access can start; and walk_i_miss already required
+    --      sig_db_o.en = '0' ON the arming cycle. sig_db_o.en is therefore '0'
+    --      for the ENTIRE I-side walk, not merely on its first busy cycle.
+    --
+    -- Two consequences. p_walk_own's `sig_db_o.en = '0'` arm fires at the end
+    -- of the first busy cycle, so the un-owned window is exactly one cycle
+    -- wide; and that cycle carries no core access, so there is nothing to
+    -- double-commit -- not on MMIO, not on TAS.
+    --
+    -- MEASURED, not only argued. A temporary `severity warning` probe of
+    -- exactly p_walk_takeover's condition was swept over every image in
+    -- sim/tests (135 images, cpu_tb and cpu_cache_tb): ZERO hits. The same
+    -- expression with the walk_side_i term REMOVED fired 400+ times over the
+    -- same sweep (that is the D-side handshake), and I-side arms fired 600+
+    -- times -- so the zero is the property and not a dead probe.
+    --
+    -- p_walk_takeover below is the standing lock on steps (1)-(4). It has to
+    -- be an RTL assertion: a double-committed bus transaction leaves NO
+    -- software-visible trace on the plain SRAM the guard suite runs on, so no
+    -- .S file can detect it. Driver: sim/tests/mmuwalkitakeover.S.
     walk_bus_ack <= db_i.ack and walk_own;
 
     -- Bus ownership handshake for the takeover. On the cycle the walk starts,
@@ -795,6 +829,33 @@ begin
       end if;
 
     end process p_walk_own;
+
+    -- I-SIDE TAKEOVER WINDOW LOCK. Pins steps (1)-(4) of the proof above: on
+    -- an I-side walk the core's data bus is idle, so the un-owned first busy
+    -- cycle cannot double-commit anything. Any future change that lets the
+    -- I-fetch be acked during a walk, drops the arming cycle from walk_supp_i,
+    -- relaxes walk_i_miss's `sig_db_o.en = '0'` term, or lets datapath.vhm
+    -- issue a D access without a slot, reopens the window and fires this.
+    -- Simulation-only; assertions have no synthesis effect.
+    --
+    -- CLOCKED, not concurrent, for the same reason p_r1_assert is: walk_own is
+    -- registered while its neighbours here are combinational, so a concurrent
+    -- assert samples deltas instead of settled end-of-cycle values.
+    p_walk_takeover : process (clk) is
+    begin
+
+      if rising_edge(clk) then
+        assert not (rst = '0' and walk_busy = '1' and walk_own = '0'
+                    and walk_side_i = '1' and sig_db_o.en = '1')
+          -- The cosim's line reader truncates a report at roughly 110
+          -- characters including its own prefix, so the crux comes FIRST.
+          report "I-SIDE WALK TAKEOVER WINDOW OCCUPIED: a core D access is on "
+                 & "db_o before the walker owns it, so it commits externally "
+                 & "and is replayed. See p_walk_takeover in core/cpu.vhd."
+          severity failure;
+      end if;
+
+    end process p_walk_takeover;
 
   end generate g_tlb_walk;
 

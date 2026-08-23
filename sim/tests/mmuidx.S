@@ -13,10 +13,18 @@
 !   (no exception, no AT) -- see the manual RB=1 experiment in the report.
 !
 ! This test isolates the TRIGGER with three independent cases, each emitting a
-! distinct result code on failure. Identity maps throughout (this MMU emits PA
-! tags, not bus relocation; all guards use identity). The corruption fires in
-! case B (codes 6/8/9, R0-indexed inside the RB=1 handler); cases A and the
-! plain/PC-rel sanity reads pass.
+! distinct result code on failure. Identity maps throughout. The corruption
+! fires in case B (codes 6/8/9, R0-indexed inside the RB=1 handler); cases A
+! and the plain/PC-rel sanity reads pass.
+!
+! CORRECTION (2026-08-21): the parenthetical here used to read "this MMU emits
+! PA tags, not bus relocation; all guards use identity". BOTH halves are false.
+! cpu.vhd's g_dstore_squash (:761-816) / g_inst_p1_fold (:822-847) splice the
+! PPN into the external db_o.a / inst_o.a under PRIV_ARCH, so the bus IS
+! relocated under every top; and mmuwalkdside, mmupagereloc16k, mmureloc and
+! mmuboot all map non-identity. Identity is a CHOICE here -- what carries this
+! guard is that every case asserts a delivered exception, not a read-back.
+! See sim/tests/README-identity-mapping.md.
 !
 ! Memory model (cpu_ctb): image flat at VA 0, RAM 0..0x1000000. P1 (0x8000xxxx)
 ! folds to PA 0x0000xxxx on the bus. We use:

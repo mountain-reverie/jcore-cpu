@@ -190,8 +190,7 @@ ENTRY(_after_ifetch)
         mov.l   k_mask16,  r1 ; and    r1, r13
 
         ! ---- Seed an SPC sentinel for the WARM leg's "no exception" assert.
-        ! WHY THIS IS HERE (do not drop it): the MMU emits PA tags and does NOT
-        ! relocate the instruction bus, and every page this guard maps is
+        ! WHY THIS IS HERE (do not drop it): every page this guard maps is
         ! IDENTITY (VA 0x00100000 -> PA 0x00100000). An UNTRANSLATED fetch of
         ! the workload therefore returns the SAME instruction word as a
         ! translated one, so "the workload ran and wrote its sentinel" does not
@@ -204,6 +203,13 @@ ENTRY(_after_ifetch)
         ! (same lesson as mmuwalkiside.S's Result=2). SPC is written by
         ! exception entry and by nothing else, so a surviving sentinel is that
         ! proof. Checked at _after_ifetch2 as code 13.
+        !
+        ! NOTE (2026-08-21): this block used to open "the MMU emits PA tags and
+        ! does NOT relocate the instruction bus". That was FALSE -- cpu.vhd's
+        ! g_inst_p1_fold (:822-847) splices the PPN into the external inst_o.a
+        ! under PRIV_ARCH, so a non-identity workload page WOULD be observable
+        ! here. Identity is a CHOICE, not a constraint; the SPC sentinel is
+        ! what makes it safe. See sim/tests/README-identity-mapping.md.
         mov.l   v_sent_spc, r0
         .word   0x404E                 ! LDC r0, SPC
 

@@ -304,17 +304,20 @@ mode in this repo, not an exotic one. Before trusting green:
   succeeds and returns the right bytes whether the translation resolved, the
   entry never installed, the walker never ran, or `MMUCR.AT` was off for the
   whole run. Green then means nothing — and identity is the easiest mapping to
-  write, so it is the most common way an MMU guard tests nothing. Under
-  `cpu_cache_tb`, choose `PA != VA` and read back through the P2 physical
-  alias: a missing translation then reads the wrong bytes. **Under `cpu_tb`
-  that witness does not exist** — `mmu_o.*_pa_tag` is wired only to the caches
-  (`sim/cpu_cache_tb.vhd:230,248`), so the bus sees the VA and *no* mapping is
-  observable in returned data. Identity is likewise **forced** for `pm >= 6`,
-  which spans the cosim's whole 16 MB backed window (`[0, 0x0100_0000)`,
-  `sim/cpu_ctb.c` `mem_bus_stack_map` / `if_bus_stack_map`), so every PPN bit
-  `page_offset_mask()` leaves live must be zero. Whenever identity is forced,
-  the guard **must** carry an independent witness that translation actually
-  happened: a `P4_TSBCNT` (`0xFF000054`) walks/hits delta *taken across the
+  write, so it is the most common way an MMU guard tests nothing. Choose
+  `PA != VA` and read back through the P2 physical alias: a missing
+  translation then reads the wrong bytes. This works under **every** top —
+  `g_dstore_squash` / `g_inst_p1_fold` (`core/cpu.vhd:761-847`, both under
+  `if PRIV_ARCH generate`, which `sim/cpu_tb.vhd` sets) splice the PPN into
+  the *external* `db_o.a` / `inst_o.a`, so relocation happens inside the core;
+  `*_pa_tag` only carries the PIPT caches' tag. Identity **is** forced for
+  `pm >= 6`, which spans the cosim's whole 16 MB backed window
+  (`[0, 0x0100_0000)`, `sim/cpu_ctb.c` `mem_bus_stack_map` /
+  `if_bus_stack_map`), so every PPN bit `page_offset_mask()` leaves live must
+  be zero — and it can be load-bearing to an image layout that pins code at a
+  fixed PA. Where identity is forced, the guard **must** carry an independent
+  witness that translation actually happened: a `P4_TSBCNT` (`0xFF000054`)
+  walks/hits delta *taken across the
   access under test* — a snapshot after the install proves nothing — an
   asserted fault count or `EXPEVT`/`MMUFSR`/`TEA` value, the walker's PTEL
   image read back out of the TSB row, or an effect only a correct PageMask can

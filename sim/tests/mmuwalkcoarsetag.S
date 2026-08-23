@@ -82,7 +82,48 @@
 !
 ! MUTATION EVIDENCE
 ! =================
-!   (filled in by the mutation runs -- see the block at the end of this header)
+! M1 -- st_tag_hi ALSO accepts a 16 KB-granular tag (the rejected alternatives
+!       3(a)/(b): `(bus_d(31 downto 12) = va_reg(31 downto 12)) or
+!       (bus_d(31 downto 14) = va_reg(31 downto 14) and bus_d(13 downto 12) =
+!       "00")`, MBZ term kept):
+!         mmuwalkcoarsetag  RED, Result=17 (0x11)  <- ITS OWN CODE
+!         mmuwalktagmbz     PASS   mmupmtlbmask  PASS
+!         mmupmrawvpn       PASS   mmupmmixzero  PASS
+!       So the mutation is caught HERE and only here -- the lock is specific.
+!
+!       Why the mutation ADDS an arm rather than replacing the compare: a
+!       strict 16 KB compare also rejects this harness's own code-page row
+!       (`start` is at VA 0x1000, whose VA[13:12] is 01), so the instruction
+!       stream dies and the guard reports 0x12 for a reason that has nothing to
+!       do with the case. Measured, and recorded so the artifact is not
+!       rediscovered: with the strict form both C1 and C2 report EXPEVT=0x040
+!       (IMISS) instead of their own codes.
+!
+! M2 -- the tag_hi[11:0] MBZ term deleted (C2's mutation): mmuwalkcoarsetag
+!       PASS. The two locks do not shadow each other.
+!
+! M3 -- `ram(idx).page_mask <= "0000"` on install: RED, Result=23 (0x17),
+!       phase 2's data check -- with pm forced to 0 the entry relocates via the
+!       whole PPN, so VA 0x45000 lands at PA 0x60000 instead of 0x61000. Not
+!       this lock's own mutation (it is C4's/C7g's) but recorded because it
+!       shows the phase-2 positive control is load-bearing.
+!
+! M4 -- vpn_compare_mask("0000") moved off n=0: PASS (it only affects pm=0
+!       entries; this guard's page is pm=1).
+!
+! M6 -- the walker reads data (+8) before tag_hi (+0): RED via the RTL
+!       assertion p_walk_read_order, not via a result code. Expected: that
+!       assertion is a global invariant and fires on the first walk of any
+!       image.
+!
+! RESTORED: pristine RTL, PASS. Confirmed twice, once after each batch.
+! All runs: docker ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
+! SIM_TOP=cpu_tb, --stop-time=120us, measured 2026-08-22. Every mutation run
+! REBUILT the cosim (never `-n`, which skips the build and measures stale
+! hardware). Mutations are applied and reverted by
+! /scratch/mut.py in the session log; the full cross-table is in
+! docs/mmu/group-c-locks.md.
+!
 !
 #include "sim_instr.h"
 #include "mmuwalk_common.inc"

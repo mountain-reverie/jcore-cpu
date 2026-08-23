@@ -92,7 +92,38 @@
 !
 ! MUTATION EVIDENCE
 ! =================
-!   (see the block at the end of this header)
+! M4 -- THE STATED MUTATION (ii): `vpn_compare_mask("0000")` moved off n=0
+!       (n := 2), which is precisely "merge the two adjacent 4 KB pages".
+!         mmupmmixzero  RED, Result=84 (0x54)  <- ITS OWN CODE
+!         mmuwalkcoarsetag PASS   mmuwalktagmbz PASS
+!         mmupmtlbmask     PASS   mmupmrawvpn   PASS
+!         mmuwalkreadorder PASS   mmupmreservedpm PASS
+!       So M4 is caught HERE and nowhere else -- the pm=0 arm of the matrix is
+!       load-bearing, not decorative.
+!
+!       WHERE it fails is more informative than the code alone. 0x54 is round
+!       0's FIFTH touch, V0b's own first touch -- not round 1 as one might
+!       expect. With the compare widened, V0b's access MATCHES the already
+!       resident V0 entry, so it never misses, never walks, and relocates
+!       through V0's frame: it reads 0xA0000000 where 0xA0B0000B is planted.
+!       The two adjacent 4 KB pages have merged, exactly as C7g says they must
+!       not, and the guard sees it at the earliest possible instant.
+!
+! M3 -- THE STATED MUTATION (i): `ram(idx).page_mask <= "0000"` on install.
+!       RED, Result=95 (0x5F), "a fault fired": with every entry reduced to
+!       4 KB, round 1's V1+0x2000 has no coverage and no row of its own.
+!
+! SPECIFICITY: M1 PASS, M2 PASS, M5a PASS, M7 (masks agree above pm=8) PASS.
+! M6 (data before tag_hi) RED via p_walk_read_order, the global invariant.
+!
+! RESTORED: pristine RTL, PASS.
+! All runs: docker ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
+! SIM_TOP=cpu_tb, --stop-time=120us, measured 2026-08-22. Every mutation run
+! REBUILT the cosim (never `-n`, which skips the build and measures stale
+! hardware). Mutations are applied and reverted by
+! /scratch/mut.py in the session log; the full cross-table is in
+! docs/mmu/group-c-locks.md.
+!
 !
 #include "sim_instr.h"
 #include "mmuwalk_common.inc"

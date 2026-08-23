@@ -111,7 +111,40 @@
 !
 ! MUTATION EVIDENCE
 ! =================
-!   (see the block at the end of this header)
+! M7 -- THE STATED MUTATION: make `page_offset_mask()` and
+!       `vpn_compare_mask()` AGREE above pm=8, which is the RIGHT fix -- in
+!       vpn_compare_mask, `when "1001" => n := 18; when others => n := 20`
+!       becomes `n := 16` for both, so pm >= 9 behaves as 256 MB.
+!         mmupmreservedpm  RED, Result=147 (0x93)  <- ITS OWN CODE
+!         mmuwalkreadorder PASS
+!       0x93 is phase 2's DATA check: with the wildcard reduced to 256 MB,
+!       VA 0x1060_0000 no longer matches the entry installed for
+!       VA 0x0080_0000, so it misses, walks its OWN row, and returns that row's
+!       frame (0xBAD00002) instead of the wildcard's relocation. The run does
+!       NOT wedge -- which is the whole reason the probe VA carries its own row
+!       (see the construction note above).
+!
+!       This is the ONE Group-C mutation that is a legitimate change rather
+!       than a wrong fix. C6g's job is to make it IMPOSSIBLE TO MAKE SILENTLY:
+!       whoever fixes C8 properly must come here, read what the old behaviour
+!       was, and update this guard deliberately.
+!
+! M3 -- `ram(idx).page_mask <= "0000"` on install: RED, Result=145 (0x91),
+!       phase 1's data check. Expected -- pm forced to 0 relocates V1 through
+!       the (zero) PPN instead of PA = VA & 0x0FFF_FFFF.
+!
+! M4 -- vpn_compare_mask("0000") moved off n=0: PASS. C7g catches that one;
+!       this guard and C7g sit at opposite ends of the PageMask range and do
+!       not shadow each other.
+!
+! RESTORED: pristine RTL, PASS.
+! All runs: docker ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
+! SIM_TOP=cpu_tb, --stop-time=120us, measured 2026-08-22. Every mutation run
+! REBUILT the cosim (never `-n`, which skips the build and measures stale
+! hardware). Mutations are applied and reverted by
+! /scratch/mut.py in the session log; the full cross-table is in
+! docs/mmu/group-c-locks.md.
+!
 !
 #include "sim_instr.h"
 #include "mmuwalk_common.inc"

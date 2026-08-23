@@ -268,6 +268,19 @@ jobs:
           # walker-installed code page. (It was written when it was the ONLY
           # guard doing so without LDTLB; every guard is walker-only now.) It already runs under cpu_tb above; this adds the CACHED
           # top. Verified passing 2026-08-12.
+          echo "== Group-C contract locks (pagemask-walker-contract.md 7.2) =="
+          # Pass on today's RTL; they exist to turn RED on the named wrong fix.
+          # Non-vacuity is the stated mutation (contract P4), recorded per guard
+          # and in docs/mmu/group-c-locks.md. Keep this list and the one in
+          # sim/mmu_sim.sh in step -- scripts/guard_list_drift.sh compares them.
+          # 120us against measured completions of 2.4-8.0us.
+          run_guard mmuwalkcoarsetag "cpu_tb" 120us
+          run_guard mmuwalktagmbz    "cpu_tb" 120us
+          run_guard mmuwalkreadorder "cpu_tb" 120us
+          run_guard mmupmtlbmask     "cpu_tb" 120us
+          run_guard mmupmrawvpn      "cpu_tb" 120us
+          run_guard mmupmmixzero     "cpu_tb" 120us
+          run_guard mmupmreservedpm  "cpu_tb" 120us
           run_guard mmuwalkdside cpu_cache_tb 300us
           run_guard mmuicolor cpu_cache_tb 400us
           # D-side: a translated C=1 page caches a data read (stale after a P2

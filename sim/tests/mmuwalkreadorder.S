@@ -67,7 +67,40 @@
 !
 ! MUTATION EVIDENCE
 ! =================
-!   (see the block at the end of this header)
+! M6 -- THE STATED MUTATION, rejected alternative 3(d): the walker reads
+!       `data` (+8) before `tag_hi` (+0). Applied by reordering the FSM --
+!       st_idle -> st_data, st_data -> st_tag_hi, st_tag_lo -> st_install,
+!       st_next_way -> st_data -- so the per-way bus sequence becomes
+!       +8, +0, +4 while the walk still installs.
+!
+!       RESULT: the run ends at 3760 ns with
+!
+!         ../core/tlb_walk.vhd:427:15:@3760ns:(assertion failure):
+!         WALK READ ORDER VIOLATED: data (+8) read before ...
+!         instance: /cpu_tb/cpu1/g_tlb_walk/u_tlb_walk/p_walk_read_order
+!
+!       That is a NAMED, self-identifying failure that cannot be conflated with
+!       another guard's, and at 3.76us it is 32x inside the 120us stop-time --
+!       it is the counter firing, not a timeout. All five Group-C locks fail
+!       under M6, as they must: the assertion is a global invariant, so it
+!       fires on the first walk of any image.
+!
+! SPECIFICITY -- every other mutation leaves this guard GREEN, so it is not a
+! guard that simply dislikes RTL edits:
+!       M1 (coarse tag accepted)                     PASS
+!       M2 (MBZ term deleted)                        PASS
+!       M3 (page_mask hardwired to "0000")           PASS
+!       M4 (vpn_compare_mask("0000") off n=0)        PASS
+!       M7 (the two mask functions agree above pm=8) PASS
+!
+! RESTORED: pristine RTL, PASS.
+! All runs: docker ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
+! SIM_TOP=cpu_tb, --stop-time=120us, measured 2026-08-22. Every mutation run
+! REBUILT the cosim (never `-n`, which skips the build and measures stale
+! hardware). Mutations are applied and reverted by
+! /scratch/mut.py in the session log; the full cross-table is in
+! docs/mmu/group-c-locks.md.
+!
 !
 #include "sim_instr.h"
 #include "mmuwalk_common.inc"

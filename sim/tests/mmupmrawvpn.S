@@ -70,7 +70,53 @@
 !
 ! MUTATION EVIDENCE
 ! =================
-!   (see the block at the end of this header)
+! M3 -- `ram(idx).page_mask <= "0000"` on install: RED, Result=65 (0x41),
+!       phase 1's data check. With the entry reduced to 4 KB the install
+!       relocates VA 0x00603000 through the whole PPN to PA 0x00900000 instead
+!       of 0x00903000, so the very first read is wrong. This is the guard's
+!       REPORTABLE mutation proof.
+!
+! M5a -- THE NATURAL WRONG FIX, `tlb_vpn_mx <= walk_va_r(31 downto 12) and
+!        vpn_compare_mask(walk_ptel(11 downto 8))`: PASS, and this is CORRECT,
+!        not a hole. Clearing bits the match path already ignores cannot change
+!        any outcome. C5 rejects store-time masking on COST, not correctness,
+!        and the measurement confirms the clause rather than contradicting it.
+!
+! M5c -- THE CONTRACT'S STATED MUTATION, "mask tlb_vpn_mx by anything", taken
+!        literally: `and vpn_compare_mask("0101")` (a hardwired 4 MB mask,
+!        coarser than the entry's own pm=4). THIS DOES NOT PRODUCE A RESULT
+!        CODE. It produces a WEDGE: the run stalls at 1.49us with
+!        "Address changed but did not see ACK" and never reports.
+!
+!        Root cause, and it is a finding rather than a harness problem. Any
+!        mask COARSER than the entry's own makes the installed entry fail to
+!        match THE VERY VA THE WALK WAS ARMED FOR. The walker installs, the
+!        access replays, misses again -- and core/tlb_walk.vhd only sets
+!        `tried` when a walk GIVES UP, never after a successful install, and
+!        `giveups` likewise only counts give-ups. So the walker re-arms without
+!        bound: walk, install, miss, walk, ... The core is stalled throughout,
+!        no instruction retires, and NO software guard can report anything.
+!        Any mask FINER than or equal to the entry's own is the provable no-op
+!        of M5a. There is no middle case, so C5's stated mutation is either a
+!        no-op or a hardware livelock -- never a reportable guard failure.
+!        Recorded as a proposed contract amendment and as an RTL follow-up in
+!        docs/mmu/group-c-locks.md.
+!
+!        This guard's code page is at VPN 0 specifically so that M5c isolates
+!        the entry under test (see the note at p_pteh_code); at VPN 1 the
+!        instruction stream dies too and the wedge tells you even less.
+!
+! SPECIFICITY: M1 PASS, M2 PASS, M4 PASS, M5a PASS.
+! M6 (data before tag_hi) RED via p_walk_read_order, the global invariant.
+!
+! RESTORED: pristine RTL, PASS.
+! All runs: docker ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
+! SIM_TOP=cpu_tb, --stop-time=120us, measured 2026-08-22. Every mutation run
+! REBUILT the cosim (never `-n`, which skips the build and measures stale
+! hardware). Mutations are applied and reverted by
+! /scratch/mut.py in the session log; the full cross-table is in
+! docs/mmu/group-c-locks.md.
+!
 !
 #include "sim_instr.h"
 #include "mmuwalk_common.inc"

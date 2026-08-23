@@ -334,8 +334,12 @@ begin
 
     -- A WARM reset: one clocked reset cycle in the middle of a running
     -- machine, which is the case core/tlb.vhd's `ram` initialiser does NOT
-    -- cover. Shaped exactly like flush_all, because in the hardware it IS the
-    -- same flush arm (`rst = '1' or ti = '1'`).
+    -- cover. Shaped like flush_all because a reset revokes the same way TI
+    -- does -- NOT because the two share a condition in the hardware. The RTL
+    -- is deliberately `if (rst = '1') then ... elsif (ti = '1')`: two arms
+    -- with a duplicated loop, NOT `rst = '1' or ti = '1'`. Folding them costs
+    -- 464 LUT4. Read the area note in core/tlb.vhd before "simplifying" them
+    -- together on the strength of this procedure's shape.
 
     procedure warm_reset is
     begin
@@ -956,12 +960,26 @@ begin
 
     -- Precondition. Without these the reset checks below are satisfied by a
     -- TLB that never installed anything, which is the vacuity that matters
-    -- here: every post-reset assertion is a NEGATIVE one.
+    -- here: every post-reset assertion is a NEGATIVE one. ALL FOUR entries are
+    -- shown present, not just the ends -- the post-reset block asserts all four
+    -- absent, and "entry 1 is gone" says nothing unless entry 1 was there.
+    -- (Mutation T2 in the header excludes that vacuity empirically; these two
+    -- extra lines close it in the file, where the next reader is looking.)
     i_va <= x"00070000";
     d_va <= x"00070000";
     wait for 1 ns;
     check(i_hit = '1', "case 24 precondition: entry 0 must be resident in the ITLB before the reset");
     check(d_hit = '1', "case 24 precondition: entry 0 must be resident in the DTLB before the reset");
+    i_va <= x"00071000";
+    d_va <= x"00071000";
+    wait for 1 ns;
+    check(i_hit = '1', "case 24 precondition: entry 1 must be resident in the ITLB before the reset");
+    check(d_hit = '1', "case 24 precondition: entry 1 must be resident in the DTLB before the reset");
+    i_va <= x"00072000";
+    d_va <= x"00072000";
+    wait for 1 ns;
+    check(i_hit = '1', "case 24 precondition: entry 2 must be resident in the ITLB before the reset");
+    check(d_hit = '1', "case 24 precondition: entry 2 must be resident in the DTLB before the reset");
     i_va <= x"00073000";
     d_va <= x"00073000";
     wait for 1 ns;

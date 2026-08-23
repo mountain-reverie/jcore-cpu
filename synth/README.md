@@ -40,12 +40,45 @@ Fmax is flat ~42 MHz across 6%–23% device utilisation). `cpu_timing_top`
 registers the boundary down to 4 IO, giving the true register→core→register
 Fmax (~42–43 MHz) that the regression gate measures.
 
+## Running an area A/B: two ways to get a wrong answer
+
+Both of these have produced a published table that was **wrong in sign**. Read
+them before comparing two netlists; neither is specific to whichever block you
+happen to be measuring.
+
+- **Never build an area table across trees that differ in ASSERTION COUNT.**
+  The driver strips verification cells (see Notes below) *after*
+  `synth`/`synth_ecp5`, so the cell leaves the netlist but its influence on how
+  everything else was mapped does not: its operands stay live through
+  optimisation, nothing feeding them can be pruned, and abc9 is handed a
+  different cone. Adding one clocked `assert` to the J4 core measured
+  **+286 to +541 LUT4** and one generic flop, with no functional change
+  whatever. An A/B whose baseline predates an assertion charges that entire
+  swing to whatever else changed.
+- **Never synthesise a "baseline" by deleting the term under test.** Deleting a
+  term but leaving its port connected leaves a *dangling input*: no logic
+  difference at all — the generic netlist has an identical cell count — yet the
+  ECP5 LUT mapping moved **535 LUT4**, more than the change being measured. It
+  is the same effect `core/datapath.vhm` records at ±464 LUT4 on J1 from
+  signals merely tied off. **Baselines come from commits**: build each arm from
+  a real commit with `git archive` into a throwaway directory.
+
+  Throwaway directories matter for a second reason — `cpu_synth.sh` and
+  `with_overlay_decoder.sh` regenerate the J4 overlay decoder into **tracked**
+  `decode/*.vhd` and restore it behind a `|| true`, so a failed restore silently
+  leaves overlay tables in your working tree.
+
+The worked example — four controlled trees, both traps annotated — is the area
+note in `core/tlb.vhd` (the TLB reset-flush arm).
+
 ## Notes
 - Elaborates the `cpu_synth_direct` configuration (adds the `u_mult` binding the
   committed FPGA configs omit). Top entity stays `cpu`.
 - The driver strips verification cells before writing the netlist
   (`chformal -remove; delete t:$check t:$print`) — VHDL `assert` statements
   otherwise become `$check`/`$assert` cells that downstream readers reject.
+  This runs **after** mapping, so it makes the netlist re-readable; it does
+  **not** make the assertion free in area. See the A/B section above.
 - ECP5 uses `synth_ecp5` with **abc9** (timing-driven mapping). This works
   because the issue/slot false combinational loop is broken in
   `core/datapath.vhm` (slot_o no longer depends on `instr.issue`; the CI guards

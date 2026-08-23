@@ -44,8 +44,13 @@
 ! cannot reach any check. Moving the frame needs only p_ptel_tgt/p_vpn_tgt/
 ! p_target, so identity was NOT forced here. The .text code page IS identity,
 ! forced by the flat image load (README-identity-mapping.md category (b)); its
-! independent witnesses are the target page's relocation above and the exact
-! walker-counter delta of check 0x66.
+! independent witnesses are the target page's relocation above and check 0x66,
+! which asserts P4_TSBCNT MOVED across the branch. Deliberately a did-it-move
+! test and not an exact delta: between the snapshot and the check the walker
+! services the target page's I-side miss AND the D-side misses for .tlbtext's
+! own PC-relative literal pool, so the exact count is a property of the literal
+! layout rather than of the mechanism under test. Moving is what discharges the
+! witness -- an inert MMU leaves it at zero.
 !
 ! P5 (VA-backing). The only VAs dereferenced under AT=1 are in the .text page
 ! and in .tlbtext at VA 0x0000_9xxx -- both inside the cosim's 16 MB backed
@@ -90,11 +95,34 @@
 !   G3  p_scratch moved by 4 without moving t_scratch_end: the pointer lands
 !       one word off.                                => Result=97  (0x61)
 !
-! MONITOR LIVENESS (p_walk_takeover, the thing this file drives)
+! MONITOR LIVENESS -- THE EVIDENCE THAT THIS FILE IS NOT VACUOUS
+! =============================================================
+! G1-G4 prove the guard's own checks bite. They do NOT prove it reaches the
+! window under test -- that is what the monitor watches, and a driver that
+! never gets near the window would pass every one of them. The proof is that
+! the monitor FIRES ON THIS IMAGE once the property is broken.
+!
 !   M-I1  core/cpu.vhd: `dp_inst_i.ack <= inst_i.ack and not walk_supp_i`
-!         reduced to `dp_inst_i.ack <= inst_i.ack` -- step (3) of the proof,
-!         the single term that freezes the pipeline for the duration of an
-!         I-side walk. See the transcript in the commit message.
+!         reduced to `dp_inst_i.ack <= inst_i.ack`. That is step (3) of the
+!         four-step proof at p_walk_own -- the single term that freezes the
+!         pipeline for the duration of an I-side walk -- so removing it lets a
+!         D access start inside the un-owned window.
+!
+!         RESULT: the run ends at 720 ns with
+!
+!           ../core/cpu.vhd:786:9:@720ns:(assertion failure):
+!           I-SIDE WALK TAKEOVER WINDOW OCCUPIED: a core D ...
+!           instance: /cpu_tb/cpu1/g_tlb_walk/p_walk_takeover
+!
+!         A NAMED, self-identifying failure that cannot be confused with any
+!         other guard's, and at 720 ns it is ~165x inside the 120us stop-time:
+!         the assertion firing, not a timeout. The monitor is a global
+!         invariant, so the same mutation also fires it on mmuwalkiside
+!         (730 ns) and mmuimiss (560 ns) -- this image is simply the one built
+!         to approach the window deliberately rather than incidentally.
+!         (Line 786 is where p_walk_takeover's assert sat at the time of the
+!         run; comments added since have moved it. The instance path is the
+!         stable identifier.)
 !
 #include "sim_instr.h"
 #include "mmuwalk_common.inc"
@@ -353,6 +381,13 @@ _t_home:
         nop
 
         .align 2
+        ! p_scratch (0x80020010) minus three words: the three `mov.l Rm,@-R4`
+        ! stores each pre-decrement by 4, so r4 must land exactly here. Written
+        ! out rather than computed because the whole point of check 0x61 is to
+        ! compare against a value derived INDEPENDENTLY of the pointer chain --
+        ! deriving it from p_scratch would make a re-executed store agree with
+        ! itself. Keep the two in step by hand; G3 in the header is the
+        ! mutation that proves the check notices when they disagree.
 t_scratch_end:  .long 0x80020004
 t_val1:         .long 0x11112222
 t_val2:         .long 0x33334444

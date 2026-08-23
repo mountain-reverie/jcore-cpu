@@ -838,12 +838,23 @@ else
   # messages got it wrong. Everything mmu_sim.sh prints is above: one
   # "  PASS  <name>" / "  FAIL  <name>" line per guard, the "  SKIP  tlb_tb"
   # line below, and one trailing "==> all guards PASSED". It prints NO
-  # aggregate -- no total, no ratio, no "0 FAIL", no "0 SKIP". The commit
-  # messages on this branch record the suite as "109/109 PASS, 0 FAIL, 0 SKIP"
-  # (and "106/106", "105/105" against earlier bases). Those totals are hand
-  # tallies of the guard list and the arithmetic is sound, but the FORM is one
-  # this script cannot produce, and they must not be read as a capture. If you
-  # need the number, count it and say so: `... | grep -c '^  PASS'`.
+  # aggregate -- no total, no ratio, no "0 FAIL", no "0 SKIP". Three of this
+  # branch's commit messages RECORDED the suite as "109/109 PASS, 0 FAIL,
+  # 0 SKIP" (and "106/106", "105/105" against earlier bases). Those totals are
+  # hand tallies of the guard list and the arithmetic is sound, but the FORM
+  # is one this script cannot produce, and they must not be read as a capture.
+  #
+  # All three have since been reworded -- each now states the result as "==>
+  # all guards PASSED" and gives its number as a count over the per-guard
+  # "  PASS" lines, with the "0 FAIL, 0 SKIP" columns dropped -- so the
+  # offending forms are quoted HERE rather than in a log that no longer
+  # carries them. If you need the number, count it and say so:
+  # `... | grep -c '^  PASS'`.
+  #
+  # Those messages are described, not cited by SHA, and that is deliberate:
+  # the reword changed every hash on this branch, which is exactly how this
+  # block came to need fixing. Name an unmerged commit by its subject line, or
+  # describe it. (f155124 above is on master, so it is safe to cite.)
   echo "== TLB unit testbench (tlb_tb) =="
   if [ "$BUILD" = 0 ]; then
     # -n means "reuse the existing build". tlb_tb is a SEPARATE top with its own

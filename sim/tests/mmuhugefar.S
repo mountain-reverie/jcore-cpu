@@ -113,7 +113,7 @@
 ! ---------------------------------------------------------------------------
 ! RESULT CODES (contract P1/P2; jcore-cpu CLAUDE.md "Writing a guard")
 ! ---------------------------------------------------------------------------
-! DATA codes are (phase << 4) | check, phase 1..4, check 1..5:
+! DATA codes are (phase << 4) | check, phase 1..4, check 1..6:
 !   0x?1  the load did not return the sentinel seeded at the translated PA
 !         (no translation, or the wrong PA)
 !   0x?2  the TSB row __jcore_tlb_walk() wrote does not carry the expected
@@ -147,18 +147,23 @@
 ! ---------------------------------------------------------------------------
 ! MEASURED RUN TIMES -- for anyone bracketing the stop-time budget
 ! ---------------------------------------------------------------------------
-!   PASS (all four phases)          29.48 us
+!   PASS (all four phases)          30.88 us
 !   pre-fix trip, phase 1 (0xE1)    24.71 us
-!   registered stop-time            200 us   (6.8x margin)
+!   registered stop-time            200 us   (6.5x margin on the trip)
 !
-! (measured 2026-08-22, with the .o and .cmd deleted and the object md5
-!  confirmed to move on every A/B -- and to return bit-identical on restore.)
+! (measured with the .o and .cmd deleted and the object md5 confirmed to move
+!  on every A/B -- and to return bit-identical on restore. The PASS time is
+!  bisected on --stop-time in NANOSECONDS: cpu_ctb parses `31us` but silently
+!  mis-parses a fractional `30.9us`, so a us-granular bisection lies.)
 !
-! Both figures were re-measured after the TSB-zeroing loop was cut from 512
-! words to 128 (it had been zeroing 4x the real TSB; see k_tsbwords below).
-! An earlier commit message quoted 52.7 us and 43 us -- those predate that
-! change and are ~60-75% too high. The RESULT CODES are unaffected and
-! reproduce exactly; only the times moved.
+! The PASS figure MOVED, 29.48 -> 30.88 us, when this guard was rebased onto a
+! jcore-cpu master carrying the I->D TLB shadow fill and onto a linux@jcore
+! carrying per-CPU TSBs. The +1.4 us is cycle-count drift in code this guard
+! does not assert on; the TRIP time is unchanged to the sample resolution, and
+! every RESULT CODE reproduces exactly. Earlier still, both figures were cut
+! when the TSB-zeroing loop went from 512 words to 128 (it had been zeroing 4x
+! the real TSB; see k_tsbwords below) -- a commit message quoting 52.7 us and
+! 43 us predates that and is ~60-75% too high.
 !
 ! The trip time matters as much as the pass time: it is the evidence that the
 ! pre-fix failure terminates via its bounded counter an order of magnitude
@@ -495,15 +500,24 @@ run_phase:
         ! be resident and would answer phase 4's access with the wrong
         ! PageMask and no fault at all.
         !
-        ! MEASURED (2026-08-22), not predicted: deleting this
-        ! strobe makes the guard fail
-        ! with 0x42 -- phase 4, check 2, the PTEL image -- because the row the
-        ! stale 16 MB entry leaves behind carries pm=6 where phase 4 expects
-        ! pm=8. An earlier version of this comment predicted 0xF0 (the
-        ! zero-hits anti-vacuity code). That was wrong in the guard's favour:
-        ! check 2 fires first, so the guard is strictly louder than its own
-        ! comment claimed. Either way it fails with a code, which is the
-        ! property that matters. ----
+        ! MEASURED, not predicted: deleting this strobe makes the guard fail
+        ! with 0x46 at 24.89 us -- phase 4, check 6, "neither way of the set
+        ! holds this VA's tag". Phase 3's resident 16 MB entry answers phase
+        ! 4's access outright, so there is no fault, no walk, and NO TSB ROW
+        ! FOR PHASE 4'S VA AT ALL; the way-selection check runs before checks
+        ! 1-4 and catches exactly that.
+        !
+        ! THIS NUMBER HAS MOVED TWICE AND THE HISTORY IS THE POINT. It was
+        ! first PREDICTED as 0xF0 (the zero-hits anti-vacuity code) and never
+        ! run. Measured, it was 0x42 -- check 2, the PTEL image -- because way
+        ! selection then fell through to way 1 without testing its tag and
+        ! compared that way's garbage. Splitting the double miss out into its
+        ! own code 0x?6 is what this branch's last commit did, and it moved
+        ! this mutation's answer from 0x42 to 0x46 as a direct consequence;
+        ! that commit re-ran the walker mutation but not this one. Each step
+        ! made the guard strictly more precise about WHICH defect it caught,
+        ! which is the property that matters -- but "measured once, never
+        ! re-measured" is how a comment stops being true. ----
         mov.l   rp_mmucr, r0
         mov     #0, r1
         mov.l   r1, @r0
@@ -766,8 +780,19 @@ ENTRY(arch_local_save_flags)
         rts
         nop
 
-! memset(s, c, n) / jcore_boot_tsb -- link-only stubs for tlb-jcore.o's
-! jcore_tsb_flush_on_generation(); never actually invoked here.
+! memset(s, c, n) / jcore_boot_tsb -- link-only stubs for tlb-jcore.o;
+! never actually invoked here.
+!
+! SIZED 8192, NOT 4096: the real object is
+! `char jcore_boot_tsb[NR_CPUS][JCORE_BOOT_TSB_BYTES]` and
+! JCORE_BOOT_TSB_BYTES is 8192 (JCORE_TSB_SET_BYTES 32 << JCORE_BOOT_TSB_SIZE_LOG
+! 8). local_flush_tlb_all() memsets JCORE_BOOT_TSB_BYTES over row
+! raw_smp_processor_id(), which is row 0 here, so 8192 is what a call would
+! write. A 4096-byte stub is latent only because nothing invokes it -- the
+! moment something does it memsets 8192 bytes over a 4096-byte object and
+! clobbers adjacent .bss. This is the identical defect the sibling stub in
+! sim/tests/mmuhuge.S was fixed for; this file was written in parallel and
+! never got the fix, so it is applied here by hand rather than inherited.
 ENTRY(memset)
         mov     r4, r3
 1:      tst     r6, r6
@@ -785,9 +810,9 @@ ENTRY(memset)
         .balign 16
         .globl  jcore_boot_tsb
         .type   jcore_boot_tsb, @object
-        .size   jcore_boot_tsb, 4096
+        .size   jcore_boot_tsb, 8192
 jcore_boot_tsb:
-        .skip   4096
+        .skip   8192
         .text
 
 ! jcore_tlb_walk_mark_accessed(pte_t *ptep, pte_t entry) -- STRONG definition

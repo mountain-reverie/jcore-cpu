@@ -24,13 +24,20 @@
 #   sim/linux_sim.sh [name]      # build linux objects + cosim + run (default: mmulinux)
 #   sim/linux_sim.sh -n [name]   # reuse the existing cosim build + linux objects
 #
-# Harnesses that link the real linux@jcore objects (each runs here and in
-# .github/workflows/full-regression.yml; NONE is reachable from sim/mmu_sim.sh):
+# LANE-2 HARNESS INVENTORY -- the harnesses that link real linux@jcore kbuild
+# objects. sim/mmu_sim.sh references NONE of these; it carries a copy of this
+# list as a comment so the two inventories can be diffed. Keep the two in step,
+# and keep .github/workflows/full-regression.yml in step with both -- it holds a
+# third, independent list.
 #
-#   mmulinux     scenarios 1-8 through the real VBR+0x400 TLB-miss vector
-#   mmulinuxexc  the real VBR+0x100 / VBR+0x600 fixed vectors
-#   mmuboot      the real head_32.S MMU-enable path
-#   mmuhuge      the real walker installing multi-size huge TLB entries
+#   mmulinux     VBR+0x400, __jcore_tlb_walk() scenarios 1-8
+#   mmulinuxexc  VBR+0x100 / VBR+0x600, the two fixed vectors mmulinux misses
+#   mmuboot      the real jcore_mmu_enable() boot path
+#   mmuhuge      a huge TLB entry installs with the right PageMask, and a
+#                second sub-page inside it hits the RESIDENT entry
+#   mmuhugefar   the case mmuhuge cannot reach: the FIRST touch of a huge
+#                mapping is past its first PAGE_SIZE, so the faulting address
+#                indexes an EMPTY pte slot (contract obligation K7)
 #   mmupmsub4k   TSB tag granularity: D-side first touch of a non-base 4 KB
 #                sub-page, all three VA[13:12] values
 #   mmupmsubi    the same on the I-side (instruction fetch)
@@ -40,9 +47,12 @@
 # pin what the REAL __jcore_tlb_walk() writes into tag_hi, which is exactly why
 # they must link kernel objects instead of hand-writing TSB rows.
 #
-# NOTE ON -n: it skips the KERNEL object build as well as the cosim build. For
-# an A/B over a linux@jcore change, run kbuild yourself first and only then use
-# -n; for an A/B over an RTL change, do not use -n at all (see CLAUDE.md).
+# -n IS A TRAP. It skips the kbuild entirely and reuses whatever .o files are
+# already under $LINUX_SRC. If the kbuild ever failed (it dies at
+# include/generated/timeconst.h in any container without `bc`), a later -n run
+# silently reports a result produced from stale objects. Never measure a kernel
+# change under -n, and confirm the kbuild succeeded before believing a
+# "Test Passed".
 #
 # Env: LINUX_SRC (default: sibling ../linux), JCORE_SOC (default: sibling
 # ../jcore-soc), J4GAS/J4LD (default: sibling ../binutils-gdb/build-sh2/...).

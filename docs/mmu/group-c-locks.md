@@ -103,6 +103,20 @@ timeout — the distinction `jcore-cpu/CLAUDE.md` insists on.
 `mmupmreservedpm` 4.37, `mmuwalkreadorder` 6.46, `mmupmmixzero` 7.96. The
 registered 120 µs is ~15× the slowest.
 
+## 4a. Whole-suite regression
+
+`p_walk_read_order` is a **permanently asserted** invariant, so it runs against
+every image in the suite, not only against its own driver. A full
+`sim/mmu_sim.sh` run on the pristine tree with the monitor in place:
+
+```
+111 PASS, 0 FAIL   ==> all guards PASSED     (2026-08-22)
+```
+
+That is the whole local guard set -- 104 pre-existing guards plus these seven --
+so the monitor does not false-fire on any walk shape any existing guard
+produces, including the give-up, re-arm, timeout and way-1 paths.
+
 ## 5. C5's stated mutation is not constructible as a reportable proof
 
 **Proposed contract amendment.** §7.2's C5 row says the mutation is "make

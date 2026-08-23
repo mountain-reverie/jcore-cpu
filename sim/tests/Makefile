@@ -378,6 +378,10 @@ mmuwalkmiss.elf: mmuwalkmiss.o
 mmuwalkcoarsetag.elf: mmuwalkcoarsetag.o
 mmuwalktagmbz.o: mmuwalkcoarsetag.S
 mmuwalktagmbz.elf: mmuwalktagmbz.o
+# Contract locks C4/C5 (docs/mmu/pagemask-walker-contract.md 7.2).
+mmupmtlbmask.elf: mmupmtlbmask.o
+mmupmrawvpn.elf: mmupmrawvpn.o
+mmupmmixzero.elf: mmupmmixzero.o
 mmutsbcoh.elf: mmutsbcoh.o
 mmuwalkstale.elf: mmuwalkstale.o
 mmuwalktorn.elf: mmuwalktorn.o

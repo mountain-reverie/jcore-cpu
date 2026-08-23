@@ -343,6 +343,12 @@ clean:
 mmutsb.elf: mmutsb.o
 mmuwalkhit.elf: mmuwalkhit.o
 mmuwalkmiss.elf: mmuwalkmiss.o
+# Contract locks C1/C2 (docs/mmu/pagemask-walker-contract.md 7.2). One harness,
+# two parameterisations -- mmuwalktagmbz.S is #define + #include over
+# mmuwalkcoarsetag.S, so its .o must rebuild when the harness changes.
+mmuwalkcoarsetag.elf: mmuwalkcoarsetag.o
+mmuwalktagmbz.o: mmuwalkcoarsetag.S
+mmuwalktagmbz.elf: mmuwalktagmbz.o
 mmutsbcoh.elf: mmutsbcoh.o
 mmuwalkstale.elf: mmuwalkstale.o
 mmuwalktorn.elf: mmuwalktorn.o

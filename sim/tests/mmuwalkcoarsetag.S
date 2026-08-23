@@ -48,7 +48,8 @@
 ! (pm=1, 16 KB), so the tested access VA 0x00045000 relocates to PA 0x00061000.
 ! PA 0x00061000 is seeded with the expected sentinel and PA 0x00045000 -- the
 ! address an UNTRANSLATED access would reach -- is seeded with a distinct
-! poison word, so an inert MMU reads poison and fails check +7. The frame is
+! poison word, so an inert MMU reads poison and fails the phase-2 data
+! check (0x17 here, 0x27 in the sibling). The frame is
 ! movable by editing p_ptel_data alone; identity was not forced and was not
 ! used.
 ! The CODE page (VA 0x1000 -> PA 0x1000) *is* identity, forced by layout: the

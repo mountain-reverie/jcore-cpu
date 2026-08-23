@@ -382,12 +382,25 @@ _t_home:
 
         .align 2
         ! p_scratch (0x80020010) minus three words: the three `mov.l Rm,@-R4`
-        ! stores each pre-decrement by 4, so r4 must land exactly here. Written
-        ! out rather than computed because the whole point of check 0x61 is to
-        ! compare against a value derived INDEPENDENTLY of the pointer chain --
-        ! deriving it from p_scratch would make a re-executed store agree with
-        ! itself. Keep the two in step by hand; G3 in the header is the
-        ! mutation that proves the check notices when they disagree.
+        ! stores each pre-decrement by 4, so r4 must land exactly here.
+        !
+        ! Written out rather than computed from p_scratch, and kept
+        ! deliberately redundant with it: an edit to one pool that misses the
+        ! other makes the guard FAIL rather than quietly follow along, and it
+        ! keeps G3 available as a distinct mutation. Redundancy is the check
+        ! here, not an oversight -- the same reason t_val1..3 duplicate
+        ! p_val1..3 rather than sharing a symbol. Keep the two in step by hand;
+        ! G3 proves the check notices.
+        !
+        ! (An earlier revision of this comment justified it differently, and
+        ! wrongly: it claimed deriving the value from p_scratch "would make a
+        ! re-executed store agree with itself". It would not. `.long
+        ! 0x80020010 - 12` is evaluated by the ASSEMBLER, so it is exactly as
+        ! independent of the runtime pointer chain as the literal below -- a
+        ! re-executed store leaves r4 at 0x80020000 and the static expected
+        ! value still fails the cmp/eq. Only a RUNTIME derivation from r4 would
+        ! be self-satisfying. Right answer, wrong mechanism; the reason above
+        ! is the one that holds.)
 t_scratch_end:  .long 0x80020004
 t_val1:         .long 0x11112222
 t_val2:         .long 0x33334444

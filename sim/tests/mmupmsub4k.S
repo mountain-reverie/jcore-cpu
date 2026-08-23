@@ -121,10 +121,21 @@
 ! MUTATION RECORD (contract §7.0 P4) -- measured, not asserted
 ! ---------------------------------------------------------------------------
 !   the defect itself: revert arch/sh/mm/tlb-jcore.c to `addr & PAGE_MASK`
-!                      -> FAIL Result=225 (0xE1), scenario A livelocks
+!                      -> FAIL Result=225 (0xE1) at 27.27 us, scenario A
+!                         livelocks
 !   the data assertion: _chk_tab row 1 expected 0x57000001 -> 0x57000009
-!                      -> FAIL Result=49 (0x31), a code of this guard's own
+!                      -> FAIL Result=49 (0x31) at 20.34 us, a code of this
+!                         guard's own
 !   unmutated          -> Test Passed
+!
+! The trip TIME is part of the evidence, not decoration: at 27.27 us against a
+! 200 us stop-time the pre-fix failure terminates via its own bounded counter
+! with 7.3x margin, so it cannot be a timeout wearing a result code.
+!
+! Re-measured on the rebased base (jcore-cpu master with the I->D shadow fill,
+! linux@jcore with the per-CPU TSB and the retired ASID-generation nibble),
+! with tlb-jcore.o and its .cmd DELETED before each arm and the object md5
+! confirmed to move on mutate and to return bit-identical on restore.
 !
 ! ---- _fail integrity net ----
 ! _fail writes r9 verbatim to TEST_RESULT_ADDRESS. TEST_PASS_MAGIC is a

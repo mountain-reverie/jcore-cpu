@@ -90,8 +90,18 @@
 ! (0xF0). A NON-zero delta in phase 2/3 would mean an entry was evicted or
 ! never really covered its whole page.
 !
+! The phase-2/3 zero is a RESIDENCY claim, so note what else competes for those
+! 16 DTLB slots: core/cpu.vhd's I->D shadow fill puts a speculative DTLB copy
+! of every ITLB install alongside them, i.e. this harness's own code pages. It
+! costs no walk (that is the point of the fill) and lands used = '0', so the
+! NRU victim selector prefers it to any of the four demand entries here -- but
+! it is real DTLB pressure and it is why this zero is MEASURED and not merely
+! derived from "four mappings fit in sixteen entries".
+!
 ! Finally cnt_walks - cnt_hits over the whole guard must be <= 4: one
-! unresolved (software) walk per mapping and no more.
+! unresolved (software) walk per mapping and no more. The shadow fill can only
+! ever REMOVE walks (a D access that would have missed now hits a shadowed
+! entry), so it cannot push this difference up through the bound.
 !
 ! MULTI_HIT, protection faults and illegal instructions all vector to
 ! VBR+0x100, which this harness turns into result 0xF1 -- so the contract's
@@ -139,10 +149,20 @@
 ! MUTATION RECORD (contract §7.0 P4) -- measured, not asserted
 ! ---------------------------------------------------------------------------
 !   the defect itself: revert arch/sh/mm/tlb-jcore.c to `addr & PAGE_MASK`
-!                      -> FAIL Result=229 (0xE5), M0's first touch livelocks
+!                      -> FAIL Result=229 (0xE5) at 36.56 us, M0's first touch
+!                         livelocks
 !   the data assertion: interleave row n=6's PA 0x00C09000 -> 0x00C0A000
-!                      -> FAIL Result=38 (0x26), naming that exact row
+!                      -> FAIL Result=38 (0x26) at 29.17 us, naming that row
 !   unmutated          -> Test Passed
+!
+! The trip TIME is part of the evidence, not decoration: at 36.56 us against a
+! 200 us stop-time the pre-fix failure terminates via its own bounded counter
+! with 5.5x margin, so it cannot be a timeout wearing a result code.
+!
+! Re-measured on the rebased base (jcore-cpu master with the I->D shadow fill,
+! linux@jcore with the per-CPU TSB and the retired ASID-generation nibble),
+! with tlb-jcore.o and its .cmd DELETED before each arm and the object md5
+! confirmed to move on mutate and to return bit-identical on restore.
 
 #include "sim_instr.h"
 #include <asm/pgtable-bits-jcore.h>

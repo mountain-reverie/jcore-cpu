@@ -88,10 +88,20 @@
 ! MUTATION RECORD (contract §7.0 P4) -- measured, not asserted
 ! ---------------------------------------------------------------------------
 !   the defect itself: revert arch/sh/mm/tlb-jcore.c to `addr & PAGE_MASK`
-!                      -> FAIL Result=228 (0xE4), the I-side fetch livelocks
+!                      -> FAIL Result=228 (0xE4) at 26.68 us, the I-side fetch
+!                         livelocks
 !   the data assertion: v_iflag_ok 0x1EC0DE01 -> 0x1EC0DE77
-!                      -> FAIL Result=4, a code of this guard's own
+!                      -> FAIL Result=4 at 13.01 us, a code of this guard's own
 !   unmutated          -> Test Passed
+!
+! The trip TIME is part of the evidence, not decoration: at 26.68 us against a
+! 200 us stop-time the pre-fix failure terminates via its own bounded counter
+! with 7.5x margin, so it cannot be a timeout wearing a result code.
+!
+! Re-measured on the rebased base (jcore-cpu master with the I->D shadow fill,
+! linux@jcore with the per-CPU TSB and the retired ASID-generation nibble),
+! with tlb-jcore.o and its .cmd DELETED before each arm and the object md5
+! confirmed to move on mutate and to return bit-identical on restore.
 
 #include "sim_instr.h"
 #include <asm/pgtable-bits-jcore.h>
@@ -347,15 +357,33 @@ _copy_row:
         ! ---- address. The stub therefore makes NO data access inside the
         ! ---- page under test.
         ! ----
-        ! ---- That is load-bearing for the P1 (cnt_hits) assertion, not
-        ! ---- tidiness. An earlier revision used PC-relative literals inside
-        ! ---- the stub; those are D-side accesses to the same 4 KB VPN, and
-        ! ---- since the I-side install goes into the ITLB only, the first one
-        ! ---- MISSES THE DTLB, walks, and finds the very row the I-side fault
-        ! ---- had written -- a second walk hit. Measured: cnt_hits moved by 2,
-        ! ---- and the case then could not say whether the I-side path itself
-        ! ---- had worked. With no data access in the page the delta is exactly
-        ! ---- the one I-side hit this case is about.
+        ! ---- That is deliberate, not tidiness: it keeps the P1 (cnt_hits)
+        ! ---- assertion about the I-side and nothing else.
+        ! ----
+        ! ---- THE REASON CHANGED UNDER THIS GUARD, so keep the history. An
+        ! ---- earlier revision used PC-relative literals inside the stub; those
+        ! ---- are D-side accesses to the same 4 KB VPN. While the walker
+        ! ---- installed into the FAULTING SIDE ONLY, the first such load missed
+        ! ---- the DTLB, walked, and found the very row the I-side fault had
+        ! ---- written -- a second walk hit. Measured then: cnt_hits moved by 2,
+        ! ---- and the case could not say whether the I-side path itself worked.
+        ! ----
+        ! ---- That is no longer what the RTL does. core/cpu.vhd's I->D SHADOW
+        ! ---- FILL (p_tlb_shadow) installs the same PTE into the DTLB one cycle
+        ! ---- after an ITLB install, so such a load now HITS and the delta
+        ! ---- stays 1. Re-measured against this base by putting a `mov.l 8f,r0`
+        ! ---- literal back into _istub: Test Passed, i.e. delta 1, not 0x24.
+        ! ----
+        ! ---- The stub still makes no data access, and that is still the right
+        ! ---- shape -- but now as ISOLATION rather than as livelock avoidance.
+        ! ---- With a literal pool the delta would rest on the shadow fill
+        ! ---- LANDING and SURVIVING: a speculative install is skipped outright
+        ! ---- when the mapping is already resident and usable, and one that
+        ! ---- lands goes in used = '0' as the next NRU victim. A change to
+        ! ---- either bound could then move this number for a reason with
+        ! ---- nothing to do with the I-side tag compare under test. With no
+        ! ---- data access in the page the delta is exactly the one I-side hit
+        ! ---- this case is about, under any shadow-fill policy.
         mov.l   k_iflag_r,   r1
         mov.l   v_iflag_ok_r, r2
         mov.l   k_iback_r,   r3
@@ -469,12 +497,14 @@ _copy_tab_end:
 ! ---- (see the note at the jmp above). r1/r2/r3 are bank-0 registers, so the
 ! ---- I-side fault -- which enters with SR.RB=1 -- cannot disturb them.
 ! ----
-! ---- DO NOT ADD A LITERAL POOL HERE. It is not a tidiness rule. A `mov.l
-! ---- @(disp,PC)` in a stub is a D-SIDE access to the same 4 KB VPN, and the
-! ---- I-side install goes into the ITLB only -- so it misses the DTLB, walks,
-! ---- and hits the very row the I-side fault wrote. cnt_hits then moves by 2
-! ---- and result 0x24 fires for a reason with nothing to do with the I-side.
-! ---- Measured, not theorised; see the note at the jmp above.
+! ---- DO NOT ADD A LITERAL POOL HERE. It is not a tidiness rule: a `mov.l
+! ---- @(disp,PC)` in a stub is a D-SIDE access to the same 4 KB VPN, which
+! ---- hands the P1 cnt_hits delta to the I->D shadow fill's residency and
+! ---- eviction bounds instead of to the I-side tag compare this case exists to
+! ---- test. Before that shadow fill existed it was worse still: the load took
+! ---- a second walk, cnt_hits moved by 2, and result 0x24 fired for a reason
+! ---- with nothing to do with the I-side. Both measured, not theorised; see
+! ---- the note at the jmp above.
         .balign 4
 _istub:
         mov.l   r2, @r1                 ! flag = IFLAG_OK

@@ -88,9 +88,11 @@
 !       (bus_d(31 downto 14) = va_reg(31 downto 14) and bus_d(13 downto 12) =
 !       "00")`, MBZ term kept):
 !         mmuwalkcoarsetag  RED, Result=17 (0x11)  <- ITS OWN CODE
-!         mmuwalktagmbz     PASS   mmupmtlbmask  PASS
-!         mmupmrawvpn       PASS   mmupmmixzero  PASS
+!         mmuwalktagmbz     PASS   mmupmtlbmask     PASS
+!         mmupmrawvpn       PASS   mmupmmixzero     PASS
+!         mmuwalkreadorder  PASS   mmupmreservedpm  PASS
 !       So the mutation is caught HERE and only here -- the lock is specific.
+!       All six of the other locks are measured under M1, not inferred.
 !
 !       Why the mutation ADDS an arm rather than replacing the compare: a
 !       strict 16 KB compare also rejects this harness's own code-page row
@@ -112,6 +114,9 @@
 ! M4 -- vpn_compare_mask("0000") moved off n=0: PASS (it only affects pm=0
 !       entries; this guard's page is pm=1).
 !
+! M7 -- the two mask functions made to agree above pm=8: PASS (this guard uses
+!       no pm >= 9 entry; C6g is the lock for that range).
+!
 ! M6 -- the walker reads data (+8) before tag_hi (+0): RED via the RTL
 !       assertion p_walk_read_order, not via a result code. Expected: that
 !       assertion is a global invariant and fires on the first walk of any
@@ -119,13 +124,15 @@
 !
 ! RESTORED: pristine RTL, PASS. Confirmed twice, once after each batch.
 ! All runs: docker ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
-! SIM_TOP=cpu_tb, --stop-time=120us, measured 2026-08-22. Every mutation run
-! REBUILT the cosim (never `-n`, which skips the build and measures stale
-! hardware). To re-apply any mutation you need BOTH halves of
-! docs/mmu/group-c-locks.md: section 3 (the edits, one row per mutation)
-! and section 9 (the run). That file also carries the full cross-table
-! and, per row, whether it has been independently reproduced or rests on
-! this record alone.
+! SIM_TOP=cpu_tb, --stop-time=120us. First measured 2026-08-22 on base 6475932;
+! EVERY line above RE-MEASURED FROM SOURCE on 2026-08-23 after the rebase onto
+! 9fdfaf6, which carries a68c765's I->D shadow fill. Every result code came out
+! identical. Only run-time timings moved; those are A/B'd against the shadow
+! fill in docs/mmu/group-c-locks.md section 4b. Every mutation run REBUILT the
+! cosim (never `-n`, which skips the build and measures stale hardware). To
+! re-apply any mutation you need BOTH halves of docs/mmu/group-c-locks.md:
+! section 3 (the edits, one row per mutation) and section 9 (the run). That
+! file also carries the full cross-table, which now has no unmeasured cell.
 !
 !
 #include "sim_instr.h"

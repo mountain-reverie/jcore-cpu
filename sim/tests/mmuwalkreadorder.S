@@ -75,7 +75,7 @@
 !
 !       RESULT: the run ends at 3760 ns with
 !
-!         ../core/tlb_walk.vhd:444:@3760ns:(assertion failure):
+!         ../core/tlb_walk.vhd:444:15:@3760ns:(assertion failure):
 !         WALK READ ORDER VIOLATED: data (+8) read before ...
 !         instance: /cpu_tb/cpu1/g_tlb_walk/u_tlb_walk/p_walk_read_order
 !
@@ -104,13 +104,15 @@
 !
 ! RESTORED: pristine RTL, PASS.
 ! All runs: docker ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
-! SIM_TOP=cpu_tb, --stop-time=120us, measured 2026-08-22. Every mutation run
-! REBUILT the cosim (never `-n`, which skips the build and measures stale
-! hardware). To re-apply any mutation you need BOTH halves of
-! docs/mmu/group-c-locks.md: section 3 (the edits, one row per mutation)
-! and section 9 (the run). That file also carries the full cross-table
-! and, per row, whether it has been independently reproduced or rests on
-! this record alone.
+! SIM_TOP=cpu_tb, --stop-time=120us. First measured 2026-08-22 on base 6475932;
+! EVERY line above RE-MEASURED FROM SOURCE on 2026-08-23 after the rebase onto
+! 9fdfaf6, which carries a68c765's I->D shadow fill. Every result code came out
+! identical. Only run-time timings moved; those are A/B'd against the shadow
+! fill in docs/mmu/group-c-locks.md section 4b. Every mutation run REBUILT the
+! cosim (never `-n`, which skips the build and measures stale hardware). To
+! re-apply any mutation you need BOTH halves of docs/mmu/group-c-locks.md:
+! section 3 (the edits, one row per mutation) and section 9 (the run). That
+! file also carries the full cross-table, which now has no unmeasured cell.
 !
 !
 #include "sim_instr.h"

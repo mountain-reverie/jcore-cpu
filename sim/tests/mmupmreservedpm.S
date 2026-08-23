@@ -4,7 +4,7 @@
 ! WHAT THIS PINS -- A HAZARD, NOT A FEATURE
 ! =========================================
 ! C8 says `data[11:8]` (PageMask) MUST be in 0..8; 9..15 are RESERVED. The
-! walker installs PageMask VERBATIM AND UNVALIDATED (core/tlb.vhd:398) and the
+! walker installs PageMask VERBATIM AND UNVALIDATED (core/tlb.vhd:456) and the
 ! two mask functions DISAGREE above pm=8 (core/components_pkg.vhd):
 ! `page_offset_mask()` saturates at n=16 (`when others`), while
 ! `vpn_compare_mask()` continues to n=18 at pm=9 and n=20 at pm>=10.
@@ -137,15 +137,28 @@
 !       this guard and C7g sit at opposite ends of the PageMask range and do
 !       not shadow each other.
 !
+! SPECIFICITY: M1 PASS, M2 PASS, M5a PASS -- and M5c PASS, which is the
+!       interesting one. M5c wedges every OTHER lock (it masks the STORED VPN
+!       more coarsely than the entry's own compare mask, so the installed entry
+!       cannot match the VA the walk was armed for and the walker re-arms
+!       without bound). This guard's entries carry pm=9/pm=10, whose compare
+!       masks already ignore those bits, so the mis-mask cannot make them fail
+!       to match: C6g is the one lock M5c structurally cannot livelock.
+! M6 (data before tag_hi) RED via p_walk_read_order at 2.15us -- earlier than
+!       C3's own driver, because the monitor is a global invariant and this
+!       guard reaches its first walk sooner.
+!
 ! RESTORED: pristine RTL, PASS.
 ! All runs: docker ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
-! SIM_TOP=cpu_tb, --stop-time=120us, measured 2026-08-22. Every mutation run
-! REBUILT the cosim (never `-n`, which skips the build and measures stale
-! hardware). To re-apply any mutation you need BOTH halves of
-! docs/mmu/group-c-locks.md: section 3 (the edits, one row per mutation)
-! and section 9 (the run). That file also carries the full cross-table
-! and, per row, whether it has been independently reproduced or rests on
-! this record alone.
+! SIM_TOP=cpu_tb, --stop-time=120us. First measured 2026-08-22 on base 6475932;
+! EVERY line above RE-MEASURED FROM SOURCE on 2026-08-23 after the rebase onto
+! 9fdfaf6, which carries a68c765's I->D shadow fill. Every result code came out
+! identical. Only run-time timings moved; those are A/B'd against the shadow
+! fill in docs/mmu/group-c-locks.md section 4b. Every mutation run REBUILT the
+! cosim (never `-n`, which skips the build and measures stale hardware). To
+! re-apply any mutation you need BOTH halves of docs/mmu/group-c-locks.md:
+! section 3 (the edits, one row per mutation) and section 9 (the run). That
+! file also carries the full cross-table, which now has no unmeasured cell.
 !
 !
 #include "sim_instr.h"

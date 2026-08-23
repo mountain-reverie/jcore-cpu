@@ -300,6 +300,27 @@ mode in this repo, not an exotic one. Before trusting green:
 - **Mutate it and confirm red.** Break the construction and check the guard
   fails **with its own result code**, not a timeout and not a neighbour's code.
   Give distinct failure IDs to distinct defects so they cannot be conflated.
+- **Never identity-map the page under test.** With `PA == VA` the access
+  succeeds and returns the right bytes whether the translation resolved, the
+  entry never installed, the walker never ran, or `MMUCR.AT` was off for the
+  whole run. Green then means nothing — and identity is the easiest mapping to
+  write, so it is the most common way an MMU guard tests nothing. Under
+  `cpu_cache_tb`, choose `PA != VA` and read back through the P2 physical
+  alias: a missing translation then reads the wrong bytes. **Under `cpu_tb`
+  that witness does not exist** — `mmu_o.*_pa_tag` is wired only to the caches
+  (`sim/cpu_cache_tb.vhd:230,248`), so the bus sees the VA and *no* mapping is
+  observable in returned data. Identity is likewise **forced** for `pm >= 6`,
+  which spans the cosim's whole 16 MB backed window (`[0, 0x0100_0000)`,
+  `sim/cpu_ctb.c` `mem_bus_stack_map` / `if_bus_stack_map`), so every PPN bit
+  `page_offset_mask()` leaves live must be zero. Whenever identity is forced,
+  the guard **must** carry an independent witness that translation actually
+  happened: a `P4_TSBCNT` (`0xFF000054`) walks/hits delta *taken across the
+  access under test* — a snapshot after the install proves nothing — an
+  asserted fault count or `EXPEVT`/`MMUFSR`/`TEA` value, the walker's PTEL
+  image read back out of the TSB row, or an effect only a correct PageMask can
+  produce. Say in the header *why* identity was unavoidable and *which*
+  witness covers it. Survey of the current suite:
+  `sim/tests/README-identity-mapping.md`.
 - **A hand-assembled `.word` is an unchecked assertion about the hardware** —
   the assembler validates nothing. When a guard reports a defect the RTL cannot
   explain, re-derive every hand-written opcode from its encoding table *before*

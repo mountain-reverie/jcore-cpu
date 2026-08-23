@@ -131,6 +131,22 @@ $(addsuffix .img,$(PMGUARDS)): %.img: %.elf
 	$(J4OBJCOPY) -v -S -O binary --srec-forceS3 $< $@
 
 # ---------------------------------------------------------------------------
+# A1b: mmuhugefar -- the case mmuhuge structurally cannot reach. Same real-
+# object link; the FIRST touch of the huge mapping is past its first
+# PAGE_SIZE, so the huge pte's own slot is not the one the faulting address
+# indexes. Pins contract obligation K7. See sim/tests/mmuhugefar.S.
+# ---------------------------------------------------------------------------
+mmuhugefar.o: mmuhugefar.S
+	mkdir -p $(J4BIN) && ln -sf $(abspath $(J4GAS)) $(J4BIN)/as
+	$(CC) $(CFLAGS) -D__ASSEMBLY__ -I$(LINUX_SRC)/arch/sh/include -B$(J4BIN) -Wa,--isa=any -c $< -o $@
+
+mmuhugefar.elf: mmuhugefar.o $(TLBJCORE_O) $(EX_O) $(ENTRY_O)
+	$(J4LD) -T sh32_p1.x -Map main.map $^ $(LIBGCC) -o $@
+
+mmuhugefar.img: mmuhugefar.elf
+	$(J4OBJCOPY) -v -S -O binary --srec-forceS3 $< $@
+
+# ---------------------------------------------------------------------------
 # SP3-c Task 3: mmuboot links the REAL jcore_mmu_enable (Task 2) and drives
 # it through the cosim; the TLB-miss handler itself is hand-rolled in
 # mmuboot.S (Task 2 only factored the boot enable stub, not a full walker).

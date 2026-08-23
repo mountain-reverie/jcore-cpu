@@ -433,6 +433,17 @@ jobs:
           run_guard mmupmsub4k "" 200us 120
           run_guard mmupmsubi  "" 200us 120
           run_guard mmupmmix   "" 200us 120
+          # A1b: mmuhugefar is the case mmuhuge structurally CANNOT reach.
+          # mmuhuge touches VA_base first, so the huge TLB entry is already
+          # resident when it touches VA_base+0x4000 -- it tests the masked VPN
+          # compare of a RESIDENT entry, and asserts the walker did NOT re-run.
+          # mmuhugefar makes the touch past the first PAGE_SIZE the FIRST touch,
+          # with the TLB flushed, so the faulting address indexes an EMPTY pte
+          # slot and the fault must be resolved by __jcore_tlb_walk() at the
+          # faulting VA (contract obligation K7). Four sizes: 64 KB, 1 MB,
+          # 16 MB and 256 MB (the last two solo, VA == PA). Same
+          # LINUX_SRC/J4GAS/J4LD/J4BIN + sh32_p1.x link as mmulinux/mmuboot.
+          run_guard mmuhugefar "" 200us 120
           # Scenarios 4-5 (deferred) and any exhaustive/slow mmulinux variant
           # would run only on the nightly schedule, e.g.:
           # if [ "${{ github.event_name }}" = "schedule" ]; then

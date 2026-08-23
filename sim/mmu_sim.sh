@@ -249,6 +249,28 @@ else
   run_guard mmupagemix2 cpu_cache_tb 200us
   run_guard mmupagewalk cpu_cache_tb 300us
   echo "== M8 fault-coverage sweep =="
+# ---------------------------------------------------------------------------
+# LANE-2 INVENTORY -- NOT RUN HERE, listed so the inventories can be diffed.
+#
+# These harnesses link real linux@jcore kbuild objects and need $LINUX_SRC,
+# which a normal jcore-cpu checkout does not have, so this script references
+# none of them. They run under sim/linux_sim.sh (which owns the authoritative
+# copy of this list) and in .github/workflows/full-regression.yml (which keeps
+# a third, independent list). All three must be kept in step; a guard added to
+# one of them is invisible to the other two.
+#
+#   mmulinux     VBR+0x400, __jcore_tlb_walk() scenarios 1-8
+#   mmulinuxexc  VBR+0x100 / VBR+0x600, the two fixed vectors mmulinux misses
+#   mmuboot      the real jcore_mmu_enable() boot path
+#   mmuhuge      a huge TLB entry installs with the right PageMask, and a
+#                second sub-page inside it hits the RESIDENT entry
+#   mmuhugefar   the case mmuhuge cannot reach: the FIRST touch of a huge
+#                mapping is past its first PAGE_SIZE, so the faulting address
+#                indexes an EMPTY pte slot (contract obligation K7)
+#
+# A fully green run of THIS script therefore says nothing about the real Linux
+# TLB-miss handler.
+# ---------------------------------------------------------------------------
 # Mutation spot-checks (2026-08-01). A guard that passes proves nothing
 # unless it can be shown to fail, so a sample was checked by corrupting one
 # expected constant and confirming a sub-test-specific failure code (not the

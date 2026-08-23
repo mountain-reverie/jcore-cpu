@@ -232,6 +232,20 @@ ENTRY(start)
         .align 2
 p_rbclear:      .long 0xDFFFFFFF
 p_vbr_val:      .long _v_gen - 0x100
+! ---- The code page is mapped at VPN 0 -- VA 0x0000_0000 -> PA 0x0000_0000,
+! ---- the whole image, identity forced by the flat image load. That is not
+! ---- incidental here: once the pm>=9 entry installs, its compare mask is wide
+! ---- enough to swallow the code page's DTLB entry under core/tlb.vhd's
+! ---- install-time dedup, and the guard keeps running ONLY because the
+! ---- wildcard relocates an identity code page to the same physical address.
+! ---- A non-identity code page would take the harness out with it.
+! ----
+! ---- Consequence: the ENTIRE image -- .vect, code, literal pools, tables and
+! ---- the vector block -- must fit in VA 0x0000..0x0FFF, and there is no
+! ---- trailing pad page. That is ENFORCED: sim/tests/Makefile fails the build
+! ---- if this image's linked _etext passes SINGLE_PAGE_LIMIT. Overflow does
+! ---- not fail at run time, it takes a silent IMISS storm that looks like a
+! ---- hang, which is why the check is a build error and not a comment.
 p_pteh_code:    .long 0x00000000
 p_ptel_code:    .long 0x000000CD        ! identity code page, U=0 (SMEP), G=1
 p_tsbslot_reg:  .long 0xFF000048

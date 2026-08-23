@@ -110,7 +110,7 @@
 !
 !         RESULT: the run ends at 720 ns with
 !
-!           ../core/cpu.vhd:786:9:@720ns:(assertion failure):
+!           ../core/cpu.vhd:901:9:@720ns:(assertion failure):
 !           I-SIDE WALK TAKEOVER WINDOW OCCUPIED: a core D ...
 !           instance: /cpu_tb/cpu1/g_tlb_walk/p_walk_takeover
 !
@@ -120,9 +120,10 @@
 !         invariant, so the same mutation also fires it on mmuwalkiside
 !         (730 ns) and mmuimiss (560 ns) -- this image is simply the one built
 !         to approach the window deliberately rather than incidentally.
-!         (Line 786 is where p_walk_takeover's assert sat at the time of the
-!         run; comments added since have moved it. The instance path is the
-!         stable identifier.)
+!         (Re-measured 2026-08-23 on the rebase onto master's I->D shadow
+!         fill: all three fire at exactly the same three times. Only the LINE
+!         moved, 786 -> 901, which is the point of quoting the instance path --
+!         it is the stable identifier and the line is not.)
 !
 #include "sim_instr.h"
 #include "mmuwalk_common.inc"

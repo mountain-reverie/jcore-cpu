@@ -396,54 +396,83 @@ begin
       --     25 of sim/tlb_tb.vhd, and see the priority note at the end of this
       --     comment).
       --
-      -- AREA. MEASURED, SYNTH_VARIANT=j4, yosys 0.44 (deterministic here -- a
-      -- repeated identical run reproduces the counts exactly). Four trees, all
-      -- built from REAL COMMITS rather than hand mutations, each synthesised in
-      -- a throwaway `git archive` copy: synth/cpu_synth.sh regenerates the J4
-      -- overlay into TRACKED decode/*.vhd behind a `|| true` restore, so it
-      -- must never be run in a tree whose diff matters.
+      -- AREA. RE-MEASURED 2026-08-23 against origin/master AFTER the I->D
+      -- shadow fill (a68c765) and the counter tie-off (9fdfaf6) landed. The
+      -- previous table was taken against 6475932 and is superseded outright --
+      -- not merely shifted. SYNTH_VARIANT=j4, yosys 0.44, every tree built from
+      -- a REAL COMMIT in a throwaway `git archive` copy (synth/cpu_synth.sh
+      -- regenerates the J4 overlay into TRACKED decode/*.vhd behind a `|| true`
+      -- restore, so it must never run in a tree whose diff matters).
       --
-      --   tree                        assert flush |  ECP5             | ASIC
-      --                                            | LUT4   FF  cells  | gates ff
-      --   N0  6475932 (base)            no    no   | 9751 3078  15758  | 35579 2696
-      --   N1  6475932 + this change     no    yes  | 9670 3078  15638  | 35605 2696
-      --   A0  7423e18 (the assertion)   yes   no   |10292 3078  16793  | 35568 2697
-      --   A1  this branch's HEAD        yes   yes  | 9956 3078  16154  | 35593 2697
+      -- ECP5 columns are `stat` after the priv_o/mmu_o drop and opt_clean, with
+      -- $scopeinfo excluded; that extraction reproduces the OLD table's 6475932
+      -- row to the unit (9751 LUT4 / 3078 FF / 15758 cells), which is how it was
+      -- validated. The ASIC columns use the design-hierarchy totals and a
+      -- straight count of every DFF-family cell; that does NOT reproduce the old
+      -- table's ASIC pair, whose convention was never recorded, so ASIC numbers
+      -- are comparable WITHIN this table only.
       --
-      -- THE RESET FLUSH IS LUT4-NEGATIVE, in both controlled pairs:
-      --   N0 -> N1   -81 LUT4   -120 cells   +26 generic gates
-      --   A0 -> A1  -336 LUT4   -639 cells   +25 generic gates
-      -- It adds 25-26 gates to the generic netlist (0.07%) and hands the
-      -- mapper a dedicated clear path in exchange, which it spends well. Flop
-      -- count is identical in all four -- no state is added, only that clear
-      -- path -- and nothing here touches the combinational LOOKUP process
-      -- above, which is where this block's Fmax actually lives. A post-place-
-      -- and-route Fmax A/B (scripts/fmax_ab.sh) has NOT been run.
+      --   tree                          assert flush |  ECP5             | ASIC
+      --                                              | LUT4   FF  cells  | gates ff
+      --   N0  origin/master (9fdfaf6)     no    no   |11332 3173  18570  | 36476 4483
+      --   N1  master + this change        no    yes  |10678 3173  17269  | 36462 4483
+      --   A0  master + the assertion      yes   no   |10477 3173  17078  | 36466 4484
+      --   A1  this branch's HEAD          yes   yes  |10798 3173  17576  | 36449 4484
       --
-      -- ITS OWN ARM, NOT `rst = '1' or ti = '1'`, AND THE DUPLICATED LOOP IS
-      -- THE POINT. That is the comparison the choice actually rests on, and it
-      -- is properly controlled: two trees byte-identical except for the arm
-      -- structure, both carrying the assertion and the rst port.
+      -- WHAT SURVIVES, AND IT IS NOT WHAT THE OLD NOTE CLAIMED.
       --
-      --   THIS FORM (rst's own arm)  9956 LUT4  16154 cells  35593 gates
-      --   `rst = '1' or ti = '1'`   10420 LUT4  17064 cells  35570 gates
-      --   `ti = '1' or rst = '1'`   10420 LUT4  17064 cells      --
+      --   * NO STATE IS ADDED. FF is 3173 in all four; the ASIC flop count moves
+      --     4483 -> 4484 with the ASSERTION and not with the flush. The clear
+      --     path is combinational, and nothing here touches the combinational
+      --     LOOKUP process above, where this block's Fmax actually lives. A
+      --     post-place-and-route Fmax A/B (scripts/fmax_ab.sh) has NOT been run.
+      --   * THE LOGIC ADDED IS NEGLIGIBLE. Generic gates span 36449..36476
+      --     across all four -- 27 cells, 0.07% -- and the flush's own two pairs
+      --     move it by -14 and -17.
+      --   * "THE FLUSH IS LUT4-NEGATIVE" IS WITHDRAWN. The two controlled pairs
+      --     now DISAGREE IN SIGN:
+      --         N0 -> N1  (no assertion)   -654 LUT4  -1301 cells
+      --         A0 -> A1  (with assertion) +321 LUT4   +498 cells
+      --     So does the assertion's own cost: N0 -> A0 is -855 LUT4 and
+      --     N1 -> A1 is +120, for one simulation-only statement.
       --
-      -- -464 LUT4 for +23 generic gates. With rst in its own leading arm the
-      -- mapper can reach the flops' own reset instead of widening a shared
-      -- enable term; folded in, it cannot. Operand order buys nothing --
-      -- swapping the two terms reproduces the folded numbers to the cell.
+      -- ITS OWN ARM, NOT `rst = '1' or ti = '1'` -- BUT NO LONGER ON AREA.
+      -- Three trees, byte-identical except for the arm structure, all carrying
+      -- the assertion and the rst port:
+      --
+      --   THIS FORM (rst's own arm)  10798 LUT4  17576 cells  36449 gates
+      --   `rst = '1' or ti = '1'`    10919 LUT4  17868 cells  36468 gates
+      --   `ti = '1' or rst = '1'`    10551 LUT4  17142 cells  36468 gates
+      --
+      -- The old note read -464 LUT4 for this form and "operand order buys
+      -- nothing". BOTH ARE NOW FALSE. This form is 121 LUT4 under one fold and
+      -- 247 OVER the other -- and those two folds are LOGICALLY THE SAME
+      -- CIRCUIT, differing only in the order of two operands of an `or`. Their
+      -- generic netlists are identical to the cell (36468 gates, 4484 flops
+      -- each) and their LUT4 counts differ by 368.
+      --
+      -- THAT 368 IS THE NOISE FLOOR OF THIS METRIC, measured directly rather
+      -- than assumed, and every margin above is inside it. The choice of form
+      -- therefore rests on READABILITY -- a reset belongs in its own leading
+      -- arm, where it reads as a reset -- and NOT on measured area. Do not
+      -- re-derive an area justification for it without first reproducing that
+      -- 368 and showing your margin exceeds it.
       --
       -- THE TWO MEASUREMENT RULES this table exists to illustrate live in
       -- synth/README.md, "Running an area A/B" -- they are not about the TLB,
       -- and the next person who needs them will be measuring something else.
-      -- Both were learned here: an earlier revision of this note took its
-      -- baseline from a tree WITHOUT p_walk_takeover while every other row had
-      -- it (+286..+541 LUT4, plus the 2696 -> 2697 flop -- N0->A0 and N1->A1
-      -- above), and built its no-flush arm by DELETING the flush term while
-      -- leaving the rst port connected (9757 LUT4, 535 below A0, on a generic
-      -- netlist identical to A0's at 35568 gates). Together they INVERTED THE
-      -- SIGN: the published result read +2.0% instead of -0.8%.
+      -- Both were learned here, and both were RE-CONFIRMED on this base:
+      --   * ASSERTION COUNT. An earlier revision took its baseline from a tree
+      --     without p_walk_takeover while every other row had it. On 6475932
+      --     that was worth +286..+541 LUT4; here it is -855 or +120 depending
+      --     on the other arm. The magnitude is unpredictable AND so is the
+      --     sign, which is exactly why the rule is "never", not "correct for".
+      --   * DANGLING INPUT. The same revision built its no-flush arm by
+      --     DELETING the flush term while leaving the rst port connected. Rerun
+      --     here that tree measures 10755 LUT4 against A0's honest 10477 -- 278
+      --     apart on a generic netlist IDENTICAL to A0's at 36466 gates and
+      --     4484 flops. Together the two mistakes INVERTED THE SIGN of the
+      --     published result: it read +2.0% instead of -0.8%.
       --
       -- Priority over the install is intentional and is locked by case 25 of
       -- sim/tlb_tb.vhd: a reset landing on the same edge as a walker install

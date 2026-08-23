@@ -40,36 +40,57 @@ Fmax is flat ~42 MHz across 6%–23% device utilisation). `cpu_timing_top`
 registers the boundary down to 4 IO, giving the true register→core→register
 Fmax (~42–43 MHz) that the regression gate measures.
 
-## Running an area A/B: two ways to get a wrong answer
+## Running an area A/B: know the noise floor first
 
-Both of these have produced a published table that was **wrong in sign**. Read
-them before comparing two netlists; neither is specific to whichever block you
-happen to be measuring.
+**The ECP5 `LUT4` count is not a precision instrument at core scale.** Measured
+on the J4 core (`SYNTH_VARIANT=j4`, yosys 0.44, 2026-08-23): two trees whose
+only difference is the **order of two operands of an `or`** — logically the same
+circuit, generic netlists identical to the cell at 36468 gates and 4484 flops —
+mapped **368 LUT4 apart**. Nothing was added, removed, or restructured.
+
+So before quoting a LUT4 delta as a result, establish what a *null* change costs
+on the same trees. If your margin is under a few hundred LUT4 on this core, you
+have measured the mapper, not your change. What does hold up at this scale is
+the **generic gate count** (`synth`, pre-mapping) and the **flop count** — both
+are stable, and both answer "did this add state or logic?" directly.
+
+Two specific ways to get an answer that is wrong in *sign*. Neither is specific
+to whichever block you happen to be measuring; both have actually done it here.
 
 - **Never build an area table across trees that differ in ASSERTION COUNT.**
   The driver strips verification cells (see Notes below) *after*
   `synth`/`synth_ecp5`, so the cell leaves the netlist but its influence on how
   everything else was mapped does not: its operands stay live through
   optimisation, nothing feeding them can be pruned, and abc9 is handed a
-  different cone. Adding one clocked `assert` to the J4 core measured
-  **+286 to +541 LUT4** and one generic flop, with no functional change
-  whatever. An A/B whose baseline predates an assertion charges that entire
-  swing to whatever else changed.
+  different cone. Adding one clocked `assert` to the J4 core — no functional
+  change whatever — measured **+286 to +541 LUT4** on one base and **−855 or
+  +120 LUT4** on another, depending on what else was in the tree. It also adds
+  **one generic flop**, which unlike the LUT4 figure is consistent. Both the
+  magnitude and the *sign* are unpredictable, which is why the rule is "never"
+  and not "correct for it".
 - **Never synthesise a "baseline" by deleting the term under test.** Deleting a
   term but leaving its port connected leaves a *dangling input*: no logic
-  difference at all — the generic netlist has an identical cell count — yet the
-  ECP5 LUT mapping moved **535 LUT4**, more than the change being measured. It
-  is the same effect `core/datapath.vhm` records at ±464 LUT4 on J1 from
-  signals merely tied off. **Baselines come from commits**: build each arm from
-  a real commit with `git archive` into a throwaway directory.
+  difference at all — the generic netlist has an identical cell **and flop**
+  count — yet the ECP5 LUT mapping moved **535 LUT4** on one base and **278** on
+  another, in both cases more than the change being measured. It is the same
+  effect `core/datapath.vhm` records at ±464 LUT4 on J1 from signals merely tied
+  off. **Baselines come from commits**: build each arm from a real commit with
+  `git archive` into a throwaway directory.
 
   Throwaway directories matter for a second reason — `cpu_synth.sh` and
   `with_overlay_decoder.sh` regenerate the J4 overlay decoder into **tracked**
   `decode/*.vhd` and restore it behind a `|| true`, so a failed restore silently
   leaves overlay tables in your working tree.
 
-The worked example — four controlled trees, both traps annotated — is the area
-note in `core/tlb.vhd` (the TLB reset-flush arm).
+Also fix your extraction before comparing anything: `stat` prints a block per
+module and then a `design hierarchy` total, and `synth_ecp5` prints its own
+`stat` before the driver's. Take the **last** block, and exclude `$scopeinfo`
+(metadata, not cells). Trees measured with different conventions cannot be put
+in the same table.
+
+The worked example — seven controlled trees, the noise floor and both traps
+measured on one base — is the area note in `core/tlb.vhd` (the TLB reset-flush
+arm).
 
 ## Notes
 - Elaborates the `cpu_synth_direct` configuration (adds the `u_mult` binding the

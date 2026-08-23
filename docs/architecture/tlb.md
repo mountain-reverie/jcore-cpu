@@ -326,8 +326,8 @@ ways:
   next access faults back into the trusted miss handler. *Guard: `mmustale`.*
 
 There is a third, non-software path: **`rst` revokes every entry**, on its own
-arm of the same flush process as `MMUCR.TI` (`core/tlb.vhd`). §4's table has
-always said `V` is "cleared by reset", but until 2026-08-23 the RTL had no `rst`
+arm of the same flush process as `MMUCR.TI` (`core/tlb.vhd`). §2's entry table
+has always said `V` is "cleared by reset", but until 2026-08-23 the RTL had no `rst`
 branch at all — only a `signal ram := (others => TLB_ENTRY_RESET)` power-on
 initialiser, which ASIC synthesis ignores and which says nothing about a reset
 asserted mid-run. A warm reset therefore left every valid entry resident, with

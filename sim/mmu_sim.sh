@@ -193,6 +193,38 @@ else
   # there would keep the suite fully green.
   run_guard mmupcprobe   "" 200us
   run_guard mmudspcprobe "" 200us
+  echo "== Group-C contract locks (pagemask-walker-contract.md 7.2) =="
+  # These PASS on today's RTL and exist to turn RED on the named WRONG FIX.
+  # Their non-vacuity comes ENTIRELY from the stated mutation (contract P4),
+  # not from a red/green transition -- so a green run here says nothing on its
+  # own. The mutation evidence for each is recorded in its own header and in
+  # docs/mmu/group-c-locks.md; re-run it before trusting any change to
+  # core/tlb_walk.vhd, core/tlb.vhd's install path, or components_pkg.vhd's two
+  # mask functions.
+  #
+  # Every one of them pairs its non-increment counter assertions with an exact
+  # POSITIVE cnt_hits delta in the same run (contract P1, "counter
+  # trustworthiness"), so none of them depends on a Group-B guard for its
+  # non-vacuity and P1g was not needed.
+  #
+  # Stop time 120us against measured completions of 2.4-8.0us (VCD final
+  # timestamps, 2026-08-22): coarsetag 2.66, tagmbz 2.69, tlbmask ~3,
+  # rawvpn 2.38, readorder 6.46, mixzero 7.96, reservedpm 4.37. ~15x margin on
+  # the slowest.
+  run_guard mmuwalkcoarsetag "cpu_tb" 120us   # C1  canonical 4 KB tag
+  run_guard mmuwalktagmbz    "cpu_tb" 120us   # C2  tag_hi[11:0] MBZ (R2)
+  run_guard mmuwalkreadorder "cpu_tb" 120us   # C3  driver for p_walk_read_order
+  run_guard mmupmtlbmask     "cpu_tb" 120us   # C4  PageMask governs the match
+  run_guard mmupmrawvpn      "cpu_tb" 120us   # C5  raw VPN, masked at match time
+  run_guard mmupmmixzero     "cpu_tb" 120us   # C7g pm=0 + 1 + 2 + 4 co-resident
+  run_guard mmupmreservedpm  "cpu_tb" 120us   # C6g reserved PageMask 9..15 (C8)
+  # LANE-2 INVENTORY MIRROR (contract P3). The real-kernel-object harnesses are
+  # not referenced by this script at all -- they run only under
+  # sim/linux_sim.sh and in CI -- so they are listed here as a comment to keep
+  # the two guard inventories diffable by scripts/guard_list_drift.sh:
+  #   mmulinux  mmulinuxexc  mmuboot  mmuhuge
+  # A1c added NO Lane-2 guard; see the __update_tlb() decision in
+  # docs/mmu/group-c-locks.md.
   echo "== cache guards (cpu_cache_tb) =="
   # mmuwalkdside under the CACHED top as well as cpu_tb. It is the only guard
   # that resolves a faulting D-store entirely via the HARDWARE WALKER (no LDTLB)

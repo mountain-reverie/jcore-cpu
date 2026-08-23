@@ -24,7 +24,29 @@
 !
 ! MUTATION EVIDENCE
 ! =================
-!   (see the block at the end of mmuwalkcoarsetag.S's header)
+! M2 -- the `bus_d(11 downto 0) = x"000"` term deleted from st_tag_hi
+!       (contract R2's exact wording):
+!         mmuwalktagmbz     RED, Result=33 (0x21)  <- ITS OWN CODE
+!         mmuwalkcoarsetag  PASS   mmupmtlbmask  PASS
+!         mmupmrawvpn       PASS   mmupmmixzero  PASS
+!
+! M1 -- st_tag_hi ALSO accepts a 16 KB-granular tag (C1's mutation):
+!       mmuwalktagmbz PASS. Correct and worth stating: this row's tag is the
+!       CANONICAL VA with a dirty MBZ field, so a coarser compare does not
+!       rescue it -- only deleting the MBZ term does.
+!
+! M3 -- page_mask hardwired to "0000": RED, Result=39 (0x27), phase 2 data.
+! M4 -- vpn_compare_mask("0000") off n=0: PASS.
+! M6 -- data read before tag_hi: RED via p_walk_read_order (global invariant).
+!
+! RESTORED: pristine RTL, PASS.
+! All runs: docker ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
+! SIM_TOP=cpu_tb, --stop-time=120us, measured 2026-08-22. Every mutation run
+! REBUILT the cosim (never `-n`, which skips the build and measures stale
+! hardware). Mutations are applied and reverted by
+! /scratch/mut.py in the session log; the full cross-table is in
+! docs/mmu/group-c-locks.md.
+!
 !
 #define CTAG_BASE   0x20
 #define CTAG_TRIP1  0xE7

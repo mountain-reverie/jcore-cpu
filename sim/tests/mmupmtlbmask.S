@@ -75,7 +75,33 @@
 !
 ! MUTATION EVIDENCE
 ! =================
-!   (see the block at the end of this header)
+! M3 -- THE STATED MUTATION: `ram(idx).page_mask <= "0000";` in core/tlb.vhd's
+!       install, i.e. the "assume one page size" fix.
+!         mmupmtlbmask  RED, Result=54 (0x36)  <- ITS OWN CODE, "unexpected
+!                       fault during phase 2": with the entry reduced to 4 KB
+!                       the far end of the page is unmapped and there is no row
+!                       for it. Note it is NOT 0x37 (phase 3's "no fault"), so
+!                       the phase attribution in the handler is doing its job.
+!       Every other Group-C lock also fails under M3 (Results 23 / 39 / 65 / 95
+!       / 145) -- expected, since a hardwired page_mask breaks every size above
+!       4 KB. M3 is the mutation this guard is FOR; the specificity evidence is
+!       the reverse direction below.
+!
+! SPECIFICITY -- this guard stays GREEN under every mutation aimed elsewhere:
+!       M1 (coarse tag accepted)                     PASS
+!       M2 (MBZ term deleted)                        PASS
+!       M4 (vpn_compare_mask("0000") off n=0)        PASS
+!       M5a (tlb_vpn_mx masked by the entry's own mask) PASS
+!       M6 (data before tag_hi)  RED via p_walk_read_order, the global invariant
+!
+! RESTORED: pristine RTL, PASS.
+! All runs: docker ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
+! SIM_TOP=cpu_tb, --stop-time=120us, measured 2026-08-22. Every mutation run
+! REBUILT the cosim (never `-n`, which skips the build and measures stale
+! hardware). Mutations are applied and reverted by
+! /scratch/mut.py in the session log; the full cross-table is in
+! docs/mmu/group-c-locks.md.
+!
 !
 #include "sim_instr.h"
 #include "mmuwalk_common.inc"

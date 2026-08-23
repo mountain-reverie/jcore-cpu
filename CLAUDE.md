@@ -314,11 +314,15 @@ mode in this repo, not an exotic one. Before trusting green:
   `pm >= 6`, which spans the cosim's whole 16 MB backed window
   (`[0, 0x0100_0000)`, `sim/cpu_ctb.c` `mem_bus_stack_map` /
   `if_bus_stack_map`), so every PPN bit `page_offset_mask()` leaves live must
-  be zero — and it can be load-bearing to an image layout that pins code at a
-  fixed PA. Where identity is forced, the guard **must** carry an independent
-  witness that translation actually happened: a `P4_TSBCNT` (`0xFF000054`)
-  walks/hits delta *taken across the
-  access under test* — a snapshot after the install proves nothing — an
+  be zero. Identity is *forced by layout* only when the page under test must
+  sit at a specific **physical** address for a reason outside the mapping — a
+  `.org`-pinned instruction, a vector table at a fixed `VBR` offset, the flat
+  VA=PA image load. The test: **if you can move the backing frame by editing
+  only PTE/PTEL constants, identity was not forced.** "It would be awkward to
+  move" is not forced. Where identity *is* forced, the guard **must** carry an
+  independent witness that translation actually happened: a `P4_TSBCNT`
+  (`0xFF000054`) walks/hits delta *taken across the access under test* — a
+  snapshot after the install proves nothing — an
   asserted fault count or `EXPEVT`/`MMUFSR`/`TEA` value, the walker's PTEL
   image read back out of the TSB row, or an effect only a correct PageMask can
   produce. Say in the header *why* identity was unavoidable and *which*

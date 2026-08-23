@@ -61,13 +61,32 @@ The cosim backs physical memory only in `[0, 0x0100_0000)` (`sim/cpu_ctb.c`
 bits must be zero — and the translation degenerates to identity. A `pm >= 6`
 entry also spans the entire backed window, so it is necessarily SOLO.
 
-**(b) A load-bearing image layout.** Some guards pin a specific instruction or
-zero-page at a fixed *physical* address, and the VA that must fetch it is
-determined by the same layout arithmetic. `mmuidslot.S` and
-`mmuimiss_illegal.S` are both like this: making them non-identity means moving
-the backing page, which perturbs the VBR/handler offsets the guard is built
-on. That is a real constraint, so it earns the carve-out — but it demands a
-witness like any other forced identity.
+**(b) A load-bearing image layout.** Identity is *forced by layout* only when
+the page under test must sit at a specific **physical** address for a reason
+outside the mapping — a `.org`-pinned instruction, a vector table at a fixed
+`VBR` offset, the flat VA=PA image load.
+
+> **The test: if you can move the backing frame by editing only PTE/PTEL
+> constants, identity was not forced.** "It would be awkward to move" is not
+> forced.
+
+Unlike (a), which is arithmetic anyone can recheck, this one is a judgement
+call — hence the fence. The test sorts the guards in §2 correctly:
+
+* `mmuidslot.S` **passes** (forced): the branch sits at VA `0x0FFE` and the
+  image loads flat, so the delay-slot instruction must be the first halfword
+  of page 1 and its PA follows from the page-straddle. Same for
+  `mmuimiss_illegal.S`, whose `_zero_page` is pinned by a hand-computed
+  `.space` pad the VBR/handler offsets depend on (`:252-253`).
+* `mmuainc.S` **fails** (not forced): the frame moves by editing two
+  constants, `v_pteA` and `k_bkA`. Same for `mmuainc2.S`.
+
+That split is exactly the call §2's repair advice already makes.
+
+Being forced is not an exemption — it still demands a witness, like any other
+forced identity. Over-citing (b) therefore costs guard strength, not
+soundness: the worst case is an identity-mapped guard that carries a counter
+or fault witness anyway, which is the compliant `mmuhuge` category.
 
 ### Not a reason: "the bus is not relocated"
 
@@ -90,11 +109,20 @@ Both rewrite the **external** bus. `sim/cpu_tb.vhd:212-217` passes
 `cache/dcache_ccl.vhm:255` says so: *"PIPT: cpu.vhd relocates the address
 upstream of the cache, so a.a is already a PA."*
 
-A green guard settles it: `mmuwalkdside.S` runs in `mmu_sim.sh`'s default
+Two green guards settle it. `mmuwalkdside.S` runs in `mmu_sim.sh`'s default
 `cpu_tb` loop (`:131`), maps VA `0x42000`→PA `0x44000` and VA `0x43000`→PA
 `0x45000`, and at `:186-209` asserts the stores landed at the **PAs** while the
-VA-as-physical words still read `0x11111111`. `mmuboot.S:9-11,139-141` makes
-the same construction under the same top.
+VA-as-physical words still read `0x11111111`.
+
+`mmuboot.S` is the stronger of the two, because it does not depend on a list
+staying current. Its only runner is `sim/linux_sim.sh`, whose build line
+(`:69-74`) makes `cpu_ctb` and `cpu_tb` and **nothing else** — there is no
+`cpu_cache_tb` target — so `mmuboot` can only ever have run under `cpu_tb`.
+It maps VA `0x00100000` → PA `0x00071000` and asserts the readback, and its
+own header says why: *"a correct readback after translation proves real
+relocation happened, not an identity-map coincidence"* (`:9-11,139-141`).
+A guard that could not pass under the stale model has been passing under it
+all along.
 
 **So `PA != VA` is a real, cheap witness for every guard under every top.** The
 stale claim survived in `mmuxlate.S`, `mmuirun.S`, `mmubenchi.S` and

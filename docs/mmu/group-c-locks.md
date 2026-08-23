@@ -79,7 +79,7 @@ in parentheses. `—` = not run in that combination.
 | **M4** | PASS | PASS | PASS | PASS | PASS | **RED 84 (0x54)** | PASS |
 | **M5a** | PASS | PASS | PASS | PASS | PASS *(provable no-op)* | PASS | — |
 | **M5c** | wedge | wedge | wedge | wedge | wedge *(see §5)* | wedge | — |
-| **M6** | RED (assert) | RED (assert) | **RED (assert) @3.76 µs** | RED (assert) | RED (assert) | RED (assert) | PASS-n/a |
+| **M6** | RED (assert) | RED (assert) | **RED (assert) @3.76 µs** | RED (assert) | RED (assert) | RED (assert) | — |
 | **M7** | — | — | PASS | — | — | PASS | **RED 147 (0x93)** |
 
 Bold = the case's own stated mutation.

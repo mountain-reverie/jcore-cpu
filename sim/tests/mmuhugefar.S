@@ -141,6 +141,23 @@
 ! Expected exact TSBCNT.hits delta: +1 per phase.
 ! Expected exact walker-invocation delta: +1 per phase.
 !
+! ---------------------------------------------------------------------------
+! MEASURED RUN TIMES -- for anyone bracketing the stop-time budget
+! ---------------------------------------------------------------------------
+!   PASS (all four phases)          29.65 us
+!   pre-fix trip, phase 1 (0xE1)    24.15 us
+!   registered stop-time            200 us   (6.7x margin)
+!
+! Both figures were re-measured after the TSB-zeroing loop was cut from 512
+! words to 128 (it had been zeroing 4x the real TSB; see k_tsbwords below).
+! An earlier commit message quoted 52.7 us and 43 us -- those predate that
+! change and are ~60-75% too high. The RESULT CODES are unaffected and
+! reproduce exactly; only the times moved.
+!
+! The trip time matters as much as the pass time: it is the evidence that the
+! pre-fix failure terminates via its bounded counter an order of magnitude
+! inside the stop-time, rather than being a timeout wearing a result code.
+!
 ! Other codes:
 !   0x7E  jcore_handle_exception() reached (a general exception this harness
 !         never drives) -- a code rather than a silent spin, so it cannot
@@ -148,6 +165,38 @@
 !   0x7D  do_IRQ() reached
 !   0x7F  _fail integrity net: r9 was 0, which sim/cpu_ctb.c's test_result()
 !         would have accepted as PASS
+!
+! ---------------------------------------------------------------------------
+! RECORDED DECISION: __update_tlb() IS STILL NOT COVERED, AND NOT BY THIS GUARD
+! ---------------------------------------------------------------------------
+! The contract's §7.4 names an uncovered gap -- the SECOND of the two TSB fill
+! sites, __update_tlb() (arch/sh/mm/tlb-jcore.c), reached via
+! update_mmu_cache() -- and asks A1b or A1c to either add a case for it or
+! record a decision not to. This is the decision not to.
+!
+! This guard does newly reach jcore_tlb_fault_entry() and do_page_fault(),
+! which no previous Lane-2 harness did (mmulinux, mmuboot and mmuhuge all stub
+! out the path before it). But it stops there: its do_page_fault() stub
+! returns immediately, and its expected fault count is ZERO, so on a correct
+! kernel the stub is never entered at all and update_mmu_cache() is never
+! reached. The gap is untouched.
+!
+! Two reasons not to close it here:
+!
+!   1. update_mmu_cache() is generic mm and cannot be linked into a bare-metal
+!      harness. The reachable proxy is to call __update_tlb(NULL, va, pte)
+!      directly -- it is a real symbol in tlb-jcore.o and its `if (vma && ...)`
+!      guard tolerates a NULL vma -- so a guard IS constructible. This is a
+!      decision, not an impossibility.
+!
+!   2. It belongs with A1a, not here. __update_tlb() writes its tag with
+!      `address & PAGE_MASK`, which is the second K1 fill site and is still
+!      UNFIXED on this branch. A guard written here would have to encode the
+!      buggy 16 KB-granular tag as its expected value, and would then have to
+!      be rewritten by whoever lands K1. Obligations K7 (this task) and K8
+!      (leave __update_tlb() partial) are both satisfied without it.
+!
+! Recommendation: carry this to A1c, or fold it into A1a alongside the K1 fix.
 !
 ! ---------------------------------------------------------------------------
 ! Memory map (P1 = 0x80000000 | physical offset)
@@ -428,8 +477,16 @@ run_phase:
         ! whole TLB. This is what makes each phase SOLO: without it phase 3's
         ! 16 MB entry -- which covers the entire backed window -- would still
         ! be resident and would answer phase 4's access with the wrong
-        ! PageMask and no fault, and this guard would pass vacuously via the
-        ! 0xF0 path instead of testing anything. ----
+        ! PageMask and no fault at all.
+        !
+        ! MEASURED, not predicted: deleting this strobe makes the guard fail
+        ! with 0x42 -- phase 4, check 2, the PTEL image -- because the row the
+        ! stale 16 MB entry leaves behind carries pm=6 where phase 4 expects
+        ! pm=8. An earlier version of this comment predicted 0xF0 (the
+        ! zero-hits anti-vacuity code). That was wrong in the guard's favour:
+        ! check 2 fires first, so the guard is strictly louder than its own
+        ! comment claimed. Either way it fails with a code, which is the
+        ! property that matters. ----
         mov.l   rp_mmucr, r0
         mov     #0, r1
         mov.l   r1, @r0

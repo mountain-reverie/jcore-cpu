@@ -495,6 +495,7 @@ begin
                 severity failure;
 
           end case;
+
         end if;
       end if;
     end if;

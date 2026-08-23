@@ -171,11 +171,14 @@ end entity tlb_tb;
 
 architecture beh of tlb_tb is
 
+  -- `rst` below starts ASSERTED. Case 1 ("empty TLB must miss") is therefore a
+  -- check on the RESET flush, not on the `ram` signal's VHDL initialiser --
+  -- which is simulation/BRAM-inference only and is ignored by ASIC synthesis,
+  -- so it is exactly the thing that must not be the reason a lookup misses at
+  -- t=0. (Kept above the block, not between clk and rst: a comment ends a vsg
+  -- alignment group, and splitting them orphans clk into a group of one, which
+  -- vsg then wants un-padded and visibly out of line with everything below.)
   signal clk               : std_logic                     := '0';
-  -- Starts ASSERTED. Case 1 ("empty TLB must miss") is therefore a check on
-  -- the RESET flush, not on the `ram` signal's VHDL initialiser -- which is
-  -- simulation/BRAM-inference only and is ignored by ASIC synthesis, so it is
-  -- exactly the thing that must not be the reason a lookup misses at t=0.
   signal rst               : std_logic                     := '1';
   signal i_va,        d_va : std_logic_vector(31 downto 0) := (others => '0');
   signal asid              : std_logic_vector(15 downto 0) := (others => '0');
@@ -225,6 +228,7 @@ begin
   -- in construction and in meaning. The split's own routing rule (cpu.vhd sends
   -- an install to the FAULTING side only) is a cpu.vhd property, not a tlb.vhd
   -- one, and is not what this bench tests.
+  -- dut_i drives we => '0' throughout: a fetch is never a store.
   dut_i : entity work.tlb
     generic map (
       entries   => 32,
@@ -234,7 +238,7 @@ begin
       clk       => clk,
       rst       => rst,
       va        => i_va,
-      we        => '0',                  -- a fetch is never a store
+      we        => '0',
       pa_tag    => i_pa_tag,
       pa12      => i_pa12,
       page_mask => i_page_mask,

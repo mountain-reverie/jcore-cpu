@@ -124,6 +124,9 @@
 !   0x?4  the walker-invocation counter moved by something other than
 !         exactly 1 (strong jcore_tlb_walk_mark_accessed override below)
 !   0x?5  do_page_fault() was entered during the phase (expected: never)
+!   0x?6  NEITHER way of the set the hardware computed holds this VA's tag,
+!         i.e. no TSB row was written for it at all. Distinct from 0x?2,
+!         which means the row IS there and carries the wrong PTEL.
 !   0xF0  TSBCNT.hits did not move AT ALL -- reserved anti-vacuity code
 !         (contract P1). The access was resolved by software, or the counter
 !         is dead; either way this guard has proved nothing.
@@ -144,9 +147,12 @@
 ! ---------------------------------------------------------------------------
 ! MEASURED RUN TIMES -- for anyone bracketing the stop-time budget
 ! ---------------------------------------------------------------------------
-!   PASS (all four phases)          29.65 us
-!   pre-fix trip, phase 1 (0xE1)    24.15 us
-!   registered stop-time            200 us   (6.7x margin)
+!   PASS (all four phases)          29.48 us
+!   pre-fix trip, phase 1 (0xE1)    24.71 us
+!   registered stop-time            200 us   (6.8x margin)
+!
+! (measured 2026-08-22, with the .o and .cmd deleted and the object md5
+!  confirmed to move on every A/B -- and to return bit-identical on restore.)
 !
 ! Both figures were re-measured after the TSB-zeroing loop was cut from 512
 ! words to 128 (it had been zeroing 4x the real TSB; see k_tsbwords below).
@@ -210,6 +216,16 @@
 #include "sim_instr.h"
 #include <asm/pgtable-bits-jcore.h>
 #define ENTRY(name) .globl name; .balign 4; name:
+
+! Scratch globals, P1 (untranslated). Named once here because SH-2's mov.l is
+! PC-relative FORWARD-only with a ~1020-byte reach, so kmain, run_phase,
+! do_page_fault and jcore_tlb_walk_mark_accessed each need their OWN literal
+! pool behind them. The POOLS are unavoidable; three copies of the raw
+! addresses were not.
+G_WCNT     = 0x80029000          ! walker-invocation counter
+G_FAULTCNT = 0x80029004          ! do_page_fault() entry counter
+G_PHASE    = 0x80029008          ! current phase, for the 0xE0|phase trip code
+G_TEA      = 0x8002900C          ! last faulting address, for post-mortem
 
         .section .vect,"a"
         .long start
@@ -378,10 +394,10 @@ k_tsb:          .long 0x80028000
 k_tsbwords:     .long 128               ! (1 << TSBBR[3:0]) sets x 32 B / 4
                                         ! == 16 x 32 / 4. Coupled to v_tsbbr
                                         ! below: change one, change both.
-k_wcnt:         .long 0x80029000
-k_faultcnt:     .long 0x80029004
-k_phase:        .long 0x80029008
-k_tea:          .long 0x8002900C
+k_wcnt:         .long G_WCNT
+k_faultcnt:     .long G_FAULTCNT
+k_phase:        .long G_PHASE
+k_tea:          .long G_TEA
 k_ttb_a:        .long 0xFF000008        ! MMU_TTB
 k_vbr:          .long jcore_vbr_base
 k_tsbbr_a:      .long 0xFF000014        ! TSBBR
@@ -479,7 +495,8 @@ run_phase:
         ! be resident and would answer phase 4's access with the wrong
         ! PageMask and no fault at all.
         !
-        ! MEASURED, not predicted: deleting this strobe makes the guard fail
+        ! MEASURED (2026-08-22), not predicted: deleting this
+        ! strobe makes the guard fail
         ! with 0x42 -- phase 4, check 2, the PTEL image -- because the row the
         ! stale 16 MB entry leaves behind carries pm=6 where phase 4 expects
         ! pm=8. An earlier version of this comment predicted 0xF0 (the
@@ -545,12 +562,25 @@ run_phase:
         ! matching tag_hi. Every VA here is 16 KB aligned, so tag_hi is the VA
         ! itself under either the old `addr & PAGE_MASK` or the canonical
         ! `addr & JCORE_TSB_TAG_MASK`. Selecting by tag_hi rather than by the
-        ! PTEL the next check asserts keeps that assertion non-circular. ----
+        ! PTEL the next check asserts keeps that assertion non-circular.
+        !
+        ! BOTH ways are tested, and a double miss gets its OWN code (?6).
+        ! Earlier this fell through to way 1 unchecked, so "no TSB row for this
+        ! VA at all" and "the row is here but its PTEL is wrong" both reported
+        ! ?2 after comparing way 1's garbage -- two distinct defects sharing
+        ! one ID, which is exactly what CLAUDE.md's "distinct failure IDs to
+        ! distinct defects" forbids. ----
         mov.l   @(12, r14), r1
         mov.l   @r3, r2
         cmp/eq  r1, r2
         bt      1f
         add     #16, r3
+        mov.l   @r3, r2
+        cmp/eq  r1, r2
+        bt      1f
+        mov     #6, r9                  ! neither way holds this VPN
+        bra     rp_fail
+        nop
 1:
 
         ! ---- check 1: the sentinel came back ----
@@ -629,9 +659,9 @@ rp_fail:
         nop
 
         .align 2
-rp_phase:       .long 0x80029008        ! == k_phase
-rp_wcnt:        .long 0x80029000        ! == k_wcnt
-rp_faultcnt:    .long 0x80029004        ! == k_faultcnt
+rp_phase:       .long G_PHASE
+rp_wcnt:        .long G_WCNT
+rp_faultcnt:    .long G_FAULTCNT
 rp_mmucr:       .long 0xFF000010        ! MMUCR (bit0 AT, bit2 TI)
 rp_tsbptr:      .long 0xFF00001C        ! read-only P4 TSBPTR alias
 rp_tsbcnt:      .long 0xFF000054        ! [31:16]=cnt_walks [15:0]=cnt_hits
@@ -696,9 +726,9 @@ ENTRY(do_page_fault)
 2:      bra     2b
         nop
         .align 2
-dpf_faultcnt:   .long 0x80029004        ! == k_faultcnt
-dpf_tea:        .long 0x8002900C        ! == k_tea
-dpf_phase:      .long 0x80029008        ! == k_phase
+dpf_faultcnt:   .long G_FAULTCNT
+dpf_tea:        .long G_TEA
+dpf_phase:      .long G_PHASE
 dpf_e0:         .long 0x000000E0
 dpf_result:     .long TEST_RESULT_ADDRESS
 
@@ -775,5 +805,6 @@ ENTRY(jcore_tlb_walk_mark_accessed)
         rts
         nop
         .align 2
-p_wcnt: .long 0x80029000                ! == k_wcnt (duplicated locally:
-                                        ! mov.l is PC-relative-forward-only)
+p_wcnt: .long G_WCNT                    ! own pool: mov.l is PC-relative
+                                        ! forward-only, so this function
+                                        ! cannot reach kmain's pool

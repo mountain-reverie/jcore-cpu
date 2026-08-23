@@ -21,19 +21,32 @@
 #   sim/mmu_sim.sh mmuxlate cpu_tb 120us # one guard, explicit top + stop-time
 #   sim/mmu_sim.sh -n mmuicolor          # reuse the existing build (skip rebuild)
 #
+# LANE-2 INVENTORY -- NOT RUN HERE, listed so the inventories can be diffed.
 #
-# GUARDS THIS SCRIPT DELIBERATELY DOES NOT RUN. The real-kernel-object
-# harnesses need linux@jcore kbuild outputs under $(LINUX_SRC), which this
-# script neither builds nor knows about, so `make -C tests <name>.img` would
-# simply fail here. They run from sim/linux_sim.sh and from
-# .github/workflows/full-regression.yml only. The list is repeated here so the
-# two guard inventories can actually be DIFFED (CLAUDE.md: they diverge in BOTH
-# directions, and nothing else in this file mentions them):
+# These harnesses link real linux@jcore kbuild objects and need $LINUX_SRC,
+# which a normal jcore-cpu checkout does not have, so this script references
+# none of them. They run under sim/linux_sim.sh (which owns the authoritative
+# copy of this list) and in .github/workflows/full-regression.yml (which keeps
+# a third, independent list). All three must be kept in step; a guard added to
+# one of them is invisible to the other two.
 #
-#   mmulinux  mmulinuxexc  mmuboot  mmuhuge
-#   mmupmsub4k  mmupmsubi  mmupmmix   -- TSB PageMask / tag-granularity
-#                                        contract Group B, see
-#                                        docs/mmu/pagemask-walker-contract.md
+#   mmulinux     VBR+0x400, __jcore_tlb_walk() scenarios 1-8
+#   mmulinuxexc  VBR+0x100 / VBR+0x600, the two fixed vectors mmulinux misses
+#   mmuboot      the real jcore_mmu_enable() boot path
+#   mmuhuge      a huge TLB entry installs with the right PageMask, and a
+#                second sub-page inside it hits the RESIDENT entry
+#   mmuhugefar   the case mmuhuge cannot reach: the FIRST touch of a huge
+#                mapping is past its first PAGE_SIZE, so the faulting address
+#                indexes an EMPTY pte slot (contract obligation K7)
+#   mmupmsub4k   TSB tag granularity: D-side first touch of a non-base 4 KB
+#                sub-page, all three VA[13:12] values
+#   mmupmsubi    the same on the I-side (instruction fetch)
+#   mmupmmix     four PageMask values resident simultaneously in one ASID
+#
+# The last three are Group B of docs/mmu/pagemask-walker-contract.md 7.1.
+#
+# A fully green run of THIS script therefore says nothing about the real Linux
+# TLB-miss handler.
 #
 # AND THIS SCRIPT PRINTS NO TOTAL. Four of this branch's five original commit
 # messages RECORDED the regression as "sim/mmu_sim.sh full suite ... 107/107
@@ -249,28 +262,6 @@ else
   run_guard mmupagemix2 cpu_cache_tb 200us
   run_guard mmupagewalk cpu_cache_tb 300us
   echo "== M8 fault-coverage sweep =="
-# ---------------------------------------------------------------------------
-# LANE-2 INVENTORY -- NOT RUN HERE, listed so the inventories can be diffed.
-#
-# These harnesses link real linux@jcore kbuild objects and need $LINUX_SRC,
-# which a normal jcore-cpu checkout does not have, so this script references
-# none of them. They run under sim/linux_sim.sh (which owns the authoritative
-# copy of this list) and in .github/workflows/full-regression.yml (which keeps
-# a third, independent list). All three must be kept in step; a guard added to
-# one of them is invisible to the other two.
-#
-#   mmulinux     VBR+0x400, __jcore_tlb_walk() scenarios 1-8
-#   mmulinuxexc  VBR+0x100 / VBR+0x600, the two fixed vectors mmulinux misses
-#   mmuboot      the real jcore_mmu_enable() boot path
-#   mmuhuge      a huge TLB entry installs with the right PageMask, and a
-#                second sub-page inside it hits the RESIDENT entry
-#   mmuhugefar   the case mmuhuge cannot reach: the FIRST touch of a huge
-#                mapping is past its first PAGE_SIZE, so the faulting address
-#                indexes an EMPTY pte slot (contract obligation K7)
-#
-# A fully green run of THIS script therefore says nothing about the real Linux
-# TLB-miss handler.
-# ---------------------------------------------------------------------------
 # Mutation spot-checks (2026-08-01). A guard that passes proves nothing
 # unless it can be shown to fail, so a sample was checked by corrupting one
 # expected constant and confirming a sub-test-specific failure code (not the

@@ -141,10 +141,11 @@
 ! All runs: docker ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
 ! SIM_TOP=cpu_tb, --stop-time=120us, measured 2026-08-22. Every mutation run
 ! REBUILT the cosim (never `-n`, which skips the build and measures stale
-! hardware). To re-apply any mutation, follow the repro block in
-! docs/mmu/group-c-locks.md section 9; that file also carries the full
-! cross-table and, per row, whether it has been independently
-! reproduced or rests on this record alone.
+! hardware). To re-apply any mutation you need BOTH halves of
+! docs/mmu/group-c-locks.md: section 3 (the edits, one row per mutation)
+! and section 9 (the run). That file also carries the full cross-table
+! and, per row, whether it has been independently reproduced or rests on
+! this record alone.
 !
 !
 #include "sim_instr.h"
@@ -404,10 +405,10 @@ ENTRY(_done)
         bra     _done
         nop
 ENTRY(_fail)
-        ! `mov #imm, Rn` SIGN-EXTENDS 8 bits, and this guard's codes reach into
-        ! the 0x80/0x90 band, so 0x85 would otherwise be reported as
-        ! 0xFFFFFF85. Normalise here rather than at every use site; every code
-        ! this file can emit fits in a byte.
+        ! `mov #imm, Rn` SIGN-EXTENDS 8 bits, and this guard's codes are in the
+        ! 0x91..0x9F band, so 0x9F would otherwise be reported as 0xFFFFFF9F.
+        ! Normalise here rather than at every use site; every code this file
+        ! can emit fits in a byte.
         extu.b  r9, r9
         mov.l   p_test_result, r0
         tst     r9, r9

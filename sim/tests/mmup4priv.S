@@ -155,12 +155,19 @@
 ! change the nomination sequence). PTEH is excluded on purpose -- the fault
 ! capture rewrites it from the faulting VA by design.
 !
-! HOW THIS BRANCH'S SUITE RESULT IS QUOTED, corrected. The commit message
-! records the regression as an aligned block reading
+! HOW THIS BRANCH'S SUITE RESULT IS QUOTED, corrected. The commit that adds
+! this guard -- "fix(mmu): require SR.MD=1 for the P4 MMU-register path" --
+! RECORDED the regression as an aligned block reading
 !
 !   full MMU / priv-arch suite      108/108 PASS, 0 FAIL, 0 SKIP
 !
-! and that FORM is wrong. sim/mmu_sim.sh prints one "  PASS  <name>" or
+! and that FORM is wrong. That message has since been reworded: it now states
+! the run as "==> all guards PASSED" and gives 108 as a count over the
+! runner's per-guard "  PASS  <name>" lines. So the offending form is quoted
+! HERE, in the file, because this is the copy a reader can still find -- the
+! log no longer carries it.
+!
+! sim/mmu_sim.sh prints one "  PASS  <name>" or
 ! "  FAIL  <name>" line per guard and one trailing "==> all guards PASSED".
 ! It has no aggregate of any kind -- no total, no ratio, no "0 FAIL" -- and no
 ! script in this repository has any notion of SKIP at all, so "0 SKIP" is
@@ -168,11 +175,17 @@
 ! hand tally reads as a capture.
 !
 ! The 108 itself stands, and is not re-stated from a run here: it is 107 (the
-! count a68c765's message records for master) plus this guard, and the +1 is
-! checkable by eye -- the only change this branch makes to sim/mmu_sim.sh is
-! inserting `mmup4priv` into the cpu_tb guard list. The MUTATION EVIDENCE
-! table above is unaffected; those Result codes are real captures. When the
-! total is wanted, count it and say so: `... | grep -c '^  PASS'`.
+! count recorded for master by "shadow an ITLB fill into the DTLB, one way
+! only", a68c765 -- a merged commit, so that SHA will not move) plus this
+! guard, and the +1 is checkable by eye -- the only change this branch makes
+! to sim/mmu_sim.sh is inserting `mmup4priv` into the cpu_tb guard list. The
+! MUTATION EVIDENCE table above is unaffected; those Result codes are real
+! captures. When the total is wanted, count it and say so:
+! `... | grep -c '^  PASS'`.
+!
+! Note the shape of both citations above, because this block has already been
+! invalidated once by a reword: an UNMERGED commit is named by its subject
+! line, never by a SHA that a rebase will silently retire.
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:

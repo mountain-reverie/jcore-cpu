@@ -154,6 +154,25 @@
 ! by check 7, TSBSLOT by check 17, TSBVSEED by check 18 (a leaked reseed would
 ! change the nomination sequence). PTEH is excluded on purpose -- the fault
 ! capture rewrites it from the faulting VA by design.
+!
+! HOW THIS BRANCH'S SUITE RESULT IS QUOTED, corrected. The commit message
+! records the regression as an aligned block reading
+!
+!   full MMU / priv-arch suite      108/108 PASS, 0 FAIL, 0 SKIP
+!
+! and that FORM is wrong. sim/mmu_sim.sh prints one "  PASS  <name>" or
+! "  FAIL  <name>" line per guard and one trailing "==> all guards PASSED".
+! It has no aggregate of any kind -- no total, no ratio, no "0 FAIL" -- and no
+! script in this repository has any notion of SKIP at all, so "0 SKIP" is
+! describing a column that does not exist. Set out in a column like that, a
+! hand tally reads as a capture.
+!
+! The 108 itself stands, and is not re-stated from a run here: it is 107 (the
+! count a68c765's message records for master) plus this guard, and the +1 is
+! checkable by eye -- the only change this branch makes to sim/mmu_sim.sh is
+! inserting `mmup4priv` into the cpu_tb guard list. The MUTATION EVIDENCE
+! table above is unaffected; those Result codes are real captures. When the
+! total is wanted, count it and say so: `... | grep -c '^  PASS'`.
 
 #include "sim_instr.h"
 #define ENTRY(name) .globl name; .balign 4; name:

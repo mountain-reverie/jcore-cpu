@@ -158,6 +158,15 @@ architecture rtl of tlb_walk is
   signal walks_r : unsigned(15 downto 0)             := (others => '0');
   signal hits_r  : unsigned(15 downto 0)             := (others => '0');
 
+  -- Internal copies of the two bus outputs. VHDL-93 forbids reading an `out`
+  -- port, and p_walk_read_order (bottom of this file) must observe exactly the
+  -- values driven onto the port rather than re-deriving them from `state` --
+  -- re-deriving them would make the monitor restate the state machine it
+  -- exists to check. These are a pure renaming: no logic, no state, no extra
+  -- port (contract R5).
+  signal bus_a_int  : std_logic_vector(31 downto 0);
+  signal bus_en_int : std_logic;
+
   -- Word offset within the current way: 0 = tag_hi, 1 = tag_lo, 2 = data.
 
   function way_word (
@@ -202,14 +211,16 @@ begin
   cnt_walks    <= walks_r;
   cnt_hits     <= hits_r;
 
-  bus_en <= '1' when (state = st_tag_hi or state = st_tag_lo or state = st_data) else
-            '0';
+  bus_en_int <= '1' when (state = st_tag_hi or state = st_tag_lo or state = st_data) else
+                '0';
+  bus_en     <= bus_en_int;
 
-  with state select bus_a <=
+  with state select bus_a_int <=
     way_word(set_addr, way, 0, entry_bytes) when st_tag_hi,
     way_word(set_addr, way, 1, entry_bytes) when st_tag_lo,
     way_word(set_addr, way, 2, entry_bytes) when st_data,
     (others => '0') when others;
+  bus_a <= bus_a_int;
 
   process (clk) is
   begin
@@ -339,5 +350,100 @@ begin
     end if;
 
   end process;
+
+  -- ---- Commit-point read-order invariant, permanently asserted ------------
+  -- CONTRACT LOCK C3 (docs/mmu/pagemask-walker-contract.md sections 3(d), 4
+  -- and 7.2). `tag_hi` is the COMMIT POINT of the torn-write protocol:
+  -- software writes data, then tag_lo, then a barrier, then tag_hi
+  -- (jcore_tsb_write_entry(), hardware-spec section 7.0). The protocol is
+  -- sound ONLY because the walker reads tag_hi FIRST -- seeing a new tag_hi
+  -- implies the data behind it is at least as new. Invert the read order (the
+  -- rejected alternative 3(d), "read +8 first so the page size is known at
+  -- compare time") and a walk landing mid-store reads the OLD data and then
+  -- the NEW, matching tag_hi, and installs a stale PTEL under a legitimate
+  -- tag.
+  --
+  -- That failure is UNDETECTABLE BY ANY SOFTWARE GUARD, because both words are
+  -- individually well-formed -- a torn entry is by construction
+  -- indistinguishable to hardware. So this assertion is the only mechanised
+  -- defence the protocol has. It is stated over the walker's OBSERVABLE bus
+  -- sequence rather than over `state`, so that reordering the state machine
+  -- cannot reorder the check along with it.
+  --
+  -- Simulation-only: assertions have no synthesis effect, so this adds no
+  -- state, no bus read, no mask network and no port (contract R5). Its
+  -- companion driver is sim/tests/mmuwalkreadorder.S, which exercises all five
+  -- walk shapes -- way-0 hit, way-0 tag_hi mismatch, way-0 tag_lo reject,
+  -- way-0 data reject and both-ways miss -- in one image, so every path
+  -- through this FSM is observed. Same shape as p_walk_order_assert in
+  -- core/cpu.vhd.
+  p_walk_read_order : process (clk) is
+
+    variable v_seen : std_logic_vector(2 downto 0)  := "000";
+    variable v_base : std_logic_vector(31 downto 4) := (others => '0');
+    variable v_have : std_logic                     := '0';
+
+  begin
+
+    if rising_edge(clk) then
+      if (rst = '1') then
+        v_seen := "000";
+        v_have := '0';
+      else
+        -- A fresh walk starts a fresh record; so does advancing to another
+        -- way, which is detected from the ADDRESS alone (at entry_bytes = 16
+        -- the way select is bit 4), not from `way`.
+        if (state = st_idle) then
+          v_seen := "000";
+          v_have := '0';
+        end if;
+
+        if (bus_en_int = '1' and bus_ack = '1' and entry_bytes = 16) then
+          if (v_have = '0' or bus_a_int(31 downto 4) /= v_base) then
+            v_seen := "000";
+            v_base := bus_a_int(31 downto 4);
+            v_have := '1';
+          end if;
+
+          case bus_a_int(3 downto 2) is
+
+            when "00" =>
+
+              v_seen(0) := '1';
+
+            when "01" =>
+
+              -- The cosim's line reader truncates a report at roughly 110
+              -- characters including its own prefix, so the crux comes FIRST.
+              assert v_seen(0) = '1'
+                report "WALK READ ORDER VIOLATED: tag_lo (+4) read before "
+                       & "tag_hi (+0) of the same way; tag_hi is the commit "
+                       & "point. See p_walk_read_order, core/tlb_walk.vhd."
+                severity failure;
+              v_seen(1) := '1';
+
+            when "10" =>
+
+              assert v_seen(0) = '1' and v_seen(1) = '1'
+                report "WALK READ ORDER VIOLATED: data (+8) read before "
+                       & "tag_hi (+0) of the same way; tag_hi is the commit "
+                       & "point. See p_walk_read_order, core/tlb_walk.vhd."
+                severity failure;
+              v_seen(2) := '1';
+
+            when others =>
+
+              assert false
+                report "WALK READ ORDER VIOLATED: the walker read word 3 of "
+                       & "an entry. +0xC is reserved and is never read. "
+                       & "See p_walk_read_order, core/tlb_walk.vhd."
+                severity failure;
+
+          end case;
+        end if;
+      end if;
+    end if;
+
+  end process p_walk_read_order;
 
 end architecture rtl;

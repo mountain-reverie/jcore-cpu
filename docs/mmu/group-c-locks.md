@@ -51,6 +51,22 @@ eliminate — so the width is now an unconditional `severity failure` assertion
 inside the same process. Widening the TSB entry must break loudly and be
 reworked.
 
+**Two guards are constrained to a single 4 KB image, and that is now a build
+error rather than a comment.** `mmupmrawvpn` and `mmupmreservedpm` map their
+code page at VPN 0 with no trailing pad page, so the whole image must fit in
+VA `0x0000..0x0FFF`; overflow does not fail, it takes a silent IMISS storm that
+reads as a hang. `sim/tests/Makefile`'s `SINGLE_PAGE_LIMIT` rule fails the build
+on the **linked** `_etext`, following the M8 scratch-block rule already in that
+file. Both currently link at `_etext = 0x800`, half the budget; padded past the
+limit the build stops with a named error and produces no `.img`.
+
+An in-file `.if . > 0x1000` was tried first and rejected on measurement: gas
+refuses it (`non-constant expression in .if statement` — `.` is not absolute in
+a relocatable section), and it would also have been wrong by the `0x118` the
+linker puts ahead of `.text` for `*(.vect)`. The deliberately overflowing image
+ends at `_etext = 0x1100`, where `.` reads `0xFE8` — under the limit — so that
+form would have passed the very overflow it was meant to catch.
+
 C1 and C2 share one harness (`mmuwalktagmbz.S` is `#define` + `#include`), the
 same pattern as `mmudspcprobe_late{b,w,c,m,mw}`.
 

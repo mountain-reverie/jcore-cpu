@@ -52,7 +52,13 @@
 --
 -- MUTATION EVIDENCE for cases 24/25 (measured 2026-08-23 in
 -- ghcr.io/mountain-reverie/jcore-cpu-ci:latest; a pristine run brackets the set
--- on both sides and PASSES). Each mutation is on core/tlb.vhd's flush process:
+-- on both sides and PASSES). Each mutation is on core/tlb.vhd's flush process.
+-- ALL SIX (T1-T6) were re-run unchanged after the rebase onto master's I->D
+-- shadow fill and reproduce exactly what is recorded below. The shadow fill
+-- does not reach this bench: it acts only through tlb.vhd's `spec` input, both
+-- DUTs here leave `spec` unassociated so it takes its port default of '0', and
+-- every install below is therefore still a demand fill. That is also why cases
+-- 26 and 27 needed no update.
 --
 --   T1  delete the `if (rst = '1') then ... end loop;` arm entirely, leaving
 --       `if (ti = '1')` as the head -- i.e. the state of the tree before this
@@ -90,10 +96,18 @@
 --       RESULT: case 26's multi-hit check red, alongside the pre-existing
 --       dedup cases (the re-install case, 16, 17, 18) -- same mutation, same
 --       mechanism, so the extra failures are expected rather than noise.
---   T6  this file: mis-wire dut_d's pa_tag to the ITLB's output. RESULT: case
---       27 red and nothing else. A testbench-level mutation because that is
---       where the mistake it guards against would live -- post-split the two
---       arrays are separate instances, so the risk is the WIRING, not tlb.vhd.
+--   T6  this file: mis-wire dut_d's pa_tag to the ITLB's output, i.e. leave
+--       d_pa_tag DRIVEN but by the wrong array (`pa_tag => open` on dut_d plus
+--       a concurrent `d_pa_tag <= i_pa_tag`). RESULT: case 27 red and nothing
+--       else. A testbench-level mutation because that is where the mistake it
+--       guards against would live -- post-split the two arrays are separate
+--       instances, so the risk is the WIRING, not tlb.vhd.
+--       DO NOT instead mutate this to `pa_tag => open` alone. That leaves
+--       d_pa_tag with NO driver, and an undriven 'U' vector trivially differs
+--       from i_pa_tag, so case 27 passes VACUOUSLY while six unrelated PA
+--       checks go red -- the exact inverse of the isolation T6 is claiming.
+--       (Measured: 6 red, case 27 green. Recorded because that is the shape a
+--       re-derivation of this mutation naturally takes.)
 --
 -- Retained cases test TLB BEHAVIOUR, which is identical in spirit between
 -- the split and unsplit designs: install, flush, ASID isolation, GLOBAL

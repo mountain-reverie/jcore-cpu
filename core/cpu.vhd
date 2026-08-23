@@ -811,22 +811,35 @@ begin
     -- wide; and that cycle carries no core access, so there is nothing to
     -- double-commit -- not on MMIO, not on TAS.
     --
-    -- MEASURED, not only argued. A temporary `severity warning` probe of
-    -- exactly p_walk_takeover's condition was swept over sim/tests: 108
-    -- images under cpu_tb plus the 14 cache-top guards re-run under
-    -- cpu_cache_tb, 122 image-runs. ZERO hits. The probe is live in both
+    -- MEASURED, not only argued. RE-RUN 2026-08-23 on this tree, i.e. AFTER
+    -- the I->D shadow fill (a68c765) added a second, speculative DTLB install
+    -- one cycle behind every ITLB install. A temporary `severity warning` probe
+    -- of exactly p_walk_takeover's condition was swept over sim/tests: all 139
+    -- buildable images under cpu_tb plus the 15 cache-top guards re-run under
+    -- cpu_cache_tb, 154 image-runs. ZERO hits. The probe is live in both
     -- directions, by two INDEPENDENT single-term relaxations of the same
-    -- expression:
-    --   * drop the walk_side_i term  -> 768 hits (the D-side handshake:
-    --     712 under cpu_tb + 56 under cpu_cache_tb)
-    --   * count I-side ARMING cycles -> 953 hits (936 + 17)
+    -- expression, all three carried in ONE sweep so the zero and the liveness
+    -- come from the same set of runs:
+    --   * drop the walk_side_i term  -> 555 hits (the D-side handshake:
+    --     512 under cpu_tb + 43 under cpu_cache_tb)
+    --   * count I-side ARMING cycles -> 1010 hits (992 + 18)
     -- Counting convention, because it is easy to quote a different number for
     -- the same hardware: an "arm" is one rising-edge sample of
     -- walk_i_arm_raw = '1', i.e. ONE pulse per I-side walk, not per busy
-    -- cycle; the 768 is likewise a count of CYCLES in which the un-owned
+    -- cycle; the 555 is likewise a count of CYCLES in which the un-owned
     -- window was occupied, not of walks. So the zero is the property, not a
     -- dead probe. (The four linux@jcore harnesses are absent from the sweep:
-    -- they need $(LINUX_SRC) kbuild objects a normal checkout does not have.)
+    -- they need $(LINUX_SRC) kbuild objects a normal checkout does not have.
+    -- The hit counts are NOT comparable with the pre-shadow-fill sweep this
+    -- replaces -- 122 runs, 768 and 953 -- because the image set, the per-image
+    -- stop times and the RTL all moved. Only the ZERO carries across.)
+    --
+    -- THE SHADOW FILL IS WHY THIS WAS RE-RUN rather than carried over, and it
+    -- changes nothing here. It adds no bus master and no path to sig_db_o: it
+    -- writes the DTLB array from a REGISTERED COPY of the walker's own install
+    -- data, entirely inside the core, while steps (1)-(4) are about who may
+    -- DRIVE THE DATA BUS. Both guards it brought with it (mmuishadow,
+    -- mmudshadow) are in the sweep and do arm I-side walks.
     --
     -- p_walk_takeover below is the standing lock on steps (1)-(4). It has to
     -- be an RTL assertion: a double-committed bus transaction leaves NO

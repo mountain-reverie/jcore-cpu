@@ -43,10 +43,11 @@
 ! All runs: docker ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
 ! SIM_TOP=cpu_tb, --stop-time=120us, measured 2026-08-22. Every mutation run
 ! REBUILT the cosim (never `-n`, which skips the build and measures stale
-! hardware). To re-apply any mutation, follow the repro block in
-! docs/mmu/group-c-locks.md section 9; that file also carries the full
-! cross-table and, per row, whether it has been independently
-! reproduced or rests on this record alone.
+! hardware). To re-apply any mutation you need BOTH halves of
+! docs/mmu/group-c-locks.md: section 3 (the edits, one row per mutation)
+! and section 9 (the run). That file also carries the full cross-table
+! and, per row, whether it has been independently reproduced or rests on
+! this record alone.
 !
 !
 #define CTAG_BASE   0x20

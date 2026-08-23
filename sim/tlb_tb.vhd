@@ -50,6 +50,27 @@
 -- warm-reset path at all, so no .S guard can reach this property. See case 24's
 -- own comment for why the `ram` signal initialiser is not the same thing.
 --
+-- MUTATION EVIDENCE for cases 24/25 (measured 2026-08-23 in
+-- ghcr.io/mountain-reverie/jcore-cpu-ci:latest; a pristine run brackets the set
+-- on both sides and PASSES). Each mutation is on core/tlb.vhd's flush process:
+--
+--   T1  delete the `if (rst = '1') then ... end loop;` arm entirely, leaving
+--       `if (ti = '1')` as the head -- i.e. the state of the tree before this
+--       work. RESULT: all EIGHT of case 24's post-reset checks red, plus both
+--       of case 25's. Cases 1-23 stay green, so the mutation is localised.
+--   T2  narrow the flush loop to `for k in 0 to 0`. RESULT: case 24's entries
+--       1, 2 and 3 red on both arrays while entry 0 is correctly cleared --
+--       which is what makes "the flush is over EVERY slot" a real claim and
+--       not decoration. Cases 12, 16 and 17 also go red: the same loop serves
+--       TI, so this mutation breaks TI too. Expected, and stated here so the
+--       extra failures are not read as noise.
+--   T3  move the install out of the `elsif` chain (`end if; if (tlb_wr = ...`)
+--       so a reset no longer inhibits it. RESULT: ONLY case 25's two checks
+--       red -- the priority claim, isolated to a single mutation.
+--
+-- Distinct defects produce distinct messages; none can be conflated with
+-- another's.
+--
 -- Retained cases test TLB BEHAVIOUR, which is identical in spirit between
 -- the split and unsplit designs: install, flush, ASID isolation, GLOBAL
 -- cross-ASID visibility, STALE suppression, superpages/page-mask handling,

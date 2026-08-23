@@ -113,9 +113,10 @@
 ! All runs: docker ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
 ! SIM_TOP=cpu_tb, --stop-time=120us, measured 2026-08-22. Every mutation run
 ! REBUILT the cosim (never `-n`, which skips the build and measures stale
-! hardware). Mutations are applied and reverted by
-! /scratch/mut.py in the session log; the full cross-table is in
-! docs/mmu/group-c-locks.md.
+! hardware). To re-apply any mutation, follow the repro block in
+! docs/mmu/group-c-locks.md section 9; that file also carries the full
+! cross-table and, per row, whether it has been independently
+! reproduced or rests on this record alone.
 !
 !
 #include "sim_instr.h"

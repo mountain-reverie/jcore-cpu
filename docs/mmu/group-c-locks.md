@@ -39,6 +39,18 @@ not that the change is safe.
 | **C6g** | `sim/tests/mmupmreservedpm.S` | **C8**: the reserved PageMask range 9..15, pinned as the hazard it is |
 | **C7g** | `sim/tests/mmupmmixzero.S` | pm=0/1/2/4 co-resident, and two ADJACENT 4 KB pages staying distinct |
 
+**C3's monitor asserts its own precondition rather than gating on it.** It
+decodes the word offset from `bus_a(3 downto 2)` and the way select from
+`bus_a(4)`, which is the entry layout only at `entry_bytes = 16` — the
+normative layout (contract §4) and the only value `core/cpu.vhd:638`
+instantiates. An earlier revision carried `and entry_bytes = 16` in the sample
+condition, which would have **silently switched the monitor off** at any other
+width instead of failing. That is a guard that stops checking when its
+precondition moves — the exact vacuity pattern this contract exists to
+eliminate — so the width is now an unconditional `severity failure` assertion
+inside the same process. Widening the TSB entry must break loudly and be
+reworked.
+
 C1 and C2 share one harness (`mmuwalktagmbz.S` is `#define` + `#include`), the
 same pattern as `mmudspcprobe_late{b,w,c,m,mw}`.
 
@@ -73,16 +85,32 @@ in parentheses. `—` = not run in that combination.
 | | C1 | C2 | C3 | C4 | C5 | C7g | C6g |
 |---|---|---|---|---|---|---|---|
 | **pristine** | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
-| **M1** | **RED 17 (0x11)** | PASS | PASS | PASS | PASS | PASS | — |
+| **M1** | **RED 17 (0x11)** | PASS | PASS | PASS | PASS | PASS | PASS |
 | **M2** | PASS | **RED 33 (0x21)** | PASS | PASS | PASS | PASS | — |
 | **M3** | RED 23 (0x17) | RED 39 (0x27) | PASS | **RED 54 (0x36)** | **RED 65 (0x41)** | **RED 95 (0x5F)** | RED 145 (0x91) |
 | **M4** | PASS | PASS | PASS | PASS | PASS | **RED 84 (0x54)** | PASS |
 | **M5a** | PASS | PASS | PASS | PASS | PASS *(provable no-op)* | PASS | — |
 | **M5c** | wedge | wedge | wedge | wedge | wedge *(see §5)* | wedge | — |
-| **M6** | RED (assert) | RED (assert) | **RED (assert) @3.76 µs** | RED (assert) | RED (assert) | RED (assert) | — |
-| **M7** | — | — | PASS | — | — | PASS | **RED 147 (0x93)** |
+| **M6** | RED (assert) | RED (assert) | **RED (assert) @3.76 µs** | RED (assert) | RED (assert) | RED (assert) | RED (assert) @2.15 µs |
+| **M7** | PASS | PASS | PASS | PASS | PASS | PASS | **RED 147 (0x93)** |
 
 Bold = the case's own stated mutation.
+
+**Provenance — which rows have two independent runs behind them, and which do
+not.** Spec review re-ran **M1, M4, M5a, M5c, M6 and M7** from source, three of
+them as complete cross-table rows, plus the 111/0 baseline; every result matched
+this record. **M2 and M3 were NOT independently re-run and rest on this record
+alone.** That is not a doubt about them — M2 is a one-term deletion and M3 a
+one-line constant, both re-appliable in a minute from §3 and §9 — but a later
+reader should know which rows are singly and which are doubly sourced.
+
+The six cells this table once left as `—` (C6g under M1 and M6; C1/C2/C4/C5
+under M7) were filled by a dedicated run on 2026-08-22, after the precondition
+assertion of §2 landed. C6g under M6 fails via the assertion at **2.15 µs**,
+earlier than the driver's own 3.76 µs, which is expected: the monitor is a
+global invariant and C6g reaches its first walk sooner. Three cells remain
+unrun — C6g under M2, M5a and M5c — because C6g did not exist when those
+batches ran; none of them is C6g's own mutation.
 
 **M6 fails every lock, and that is correct rather than sloppy.**
 `p_walk_read_order` is a *global* invariant asserted on every walk, so it fires
@@ -110,12 +138,30 @@ every image in the suite, not only against its own driver. A full
 `sim/mmu_sim.sh` run on the pristine tree with the monitor in place:
 
 ```
-111 PASS, 0 FAIL   ==> all guards PASSED     (2026-08-22)
+111 PASS, 0 FAIL   ==> all guards PASSED     (2026-08-22, baseline)
+                   ==> all guards PASSED     (2026-08-22, re-run after the
+                                              entry_bytes precondition
+                                              assertion of section 2 landed)
 ```
 
-That is the whole local guard set -- 104 pre-existing guards plus these seven --
-so the monitor does not false-fire on any walk shape any existing guard
-produces, including the give-up, re-arm, timeout and way-1 paths.
+The guard list did not change between the two runs, so the second is the same
+111 invocations; it is reported as the runner reported it rather than
+re-counted. Its point is narrower: the unconditional `entry_bytes` assertion
+does not false-fire anywhere in the suite.
+
+That is the whole local guard set — 104 pre-existing guards plus these seven.
+
+**Read that claim precisely.** A green suite proves the monitor does not
+false-fire on the walk shapes those images actually *take*. It says nothing
+about a path no image drives, and **nothing here demonstrates that any image
+reaches the walker's timeout exit** (`core/tlb_walk.vhd:334-345`). For that path
+the argument is structural, not empirical: the timeout exit sets `state <=
+st_idle`, and `st_idle` unconditionally clears `v_seen`/`v_have` at the top of
+the monitor, so the next walk begins from an empty record and a false-fire is
+unreachable by construction. The give-up, re-arm and way-1 paths *are*
+exercised — `mmuwalkreadorder` drives the way-1 and both-ways-miss shapes by
+construction, and `mmuwalkrearm` and `mmuwalkmiss` drive re-arm and give-up —
+so those three are empirical and only the timeout one is argued.
 
 ## 5. C5's stated mutation is not constructible as a reportable proof
 
@@ -175,6 +221,15 @@ checkable form is: *a VA outside the backed window is admissible only if (a) it
 provably hits a resident entry, and (b) a TSB row exists for it whose walk
 resolves to a backed PA, so that an eviction or a mutation degrades to a walk
 rather than to a wedge.* C6g satisfies both.
+
+**Clause (b) is not a hypothesis — it is the measured difference between this
+case and C5.** Under **M7** the probe VA `0x1060_0000` genuinely misses, its raw
+unbacked VA genuinely reaches the bus, and the guard nonetheless **reports 147
+(0x93) rather than wedging**, because the row put there under clause (b)
+resolves the walk. C5's M5c, which has no such escape, wedges at 1.49 µs with
+no code (§5). Same environment, same P5 pressure, opposite outcome — and the
+only structural difference is clause (b). That is the empirical case for
+adopting the relaxation rather than merely permitting it.
 
 ## 7. The Group-P condition: P1g was not needed
 

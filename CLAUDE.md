@@ -300,6 +300,34 @@ mode in this repo, not an exotic one. Before trusting green:
 - **Mutate it and confirm red.** Break the construction and check the guard
   fails **with its own result code**, not a timeout and not a neighbour's code.
   Give distinct failure IDs to distinct defects so they cannot be conflated.
+- **Never identity-map the page under test.** With `PA == VA` the access
+  succeeds and returns the right bytes whether the translation resolved, the
+  entry never installed, the walker never ran, or `MMUCR.AT` was off for the
+  whole run. Green then means nothing — and identity is the easiest mapping to
+  write, so it is the most common way an MMU guard tests nothing. Choose
+  `PA != VA` and read back through the P2 physical alias: a missing
+  translation then reads the wrong bytes. This works under **every** top —
+  `g_dstore_squash` / `g_inst_p1_fold` (`core/cpu.vhd:811-897`, both under
+  `if PRIV_ARCH generate`, which `sim/cpu_tb.vhd` sets) splice the PPN into
+  the *external* `db_o.a` / `inst_o.a`, so relocation happens inside the core;
+  `*_pa_tag` only carries the PIPT caches' tag. Identity **is** forced for
+  `pm >= 6`, which spans the cosim's whole 16 MB backed window
+  (`[0, 0x0100_0000)`, `sim/cpu_ctb.c` `mem_bus_stack_map` /
+  `if_bus_stack_map`), so every PPN bit `page_offset_mask()` leaves live must
+  be zero. Identity is *forced by layout* only when the page under test must
+  sit at a specific **physical** address for a reason outside the mapping — a
+  `.org`-pinned instruction, a vector table at a fixed `VBR` offset, the flat
+  VA=PA image load. The test: **if you can move the backing frame by editing
+  only PTE/PTEL constants, identity was not forced.** "It would be awkward to
+  move" is not forced. Where identity *is* forced, the guard **must** carry an
+  independent witness that translation actually happened: a `P4_TSBCNT`
+  (`0xFF000054`) walks/hits delta *taken across the access under test* — a
+  snapshot after the install proves nothing — an
+  asserted fault count or `EXPEVT`/`MMUFSR`/`TEA` value, the walker's PTEL
+  image read back out of the TSB row, or an effect only a correct PageMask can
+  produce. Say in the header *why* identity was unavoidable and *which*
+  witness covers it. Survey of the current suite:
+  `sim/tests/README-identity-mapping.md`.
 - **A hand-assembled `.word` is an unchecked assertion about the hardware** —
   the assembler validates nothing. When a guard reports a defect the RTL cannot
   explain, re-derive every hand-written opcode from its encoding table *before*

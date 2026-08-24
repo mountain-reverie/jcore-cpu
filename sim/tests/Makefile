@@ -102,6 +102,35 @@ mmuhuge.img: mmuhuge.elf
 	$(J4OBJCOPY) -v -S -O binary --srec-forceS3 $< $@
 
 # ---------------------------------------------------------------------------
+# TSB PageMask / tag-granularity contract, Group B (A1a). Same real-object
+# link as mmulinux/mmuhuge: these guards exist to pin what the REAL
+# __jcore_tlb_walk() writes into tag_hi, so a Lane-1 (hand-built TSB row)
+# mirror of them would test nothing about the defect. See
+# docs/mmu/pagemask-walker-contract.md §7.1 and the header of each .S.
+#
+#   mmupmsub4k  B1a/b/c  first touch of a non-base 4 KB sub-page, D-side
+#   mmupmsubi   B2       ditto, I-side (instruction fetch)
+#   mmupmmix    B4       16 K + 64 K + 256 K + 1 M simultaneously resident,
+#                        i.e. four DISTINCT PageMask values (pm=1..4) at once.
+#                        256 K stands in for the contract's 16 M: every VA a
+#                        guard translates must itself be a backed physical
+#                        address (the raw VA reaches the bus while the miss is
+#                        walked) and the cosim backs only 16 MB, so four
+#                        mappings disjoint at 16 MB granularity cannot fit.
+# ---------------------------------------------------------------------------
+PMGUARDS := mmupmsub4k mmupmsubi mmupmmix
+
+$(addsuffix .o,$(PMGUARDS)): %.o: %.S
+	mkdir -p $(J4BIN) && ln -sf $(abspath $(J4GAS)) $(J4BIN)/as
+	$(CC) $(CFLAGS) -D__ASSEMBLY__ -I$(LINUX_SRC)/arch/sh/include -B$(J4BIN) -Wa,--isa=any -c $< -o $@
+
+$(addsuffix .elf,$(PMGUARDS)): %.elf: %.o $(TLBJCORE_O) $(EX_O) $(ENTRY_O)
+	$(J4LD) -T sh32_p1.x -Map main.map $^ $(LIBGCC) -o $@
+
+$(addsuffix .img,$(PMGUARDS)): %.img: %.elf
+	$(J4OBJCOPY) -v -S -O binary --srec-forceS3 $< $@
+
+# ---------------------------------------------------------------------------
 # SP3-c Task 3: mmuboot links the REAL jcore_mmu_enable (Task 2) and drives
 # it through the cosim; the TLB-miss handler itself is hand-rolled in
 # mmuboot.S (Task 2 only factored the boot enable stub, not a full walker).

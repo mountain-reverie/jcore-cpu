@@ -6,15 +6,29 @@
 ! ---- what it tested, and why that was vacuous -----------------------------
 ! The old guard installed an IDENTITY entry (VA == PA) with LDTLB, enabled AT,
 ! and required a load through the translated P0 address to return the value
-! written earlier with AT off. But this MMU does not relocate the bus -- the
-! TLB emits PA tags only, so under an identity map the load returns the right
-! value WHETHER OR NOT the translation ever happened. The assertion "the value
-! came back" was therefore satisfied by an MMU that did nothing at all. Nothing
-! in the old guard could tell the two apart.
+! written earlier with AT off. Because the entry was IDENTITY (VA == PA), the
+! load returns the right value WHETHER OR NOT the translation ever happened:
+! with AT off a P0 access is untranslated and the bus sees the VA, which is
+! the same address. The assertion "the value came back" was therefore
+! satisfied by an MMU that did nothing at all, and nothing in the old guard
+! could tell the two apart.
 !
-! A non-identity map cannot repair this: with no bus relocation there is no
-! observable difference in the returned data for ANY map. The observable that
-! does exist is the walker's own counters, so the witness moves there.
+! CORRECTION (2026-08-21). This block used to claim "this MMU does not
+! relocate the bus -- the TLB emits PA tags only", and concluded from it that
+! a non-identity map could not repair the vacuity. That is FALSE, and it
+! misled a later audit into exempting every cpu_tb guard from the
+! no-identity-mapping rule. core/cpu.vhd's g_dstore_squash (:811-866) and
+! g_inst_p1_fold (:872-897), both under `if PRIV_ARCH generate`, splice the
+! PPN into the EXTERNAL db_o.a / inst_o.a -- so relocation happens inside the
+! core, under every top including cpu_tb (sim/cpu_tb.vhd passes
+! PRIV_ARCH => true). The *_pa_tag port exists only to hand the PIPT caches
+! their tag (cache/dcache_ccl.vhm:255). mmuwalkdside.S proves it: it runs in
+! mmu_sim.sh's default cpu_tb loop and asserts its stores landed at the PAs.
+!
+! So a non-identity map WOULD be a valid witness here. The walker counters are
+! kept as the witness anyway because they are strictly stronger: they localize
+! the walk to the access under test, which a relocated read-back does not.
+! See sim/tests/README-identity-mapping.md.
 !
 ! ---- what this guard tests NOW ---------------------------------------------
 ! Unchanged in substance: a load through a translated P0 VA must succeed and

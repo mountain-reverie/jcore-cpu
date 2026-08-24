@@ -24,6 +24,26 @@
 #   sim/linux_sim.sh [name]      # build linux objects + cosim + run (default: mmulinux)
 #   sim/linux_sim.sh -n [name]   # reuse the existing cosim build + linux objects
 #
+# Harnesses that link the real linux@jcore objects (each runs here and in
+# .github/workflows/full-regression.yml; NONE is reachable from sim/mmu_sim.sh):
+#
+#   mmulinux     scenarios 1-8 through the real VBR+0x400 TLB-miss vector
+#   mmulinuxexc  the real VBR+0x100 / VBR+0x600 fixed vectors
+#   mmuboot      the real head_32.S MMU-enable path
+#   mmuhuge      the real walker installing multi-size huge TLB entries
+#   mmupmsub4k   TSB tag granularity: D-side first touch of a non-base 4 KB
+#                sub-page, all three VA[13:12] values
+#   mmupmsubi    the same on the I-side (instruction fetch)
+#   mmupmmix     four PageMask values resident simultaneously in one ASID
+#
+# The last three are Group B of docs/mmu/pagemask-walker-contract.md 7.1. They
+# pin what the REAL __jcore_tlb_walk() writes into tag_hi, which is exactly why
+# they must link kernel objects instead of hand-writing TSB rows.
+#
+# NOTE ON -n: it skips the KERNEL object build as well as the cosim build. For
+# an A/B over a linux@jcore change, run kbuild yourself first and only then use
+# -n; for an A/B over an RTL change, do not use -n at all (see CLAUDE.md).
+#
 # Env: LINUX_SRC (default: sibling ../linux), JCORE_SOC (default: sibling
 # ../jcore-soc), J4GAS/J4LD (default: sibling ../binutils-gdb/build-sh2/...).
 set -uo pipefail

@@ -194,8 +194,7 @@ ENTRY(_after_ifetch)
         ! [_bench_warm_start, _after_ifetch2) window on purpose -- it must not
         ! perturb the number sim/bench_tlb_hotpath.sh reports).
         !
-        ! WHY: the MMU emits PA tags and does NOT relocate the instruction bus,
-        ! and this guard's workload page is IDENTITY-mapped (VA 0x00100000 ->
+        ! WHY: this guard's workload page is IDENTITY-mapped (VA 0x00100000 ->
         ! PA 0x00100000). An UNTRANSLATED fetch returns the same instruction
         ! word as a translated one, so the sentinel/walker_calls checks below
         ! all hold even when the fetch bypasses translation entirely. Measured:
@@ -208,6 +207,14 @@ ENTRY(_after_ifetch)
         ! SPC is written by exception entry and nothing else, so a surviving
         ! sentinel proves the warm IMISS was answered by the hardware walker.
         ! r13 snapshots the walker's own cnt_hits as the positive half.
+        !
+        ! NOTE (2026-08-21): this block used to open "the MMU emits PA tags and
+        ! does NOT relocate the instruction bus". That was FALSE -- cpu.vhd's
+        ! g_inst_p1_fold (:872-897) splices the PPN into the external inst_o.a
+        ! under PRIV_ARCH, so a non-identity workload page WOULD be observable.
+        ! Identity is a CHOICE here (the bench measures a fixed hot path and
+        ! wants the simplest possible map); the SPC + cnt_hits witnesses are
+        ! what make that choice safe. See sim/tests/README-identity-mapping.md.
         mov.l   k_walkcnt, r0 ; mov.l @r0, r13
         mov.l   k_mask16,  r1 ; and    r1, r13
         mov.l   v_sent_spc, r0

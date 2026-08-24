@@ -269,8 +269,46 @@ begin
           when st_tag_hi =>
 
             if (bus_ack = '1') then
-              -- Full 32-bit compare against the 4 KB-granular VPN, which is
-              -- what Linux writes into tag_hi (address & PAGE_MASK).
+              -- EXACT 32-bit compare against {VA_fault[31:12], 12'b0} -- the
+              -- CANONICAL VPN, the faulting VA truncated to the architecture's
+              -- FINEST page size (4 KB). No PageMask, no page-size field and no
+              -- programmable shift is applied to it, for ANY page size. That is
+              -- normative: docs/mmu/pagemask-walker-contract.md C1/C3,
+              -- hardware-spec.md §7.0a.
+              --
+              -- DO NOT "FIX" THIS TO MASK BY THE PAGE SIZE. This code is
+              -- correct as written and the compare must stay size-oblivious:
+              --   * the entry's page size lives in `data` (PTEL[11:8]), which
+              --     is not read until st_data -- after this compare -- and the
+              --     read order cannot be inverted without breaking the
+              --     tag_hi-is-the-commit-point protocol (see sim/tests/
+              --     mmuwalktorn.S and contract §3(d));
+              --   * the TSB set INDEX is already 4 KB-granular (tsb_ptr()
+              --     hashes VA[31:12], core/datapath_pkg.vhd), and index and tag
+              --     granularity must be the SAME constant -- masking one
+              --     without the other is a silent-aliasing change (C2);
+              --   * a size-dependent tag makes the intra-set anti-duplicate
+              --     invariant constructible: a stale coarse row would match
+              --     under its OWN mask while software, searching for the new
+              --     exact tag, could not see it (C6, §3(a)).
+              -- The cost is that a page larger than 4 KB owns one row per
+              -- TOUCHED 4 KB sub-page. That is never a correctness cost -- each
+              -- such row carries the identical `data` -- and it is accepted
+              -- (C7).
+              --
+              -- This comment used to assert that the compare matched "what
+              -- Linux writes into tag_hi (address & PAGE_MASK)". That was
+              -- false, and the falsehood was load-bearing -- it is what let the
+              -- kernel's 16 KB-aligned tag survive review on both sides. The
+              -- kernel now writes `addr & JCORE_TSB_TAG_MASK`; the RTL was
+              -- always right. Guards: sim/tests/mmupmsub4k.S, mmupmsubi.S,
+              -- mmupmmix.S (Lane 2, real linux@jcore objects), and
+              -- sim/tests/mmupage16k.S, which MUST go red if this expression
+              -- is ever changed.
+              --
+              -- The `bus_d(11 downto 0) = x"000"` term is not redundant: it
+              -- enforces tag_hi[11:0] reserved-must-be-zero (C1/R2) and keeps
+              -- that field available for a future architectural use.
               if (bus_d(31 downto 12) = va_reg(31 downto 12)
                   and bus_d(11 downto 0) = x"000") then
                 state <= st_tag_lo;

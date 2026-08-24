@@ -406,6 +406,33 @@ jobs:
           # compare hit and the installed TSB PTEL encoding. Same
           # LINUX_SRC/J4GAS/J4LD/J4BIN + sh32_p1.x link as mmulinux/mmuboot.
           run_guard mmuhuge "" 200us 120
+          # TSB PageMask / tag-granularity contract, Group B (task A1a).
+          # docs/mmu/pagemask-walker-contract.md 7.1; hardware-spec.md 7.0a;
+          # linux-spec.md 4.3a.
+          #
+          # These pin WHAT THE KERNEL WRITES into tag_hi, so they need the same
+          # real linux@jcore object link as mmulinux/mmuhuge and cannot live in
+          # sim/mmu_sim.sh (which cannot see $(LINUX_SRC)). A Lane-1 mirror
+          # built from hand-written TSB rows would bypass __jcore_tlb_walk()
+          # entirely and test nothing about this defect.
+          #
+          # Each carries its own BOUNDED repeat-fault counter in a harness-owned
+          # VBR+0x400 shim and asserts an EXACT P4_TSBCNT hits delta, so the
+          # pre-fix failure reports a named result code instead of presenting as
+          # a --stop-time timeout (CLAUDE.md rules a timeout out as a failure
+          # signal). Measured against the unfixed kernel (tag_hi = addr &
+          # PAGE_MASK): Result=225 / 228 / 229 respectively; all three pass with
+          # tag_hi = addr & JCORE_TSB_TAG_MASK.
+          #
+          #   mmupmsub4k  B1a/b/c  D-side first touch of a non-base 4 KB
+          #                        sub-page, for all three VA[13:12] values
+          #   mmupmsubi   B2       the same on the I-side (instruction fetch),
+          #                        which has its own arming/suppression logic
+          #   mmupmmix    B4       four PageMask values (pm=1,2,3,4) resident
+          #                        simultaneously in one ASID, interleaved
+          run_guard mmupmsub4k "" 200us 120
+          run_guard mmupmsubi  "" 200us 120
+          run_guard mmupmmix   "" 200us 120
           # Scenarios 4-5 (deferred) and any exhaustive/slow mmulinux variant
           # would run only on the nightly schedule, e.g.:
           # if [ "${{ github.event_name }}" = "schedule" ]; then
@@ -413,7 +440,11 @@ jobs:
           # fi
 
           [ "$fail" = 0 ] || { echo "==> functional guards FAILED" >&2; exit 1; }
-          echo "==> all 50 priv-arch + MMU functional guards PASSED"
+          # Deliberately NOT a hardcoded count. It used to read "all 50", which
+          # was already wrong before this job grew the tag-granularity guards --
+          # a number nobody updates is a claim that quietly stops being true,
+          # and the pass/fail decision is the `$fail` check above, not the text.
+          echo "==> all priv-arch + MMU functional guards PASSED"
 
   # SP3-d: the 2-core SMP-bring-up guard (spin-table secondary release + IPI via
   # the real icache_modereg) runs on cpu_dualcore_tb. It is a BASE-J2 SMP test

@@ -21,6 +21,41 @@
 #   sim/mmu_sim.sh mmuxlate cpu_tb 120us # one guard, explicit top + stop-time
 #   sim/mmu_sim.sh -n mmuicolor          # reuse the existing build (skip rebuild)
 #
+#
+# GUARDS THIS SCRIPT DELIBERATELY DOES NOT RUN. The real-kernel-object
+# harnesses need linux@jcore kbuild outputs under $(LINUX_SRC), which this
+# script neither builds nor knows about, so `make -C tests <name>.img` would
+# simply fail here. They run from sim/linux_sim.sh and from
+# .github/workflows/full-regression.yml only. The list is repeated here so the
+# two guard inventories can actually be DIFFED (CLAUDE.md: they diverge in BOTH
+# directions, and nothing else in this file mentions them):
+#
+#   mmulinux  mmulinuxexc  mmuboot  mmuhuge
+#   mmupmsub4k  mmupmsubi  mmupmmix   -- TSB PageMask / tag-granularity
+#                                        contract Group B, see
+#                                        docs/mmu/pagemask-walker-contract.md
+#
+# AND THIS SCRIPT PRINTS NO TOTAL. Four of this branch's five original commit
+# messages RECORDED the regression as "sim/mmu_sim.sh full suite ... 107/107
+# PASS", which reads as a line the script emitted. It is not one. Those four
+# have since been reworded -- they now state the run as "==> all guards
+# PASSED" with 107 given as a count over the per-guard lines -- so the wrong
+# form is quoted here rather than there, and the retraction stays legible even
+# though the log no longer shows what it retracts. The script prints
+# "  PASS  <name>" or "  FAIL  <name>" once per guard (the two echoes in
+# run_guard) and, only when nothing failed, one trailing "==> all guards
+# PASSED" (the last line of this file). There is no aggregate in it: no total,
+# no N/N ratio, no "0 FAIL", no SKIP. The 107 is a hand tally of the guard
+# list, not a capture. Its arithmetic holds -- this branch adds no run_guard
+# call here, since all three of its new guards are in the Lane-2 list above
+# and run elsewhere, so 104 -> 107 is master's mmuishadow, mmudshadow and
+# slotillset and nothing of this branch's. When the number is wanted, count it
+# and say so: `... | grep -c '^  PASS'`.
+#
+# Neither a commit SHA nor a line number is cited above, on purpose: a rebase,
+# a reword or an edit invalidates either one silently. Cite the subject line,
+# or describe the change.
+#
 # Env: JCORE_SOC (default: sibling ../jcore-soc).
 set -uo pipefail
 

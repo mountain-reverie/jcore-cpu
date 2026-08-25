@@ -908,8 +908,9 @@ begin
     -- feeding them can be pruned and abc9 is handed a different cone. Measured
     -- on this design, with no functional change whatever: adding this process
     -- moves mapped ECP5 LUT4 by several hundred, and adds one `reg` to the
-    -- generic ASIC netlist (2696 -> 2697). Figures and method are in the area
-    -- note in core/tlb.vhd.
+    -- generic ASIC netlist (4483 -> 4484 on the current base -- the pair read
+    -- 2696 -> 2697 before the rebase, the same +1 against a smaller design).
+    -- Figures and method are in the area note in core/tlb.vhd.
     --
     -- The consequence is a measurement rule, not a reason to drop the
     -- assertion: NEVER build an area A/B across two trees that differ in

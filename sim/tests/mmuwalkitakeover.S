@@ -78,7 +78,9 @@
 ! MUTATION EVIDENCE
 ! =================
 ! (measured in ghcr.io/mountain-reverie/jcore-cpu-ci:latest, CPU_VARIANT=j4,
-!  SIM_TOP=cpu_tb, --stop-time=80us. G1-G4 mutate THIS FILE, so each rebuilt
+!  SIM_TOP=cpu_tb, --stop-time=120us -- this guard's registered budget in both
+!  sim/mmu_sim.sh and full-regression.yml, and the figure the ~165x margin at
+!  M-I1 below is against. G1-G4 mutate THIS FILE, so each rebuilt
 !  the image against unmodified RTL; M-I1 mutates the RTL and rebuilt the whole
 !  cosim, never `-n`. PRISTINE and RESTORED runs bracket the set: both PASS.)
 !

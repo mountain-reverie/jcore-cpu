@@ -413,6 +413,14 @@ clean:
 
 .PHONY: clean j4-guards
 mmutsb.elf: mmutsb.o
+# D0b TLB-capacity suite. mmucapd.S is BOTH the guard and the harness:
+# mmucapsub.S is a #define + #include wrapper over it (CAP_PM / CAP_FIRSTSUB),
+# so its .o must rebuild when the harness changes. Same shape as
+# mmuwalkcoarsetag/mmuwalktagmbz above.
+mmucapd.elf: mmucapd.o
+mmucapsub.o: mmucapd.S
+mmucapsub.elf: mmucapsub.o
+mmucapi.elf: mmucapi.o
 mmuwalkhit.elf: mmuwalkhit.o
 mmuwalkmiss.elf: mmuwalkmiss.o
 # Contract locks C1/C2 (docs/mmu/pagemask-walker-contract.md 7.2). One harness,

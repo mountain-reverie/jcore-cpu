@@ -58,12 +58,17 @@
 # "  PASS  <name>" or "  FAIL  <name>" once per guard (the two echoes in
 # run_guard) and, only when nothing failed, one trailing "==> all guards
 # PASSED" (the last line of this file). There is no aggregate in it: no total,
-# no N/N ratio, no "0 FAIL", no SKIP. The 107 is a hand tally of the guard
-# list, not a capture. Its arithmetic holds -- this branch adds no run_guard
-# call here, since all three of its new guards are in the Lane-2 list above
-# and run elsewhere, so 104 -> 107 is master's mmuishadow, mmudshadow and
-# slotillset and nothing of this branch's. When the number is wanted, count it
-# and say so: `... | grep -c '^  PASS'`.
+# no N/N ratio, no "0 FAIL", no SKIP. The 107 was a hand tally of the guard
+# list at the time that paragraph was written, not a capture. When the number
+# is wanted, count it and say so: `... | grep -c '^  PASS'`.
+#
+# THAT 107 IS NOW STALE, and the sentence that used to follow it here --
+# "this branch adds no run_guard call here" -- belonged to a branch that has
+# since merged; it is not a claim about whatever branch you are reading. The
+# D0b capacity suite adds three run_guard calls to the loop below (mmucapd,
+# mmucapsub, mmucapi), so any count quoted from before it landed is three
+# short. Do not carry a number forward from a comment. Take it from the run
+# you actually did, with the grep above, and say that is what you did.
 #
 # Neither a commit SHA nor a line number is cited above, on purpose: a rebase,
 # a reword or an edit invalidates either one silently. Cite the subject line,
@@ -164,6 +169,12 @@ if [ $# -ge 1 ]; then
     # Keep in step with the `run_guard mmuwalkitakeover` line below, so a
     # single-guard invocation measures the same budget the suite does.
     mmuwalkitakeover) top="${top:-cpu_tb}"; stop="${stop:-120us}" ;;
+    # Same reasoning as the two arms above: without these, a single-guard
+    # invocation falls back to the 80us default, dies mid-leg, and looks
+    # exactly like a hang rather than like a budget. Keep in step with the
+    # run_guard lines in the suite branch below.
+    mmucapd)             top="${top:-cpu_tb}"; stop="${stop:-120us}" ;;
+    mmucapsub|mmucapi)   top="${top:-cpu_tb}"; stop="${stop:-200us}" ;;
     m8_dside)   stop="${stop:-420us}" ;;
     # Keep in step with the budget on the `run_guard m8_dsdslot_0` line below.
     # Without this arm a single-guard invocation fell back to the 80us default
@@ -243,6 +254,30 @@ else
   # this suite runs on -- and this guard is what makes the shape happen at all.
   # See the file's own header for the proof it drives and the mutation evidence.
   run_guard mmuwalkitakeover "cpu_tb" 120us
+  echo "== TLB capacity / eviction suite (D0b) =="
+  # docs/mmu/tlb-capacity-suite.md is the writeup: harness contract, the full
+  # measured mutation table, and how to add a parameterisation.
+  # THE POINT OF THESE THREE: until they landed, no guard in this script drove
+  # a TLB working set past its array's entry count and then ASSERTED anything
+  # about it. mmudrain was the nearest thing -- ten D-side pages against a
+  # 16-entry DTLB -- and its header says outright that its only reaction to
+  # DTLB size is a fault COUNT at 8+8. These measure residency and eviction
+  # directly, off P4_TSBCNT (0xFF000054) and P4_TLBINST (0xFF000058), with a
+  # small-vs-large differential so a non-increment is never the only evidence.
+  #
+  # None of them is identity-mapped: every page under test is reached at
+  # VA = PA + 0x0040_0000 and every backing word holds its own PA, so an inert
+  # MMU reads zeros and fails a data check (mmucapd/mmucapsub) or fetches
+  # 0x0000 and takes an illegal-instruction trap (mmucapi). All three were
+  # measured red that way -- see each file's M0 note.
+  #
+  # Stop times against MEASURED completions (final timestamp of an MMU_VCD
+  # dump, which ends at the "Test Passed" exit): mmucapd 21.37us, mmucapsub
+  # 37.86us, mmucapi 40.47us. Margins ~5.6x / ~5.3x / ~4.9x.
+  run_guard mmucapd   "cpu_tb" 120us   # DTLB capacity, 6 vs 24 4 KB mappings
+  run_guard mmucapsub "cpu_tb" 200us   # the same, pm=1, first touch at the
+                                       # LAST sub-page of each 16 KB mapping
+  run_guard mmucapi   "cpu_tb" 200us   # ITLB capacity + interleaved I/D walks
   # LANE-2 INVENTORY MIRROR (contract P3). The real-kernel-object harnesses are
   # not referenced by this script at all -- they run only under
   # sim/linux_sim.sh and in CI -- so they are listed here as a comment to keep

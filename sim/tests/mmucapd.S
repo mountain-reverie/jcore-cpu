@@ -157,11 +157,22 @@
 !   0x26  leg L sweep: fewer than N_LARGE walks over the whole sweep -> the
 !         sweep did not actually miss, so leg L measured nothing
 !   0x31  final re-sweep at the mapping bases: wrong data after the churn
-!   0x2F  SETUP: a TSB set was full in BOTH ways while seeding. A harness
-!         collision, not a CPU defect -- widen TSB_SIZE_LOG or move the window.
+!   0x2E  SETUP: a TSB set was full in BOTH ways while seeding the CODE pages.
+!   0x2F  SETUP: ditto while seeding the ALIAS window. Split from 0x2E because
+!         the two ranges fail for different reasons and have different fixes --
+!         the code range grows with the guard, the alias range with N_LARGE.
+!         Either is a harness collision, not a CPU defect: widen TSB_SIZE_LOG
+!         or move the window.
 !   0x41  unexpected TLB exception (VBR+0x400). Every VA touched here has a TSB
 !         row, so a fault means the walker did not resolve one it could have.
+!         If you are reading this after changing a PARAMETER rather than the
+!         RTL, see the assembly-time range checks below first -- they exist
+!         because several misconfigurations used to land here and read as an
+!         RTL defect.
 !   0x42  unexpected general exception (VBR+0x100)
+!   0x7F  NOT an assertion. The _fail integrity net rewrites r9==0 to 0x7F, so
+!         this is what reaching _fail without setting a code looks like: a
+!         fall-through, not a failed check. Chase the control flow, not the MMU.
 !
 ! Codes are all <= 0x7F so `mov #imm` does not sign-extend them.
 !
@@ -205,25 +216,70 @@
 #define TSB_BASE     0x00F00000
 #define TSB_SIZE_LOG 10
 
-        .section .vect
-        .long start
-        .long 0x00300000                ! stack: deliberately NOT the usual
-                                        ! 0x7000, which lands inside _frames
-                                        ! and would silently overwrite a
-                                        ! sentinel. Nothing here uses it.
-        .long start
-        .long 0x00300000
-        .rept 60
-        .long 0
-        .endr
-        .long SIM_INSTR_MAGIC
-        .long _sim_instr_end
-        .long _done
-        .long _fail
-        .long CMD_ENABLE_TEST_RESULT
-_sim_instr_end: .long 0
+! ---------------------------------------------------------------------------
+! PARAMETER RANGE CHECKS -- at ASSEMBLY time, and here is why they are worth
+! six directives.
+!
+! Every one of the misconfigurations below used to assemble and link with no
+! diagnostic at all, and then land on Result=0x41 at run time. 0x41's own text
+! says "a fault means the walker did not resolve one it could have" -- so a
+! harness mistake read as an RTL defect, which is the most expensive kind of
+! wrong signal this suite can emit. Two measured examples:
+!
+!   CAP_FIRSTSUB=4 at CAP_PM=1  FIRST_OFF becomes MAP_SPAN, so every first
+!                               touch slides up one whole mapping and leg L's
+!                               last one falls off the end of the seeded
+!                               window, where there is no row.
+!   N_LARGE=130                 `mov #N_LARGE, r13` sign-extends; objdump
+!                               shows `mov #-126,r13` and the sweep loop runs
+!                               a garbage number of times.
+!
+! Every operand here is a preprocessor constant, so `.if` can evaluate it --
+! unlike a section-relative symbol difference, which gas rejects with
+! "non-constant expression in .if statement". That distinction is exactly what
+! bit sim/tests/Makefile's single-page check, which had to move OUT of the
+! file and onto the linked image for the same reason. These stay in-file
+! BECAUSE they are pure arithmetic on #defines, and each was verified to fire
+! by building a deliberately violating wrapper.
+! ---------------------------------------------------------------------------
+        .if CAP_FIRSTSUB >= CAP_NSUB
+        .error "mmucapd: CAP_FIRSTSUB must index a sub-page INSIDE the mapping (0 .. CAP_NSUB-1)"
+        .endif
+        .if N_LARGE > 127
+        .error "mmucapd: N_LARGE is loaded with `mov #imm', which sign-extends above 127"
+        .endif
+        .if N_SMALL > 127
+        .error "mmucapd: N_SMALL is loaded with `mov #imm', which sign-extends above 127"
+        .endif
+        .if N_SMALL >= N_LARGE
+        .error "mmucapd: N_SMALL must be strictly under N_LARGE, or the two legs do not differ"
+        .endif
+        ! The alias window must sit ENTIRELY ABOVE the image. The frames are
+        ! N_LARGE * MAP_SPAN bytes at _frames, and the window starts at
+        ! _frames + ALIAS_DELTA, so this is the whole condition -- and it is
+        ! what keeps the inert-MMU tripwire alive: an untranslated read only
+        ! returns 0 while the VA lands in the cosim's anonymous zero-filled
+        ! backing rather than back inside the loaded image.
+        .if N_LARGE * MAP_SPAN > ALIAS_DELTA
+        .error "mmucapd: the alias window would overlap the image; an untranslated read there stops returning 0 and the inert-MMU tripwire dies"
+        .endif
+        ! P5: every VA touched under AT=1 must be inside the cosim's 16 MB
+        ! backing, because the raw VA reaches the bus while a miss is walked.
+        ! The 1 MB allowance stands in for _frames, which is not a constant.
+        .if ALIAS_DELTA + N_LARGE * MAP_SPAN + 0x00100000 > 0x01000000
+        .error "mmucapd: the alias window leaves the cosim's 16 MB backed range (P5)"
+        .endif
+        ! HONESTY NOTE: at the shipped ALIAS_DELTA of 0x0040_0000 the overlap
+        ! check above always trips first, so this P5 check is UNREACHABLE and
+        ! was NOT demonstrated firing -- unlike the others, each of which was.
+        ! It is kept because it becomes the binding constraint the moment
+        ! anyone raises ALIAS_DELTA, and a check that only matters later is
+        ! still cheaper than the run-time 0x41 it replaces.
 
-        .text
+        ! Stack deliberately NOT the usual 0x7000, which lands inside
+        ! _frames and would silently overwrite a sentinel. Nothing here uses
+        ! it -- no JSR nesting, and exception entry saves to SPC/SSR.
+        mmu_vect_block 0x00300000
         .balign PAGE_SZ
 ENTRY(start)
 #if CONFIG_PRIV_ARCH
@@ -252,7 +308,47 @@ ENTRY(start)
         .word   0x407E                  ! LDC r0, ASIDR
         nop
         nop
-        bra     _seed_code
+
+        ! ---- Rows for the guard's own CODE pages, start .. _code_end:
+        ! ---- IDENTITY (delta 0, 4 KB mask) and GLOBAL, U=0 for SMEP. Not what
+        ! ---- is under test -- they only have to be resolvable the moment AT
+        ! ---- goes on, and the walker pulls each in as a STALL on first touch,
+        ! ---- so no exception is ever taken for them.
+        mov.l   p_code_start, r1
+        mov.l   p_code_end, r2
+        mov.l   p_4kmask, r3
+        mov     #0, r4                  ! identity: PA == VA
+        mov.l   p_code_flags, r5
+        mov     #0x2E, r9               ! setup-failure code for THIS range
+        mov.l   p_seed, r0
+        jsr     @r0
+        nop
+
+        ! ---- Rows for every 4 KB page of the ALIAS window. Each row's TAG is
+        ! ---- that page's own VPN (the TSB is 4 KB-granular by contract, C1)
+        ! ---- while its PTEL carries the MAPPING BASE's PPN plus CAP_PM, so
+        ! ---- all CAP_NSUB sub-pages of one mapping share a PTEL and install
+        ! ---- as ONE TLB entry:  PPN = (VA - ALIAS_DELTA) & ~(MAP_SPAN - 1).
+        ! ----
+        ! ---- Seeding every sub-page rather than only the first-touched one is
+        ! ---- deliberate: a missing TLB entry then shows up as an extra WALK
+        ! ---- (a named counter failure) instead of as an exception, which is a
+        ! ---- far more legible signal.
+        mov.l   p_va, r1
+        mov.l   p_vaend, r2
+        mov.l   p_spanmask, r3
+        mov.l   p_delta, r4
+        mov.l   p_data_flags, r5
+        mov     #0x2F, r9
+        mov.l   p_seed, r0
+        jsr     @r0
+        nop
+
+        ! ---- Enable AT. ----
+        mov.l   p_mmucr, r0
+        mov     #1, r1
+        mov.l   r1, @r0
+        bra     _leg_S
         nop
 
         .align 2
@@ -262,140 +358,32 @@ p_tsbbr_addr:   .long 0xFF000014
 p_tsbbr_val:    .long TSB_BASE + TSB_SIZE_LOG
 p_tsbcfg_addr:  .long 0xFF000018
 p_tsbcfg_val:   .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
+p_seed:         .long _seed
+p_code_start:   .long start
+p_code_end:     .long _code_end
+p_4kmask:       .long 0xFFFFF000
+p_code_flags:   .long CODE_FLAGS
+p_va:           .long _frames + ALIAS_DELTA
+p_vaend:        .long _frames + ALIAS_DELTA + N_LARGE * MAP_SPAN
+p_spanmask:     .long ~(MAP_SPAN - 1)
+p_delta:        .long ALIAS_DELTA
+p_data_flags:   .long DATA_FLAGS
+p_mmucr:        .long 0xFF000010
 
-! ---------------------------------------------------------------------------
-! Seed a TSB row for every code page, start .. _code_end. These are IDENTITY
-! and GLOBAL (0xCD = W|X|C|G|V, U=0 for SMEP): the guard's own instruction
-! stream and literal pools have to be resolvable the moment AT goes on, and
-! they are not what is under test. The walker pulls each in as a STALL on
-! first touch, so no exception is ever taken for them.
-!
-! AT is still off here, so these are plain P0 stores straight at the TSB.
-! ---------------------------------------------------------------------------
-ENTRY(_seed_code)
-        mov.l   c_tsbslot, r12
-        mov.l   c_start, r1
-        mov.l   c_end, r2
-        mov.l   c_flags, r5
-        mov.l   c_pagesz, r4
-1:      mov     r1, r6
-        or      r5, r6                  ! PTEL = page | CODE_FLAGS
-        mov.l   r1, @r12                ! ask the P4 slot helper for this VA
-        mov.l   @r12, r7                ! r7 = 32-byte-aligned SET address
-        mov.l   @(8, r7), r0
-        tst     #1, r0                  ! way 0 data word: V clear?
-        bt      3f
-        add     #16, r7                 ! try way 1
-        mov.l   @(8, r7), r0
-        tst     #1, r0
-        bt      3f
-        mov.l   c_full, r0              ! both ways occupied: harness collision
-        jmp     @r0
-        nop
-3:      mov     #0, r0                  ! ASID_TAG = 0
-        tsb_fill r7, r1, r0, r6
-        add     r4, r1
-        cmp/hs  r2, r1
-        bf      1b
-        bra     _seed_data
-        nop
-
-        .align 2
-c_tsbslot:      .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
-c_start:        .long start
-c_end:          .long _code_end
-c_flags:        .long CODE_FLAGS
-c_pagesz:       .long PAGE_SZ
-c_full:         .long _setup_full
-
-! ---------------------------------------------------------------------------
-! Seed a TSB row for every 4 KB page of the alias window. The row's TAG is the
-! page's own VPN (the TSB is 4 KB-granular by contract, C1) and its PTEL
-! carries the MAPPING BASE's PPN plus CAP_PM, so all CAP_NSUB sub-pages of one
-! mapping share a single PTEL and install as ONE TLB entry.
-!
-!   PPN = (VA - ALIAS_DELTA) & ~(MAP_SPAN - 1)
-!
-! Seeding every sub-page rather than only the first-touched one is deliberate:
-! it means a missing TLB entry shows up as an extra WALK (a named counter
-! failure) instead of as an exception, which is a far more legible signal.
-! ---------------------------------------------------------------------------
-ENTRY(_seed_data)
-        mov.l   d_tsbslot, r12
-        mov.l   d_va, r1
-        mov.l   d_vaend, r2
-        mov.l   d_spanmask, r3
-        mov.l   d_delta, r4
-        mov.l   d_flags, r5
-        mov.l   d_pagesz, r8
-1:      mov     r1, r6
-        sub     r4, r6                  ! r6 = PA of this 4 KB page
-        and     r3, r6                  ! r6 = PA of the MAPPING base
-        or      r5, r6                  ! r6 = PTEL
-        mov.l   r1, @r12
-        mov.l   @r12, r7
-        mov.l   @(8, r7), r0
-        tst     #1, r0
-        bt      3f
-        add     #16, r7
-        mov.l   @(8, r7), r0
-        tst     #1, r0
-        bt      3f
-        mov.l   d_full, r0
-        jmp     @r0
-        nop
-3:      mov     #0, r0
-        tsb_fill r7, r1, r0, r6
-        add     r8, r1
-        cmp/hs  r2, r1
-        bf      1b
-
-        ! ---- Enable AT. ----
-        mov.l   d_mmucr, r0
-        mov     #1, r1
-        mov.l   r1, @r0
-        bra     _leg_S
-        nop
-
-        .align 2
-d_tsbslot:      .long 0xFF000048
-d_va:           .long _frames + ALIAS_DELTA
-d_vaend:        .long _frames + ALIAS_DELTA + N_LARGE * MAP_SPAN
-d_spanmask:     .long ~(MAP_SPAN - 1)
-d_delta:        .long ALIAS_DELTA
-d_flags:        .long DATA_FLAGS
-d_pagesz:       .long PAGE_SZ
-d_mmucr:        .long 0xFF000010
-d_full:         .long _setup_full
-
+        ! r9 already carries 0x2E or 0x2F -- whichever seed call landed here.
+        ! Splitting them costs nothing and tells you which range collided.
 ENTRY(_setup_full)
-        mov     #0x2F, r9
         bra     _fail
         nop
+
+        mmu_seed_routine s, PAGE_SZ
 
 #else
         bra     _done
         nop
 #endif  ! CONFIG_PRIV_ARCH (preamble)
 
-ENTRY(_done)
-        mov.l   p_test_result, r0
-        mov.l   p_test_result_pass, r9
-        mov.l   r9, @r0
-        bra     _done
-        nop
-ENTRY(_fail)
-        mov.l   p_test_result, r0
-        tst     r9, r9                  ! integrity net: 0 is not a fail code
-        bf      1f
-        mov     #0x7F, r9
-1:
-        mov.l   r9, @r0
-        bra     _fail
-        nop
-        .align 2
-p_test_result:      .long TEST_RESULT_ADDRESS
-p_test_result_pass: .long TEST_PASS_MAGIC
+        mmu_done_fail p
 
 #if CONFIG_PRIV_ARCH
 ! ===========================================================================
@@ -470,17 +458,8 @@ s_span:         .long MAP_SPAN
 ! BUILT in a register (mov/shll16/add) instead of loaded from a literal pool.
 ! ===========================================================================
 ENTRY(_leg_L)
-        ! ---- leg-boundary flush: AT off, MMUCR.TI pulse, AT on. AT must go
-        ! ---- off first -- a TI taken with AT=1 unmaps the executing page.
         mov.l   l_mmucr, r0
-        mov     #0, r1
-        mov.l   r1, @r0
-        mov     #4, r1
-        mov.l   r1, @r0
-        mov     #0, r1
-        mov.l   r1, @r0
-        mov     #1, r1
-        mov.l   r1, @r0
+        mmu_flush_at r0                 ! leg boundary: AT off, TI, AT on
 
         mov.l   l_cnt, r10
         mov.l   l_first0, r11
@@ -603,42 +582,11 @@ f_span:         .long MAP_SPAN
 f_mmucr:        .long 0xFF000010
 
 ! ===========================================================================
-! Vector block. _vecblk is PAGE_SZ-aligned, so `.space 0x100` lands _v_gen
-! exactly at VBR+0x100 and the `.balign 0x400` after it lands _v_cap exactly
-! at VBR+0x400 (the general handler's body is far shorter than 0x300 bytes).
-! Both run with SR.RB=1; r9 is NOT banked, so the code they hand to _fail
-! survives.
-!
-! Reaching either one is a defect: every VA this guard touches under AT=1 has
-! a TSB row, so the walker must resolve every miss as a stall.
+! Vector block (mmuwalk_common.inc). Reaching either handler is a defect:
+! every VA this guard touches under AT=1 has a TSB row, so the walker must
+! resolve every miss as a stall.
 ! ===========================================================================
-        .balign PAGE_SZ
-_vecblk:
-        .space 0x100, 0
-_v_gen:                                 ! VBR + 0x100
-        mov.l   Hg_mmucr, r0
-        mov     #0, r1
-        mov.l   r1, @r0
-        mov     #0x42, r9
-        mov.l   Hg_fail, r0
-        jmp     @r0
-        nop
-        .align 2
-Hg_mmucr:       .long 0xFF000010
-Hg_fail:        .long _fail
-
-        .balign 0x400
-_v_cap:                                 ! VBR + 0x400
-        mov.l   Ht_mmucr, r0
-        mov     #0, r1
-        mov.l   r1, @r0
-        mov     #0x41, r9
-        mov.l   Ht_fail, r0
-        jmp     @r0
-        nop
-        .align 2
-Ht_mmucr:       .long 0xFF000010
-Ht_fail:        .long _fail
+        mmu_vec_handlers H, 0x42, 0x41
 
         .balign 4
 ENTRY(_code_end)                        ! everything below start is code, and

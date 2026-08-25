@@ -148,11 +148,19 @@
 !         the I->D shadow fill alone can satisfy it; see the note above.
 !   0x58  leg M: I-side chain pointer wrong
 !   0x59  leg M: D-side data pointer wrong
-!   0x2F  SETUP: a TSB set was full in BOTH ways while seeding -- a harness
-!         collision, not a CPU defect
+!   0x2E  SETUP: a TSB set was full in BOTH ways while seeding the CODE pages.
+!   0x2F  SETUP: ditto while seeding the ALIAS window. Split from 0x2E because
+!         the two ranges fail for different reasons: the code range grows with
+!         the guard, the alias range with N_LARGE_I / N_MIX. Either is a
+!         harness collision, not a CPU defect.
 !   0x41  unexpected TLB exception (VBR+0x400). Every VA here has a TSB row.
+!         If you are reading this after changing a PARAMETER rather than the
+!         RTL, check the assembly-time range checks below first.
 !   0x42  unexpected general exception (VBR+0x100) -- notably what an
 !         UNTRANSLATED fetch of the alias window produces, since it reads 0x0000
+!   0x7F  NOT an assertion. The _fail integrity net rewrites r9==0 to 0x7F, so
+!         this is a fall-through into _fail without a code being set, not a
+!         failed check. Chase the control flow, not the MMU.
 !
 ! Codes are all <= 0x7F so `mov #imm` does not sign-extend them.
 !
@@ -175,24 +183,52 @@
 #define TSB_BASE     0x00F00000
 #define TSB_SIZE_LOG 10
 
-        .section .vect
-        .long start
-        .long 0x00300000                ! stack: NOT the usual 0x7000, which
-                                        ! would land inside the stub pages.
-                                        ! Nothing here uses it.
-        .long start
-        .long 0x00300000
-        .rept 60
-        .long 0
-        .endr
-        .long SIM_INSTR_MAGIC
-        .long _sim_instr_end
-        .long _done
-        .long _fail
-        .long CMD_ENABLE_TEST_RESULT
-_sim_instr_end: .long 0
+! Total 4 KB pages in the alias window: three chains, each N stubs plus a
+! trampoline, and leg M's data pages.
+#define ALIAS_PAGES  ((N_SMALL_I + 1) + (N_LARGE_I + 1) + (N_MIX + 1) + N_MIX)
 
-        .text
+! ---------------------------------------------------------------------------
+! PARAMETER RANGE CHECKS -- at ASSEMBLY time. Same reasoning as mmucapd.S's:
+! a misconfigured constant otherwise reaches run time and lands on Result=0x41
+! or 0x42, whose texts accuse the walker, so a harness mistake reads as an RTL
+! defect. Each counter below is consumed by `mov #imm`, which sign-extends
+! above 127. Every operand is a preprocessor constant, so `.if` can evaluate
+! it -- see the longer note in mmucapd.S about why that distinction matters.
+! ---------------------------------------------------------------------------
+        .if N_LARGE_I > 127
+        .error "mmucapi: N_LARGE_I is loaded with `mov #imm', which sign-extends above 127"
+        .endif
+        .if N_SMALL_I > 127
+        .error "mmucapi: N_SMALL_I is loaded with `mov #imm', which sign-extends above 127"
+        .endif
+        .if N_MIX > 127
+        .error "mmucapi: N_MIX is loaded with `mov #imm', which sign-extends above 127"
+        .endif
+        .if N_SMALL_I >= N_LARGE_I
+        .error "mmucapi: N_SMALL_I must be strictly under N_LARGE_I, or legs S and L do not differ"
+        .endif
+        ! The alias window must sit ENTIRELY ABOVE the image, or an
+        ! untranslated fetch there stops reading 0x0000 and the inert-MMU
+        ! tripwire (Result=0x42) dies.
+        .if ALIAS_PAGES * PAGE_SZ > ALIAS_DELTA
+        .error "mmucapi: the alias window would overlap the image; an untranslated fetch there stops reading 0x0000 and the inert-MMU tripwire dies"
+        .endif
+        ! P5: the raw VA reaches the bus while a miss is walked, so every VA
+        ! must be inside the cosim's 16 MB backing. The 1 MB allowance stands
+        ! in for _stubs_a, which is not a constant.
+        .if ALIAS_DELTA + ALIAS_PAGES * PAGE_SZ + 0x00100000 > 0x01000000
+        .error "mmucapi: the alias window leaves the cosim's 16 MB backed range (P5)"
+        .endif
+        ! HONESTY NOTE: at the shipped ALIAS_DELTA of 0x0040_0000 the overlap
+        ! check above always trips first, so this P5 check is UNREACHABLE and
+        ! was NOT demonstrated firing -- unlike the others, each of which was.
+        ! It is kept because it becomes the binding constraint the moment
+        ! anyone raises ALIAS_DELTA, and a check that only matters later is
+        ! still cheaper than the run-time 0x41 it replaces.
+
+        ! Stack deliberately NOT the usual 0x7000, which would land inside
+        ! the stub pages. Nothing here uses it.
+        mmu_vect_block 0x00300000
         .balign PAGE_SZ
 ENTRY(start)
 #if CONFIG_PRIV_ARCH
@@ -225,17 +261,23 @@ ENTRY(start)
         ! ---- Rows for the driver's own code pages: IDENTITY (delta 0). ----
         mov.l   p_code_start, r1
         mov.l   p_code_end, r2
+        mov.l   p_4kmask, r3
         mov     #0, r4
         mov.l   p_flags, r5
+        mov     #0x2E, r9               ! setup-failure code for THIS range
         mov.l   p_seed, r0
         jsr     @r0
         nop
 
-        ! ---- Rows for the whole alias window: VA = PA + ALIAS_DELTA. ----
+        ! ---- Rows for the whole alias window: VA = PA + ALIAS_DELTA. Every
+        ! ---- page here is 4 KB (there is no CAP_PM analogue on this axis), so
+        ! ---- the PPN mask is the plain page mask for both calls.
         mov.l   p_alias_va, r1
         mov.l   p_alias_vaend, r2
+        mov.l   p_4kmask, r3
         mov.l   p_delta, r4
         mov.l   p_flags, r5
+        mov     #0x2F, r9
         mov.l   p_seed, r0
         jsr     @r0
         nop
@@ -256,6 +298,7 @@ p_tsbcfg_addr:  .long 0xFF000018
 p_tsbcfg_val:   .long 0x00000061        ! HASH_SHIFT=6, HASH_MODE=1
 p_code_start:   .long start
 p_code_end:     .long _code_end
+p_4kmask:       .long 0xFFFFF000
 p_alias_va:     .long _stubs_a + ALIAS_DELTA
 p_alias_vaend:  .long _alias_end + ALIAS_DELTA
 p_delta:        .long ALIAS_DELTA
@@ -263,75 +306,19 @@ p_flags:        .long MAP_FLAGS
 p_seed:         .long _seed
 p_mmucr:        .long 0xFF000010
 
-! ---------------------------------------------------------------------------
-! _seed -- write one TSB row per 4 KB page of [r1, r2), with PA = VA - r4 and
-! PTEL flags r5. Called twice: once with r4 = 0 for the identity code pages,
-! once with r4 = ALIAS_DELTA for the window under test. Runs with AT off, so
-! the row writes are plain P0 stores.
-!
-! Two-way insert: way 0 unless it already holds a valid entry. A third
-! colliding VPN is a harness problem, not a CPU defect, and says so (0x2F)
-! rather than silently evicting a row the run depends on.
-! ---------------------------------------------------------------------------
-ENTRY(_seed)
-        mov.l   z_tsbslot, r12
-        mov.l   z_pagesz, r3
-1:      mov     r1, r6
-        sub     r4, r6                  ! r6 = PA of this page
-        or      r5, r6                  ! r6 = PTEL
-        mov.l   r1, @r12                ! ask the P4 slot helper
-        mov.l   @r12, r7                ! r7 = 32-byte-aligned SET address
-        mov.l   @(8, r7), r0
-        tst     #1, r0
-        bt      3f
-        add     #16, r7
-        mov.l   @(8, r7), r0
-        tst     #1, r0
-        bt      3f
-        mov.l   z_full, r0
-        jmp     @r0
-        nop
-3:      mov     #0, r0                  ! ASID_TAG = 0
-        tsb_fill r7, r1, r0, r6
-        add     r3, r1
-        cmp/hs  r2, r1
-        bf      1b
-        rts
-        nop
-
-        .align 2
-z_tsbslot:      .long 0xFF000048        ! P4_TSBSLOT: tsb_ptr(VA, ASIDR)
-z_pagesz:       .long PAGE_SZ
-z_full:         .long _setup_full
-
+        ! r9 already carries 0x2E or 0x2F -- whichever seed call landed here.
 ENTRY(_setup_full)
-        mov     #0x2F, r9
         bra     _fail
         nop
+
+        mmu_seed_routine z, PAGE_SZ
 
 #else
         bra     _done
         nop
 #endif  ! CONFIG_PRIV_ARCH (preamble)
 
-ENTRY(_done)
-        mov.l   p_test_result, r0
-        mov.l   p_test_result_pass, r9
-        mov.l   r9, @r0
-        bra     _done
-        nop
-ENTRY(_fail)
-        mov.l   p_test_result, r0
-        tst     r9, r9                  ! integrity net: 0 is not a fail code
-        bf      1f
-        mov     #0x7F, r9
-1:
-        mov.l   r9, @r0
-        bra     _fail
-        nop
-        .align 2
-p_test_result:      .long TEST_RESULT_ADDRESS
-p_test_result_pass: .long TEST_PASS_MAGIC
+        mmu_done_fail p
 
 #if CONFIG_PRIV_ARCH
 ! ===========================================================================
@@ -391,15 +378,8 @@ s_a_fin:        .long _stubs_a + ALIAS_DELTA + (N_SMALL_I + 1) * PAGE_SZ
 ! least N_LARGE_I ITLB entries.
 ! ===========================================================================
 ENTRY(_leg_L)
-        mov.l   l_mmucr, r0             ! leg-boundary flush: AT off, TI, AT on
-        mov     #0, r1
-        mov.l   r1, @r0
-        mov     #4, r1
-        mov.l   r1, @r0
-        mov     #0, r1
-        mov.l   r1, @r0
-        mov     #1, r1
-        mov.l   r1, @r0
+        mov.l   l_mmucr, r0
+        mmu_flush_at r0                 ! leg boundary: AT off, TI, AT on
 
         mov.l   l_tlbi, r10
         mov.l   l_stride, r11
@@ -463,15 +443,8 @@ l_b_fin:        .long _stubs_b + ALIAS_DELTA + (N_LARGE_I + 1) * PAGE_SZ
 ! 0x55 and 0x59 are the leg.
 ! ===========================================================================
 ENTRY(_leg_M)
-        mov.l   m_mmucr, r0             ! leg-boundary flush
-        mov     #0, r1
-        mov.l   r1, @r0
-        mov     #4, r1
-        mov.l   r1, @r0
-        mov     #0, r1
-        mov.l   r1, @r0
-        mov     #1, r1
-        mov.l   r1, @r0
+        mov.l   m_mmucr, r0
+        mmu_flush_at r0                 ! leg boundary: AT off, TI, AT on
 
         ! expected sum = sum of the N_MIX data-page PHYSICAL addresses
         mov.l   m_dpa, r1
@@ -482,8 +455,13 @@ ENTRY(_leg_M)
         add     r4, r1
         dt      r2
         bf      1b
-        mov     r3, r9                  ! park it: r9 is not banked and the
-                                        ! chain never touches it
+        ! Park it in r5, NOT r9. r9 is the fail-code register, and the _fail
+        ! integrity net only rewrites r9 == 0 -- so any check added inside the
+        ! window below would have reported a 32-bit sum (~0x0034_0000) and read
+        ! as memory corruption rather than as a failed assertion. r5 is free
+        ! here (the mixed stub touches only r6, r7, r8, r11, r12, r13) and is
+        ! not reused until after the 0x55 compare consumes it.
+        mov     r3, r5
         mov.l   m_tlbi, r10
         mov.l   m_stride, r11
         mov.l   m_dstride, r8
@@ -502,12 +480,12 @@ ENTRY(_capi_mret)
         bf      2b
 
         ! ---- 0x55: the twenty loads translated correctly, exactly once each
-        cmp/eq  r9, r7
+        cmp/eq  r5, r7
         mov     #0x55, r9
         bt      3f
         bra     _fail
         nop
-3:      mov     r6, r5
+3:      mov     r6, r5                  ! r5 is free again from here
         sub     r4, r5                  ! r5 = packed install delta
         mov     r5, r3
         shlr16  r3                      ! r3 = ITLB installs
@@ -557,37 +535,10 @@ m_m_fin:        .long _stubs_m + ALIAS_DELTA + (N_MIX + 1) * PAGE_SZ
 m_d_fin:        .long _mdata + ALIAS_DELTA + N_MIX * PAGE_SZ
 
 ! ===========================================================================
-! Vector block. _vecblk is PAGE_SZ-aligned, so `.space 0x100` puts _v_gen at
-! VBR+0x100 and the `.balign 0x400` after it puts _v_cap at VBR+0x400. Both
-! run with SR.RB=1; r9 is not banked, so the code survives into _fail.
+! Vector block (mmuwalk_common.inc). 0x42 is the one an inert MMU produces:
+! an untranslated fetch of the alias window reads 0x0000.
 ! ===========================================================================
-        .balign PAGE_SZ
-_vecblk:
-        .space 0x100, 0
-_v_gen:                                 ! VBR + 0x100
-        mov.l   Hg_mmucr, r0
-        mov     #0, r1
-        mov.l   r1, @r0
-        mov     #0x42, r9
-        mov.l   Hg_fail, r0
-        jmp     @r0
-        nop
-        .align 2
-Hg_mmucr:       .long 0xFF000010
-Hg_fail:        .long _fail
-
-        .balign 0x400
-_v_cap:                                 ! VBR + 0x400
-        mov.l   Ht_mmucr, r0
-        mov     #0, r1
-        mov.l   r1, @r0
-        mov     #0x41, r9
-        mov.l   Ht_fail, r0
-        jmp     @r0
-        nop
-        .align 2
-Ht_mmucr:       .long 0xFF000010
-Ht_fail:        .long _fail
+        mmu_vec_handlers H, 0x42, 0x41
 
         .balign 4
 ENTRY(_code_end)                        ! end of the identity-mapped driver

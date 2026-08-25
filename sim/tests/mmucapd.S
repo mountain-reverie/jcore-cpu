@@ -239,8 +239,9 @@
 ! "non-constant expression in .if statement". That distinction is exactly what
 ! bit sim/tests/Makefile's single-page check, which had to move OUT of the
 ! file and onto the linked image for the same reason. These stay in-file
-! BECAUSE they are pure arithmetic on #defines, and each was verified to fire
-! by building a deliberately violating wrapper.
+! BECAUSE they are pure arithmetic on #defines. Every check below except the
+! last was verified to fire by building a deliberately violating wrapper; the
+! last one carries its own note saying why it could not be.
 ! ---------------------------------------------------------------------------
         .if CAP_FIRSTSUB >= CAP_NSUB
         .error "mmucapd: CAP_FIRSTSUB must index a sub-page INSIDE the mapping (0 .. CAP_NSUB-1)"

@@ -908,8 +908,22 @@ begin
     -- feeding them can be pruned and abc9 is handed a different cone. Measured
     -- on this design, with no functional change whatever: adding this process
     -- moves mapped ECP5 LUT4 by several hundred, and adds one `reg` to the
-    -- generic ASIC netlist (4483 -> 4484 on the current base -- the pair read
-    -- 2696 -> 2697 before the rebase, the same +1 against a smaller design).
+    -- generic ASIC netlist. THE +1 IS THE CLAIM; THE ABSOLUTE PAIR IS NOT.
+    -- This note used to say "on the current base", and two rebases have since
+    -- rewritten what that named, so the base is stated explicitly from here on:
+    --
+    --   2696 -> 2697   the original base
+    --   4483 -> 4484   master 9fdfaf6 (the base of core/tlb.vhd's table)
+    --   4519 -> 4520   master 06a8148, re-measured for this rebase
+    --
+    -- Same +1 against three different designs. The re-measurement built master
+    -- and this commit with `git archive` into throwaway trees -- core/cpu.vhd
+    -- is the ONLY RTL file differing between them, so the assertion is cleanly
+    -- isolated -- and counted every DFF-family cell in the design-hierarchy
+    -- totals, the convention core/tlb.vhd's ASIC columns use. The added cell is
+    -- a plain $_DFF_P_: the assertion's own register. Generic cells over that
+    -- same pair moved 36844 -> 36837, i.e. SEVEN FEWER for a simulation-only
+    -- statement -- the LUT4 lesson again, in miniature.
     -- Figures and method are in the area note in core/tlb.vhd.
     --
     -- The consequence is a measurement rule, not a reason to drop the

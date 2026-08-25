@@ -1242,6 +1242,13 @@ begin
         -- software LDTLB, which wrote BOTH arrays, every shrunk size failed.
         --
         -- `entries` MUST stay a power of two (log2 leaf/root reduction).
+        --
+        -- THIS NUMBER IS NOW ASSERTED, not merely measured. sim/tests/mmucapi.S
+        -- brackets it from both sides: a 3-stub I-side chain must stay wholly
+        -- resident (red at `entries => 2`, Result=0x52) and a 12-stub chain must
+        -- evict completely (red at `entries => 32`, Result=0x54). Changing this
+        -- without re-tuning that guard's N_SMALL_I / N_LARGE_I turns the suite
+        -- red, deliberately.
         entries   => 8,
         side_is_i => true
       )
@@ -1280,6 +1287,13 @@ begin
         -- guard (mmudrain) that needs more than 8 entries, and every SH code
         -- page carrying a PC-relative literal pool is read through the DTLB as
         -- well as fetched through the ITLB. See the ITLB block above.
+        --
+        -- THIS NUMBER IS NOW ASSERTED TOO. mmudrain only reacts at 8 -- its ten
+        -- D-side pages are under 16, so it never forces a capacity eviction at
+        -- the shipped size. sim/tests/mmucapd.S does: 6 mappings must stay
+        -- resident (red at `entries => 4`, Result=0x13) and 24 must not (red at
+        -- `entries => 32`, Result=0x23). Re-tune its N_SMALL / N_LARGE if this
+        -- moves.
         entries   => 16,
         side_is_i => false
       )

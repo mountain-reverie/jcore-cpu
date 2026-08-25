@@ -241,6 +241,20 @@ green with the demote logic deleted). Also `mmuboot` (VA `0x00100000` → PA
 carry counter or fault witnesses on top of the non-identity map, so they are
 doubly covered.
 
+The D0b capacity suite — `mmucapd`, `mmucapsub` (a `#define` + `#include`
+wrapper over `mmucapd`), `mmucapi` — belongs here too, and is the strongest
+form of the pattern in the tree because it needs no per-guard sentinel table.
+Every page under test is mapped `VA = PA + 0x0040_0000`, and each backing word
+holds **its own physical address** (`.long .`), so the expected value of any
+touch is just `VA - 0x0040_0000`: a wrong frame, an absent entry and an inert
+MMU are all distinguishable from a single compare. The alias window sits above
+the image, where the cosim's backing is anonymous and zero-filled, so an
+untranslated read returns 0 and an untranslated *fetch* returns `0x0000` —
+which is why `mmucapi` reports a general illegal-instruction trap
+(`Result=0x42`) rather than merely a wrong value when AT is never enabled. All
+three were measured red that way; see each file's `M0` note. Their code pages
+are identity, carve-out (b), with no assertion depending on them.
+
 **Walker-counter delta across the access under test** (`0xFF000054`):
 `mmubenchi`, `mmuirun`, `mmup4alias`, `mmurun`, `mmusplit`, `mmustale`,
 `mmutsbcoh`, `mmutsbvictim`, `mmuwalkhit`, `mmuwalkiside`, `mmuwalkmiss`,
@@ -309,10 +323,20 @@ live in the current `.word 0x6CD2` build. It does not change the verdict
 
 ## 5. Coverage of this survey
 
-* **87** `mmu*.S` files exist. **82** are distinct guards; the other 5
-  (`mmudspcprobe_late{b,c,m,mw,w}.S`) are `#define` + `#include` shims over
-  `mmudspcprobe_late.S` and inherit its verdict. (85/80 at the original survey
-  date; `mmuishadow.S` and `mmudshadow.S` arrived with `a68c765`.)
+* **87** `mmu*.S` files existed at the survey date. **82** were distinct
+  guards; the other 5 (`mmudspcprobe_late{b,c,m,mw,w}.S`) are `#define` +
+  `#include` shims over `mmudspcprobe_late.S` and inherit its verdict. (85/80
+  at the original survey date; `mmuishadow.S` and `mmudshadow.S` arrived with
+  `a68c765`.)
+* **THE 87 IS STALE AND THE STALENESS PREDATES D0b.** `ls sim/tests/mmu*.S | wc
+  -l` on the base D0b branched from reports **100**, so thirteen guards landed
+  after the 2026-08-23 re-audit and are *not* classified anywhere in this file.
+  D0b adds three more (`mmucapd`, `mmucapsub`, `mmucapi`, classified in §4
+  above and read in full because they were written here), for 103. The thirteen
+  are NOT classified by this note and must not be assumed compliant — the count
+  is corrected so the gap is visible, not closed. Re-deriving them is a
+  standalone job; whoever does it should re-run the count rather than trusting
+  any number in this file, including these.
 * All 82 were classified, and none was left `UNKNOWN`. **The evidence behind
   those verdicts is not uniform**, and the difference matters when acting on
   this file:

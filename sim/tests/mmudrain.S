@@ -160,10 +160,19 @@
 ! + code pages in the ITLB, and 10 data pages + the code pages the verifier
 ! reads through in the DTLB.
 !
-! THIS FILE IS THE SUITE'S DTLB-CAPACITY CANARY, measured 2026-08-13 in the L4
-! capacity sweep. It is the only guard anywhere in mmu_sim.sh / linux_sim.sh
-! whose D-side live set exceeds 8 pages, and it is the only one that reacts to
-! DTLB size:
+! THIS FILE WAS THE SUITE'S DTLB-CAPACITY CANARY, measured 2026-08-13 in the L4
+! capacity sweep -- the only guard anywhere in mmu_sim.sh / linux_sim.sh whose
+! D-side live set exceeded 8 pages, and the only one that reacted to DTLB size.
+!
+! NO LONGER THE ONLY ONE, and no longer the primary evidence. The D0b capacity
+! suite (sim/tests/mmucapd.S, mmucapsub.S, mmucapi.S) drives working sets PAST
+! the shipped entry counts on both arrays and asserts residency and eviction
+! directly, off P4_TSBCNT and P4_TLBINST, instead of inferring them from a
+! fault count. Read those first when a capacity question comes up; this file's
+! reaction to DTLB size stays useful as a second, independent signal, but note
+! what it actually measures -- ten D-side pages is UNDER the shipped 16-entry
+! DTLB, so this guard never forces a capacity eviction at the shipped size at
+! all. It only notices when the array is shrunk to 8:
 !   8 ITLB + 16 DTLB -> PASS (all three legs, no constant touched)
 !   8 ITLB +  8 DTLB -> FAIL, Result=0x10 (leg A fault count). Layers 1-3
 !     (exactly-once register arithmetic, page read-backs) still PASS, so every

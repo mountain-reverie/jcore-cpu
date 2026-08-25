@@ -41,8 +41,33 @@
 ! same PTEL in one run.
 !
 ! WORKING SET. 24 mappings x 16 KB = 384 KB of VA, one DTLB entry each, against
-! a 16-entry DTLB. The alias window is _frames + 0x0040_0000 upward and stays
-! well inside the cosim's 16 MB backed window (P5); see mmucapd.S's header.
+! a 16-entry DTLB.
+!
+! IDENTITY MAPPING -- stated here rather than only by reference, because a
+! carve-out has to be argued in the guard's own header and inheriting one
+! through an #include is not that.
+!
+!   The pages UNDER TEST are not identity-mapped and no carve-out is claimed
+!   for them. Every one is reached at VA = PA + 0x0040_0000 and every backing
+!   word holds its own physical address, so each of the 24 first touches and
+!   every base re-touch compares against VA - 0x0040_0000. Editing ALIAS_DELTA
+!   alone moves the frames, which is the test README-identity-mapping.md sets
+!   for "was identity forced?" -- it was not, and it was not chosen either.
+!   MEASURED red with AT never enabled: Result=17 (0x11).
+!
+!   The CODE pages ARE identity-mapped, and that is carve-out (b),
+!   layout-forced: the cosim loads the image flat, so `start`, its literal
+!   pools and the vector block physically are at the VAs the preamble maps them
+!   to, and moving them would mean relinking rather than editing a PTEL.
+!   NO ASSERTION IN THIS FILE DEPENDS ON IT. Every result code above is a
+!   compare against a relocated frame or a walker-counter delta taken across an
+!   access to the alias window; the code pages only have to be fetchable for
+!   the guard to run at all, and if they were not, it would not reach a check.
+!
+! P5 (VA-backing). MEASURED on the linked image: code 0x0000_4000..0x0000_5418,
+! alias window 0x0040_8000..0x0046_8000. Both are inside the cosim's 16 MB
+! backed window, which matters because the raw VA reaches the bus while a miss
+! is being walked.
 !
 ! NON-VACUITY. Group C, exactly as the harness. The harness's own M1/M2 (DTLB
 ! `entries` 16 -> 32 and 16 -> 4) apply unchanged. Two further mutations are

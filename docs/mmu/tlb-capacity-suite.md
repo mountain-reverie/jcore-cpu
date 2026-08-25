@@ -149,6 +149,29 @@ perfectly. It is paired, in the same run and off the same counter, with an
 exact positive delta. That is the counter-trustworthiness pattern the Group-C
 locks use, and it is why neither leg needs to lean on the other guard.
 
+### 2.6 Two assertions that are weaker than they look
+
+Both are real checks; neither is independent evidence, and the guards say so in
+their own headers. Recorded here as well so a reader weighing the suite does
+not double-count them.
+
+* **`mmucapd`'s `0x25` is degenerate in its own build.** The leg-L base probe
+  asserts that an entry installed from the first-touch sub-page covers the
+  mapping base. At `CAP_PM = 0` / `CAP_FIRSTSUB = 0` the two probe VAs are the
+  same address — `l_first0` and `l_base0` both hold `0x0040_3000` in the linked
+  image — so probe 2 re-touches precisely what probe 1 installed. In `mmucapd`
+  the code asserts residency across a re-touch and nothing more. The stated
+  property is measured only by `mmucapsub`, and the M4 row of §4 is the proof:
+  it turns `mmucapsub` red and leaves `mmucapd` green.
+* **`mmucapi`'s `0x57` overlaps the shadow fill.** The one-way I→D shadow fill
+  writes a DTLB slot behind every ITLB install, and `P4_TLBINST[15:0]` counts
+  slot writes regardless of origin. With `N_MIX` over-subscribed stub pages the
+  measured traversal yields on the order of `N_MIX` DTLB installs from shadow
+  fills alone, so "DTLB installs ≥ `N_MIX`" can be met with no D-side demand
+  install at all. It is a live-ness check on the D-side install path. Leg M's
+  D-side evidence is `0x55` (the exact 20-term relocated sum) and `0x59` (the
+  data pointer advanced exactly `N_MIX` times).
+
 ---
 
 ## 3. The guards
@@ -245,24 +268,50 @@ plainly rather than implying coverage it does not have.
 ```
 #define CAP_PM       <0..>      /* mapping size: PAGE_SZ << (2*CAP_PM) */
 #define CAP_FIRSTSUB <0..>      /* which 4 KB sub-page is touched FIRST */
+#define N_SMALL      <n>        /* optional: size of the "fits" leg      */
+#define N_LARGE      <n>        /* optional: size of the "does not fit"  */
 #include "mmucapd.S"
 ```
 
-Everything else — the seed loop, the alias arithmetic, the probe windows, the
-result codes — follows from those two. Three constraints on the values:
+All four are `#ifndef`-guarded. Everything else — the seed loop, the alias
+arithmetic, the probe windows, the result codes — follows from them. Three
+constraints on the values:
 
-* **Every mapping must still cost exactly one TLB entry**, or `N_SMALL` and
-  `N_LARGE` stop bracketing the array size. That holds for any `CAP_PM`.
+* **The bracket must still bracket.** `N_SMALL` mappings plus the two code
+  pages must stay at or under the array's entry count, and `N_LARGE` must
+  exceed it strictly. Every mapping costs exactly one TLB entry whatever
+  `CAP_PM` is, because a superpage is one entry, so this is arithmetic on
+  mapping COUNT and is independent of size.
 * **P5.** Every VA touched under `AT=1` must lie in `[0, 0x0100_0000)`, because
   the raw VA reaches the bus while a miss is walked and the cosim backs only
   16 MB. The window is `_frames + ALIAS_DELTA` for `N_LARGE * MAP_SPAN` bytes,
-  so at `N_LARGE = 24`: `CAP_PM = 2` (64 KB) needs 1.5 MB and is comfortable,
-  `CAP_PM = 3` (256 KB) needs 6 MB and fits but is unwieldy, and `CAP_PM = 4`
-  (1 MB) needs 24 MB and does not fit at all. Lower `N_LARGE` and the bracket
-  loosens, so that is a trade, not a free knob.
+  so at the default `N_LARGE = 24`: `CAP_PM = 2` (64 KB) needs 1.5 MB and is
+  comfortable, `CAP_PM = 3` (256 KB) needs 6 MB and fits but is unwieldy, and
+  `CAP_PM = 4` (1 MB) needs 24 MB and does not fit at all. **`N_LARGE` is the
+  remedy in both of those cases, which is exactly why it is overridable** — a
+  size knob whose only escape hatch a wrapper could not reach would be no
+  escape hatch.
 * **Image size.** The frames are `.space`-filled in the image, so the `.img`
-  grows as `N_LARGE * MAP_SPAN`. Measured: 108 KB at `CAP_PM=0`, 416 KB at
-  `CAP_PM=1`; a `CAP_PM=3` build would be ~6 MB.
+  grows as `N_LARGE * MAP_SPAN`. Measured: 108 KB at `CAP_PM=0`/`N_LARGE=24`,
+  416 KB at `CAP_PM=1`/`N_LARGE=24`, 1.375 MB at `CAP_PM=2`/`N_LARGE=20`.
+
+**DEMONSTRATED, not asserted.** A throwaway fourth wrapper was written, built,
+run and deleted:
+
+```
+#define CAP_PM       2      /* 64 KB superpages, 16 sub-pages each */
+#define CAP_FIRSTSUB 15     /* first touch on the LAST sub-page    */
+#define N_LARGE      20     /* overridden down from 24             */
+#define N_SMALL      6
+#include "mmucapd.S"
+```
+
+The override reaches the linked image — `d_va = 0x0042_0000`,
+`d_vaend = 0x0056_0000`, a span of `0x14_0000` = 20 × 64 KB and not the
+default 24 × 64 KB = `0x18_0000`; `s_span = 0x0001_0000` confirms `CAP_PM=2`
+and `s_first0 = 0x0042_F000` is sub-page 15 of mapping 0. It passes, completing
+at 87.31 µs. 20 mappings still exceed the 16-entry DTLB, so the bracket holds
+at the lower count.
 
 A new wrapper needs registering in **three** places — `sim/mmu_sim.sh` (both
 the suite loop and the single-guard `case` arm), `sim/tests/Makefile` (an

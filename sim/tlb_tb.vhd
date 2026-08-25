@@ -30,7 +30,7 @@
 --     arrays (one `va`/`hit`/... port set plus a `side_is_i` generic, instead
 --     of the old i_*/d_* pairs). This bench still instantiated the dual-ported
 --     entity, so it could no longer elaborate at all.
---   * ORPHANED. Nothing ran it. It is in sim/Makefile's VHDL_TOPS and in no
+--   * ORPHANED. Nothing ran it. It sat in sim/Makefile's VHDL_TOPS and in no
 --     script -- not sim/mmu_sim.sh, not any workflow -- and the mcode GHDL
 --     flow only COMPILES the tops it is asked to run (`ghdl -i` merely imports
 --     file names), so a broken top costs nothing at build time and reports
@@ -219,7 +219,7 @@ begin
   -- two independent single-port arrays selected by the `side_is_i` generic, and
   -- core/cpu.vhd instantiates it twice. This testbench was not updated with it
   -- and stopped elaborating -- silently, because `ghdl -i`/mcode only compiles
-  -- the tops actually run, and nothing ran this one (it is in sim/Makefile's
+  -- the tops actually run, and nothing ran this one (it sat in sim/Makefile's
   -- VHDL_TOPS and in no script). It is wired into sim/mmu_sim.sh and the CI
   -- guard list now, so that cannot recur.
   --
@@ -355,8 +355,11 @@ begin
     -- cover. Shaped like flush_all because a reset revokes the same way TI
     -- does -- NOT because the two share a condition in the hardware. The RTL
     -- is deliberately `if (rst = '1') then ... elsif (ti = '1')`: two arms
-    -- with a duplicated loop, NOT `rst = '1' or ti = '1'`. Folding them costs
-    -- 464 LUT4. Read the area note in core/tlb.vhd before "simplifying" them
+    -- with a duplicated loop, NOT `rst = '1' or ti = '1'`. This comment used
+    -- to add "Folding them costs 464 LUT4"; that margin has since been
+    -- WITHDRAWN -- re-measured on the current base, it sits inside the
+    -- metric's own noise floor -- and the form now rests on READABILITY, not
+    -- on area. Read the area note in core/tlb.vhd before "simplifying" them
     -- together on the strength of this procedure's shape.
 
     procedure warm_reset is

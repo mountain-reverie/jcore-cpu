@@ -278,6 +278,19 @@ jobs:
           # the detector -- a double-committed bus access is invisible to
           # software on plain SRAM -- and this guard makes the shape happen.
           run_guard mmuwalkitakeover "cpu_tb" 120us
+          echo "== TLB capacity / eviction suite (D0b) =="
+          # Working sets driven PAST the array entry count, with the eviction
+          # asserted rather than assumed: mmucapd/mmucapsub off P4_TSBCNT
+          # (0xFF000054), mmucapi off P4_TLBINST (0xFF000058). Each pairs a
+          # working set that FITS (a non-increment) with one that does NOT (an
+          # exact positive delta), so neither leg rests on a dead counter. All
+          # three map every page under test at VA = PA + 0x0040_0000. Keep this
+          # list and sim/mmu_sim.sh's in step -- scripts/guard_list_drift.sh
+          # compares the stop times. Measured completions 21.37 / 37.86 /
+          # 40.47us (final timestamp of an MMU_VCD dump).
+          run_guard mmucapd   "cpu_tb" 120us
+          run_guard mmucapsub "cpu_tb" 200us
+          run_guard mmucapi   "cpu_tb" 200us
           # I-side cacheability: instruction fetches run through the live I-cache
           # (cpu_cache_tb); proves a C=0 translated page bypasses the icache (fresh
           # self-modified code) vs a C=1 page caches (stale). 400us to complete.

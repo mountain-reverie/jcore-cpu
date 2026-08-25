@@ -184,7 +184,8 @@ Also the harness. 24 mappings of 4 KB against a 16-entry DTLB.
 * **leg L** — flush, sweep 24, then: the sweep itself walked ≥ 24 times
   (`0x26`); re-probing mapping 0 walks exactly once and that walk hits
   (`0x23`); the entry it rebuilds covers the mapping base with no further walk
-  (`0x25`).
+  (`0x25` — **degenerate in this build**, where the two probe VAs are the same
+  address; see §2.6, and read the property off `mmucapsub` instead).
 * **leg F** — re-sweep all 24 at their bases with the DTLB thrashing
   throughout; every one must still relocate correctly (`0x31`).
 
@@ -282,18 +283,44 @@ constraints on the values:
   exceed it strictly. Every mapping costs exactly one TLB entry whatever
   `CAP_PM` is, because a superpage is one entry, so this is arithmetic on
   mapping COUNT and is independent of size.
+* **The alias window must clear the image**, i.e. `N_LARGE * MAP_SPAN <=
+  ALIAS_DELTA`. This is the constraint an earlier revision of this section
+  missed, and it is the one that keeps §2.1's inert-MMU tripwire alive: an
+  untranslated read only returns 0 while the VA lands in the cosim's anonymous
+  zero-filled backing rather than back inside the loaded image. At the default
+  `N_LARGE = 24` and `ALIAS_DELTA = 4 MB`: `CAP_PM = 2` (64 KB) needs 1.5 MB
+  and is fine, `CAP_PM = 3` (256 KB) needs 6 MB and **is rejected** — the
+  earlier text called it "fits but unwieldy", which was wrong, because 6 MB
+  exceeds `ALIAS_DELTA` and the window would land back on top of the image.
+  `CAP_PM = 4` needs 24 MB and fails this and P5 both. **`N_LARGE` is the
+  remedy in every one of those cases, which is exactly why it is
+  overridable** — a size knob whose only escape hatch a wrapper could not
+  reach would be no escape hatch.
 * **P5.** Every VA touched under `AT=1` must lie in `[0, 0x0100_0000)`, because
   the raw VA reaches the bus while a miss is walked and the cosim backs only
-  16 MB. The window is `_frames + ALIAS_DELTA` for `N_LARGE * MAP_SPAN` bytes,
-  so at the default `N_LARGE = 24`: `CAP_PM = 2` (64 KB) needs 1.5 MB and is
-  comfortable, `CAP_PM = 3` (256 KB) needs 6 MB and fits but is unwieldy, and
-  `CAP_PM = 4` (1 MB) needs 24 MB and does not fit at all. **`N_LARGE` is the
-  remedy in both of those cases, which is exactly why it is overridable** — a
-  size knob whose only escape hatch a wrapper could not reach would be no
-  escape hatch.
+  16 MB. At the shipped `ALIAS_DELTA` the constraint above is strictly
+  tighter, so P5 never binds on its own; it becomes the binding one as soon as
+  `ALIAS_DELTA` is raised.
 * **Image size.** The frames are `.space`-filled in the image, so the `.img`
   grows as `N_LARGE * MAP_SPAN`. Measured: 108 KB at `CAP_PM=0`/`N_LARGE=24`,
   416 KB at `CAP_PM=1`/`N_LARGE=24`, 1.375 MB at `CAP_PM=2`/`N_LARGE=20`.
+
+**All four are now checked at ASSEMBLY time**, in the `.if`/`.error` block
+beside the `#ifndef`s, and this list is no longer the only place they live.
+That block exists because every violation used to reach run time and land on
+`Result=0x41` — whose text says *"a fault means the walker did not resolve one
+it could have"*, so a harness mistake read as an RTL defect. Two that used to
+assemble and link silently: `CAP_FIRSTSUB=4` at `CAP_PM=1` (the index leaves
+the mapping, so every first touch slides up one whole mapping and leg L's last
+one falls off the seeded window) and `N_LARGE=130` (`mov #N_LARGE, r13`
+sign-extends; `objdump` shows `mov #-126,r13`).
+
+Six of the seven checks were **demonstrated firing** by building a deliberately
+violating wrapper — `CAP_FIRSTSUB=4`, `N_LARGE=130`, `N_SMALL=200`,
+`N_SMALL >= N_LARGE`, `CAP_PM=3`, and on the I-side guard `N_SMALL_I >=
+N_LARGE_I` and `N_MIX=900` — while all three shipped parameterisations
+assemble clean. The seventh, the bare P5 bound, is unreachable at the shipped
+`ALIAS_DELTA` and is labelled as such in the source rather than claimed.
 
 **DEMONSTRATED, not asserted.** A throwaway fourth wrapper was written, built,
 run and deleted:

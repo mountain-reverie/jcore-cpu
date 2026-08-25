@@ -87,6 +87,13 @@
 !                 base-first; mmucapsub.S uses 3, i.e. the LAST sub-page of a
 !                 16 KB mapping, so no mapping in that build is ever entered
 !                 through its own first PAGE_SIZE.
+!   N_SMALL       how many mappings the "fits" leg sweeps.       default 6
+!   N_LARGE       how many the "does not fit" leg sweeps.        default 24
+!
+! N_LARGE is overridable BECAUSE it has to be: the VA window is
+! N_LARGE * MAP_SPAN and must stay inside the cosim's 16 MB backing, so raising
+! CAP_PM without being able to lower N_LARGE would walk straight off the end of
+! P5. See the block at the #ifndefs below for the one constraint that binds.
 !
 ! The TSB is 4 KB-granular BY CONTRACT -- core/tlb_walk.vhd compares
 ! `bus_d(31 downto 12) = va_reg(31 downto 12)` and core/datapath_pkg.vhd's
@@ -137,6 +144,16 @@
 !   0x24  leg L base probe: wrong data at the mapping BASE
 !   0x25  leg L base probe: the counters MOVED. The entry installed from the
 !         FIRST-TOUCH sub-page does not cover its own mapping base.
+!         DEGENERATE IN *THIS* BUILD, and do not credit this file with the
+!         property. At CAP_PM=0 / CAP_FIRSTSUB=0 the two probe VAs are the same
+!         address -- l_first0 and l_base0 are both _frames + ALIAS_DELTA, and
+!         the linked image shows both literals holding 0x00403000 -- so probe 2
+!         re-touches exactly what probe 1 just installed. Here 0x25 asserts only
+!         RESIDENCY ACROSS A RE-TOUCH, which is worth having but is not
+!         coverage. The stated coverage property is measured by mmucapsub.S,
+!         where CAP_FIRSTSUB=3 makes the two VAs 0x3000 apart, and it is
+!         mmucapsub that goes red under M4 while this file stays green -- which
+!         is exactly the evidence that 0x25 here is inert.
 !   0x26  leg L sweep: fewer than N_LARGE walks over the whole sweep -> the
 !         sweep did not actually miss, so leg L measured nothing
 !   0x31  final re-sweep at the mapping bases: wrong data after the churn
@@ -159,17 +176,28 @@
 #define CAP_FIRSTSUB 0
 #endif
 
-#define PAGE_SZ      0x1000
-#define CAP_NSUB     (1 << (2 * CAP_PM))
-#define MAP_SPAN     (PAGE_SZ * CAP_NSUB)
-#define FIRST_OFF    (CAP_FIRSTSUB * PAGE_SZ)
-
 ! N_SMALL must fit in the DTLB alongside the handful of code pages this file
 ! reads literal pools out of; N_LARGE must exceed it outright. Shipped DTLB is
 ! 16 entries (core/cpu.vhd, u_dtlb). Every mapping costs exactly ONE entry
 ! whatever CAP_PM is, because a superpage is one entry.
+!
+! WRAPPER-OVERRIDABLE, and it has to be. The VA window is N_LARGE * MAP_SPAN
+! bytes and must stay inside the cosim's 16 MB backing (P5), so a wrapper that
+! raises CAP_PM has to be able to lower N_LARGE in the same breath -- at
+! CAP_PM=4 the default 24 would need 24 MB. Both are #ifndef-guarded for that
+! reason. The only hard constraint is the one above: N_SMALL + the code pages
+! at or under the DTLB entry count, N_LARGE strictly over it.
+#ifndef N_SMALL
 #define N_SMALL      6
+#endif
+#ifndef N_LARGE
 #define N_LARGE      24
+#endif
+
+#define PAGE_SZ      0x1000
+#define CAP_NSUB     (1 << (2 * CAP_PM))
+#define MAP_SPAN     (PAGE_SZ * CAP_NSUB)
+#define FIRST_OFF    (CAP_FIRSTSUB * PAGE_SZ)
 
 #define ALIAS_DELTA  0x00400000
 #define DATA_FLAGS   ((CAP_PM << 8) | 0xE9)

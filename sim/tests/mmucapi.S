@@ -119,6 +119,19 @@
 ! should add a mutation aimed at the walker's D-side install routing, which
 ! this file does not currently have one for.
 !
+! AND 0x57 IS NOT INDEPENDENT EVIDENCE -- do not read it as such. The I->D
+! shadow fill (core/cpu.vhd, p_tlb_shadow / `dtlb_wr <= ... or shadow_wr`)
+! installs the STUB page into the DTLB one cycle behind every ITLB install, and
+! P4_TLBINST[15:0] counts actual slot writes, shadow ones included. With N_MIX
+! over-subscribed stub pages the third traversal therefore produces on the
+! order of N_MIX DTLB installs FROM SHADOW FILLS ALONE, so
+! "DTLB installs >= N_MIX" is satisfiable with not one D-side demand install in
+! the run. It is a live-ness check on the D-side install path, no more.
+! The D-side evidence in this leg is 0x55 (the exact twenty-term relocated sum)
+! and 0x59 (the data pointer advanced exactly N_MIX times); those two are what
+! make the interleave mean anything, and a reader weighing this guard should
+! weigh them and discount 0x57 accordingly.
+!
 ! RESULT CODES
 ! ============
 !   0x51  leg S: chain pointer wrong after a traversal -- the chain did not run
@@ -131,7 +144,8 @@
 !   0x55  leg M: the sum of the loaded words is wrong -- a D-side touch in the
 !         interleaved chain mis-translated, or ran the wrong number of times
 !   0x56  leg M: fewer than N_MIX ITLB installs in the last traversal
-!   0x57  leg M: fewer than N_MIX DTLB installs in the last traversal
+!   0x57  leg M: fewer than N_MIX DTLB installs in the last traversal. WEAK --
+!         the I->D shadow fill alone can satisfy it; see the note above.
 !   0x58  leg M: I-side chain pointer wrong
 !   0x59  leg M: D-side data pointer wrong
 !   0x2F  SETUP: a TSB set was full in BOTH ways while seeding -- a harness
@@ -441,6 +455,12 @@ l_b_fin:        .long _stubs_b + ALIAS_DELTA + (N_LARGE_I + 1) * PAGE_SZ
 ! right frame AND ran exactly once, in order. A dropped or doubled load moves
 ! it. The expected value is computed here in a loop rather than folded into a
 ! literal, because `N * symbol` is not a relocatable expression.
+!
+! It is the evidence BECAUSE the DTLB install count is not. The I->D shadow
+! fill writes a DTLB slot behind every ITLB install, and P4_TLBINST[15:0]
+! counts slot writes, so the 0x57 threshold below can be met by shadow fills
+! alone without a single D-side demand install. 0x57 is a live-ness check;
+! 0x55 and 0x59 are the leg.
 ! ===========================================================================
 ENTRY(_leg_M)
         mov.l   m_mmucr, r0             ! leg-boundary flush

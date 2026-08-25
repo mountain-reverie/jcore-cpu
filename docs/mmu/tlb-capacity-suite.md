@@ -9,24 +9,29 @@ table, and how to add a parameterisation without rewriting any of it.
 
 ## 1. What it replaces
 
-Before this suite, the cycle cosim's MMU working sets were small, base-first,
-and — with two exceptions — identity-mapped. Three consequences, all of them
-the kind of gap that makes a green suite mean less than it looks:
+Before this suite, the cosim's MMU working sets were small and base-first, and
+a good many of them were identity-mapped (`sim/tests/README-identity-mapping.md`
+surveys which). Three consequences, all of them the kind of gap that makes a
+green suite mean less than it looks:
 
 * **Nothing exceeded the DTLB.** The shipped DTLB is 16 entries
-  (`core/cpu.vhd`, `u_dtlb`). The largest D-side live set in the suite was
-  `mmudrain.S`'s ten pages. Ten is under sixteen, so no guard forced a capacity
-  eviction at the shipped size. `mmudrain`'s header calls it "the suite's
-  DTLB-capacity canary", and it is honest about what it measures: it reacts to
-  an 8-entry DTLB (leg A's fault count, `Result=0x10`) and to nothing else.
+  (`core/cpu.vhd`, `u_dtlb`). `mmudrain.S`'s ten D-side pages are the largest
+  live set this work is aware of — its own header claims it is the largest in
+  `mmu_sim.sh`/`linux_sim.sh`, and that claim was NOT re-verified here across
+  all 100 `mmu*.S` files. What *was* checked is the part that matters: ten is
+  under sixteen, so that guard does not force a capacity eviction at the
+  shipped size. It reacts to an 8-entry DTLB, via leg A's fault count
+  (`Result=0x10`), and its header says so.
 * **Nothing asserted anything about the ITLB.** `mmudrain`'s leg D does have an
   11-page I-side live set against an 8-entry ITLB, and its header records that
   the resulting capacity misses are absorbed as stalls — but no assertion in
   the file is about the ITLB at all. Its checks are D-side base-register
-  arithmetic.
-* **First touches were base-first.** A mapping was always entered through its
-  own first `PAGE_SIZE`, which is exactly the case where the TSB's 4 KB tag
-  granularity and the entry's `page_mask` cannot disagree.
+  arithmetic and fault counts.
+* **First touches were base-first.** `mmupmrawvpn.S` is the exception, and it
+  is one mapping and one unaligned touch with nothing resident competing for
+  the entry. Otherwise a mapping was entered through its own first `PAGE_SIZE`,
+  which is exactly the case where the TSB's 4 KB tag granularity and the
+  entry's `page_mask` cannot disagree.
 
 An infinite-capacity TLB model, or a replacement policy that never evicted,
 would have passed the entire suite.

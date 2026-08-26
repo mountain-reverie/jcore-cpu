@@ -1793,138 +1793,161 @@ end generate;
                 -- these, never seg_v/sr.md again.
                 p4_refuse_v := seg_v = SEG_P4 and this.sr.md = '0';
                 p4_serve_v  := seg_v = SEG_P4 and this.sr.md = '1';
-                -- PMU BLOCK, 0xFF001xxx (docs/soc/p4-mmio-map.md 3, "PMU
-                -- (Performance Monitoring Unit)", the 4 KB per-CPU page
-                -- already allocated at 0xFF001000). NOT squeezed into free
-                -- offsets of the MMU page at 0xFF000xxx: 0x34 is reserved for
-                -- the proposed PTEU and 0x3C/0x40 are QACR0/QACR1, so that
-                -- page has less room than a glance at the decode suggests.
-                -- The PMU has a page of its own; there was no need to contend
-                -- for those bytes.
+                -- P4 BLOCK DECODE, PAGE FIRST.
                 --
-                -- TESTED FIRST, and on a WHOLE-PAGE match, because every arm
-                -- below matches on ma_ad(7 downto 0) ALONE. Without this arm
-                -- leading, 0xFF001010 would decode as MMUCR and the PMU would
-                -- be unreachable at any offset that collides with an MMU
-                -- register. Ordering it first also means NO address outside
-                -- 0xFF001xxx changes behaviour: the residual aliasing of the
-                -- MMU page across the rest of the 16 MB P4 window is
-                -- pre-existing and deliberately left alone here.
+                -- `seg_decode` calls the whole of 0xFF------ P4, and this
+                -- core now puts more than one register block in it. The
+                -- outer selector below is the 4 KB PAGE
+                -- (docs/soc/p4-mmio-map.md 3 allocates P4 per-CPU blocks on
+                -- 4 KB boundaries); each arm then decodes offsets WITHIN its
+                -- own page and nowhere else.
                 --
-                -- THE COMPARES BELOW ARE 12-BIT (ma_ad(11 downto 0)), NOT
-                -- 8-BIT LIKE EVERY OTHER ARM IN THIS CHAIN. Do not "tidy"
-                -- them back to ma_ad(7 downto 0) for symmetry -- that is a
-                -- silent double regression:
+                -- ADDING A THIRD BLOCK: add a `when x"00N" =>` arm here. Do
+                -- NOT append to the MMU chain in the `others` arm -- those
+                -- tests match on ma_ad(7 downto 0) ALONE, so an offset added
+                -- there answers at that offset in EVERY page, and a new
+                -- block's own page would be shadowed at every offset that
+                -- collides with an MMU register. It would fail silently, too:
+                -- an undecoded P4 offset raises nothing and reads as zero
+                -- (p4-mmio-map.md, "Undecoded P4 offsets fail SILENTLY"), so
+                -- the new block would simply appear to be permanently
+                -- disabled. This structure exists so that hazard cannot be
+                -- reached by appending in the obvious place.
                 --
-                --   * It re-opens 16 writable ALIASES of every PMU register
-                --     across the page (0xFF001100 would be PMCR again,
-                --     0xFF001120 PMCYC, ...), which would make the "0x040
-                --     onwards is reserved" line in the map a lie and put a
-                --     writable cycle counter at an address nothing documents.
-                --     Guard pmucnt check 0x03 fails if it comes back.
-                --   * It makes these three lines match the P4_DECODE_RE in
-                --     jcore-workspace scripts/check-doc-facts.py
-                --     (`p4-offsets-match-rtl`, Wave-1 task B0c), whose regex
-                --     is `ma_ad(7 downto 0) = x"NN" then p4_sel_v := P4_NAME`
-                --     and which reads that NN as a P4 offset. It would then
-                --     report PMCR at offset 0x000, PMOVF at 0x004 and PMIDR
-                --     at 0x008 -- addresses that belong to PTEH, PTEL and
-                --     TTB. Measured: the check parses 18 registers at
-                --     a9ffac1 and 21 with the 8-bit form, three of them
-                --     "absent from the map"; and they CANNOT be documented
-                --     away, because writing PMCR at 0x000 into the map's
-                --     table collides with PTEH there and trips that check's
-                --     duplicate-offset arm instead. The 12-bit form states
-                --     the truth (these are page-relative offsets in a
-                --     different page) and the regex correctly does not match
-                --     it.
-                if ma_ad(23 downto 12) = x"001" then
-                  if    ma_ad(11 downto 0) = x"000" then p4_sel_v := P4_PMCR;
-                  elsif ma_ad(11 downto 0) = x"004" then p4_sel_v := P4_PMOVF;
-                  elsif ma_ad(11 downto 0) = x"008" then p4_sel_v := P4_PMIDR;
-                  -- The eight counters occupy 0x020..0x03C as one contiguous,
-                  -- naturally indexed block: bits [4:2] ARE the counter
-                  -- number and also the PMOVF bit number, so software has one
-                  -- numbering to get wrong instead of three. 0x00C..0x01C is
-                  -- left free on purpose -- that is where PMSEL0..3 go if this
-                  -- block ever grows programmable event select. Bits [11:5]
-                  -- are fully compared, so 0x020..0x03C is the ONLY window
-                  -- that answers.
-                  -- The window and the index slice are DERIVED from
-                  -- perf_pkg's pmu_cnt_tag / pmu_cnt_idx_bits rather than
-                  -- spelled out here, so this decode and the counter count
-                  -- cannot drift apart: shrinking pmu_num_cnt without
-                  -- narrowing the index, or widening the index without
-                  -- restating the tag, is an elaboration error rather than a
-                  -- window that decodes addresses onto counters that do not
-                  -- exist. With pmu_cnt_idx_bits = 3 this reads exactly
-                  -- ma_ad(11 downto 5) = "0000001" and ma_ad(4 downto 2).
-                  elsif ma_ad(11 downto 2 + PMU_CNT_IDX_BITS) = PMU_CNT_TAG
-                        and ma_ad(1 downto 0) = "00" then
-                    p4_sel_v  := P4_PMCNT;
-                    pmu_idx_v := to_integer(unsigned(
-                                   ma_ad(1 + PMU_CNT_IDX_BITS downto 2)));
+                -- The MMU page is the `others` arm rather than `when x"000"`
+                -- ON PURPOSE, and it is not tidiness: it keeps the
+                -- pre-existing behaviour that the MMU registers answer across
+                -- the rest of the P4 window byte-for-byte. That aliasing is
+                -- old, undocumented and out of scope to change here; making
+                -- it `when x"000"` would silently retire it.
+                case ma_ad(23 downto 12) is
+
+                  when x"001" =>
+                  -- PMU BLOCK, 0xFF001xxx (docs/soc/p4-mmio-map.md 3, "PMU
+                  -- (Performance Monitoring Unit)", the 4 KB per-CPU page
+                  -- already allocated at 0xFF001000). NOT squeezed into free
+                  -- offsets of the MMU page at 0xFF000xxx: 0x34 is reserved for
+                  -- the proposed PTEU and 0x3C/0x40 are QACR0/QACR1, so that
+                  -- page has less room than a glance at the decode suggests.
+                  -- The PMU has a page of its own; there was no need to contend
+                  -- for those bytes.
+                  --
+                  -- THE COMPARES BELOW ARE 12-BIT (ma_ad(11 downto 0)), NOT
+                  -- 8-BIT LIKE EVERY OTHER ARM IN THIS CHAIN. Do not "tidy"
+                  -- them back to ma_ad(7 downto 0) for symmetry -- that is a
+                  -- silent double regression:
+                  --
+                  --   * It re-opens 16 writable ALIASES of every PMU register
+                  --     across the page (0xFF001100 would be PMCR again,
+                  --     0xFF001120 PMCYC, ...), which would make the "0x040
+                  --     onwards is reserved" line in the map a lie and put a
+                  --     writable cycle counter at an address nothing documents.
+                  --     Guard pmucnt check 0x03 fails if it comes back.
+                  --   * It makes these three lines match the P4_DECODE_RE in
+                  --     jcore-workspace scripts/check-doc-facts.py
+                  --     (`p4-offsets-match-rtl`, Wave-1 task B0c), whose regex
+                  --     is `ma_ad(7 downto 0) = x"NN" then p4_sel_v := P4_NAME`
+                  --     and which reads that NN as a P4 offset. It would then
+                  --     report PMCR at offset 0x000, PMOVF at 0x004 and PMIDR
+                  --     at 0x008 -- addresses that belong to PTEH, PTEL and
+                  --     TTB. Measured: the check parses 18 registers at
+                  --     a9ffac1 and 21 with the 8-bit form, three of them
+                  --     "absent from the map"; and they CANNOT be documented
+                  --     away, because writing PMCR at 0x000 into the map's
+                  --     table collides with PTEH there and trips that check's
+                  --     duplicate-offset arm instead. The 12-bit form states
+                  --     the truth (these are page-relative offsets in a
+                  --     different page) and the regex correctly does not match
+                  --     it.
+                    if    ma_ad(11 downto 0) = x"000" then p4_sel_v := P4_PMCR;
+                    elsif ma_ad(11 downto 0) = x"004" then p4_sel_v := P4_PMOVF;
+                    elsif ma_ad(11 downto 0) = x"008" then p4_sel_v := P4_PMIDR;
+                    -- The eight counters occupy 0x020..0x03C as one contiguous,
+                    -- naturally indexed block: bits [4:2] ARE the counter
+                    -- number and also the PMOVF bit number, so software has one
+                    -- numbering to get wrong instead of three. 0x00C..0x01C is
+                    -- left free on purpose -- that is where PMSEL0..3 go if this
+                    -- block ever grows programmable event select. All 12
+                    -- offset bits are compared, so 0x020..0x03C is the ONLY
+                    -- window that answers -- guard pmucnt check 0x04.
+                    -- The window and the index slice are DERIVED from
+                    -- perf_pkg's pmu_cnt_tag / pmu_cnt_idx_bits rather than
+                    -- spelled out here, so the literal lives in ONE file and
+                    -- the two slices cannot be edited apart. With
+                    -- pmu_cnt_idx_bits = 3 this reads exactly
+                    -- ma_ad(11 downto 5) = "0000001" and ma_ad(4 downto 2).
+                    -- The agreement with pmu_num_cnt is hand-maintained, NOT
+                    -- compiler-checked -- perf_pkg's comment records what was
+                    -- measured, and guard pmucnt is the backstop.
+                    elsif ma_ad(11 downto 2 + PMU_CNT_IDX_BITS) = PMU_CNT_TAG
+                          and ma_ad(1 downto 0) = "00" then
+                      p4_sel_v  := P4_PMCNT;
+                      pmu_idx_v := to_integer(unsigned(
+                                     ma_ad(1 + PMU_CNT_IDX_BITS downto 2)));
+                    end if;
+
+                  when others =>
+                  -- PTEH/PTEL/ASIDR read-only aliases (Phase 3): stock SH-4
+                  -- offsets for PTEH/PTEL, J-core-chosen 0x38 for ASIDR
+                  -- (0x34 stays reserved for the proposed PTEU). These are now
+                  -- the ONLY way to read the three registers -- `STC PTEH,Rn`,
+                  -- `STC PTEL,Rn` and `STC ASIDR,Rn` were retired and decode to
+                  -- General Illegal. Writes are not decoded here: LDC remains
+                  -- the only write path (design D7).
+                  if    ma_ad(7 downto 0) = x"00" then p4_sel_v := P4_PTEH;
+                  elsif ma_ad(7 downto 0) = x"04" then p4_sel_v := P4_PTEL;
+                  elsif ma_ad(7 downto 0) = x"38" then p4_sel_v := P4_ASIDR;
+                  elsif ma_ad(7 downto 0) = x"08" then p4_sel_v := P4_TTB;
+                  elsif ma_ad(7 downto 0) = x"0C" then p4_sel_v := P4_TEA;
+                  elsif ma_ad(7 downto 0) = x"10" then p4_sel_v := P4_MMUCR;
+                  elsif ma_ad(7 downto 0) = x"14" then p4_sel_v := P4_TSBBR;
+                  elsif ma_ad(7 downto 0) = x"18" then p4_sel_v := P4_TSBCFG;
+                  elsif ma_ad(7 downto 0) = x"1C" then p4_sel_v := P4_TSBPTR;
+                  -- SH-4 event block at its architectural addresses. These are
+                  -- also reachable via STC TRA/EXPEVT/INTEVT,Rn; the MMIO aliases
+                  -- exist so generic (non-J-core) SH-4 kernel code that pokes
+                  -- 0xFF0000{20,24,28} keeps working. TRA is read/write on SH-4
+                  -- (software writes it to fake a TRAPA code); EXPEVT/INTEVT are
+                  -- read-only here -- J4 latches both from the exception itself.
+                  elsif ma_ad(7 downto 0) = x"20" then p4_sel_v := P4_TRA;
+                  elsif ma_ad(7 downto 0) = x"24" then p4_sel_v := P4_EXPEVT;
+                  elsif ma_ad(7 downto 0) = x"28" then p4_sel_v := P4_INTEVT;
+                  -- MMUFSR is J4-only and deliberately NOT at 0x28: that address
+                  -- is SH-4's INTEVT (see above), and the two collided until this
+                  -- was moved to 0x2C -- which SH-4 and SH-4A both leave free.
+                  elsif ma_ad(7 downto 0) = x"2C" then p4_sel_v := P4_MMUFSR;
+                  -- TSBSLOT: write a VA, read the same address back to get
+                  -- tsb_ptr(VA). Read/write like TSBBR/TSBCFG above; the read
+                  -- evaluates tsb_ptr() on the latched VA so the TSB index
+                  -- function has exactly one implementation. Linux's
+                  -- jcore_tsb_slot_addr() uses this instead of mirroring the
+                  -- hash in C.
+                  elsif ma_ad(7 downto 0) = x"48" then p4_sel_v := P4_TSBSLOT;
+                  -- TSB victim selector (Phase-2 Task 4 Part B).
+                  -- 0x4C TSBVSEED: WRITE-ONLY seed for the victim LFSR. It has
+                  --      no read case below, so a read returns the `others`
+                  --      hard zero -- deliberately, not by omission: if software
+                  --      could read the seed back so could an attacker, and the
+                  --      whole point of taking the seed from the OS is that the
+                  --      victim sequence must not be reconstructible from
+                  --      anything public (this core's sources included).
+                  -- 0x50 TSBVICT: READ-ONLY 1-bit way nomination. The read
+                  --      advances the LFSR, so each read consumes one bit and
+                  --      no two reads see the same nomination state. Only the
+                  --      nomination is exposed; the state itself never is.
+                  elsif ma_ad(7 downto 0) = x"4C" then p4_sel_v := P4_TSBVSEED;
+                  elsif ma_ad(7 downto 0) = x"50" then p4_sel_v := P4_TSBVICT;
+                  -- Walker counters' P4 home: 0x54 TSBCNT, read-only,
+                  -- [31:16]=cnt_walks [15:0]=cnt_hits. This is the ONLY way to
+                  -- read the counters; the earlier P2 debug window at
+                  -- 0xABCD0F00 has been retired.
+                  elsif ma_ad(7 downto 0) = x"54" then p4_sel_v := P4_TSBCNT;
+                  -- 0x58 TLBINST: read-only, [31:16]=ITLB slot writes
+                  -- [15:0]=DTLB slot writes. Anti-vacuity instrumentation for
+                  -- the I->D shadow fill; not architectural.
+                  elsif ma_ad(7 downto 0) = x"58" then p4_sel_v := P4_TLBINST;
                   end if;
-                -- PTEH/PTEL/ASIDR read-only aliases (Phase 3): stock SH-4
-                -- offsets for PTEH/PTEL, J-core-chosen 0x38 for ASIDR
-                -- (0x34 stays reserved for the proposed PTEU). These are now
-                -- the ONLY way to read the three registers -- `STC PTEH,Rn`,
-                -- `STC PTEL,Rn` and `STC ASIDR,Rn` were retired and decode to
-                -- General Illegal. Writes are not decoded here: LDC remains
-                -- the only write path (design D7).
-                elsif ma_ad(7 downto 0) = x"00" then p4_sel_v := P4_PTEH;
-                elsif ma_ad(7 downto 0) = x"04" then p4_sel_v := P4_PTEL;
-                elsif ma_ad(7 downto 0) = x"38" then p4_sel_v := P4_ASIDR;
-                elsif ma_ad(7 downto 0) = x"08" then p4_sel_v := P4_TTB;
-                elsif ma_ad(7 downto 0) = x"0C" then p4_sel_v := P4_TEA;
-                elsif ma_ad(7 downto 0) = x"10" then p4_sel_v := P4_MMUCR;
-                elsif ma_ad(7 downto 0) = x"14" then p4_sel_v := P4_TSBBR;
-                elsif ma_ad(7 downto 0) = x"18" then p4_sel_v := P4_TSBCFG;
-                elsif ma_ad(7 downto 0) = x"1C" then p4_sel_v := P4_TSBPTR;
-                -- SH-4 event block at its architectural addresses. These are
-                -- also reachable via STC TRA/EXPEVT/INTEVT,Rn; the MMIO aliases
-                -- exist so generic (non-J-core) SH-4 kernel code that pokes
-                -- 0xFF0000{20,24,28} keeps working. TRA is read/write on SH-4
-                -- (software writes it to fake a TRAPA code); EXPEVT/INTEVT are
-                -- read-only here -- J4 latches both from the exception itself.
-                elsif ma_ad(7 downto 0) = x"20" then p4_sel_v := P4_TRA;
-                elsif ma_ad(7 downto 0) = x"24" then p4_sel_v := P4_EXPEVT;
-                elsif ma_ad(7 downto 0) = x"28" then p4_sel_v := P4_INTEVT;
-                -- MMUFSR is J4-only and deliberately NOT at 0x28: that address
-                -- is SH-4's INTEVT (see above), and the two collided until this
-                -- was moved to 0x2C -- which SH-4 and SH-4A both leave free.
-                elsif ma_ad(7 downto 0) = x"2C" then p4_sel_v := P4_MMUFSR;
-                -- TSBSLOT: write a VA, read the same address back to get
-                -- tsb_ptr(VA). Read/write like TSBBR/TSBCFG above; the read
-                -- evaluates tsb_ptr() on the latched VA so the TSB index
-                -- function has exactly one implementation. Linux's
-                -- jcore_tsb_slot_addr() uses this instead of mirroring the
-                -- hash in C.
-                elsif ma_ad(7 downto 0) = x"48" then p4_sel_v := P4_TSBSLOT;
-                -- TSB victim selector (Phase-2 Task 4 Part B).
-                -- 0x4C TSBVSEED: WRITE-ONLY seed for the victim LFSR. It has
-                --      no read case below, so a read returns the `others`
-                --      hard zero -- deliberately, not by omission: if software
-                --      could read the seed back so could an attacker, and the
-                --      whole point of taking the seed from the OS is that the
-                --      victim sequence must not be reconstructible from
-                --      anything public (this core's sources included).
-                -- 0x50 TSBVICT: READ-ONLY 1-bit way nomination. The read
-                --      advances the LFSR, so each read consumes one bit and
-                --      no two reads see the same nomination state. Only the
-                --      nomination is exposed; the state itself never is.
-                elsif ma_ad(7 downto 0) = x"4C" then p4_sel_v := P4_TSBVSEED;
-                elsif ma_ad(7 downto 0) = x"50" then p4_sel_v := P4_TSBVICT;
-                -- Walker counters' P4 home: 0x54 TSBCNT, read-only,
-                -- [31:16]=cnt_walks [15:0]=cnt_hits. This is the ONLY way to
-                -- read the counters; the earlier P2 debug window at
-                -- 0xABCD0F00 has been retired.
-                elsif ma_ad(7 downto 0) = x"54" then p4_sel_v := P4_TSBCNT;
-                -- 0x58 TLBINST: read-only, [31:16]=ITLB slot writes
-                -- [15:0]=DTLB slot writes. Anti-vacuity instrumentation for
-                -- the I->D shadow fill; not architectural.
-                elsif ma_ad(7 downto 0) = x"58" then p4_sel_v := P4_TLBINST;
-                end if;
+                end case;
               end if;
               -- PRIVILEGE GATE. P4 is the SH-4 privileged control-register
               -- segment: "Accesses are untranslated (no MMU lookup), uncached,

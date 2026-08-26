@@ -109,7 +109,13 @@ package cpu2j0_components_pack is
     -- is observable by software. See tsb_lfsr_next() in datapath_pkg.
     vlfsr : std_logic_vector(15 downto 0);
     -- MMUFSR (M-fsr, hardware-spec §2.11): fault-status snapshot latched on
-    -- every TLB exception, read-only MMIO 0xFF000028. [12]=VALID [11:8]=KIND
+    -- every TLB exception, read-only MMIO 0xFF00002C. (This line said
+    -- 0xFF000028 until 2026-08-25. 0x28 is INTEVT's architectural SH-4
+    -- address, and it is precisely what MMUFSR was moved OFF because of --
+    -- see the `x"2C" then p4_sel_v := P4_MMUFSR` arm in datapath.vhm and the
+    -- comment directly above it, which explains the move. The decode is the
+    -- authority; an address restated in a comment is not.)
+    -- [12]=VALID [11:8]=KIND
     -- [7:5]=rsvd(0) [4]=USER [3]=PROT [2]=ITLB [1]=INITIAL(0) [0]=WRITE.
     -- Distinguishes DPROT_R/DPROT_W, which otherwise share EXPEVT 0x0C0.
     fsr : std_logic_vector(31 downto 0);

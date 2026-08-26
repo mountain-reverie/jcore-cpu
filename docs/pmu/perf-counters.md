@@ -384,6 +384,9 @@ on what else was in the tree.
 | j2 | `a3a57d5`               | 17469 | 1700 |
 
 **J4: +2431 generic cells (+6.6 %), +264 flops (+5.8 %).**
+Re-measured on the branch tip after the comment-only corrections in the final
+commits: **identical**, 39258 cells / 4784 flops — which is what a comment-only
+change must be, and is worth having checked rather than assumed.
 **J1/J2: +0 flops, −4 generic cells** — i.e. nothing, −4 being noise at this
 scale. That is the tie-off in `g_no_mmu_counters` doing its job; a build without
 the MMU pays nothing for the PMU.

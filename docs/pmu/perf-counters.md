@@ -62,6 +62,26 @@ and word-aligned. Privileged (`SR.MD = 1`) only — see §7.
 | `0x038` | PMWLK | RW | counter 6 — TSB walks armed |
 | `0x03C` | PMWHT | RW | counter 7 — TSB walks that found a usable PTE |
 
+### 2.1 Reset values, and exactly how PMCR behaves on write
+
+| Register | Value out of reset |
+|----------|--------------------|
+| PMCR  | `0x00000001` — the **whole word**, not just bit 0. Guard `pmucnt` check `0x02` asserts this exact value. |
+| PMOVF | `0x00000000` |
+| PMCNT0–7 | `0x00000000`, and counting immediately (PMCR.EN resets set) |
+| PMIDR | `0x4A5020FF`, constant — `0x00000000` on a build without the PMU |
+
+**PMCR bits `[31:1]` are plain read/write storage, not RAZ/WI.** They are
+implemented as flops, they read back exactly what was written, and nothing in
+hardware consumes them. This is stated because the alternative matters to a
+driver: with RAZ/WI a plain `writel(1, PMCR)` is always correct, whereas here it
+**clobbers** whatever a previous writer left in the upper bits. Today nothing
+uses them, so `writel(1, PMCR)` is correct *and* is what the guards do — but if
+a future revision defines a bit up there (freeze-on-overflow and
+interrupt-enable are the obvious candidates, and `j32ooo-spec.md` §12.1 lists
+both), every existing plain write becomes a bug. **Use read-modify-write on
+PMCR** and the driver survives that revision unchanged.
+
 The counters occupy `0x20`–`0x3C` as one contiguous, naturally indexed block:
 **address bits `[4:2]` are the counter number and also the PMOVF bit number**, so
 software has one numbering to get wrong instead of three.
@@ -128,16 +148,54 @@ sample():
             # 2^32 events, that is a sampling-rate bug, not a hardware fault.
 ```
 
+### 3.1a Freezing: what `PMCR.EN` costs, and how to program a period
+
 To take a **coherent** snapshot across all eight counters — one in which no
 counter moves between the eight reads — clear `PMCR.EN`, read, and set it again.
 That is what `EN` is for. It is not an arming bit: it **resets set**, so the
 counters free-run out of reset exactly as the walker counters always have (41 of
 the 157 guard sources in `sim/tests` reference `0xFF000054`; counted with
 `grep -l 0xFF000054 sim/tests/*.S | wc -l`), and because a counter you must
-remember to
-switch on is a counter that reads zero when you forget — the same
+remember to switch on is a counter that reads zero when you forget — the same
 "reads zero, never faults, looks like the feature is disabled" failure mode that
 `p4-mmio-map.md` records as a normative hazard for undecoded P4 offsets.
+
+**`EN = 0` freezes PMCYC too.** There is no exemption: `perf.vhd` gates every
+counter on `PMCR.EN`, cycles included, and guard `pmuovf` check `0x10` asserts
+exactly that by equality. Two consequences a driver author must plan for:
+
+* **Ratios stay correct.** The frozen window is excluded from numerator and
+  denominator alike, so IPC, miss rate and TSB hit rate are unaffected by
+  snapshotting.
+* **PMCYC stops tracking wall clock.** Across an eleven-register read burst it
+  systematically undercounts, and the deficit accumulates over every sample. So
+  **do not use PMCYC as an elapsed-time source if you freeze.** If you need
+  elapsed cycles, read PMCYC *first and unfrozen* — a single 32-bit read cannot
+  tear — and freeze only for the multi-counter set that actually needs
+  coherence.
+
+**Programming a sampling period — freeze first.** A counter write and a hardware
+event in the same cycle resolve **write wins, and that event is dropped**
+(`perf.vhd`: the write arm precedes the increment arm on the same counter).
+That is deliberate — the alternative, adding the event on top of the written
+value, means software can never know what it just installed — but it means a
+naive `writel(period, PMCNT[n])` on a running counter can lose one count. The
+loss is bounded at one per write and lands on a value being discarded anyway,
+so it is usually irrelevant; it is *not* irrelevant if the driver is
+reconstructing an exact total across the write. The recipe that has no loss at
+all:
+
+```
+    clear PMCR.EN                  # freeze
+    write PMCNT[n] = period_start  # no event can be in flight to lose
+    write PMOVF    = 1 << n        # W1C: clear this counter's stale wrap flag
+    set   PMCR.EN                  # resume
+```
+
+Overflow is captured *at the wrap*, and the write-1-to-clear is folded in
+**after** the set within one cycle, so a wrap landing in the same cycle as the
+clearing write survives it. That ordering is what makes the sequence above safe
+to run at any time rather than only while frozen.
 
 ### 3.2 The sampling boundary — a measured property, not a bug
 
@@ -224,6 +282,17 @@ is therefore tested **first** and on a whole-page match
 `0xFF001xxx` changes behaviour**: the residual aliasing of the MMU page across
 the rest of the 16 MB P4 window is pre-existing and deliberately left alone here
 rather than fixed as a side effect of an unrelated change.
+
+Addresses *inside* the page did change, and a hypervisor or emulator author
+needs the sentence spelled out rather than inferred from "outside". Before this
+block existed, the MMU page's `[7:0]`-only decode answered across the whole P4
+window, so **`0xFF001010` was a writable alias of `MMUCR`**, `0xFF001014` of
+`TSBBR`, and so on for every MMU register. Those aliases are gone: `0xFF001xxx`
+is now claimed by the PMU arm, and any offset in it that the PMU does not decode
+reads as a hard zero and discards writes. Nothing is known to have used them —
+they were never documented and no guard or kernel path references them — but a
+model built by observing the old RTL will differ here, and "the MMU registers
+answer at `0xFF0010xx`" was a true statement about `a9ffac1`.
 
 *Width.* The offset compares inside the page are **12-bit**
 (`ma_ad(11 downto 0)`), not 8-bit like every other arm in the chain. This is not

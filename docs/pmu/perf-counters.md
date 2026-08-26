@@ -36,8 +36,8 @@ reconstructible by modular arithmetic — `total += (cur - prev) mod 2^W` — bu
 target of 400 MHz, 16 bits wrap every **164 µs**. No operating system samples a
 counter that often, so between any two samples an unknown number of wraps has
 occurred and the modular difference is not a count of anything. That is the
-precise reason the existing pair could witness *"a walk happened"* (which is all
-nine existing guards ever asked of it) and could not measure a rate.
+precise reason the existing pair could witness *"a walk happened"* — which is all
+any existing guard ever asked of it — and could not measure a rate.
 
 ---
 
@@ -124,8 +124,10 @@ sample():
 To take a **coherent** snapshot across all eight counters — one in which no
 counter moves between the eight reads — clear `PMCR.EN`, read, and set it again.
 That is what `EN` is for. It is not an arming bit: it **resets set**, so the
-counters free-run out of reset exactly as the walker counters always have (nine
-existing guards depend on that), and because a counter you must remember to
+counters free-run out of reset exactly as the walker counters always have (41 of
+the 157 guard sources in `sim/tests` reference `0xFF000054`; counted with
+`grep -l 0xFF000054 sim/tests/*.S | wc -l`), and because a counter you must
+remember to
 switch on is a counter that reads zero when you forget — the same
 "reads zero, never faults, looks like the feature is disabled" failure mode that
 `p4-mmio-map.md` records as a normative hazard for undecoded P4 offsets.
@@ -327,9 +329,12 @@ decision, not an oversight. Three facts drove it:
    (and the `dcache` mirror), matching `component` declarations in
    `cache/cache_pkg.vhd`, and updates to every instantiation — including board
    tops in `jcore-soc`, which cannot be built or tested from here.
-3. **Decisively: the default testbench has no cache.** 140 of the ~155 guards in
-   `sim/tests` run on `cpu_tb`, which wires the CPU straight to the bus fabric;
-   only 15 run on `cpu_cache_tb`. A miss counter would therefore read a constant
+3. **Decisively: the default testbench has no cache.** `sim/tests` holds 157
+   `.S` guard sources and `sim/mmu_sim.sh` names `cpu_cache_tb` on exactly 15
+   `run_guard` lines (counted, not estimated:
+   `ls sim/tests/*.S | wc -l` and `grep -c 'run_guard.*cpu_cache_tb'`). Every
+   other guard runs on `cpu_tb`, which wires the CPU straight to the bus fabric
+   with no cache RTL at all. A miss counter would therefore read a constant
    zero in the configuration almost every guard uses — a P4 register that reads
    zero and never faults, which is precisely the hazard `p4-mmio-map.md` calls
    normative, and it would ship with no non-vacuous guard covering it.
@@ -438,6 +443,23 @@ unchanged and is now served from `PMWLK[15:0] & PMWHT[15:0]`.
 
 The §3.2 note on TSBCNT should also record that the walker no longer holds its
 own counters.
+
+---
+
+## 9a. A correction to this branch's own commit messages
+
+Commit `e208745`'s message says "the nine guards that assert exact TSBCNT
+deltas are the regression net for the move". **The number nine is wrong**, and
+it is wrong because it was copied out of `p4-mmio-map.md` §3.2 ("nine
+anti-vacuity guards assert on it") rather than measured. Counted here:
+
+    $ grep -l 0xFF000054 sim/tests/*.S | wc -l
+    41
+
+41 of the 157 guard sources in `sim/tests` read `0xFF000054`. The conclusion the
+sentence drew is unaffected — the regression net is larger than claimed, not
+smaller, and the whole suite passes — but the figure in that commit message
+should not be quoted. `p4-mmio-map.md` §3.2 should be corrected too.
 
 ---
 

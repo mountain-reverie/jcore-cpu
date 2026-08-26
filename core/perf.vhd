@@ -53,9 +53,9 @@ architecture rtl of perf is
   -- free-run out of reset.
   --
   -- Not a default chosen for convenience. (a) Counters 6/7 back the P4_TSBCNT
-  -- alias, which has always been free-running from reset and which nine guards
-  -- assert exact deltas on; resetting EN to '0' would freeze it and change
-  -- architected behaviour. (b) A counter you have to remember to switch on is a
+  -- alias, which has always been free-running from reset and which 41 of the
+  -- 157 guard sources in sim/tests read; resetting EN to '0' would freeze it
+  -- and change architected behaviour. (b) A counter you have to remember to switch on is a
   -- counter that reads zero when you forget, and a P4 register that reads zero
   -- and never faults is exactly the failure mode docs/soc/p4-mmio-map.md flags
   -- as a normative hazard. EN's purpose is therefore to FREEZE, not to arm: a

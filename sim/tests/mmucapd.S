@@ -239,9 +239,30 @@
 ! "non-constant expression in .if statement". That distinction is exactly what
 ! bit sim/tests/Makefile's single-page check, which had to move OUT of the
 ! file and onto the linked image for the same reason. These stay in-file
-! BECAUSE they are pure arithmetic on #defines. Every check below except the
-! last was verified to fire by building a deliberately violating wrapper; the
-! last one carries its own note saying why it could not be.
+! BECAUSE they are pure arithmetic on #defines.
+!
+! WHAT EACH CHECK IS WORTH. Six checks here, six more in mmucapi.S, twelve in
+! all. They are NOT equally strong and the difference was measured, by building
+! a violating wrapper for each and recording EVERY .error it produced -- not
+! just the one being aimed at:
+!
+!   CAP_FIRSTSUB >= CAP_NSUB   ISOLATED   fires alone (CAP_PM=1,FIRSTSUB=4)
+!   N_LARGE > 127              ISOLATED   fires alone (N_LARGE=130)
+!   N_SMALL >= N_LARGE         ISOLATED   fires alone (N_SMALL=30)
+!   N_LARGE * MAP_SPAN > DELTA ISOLATED   fires alone (CAP_PM=3) -- but see
+!                                         the reachability note at the check
+!   N_SMALL > 127              NEVER ALONE. N_SMALL > 127 implies either
+!                                         N_LARGE > 127 or N_SMALL >= N_LARGE,
+!                                         so one of the two above always fires
+!                                         with it. Measured both ways
+!                                         (N_SMALL=200; N_SMALL=130/N_LARGE=140)
+!                                         and it co-fired every time. It is
+!                                         defence in depth, not a diagnostic.
+!   the P5 bound               UNREACHABLE -- its own note explains why.
+!
+! An earlier revision of this comment said "each was verified to fire", then
+! "each except the last". Both were wrong: the honest count is four isolated,
+! one that cannot be isolated even in principle, and one unreachable.
 ! ---------------------------------------------------------------------------
         .if CAP_FIRSTSUB >= CAP_NSUB
         .error "mmucapd: CAP_FIRSTSUB must index a sub-page INSIDE the mapping (0 .. CAP_NSUB-1)"
@@ -257,10 +278,25 @@
         .endif
         ! The alias window must sit ENTIRELY ABOVE the image. The frames are
         ! N_LARGE * MAP_SPAN bytes at _frames, and the window starts at
-        ! _frames + ALIAS_DELTA, so this is the whole condition -- and it is
-        ! what keeps the inert-MMU tripwire alive: an untranslated read only
-        ! returns 0 while the VA lands in the cosim's anonymous zero-filled
-        ! backing rather than back inside the loaded image.
+        ! _frames + ALIAS_DELTA, so this is the whole condition. _frames
+        ! cancels only because the frames are the LAST thing in the image.
+        !
+        ! THE HAZARD IT NAMES IS NOT REACHABLE TODAY, and this check is in the
+        ! same "kept for the future" category as the P5 one below -- earlier
+        ! wording here presented it as live, which was wrong. sim/tests/sh32.x
+        ! caps the image at `ram : l = 0x200000`, 2 MB, against an ALIAS_DELTA
+        ! of 4 MB. So any configuration big enough to overlap the window has
+        ! already failed to LINK: measured, CAP_PM=2 N_LARGE=31 assembles
+        ! clean and dies with "section `.text' will not fit in region `ram'",
+        ! and 30 is the largest that links. The inert-MMU tripwire therefore
+        ! cannot die on anything that builds.
+        !
+        ! Keep it anyway. It is the right condition, it fires a whole stage
+        ! earlier than the linker with a message that names the consequence
+        ! rather than the symptom, and it stays correct if sh32.x's ram region
+        ! ever grows past ALIAS_DELTA -- at which point it becomes the only
+        ! thing standing between a wrapper author and a silently vacuous
+        ! guard.
         .if N_LARGE * MAP_SPAN > ALIAS_DELTA
         .error "mmucapd: the alias window would overlap the image; an untranslated read there stops returning 0 and the inert-MMU tripwire dies"
         .endif
@@ -270,12 +306,13 @@
         .if ALIAS_DELTA + N_LARGE * MAP_SPAN + 0x00100000 > 0x01000000
         .error "mmucapd: the alias window leaves the cosim's 16 MB backed range (P5)"
         .endif
-        ! HONESTY NOTE: at the shipped ALIAS_DELTA of 0x0040_0000 the overlap
-        ! check above always trips first, so this P5 check is UNREACHABLE and
-        ! was NOT demonstrated firing -- unlike the others, each of which was.
-        ! It is kept because it becomes the binding constraint the moment
-        ! anyone raises ALIAS_DELTA, and a check that only matters later is
-        ! still cheaper than the run-time 0x41 it replaces.
+        ! HONESTY NOTE: UNREACHABLE, and NOT demonstrated firing. This one
+        ! needs the window past 0x00B0_0000 while the overlap check above
+        ! needs only 0x0040_0000, so the overlap check always trips first --
+        ! and, per its own note, even THAT is behind sh32.x's 2 MB ram cap.
+        ! Kept because it becomes the binding constraint once ALIAS_DELTA
+        ! goes above 0x0078_0000, and removing it would plant a trap for
+        ! whoever raises it.
 
         ! Stack deliberately NOT the usual 0x7000, which lands inside
         ! _frames and would silently overwrite a sentinel. Nothing here uses
@@ -587,7 +624,7 @@ f_mmucr:        .long 0xFF000010
 ! every VA this guard touches under AT=1 has a TSB row, so the walker must
 ! resolve every miss as a stall.
 ! ===========================================================================
-        mmu_vec_handlers H, 0x42, 0x41
+        mmu_vec_handlers H, PAGE_SZ, 0x42, 0x41
 
         .balign 4
 ENTRY(_code_end)                        ! everything below start is code, and

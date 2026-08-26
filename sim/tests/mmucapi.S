@@ -171,9 +171,23 @@
 #define PAGE_SZ      0x1000
 ! ITLB is 8 entries (core/cpu.vhd, u_itlb). N_SMALL_I + 1 trampoline + the
 ! driver's own code pages must stay under it; N_LARGE_I must exceed it.
+!
+! #ifndef-guarded like mmucapd.S's N_SMALL / N_LARGE. Not because this file is
+! a harness -- it is not, and should not become one -- but because a bare
+! #define makes the range checks below UNTESTABLE by the normal method: a
+! wrapper's `#define N_MIX 200` loses to the file's own #define, so the check
+! sees 20 and nothing fires. That is exactly how an earlier revision of this
+! file came to claim demonstrations it had only produced by editing the file
+! in place.
+#ifndef N_SMALL_I
 #define N_SMALL_I    3
+#endif
+#ifndef N_LARGE_I
 #define N_LARGE_I    12
+#endif
+#ifndef N_MIX
 #define N_MIX        20
+#endif
 #define ALIAS_DELTA  0x00400000
 ! One PTEL flag word serves stub pages and data pages alike: 0xCD is
 ! W|X|C|G|V with U=0. X=1 lets the kernel fetch it, U=0 keeps SMEP happy
@@ -194,6 +208,31 @@
 ! defect. Each counter below is consumed by `mov #imm`, which sign-extends
 ! above 127. Every operand is a preprocessor constant, so `.if` can evaluate
 ! it -- see the longer note in mmucapd.S about why that distinction matters.
+!
+! WHAT EACH CHECK IS WORTH. Six here, six in mmucapd.S, twelve in all. Each was
+! given a violating wrapper and EVERY .error it produced was recorded, not just
+! the one being aimed at:
+!
+!   N_LARGE_I > 127            ISOLATED   fires alone (N_LARGE_I=200)
+!   N_MIX > 127                ISOLATED   fires alone (N_MIX=200)
+!   N_SMALL_I >= N_LARGE_I     ISOLATED   fires alone (N_SMALL_I=20)
+!   N_SMALL_I > 127            NEVER ALONE. N_SMALL_I > 127 implies either
+!                                          N_LARGE_I > 127 or
+!                                          N_SMALL_I >= N_LARGE_I, so one of
+!                                          the two above always fires with it
+!                                          (measured: N_SMALL_I=200 co-fires).
+!                                          Defence in depth, not a diagnostic.
+!   ALIAS_PAGES overlap        UNREACHABLE -- see its own note
+!   the P5 bound               UNREACHABLE -- see its own note
+!
+! So: three isolated, one that cannot be isolated even in principle, two
+! unreachable. An earlier revision of this file claimed the P5 bound was the
+! only undemonstrated one, "unlike the others, each of which was". That was
+! false twice over -- the overlap check is unreachable too, and the earlier
+! "demonstrations" here were produced by EDITING THIS FILE with sed rather
+! than by a wrapper, because these three counters were bare #defines that a
+! wrapper's #define could not override. They are #ifndef-guarded now, and the
+! table above was re-measured with real wrappers.
 ! ---------------------------------------------------------------------------
         .if N_LARGE_I > 127
         .error "mmucapi: N_LARGE_I is loaded with `mov #imm', which sign-extends above 127"
@@ -210,6 +249,21 @@
         ! The alias window must sit ENTIRELY ABOVE the image, or an
         ! untranslated fetch there stops reading 0x0000 and the inert-MMU
         ! tripwire (Result=0x42) dies.
+        !
+        ! UNREACHABLE, for a reason specific to this guard, and stated because
+        ! an earlier revision counted it as demonstrated. ALIAS_PAGES is
+        ! N_SMALL_I + N_LARGE_I + 2*N_MIX + 3, and the four checks above cap
+        ! every term at 127, so ALIAS_PAGES <= 510 -- at most 0x1FE000 bytes,
+        ! against an ALIAS_DELTA of 0x400000. It cannot fire in any
+        ! configuration the other checks admit. It DOES fire at, say,
+        ! N_MIX=900, but only alongside the N_MIX > 127 error that already
+        ! rejects that value (plus three `offset out of range' errors from the
+        ! literal pools the oversized .rept pushes apart), so that is a
+        ! co-firing, not an isolation.
+        !
+        ! mmucapd.S's twin check is reachable in principle -- its window is
+        ! N_LARGE * MAP_SPAN and MAP_SPAN has no 127 cap -- but is blocked one
+        ! stage later by sh32.x's 2 MB `ram' region. See the note there.
         .if ALIAS_PAGES * PAGE_SZ > ALIAS_DELTA
         .error "mmucapi: the alias window would overlap the image; an untranslated fetch there stops reading 0x0000 and the inert-MMU tripwire dies"
         .endif
@@ -219,12 +273,11 @@
         .if ALIAS_DELTA + ALIAS_PAGES * PAGE_SZ + 0x00100000 > 0x01000000
         .error "mmucapi: the alias window leaves the cosim's 16 MB backed range (P5)"
         .endif
-        ! HONESTY NOTE: at the shipped ALIAS_DELTA of 0x0040_0000 the overlap
-        ! check above always trips first, so this P5 check is UNREACHABLE and
-        ! was NOT demonstrated firing -- unlike the others, each of which was.
-        ! It is kept because it becomes the binding constraint the moment
-        ! anyone raises ALIAS_DELTA, and a check that only matters later is
-        ! still cheaper than the run-time 0x41 it replaces.
+        ! HONESTY NOTE: UNREACHABLE, and NOT demonstrated firing -- for the
+        ! same 127-cap arithmetic as the overlap check above, which bounds
+        ! ALIAS_PAGES * PAGE_SZ at 0x1FE000. Kept because it becomes the
+        ! binding constraint once ALIAS_DELTA is raised, and removing it would
+        ! plant a trap for whoever raises it.
 
         ! Stack deliberately NOT the usual 0x7000, which would land inside
         ! the stub pages. Nothing here uses it.
@@ -538,7 +591,7 @@ m_d_fin:        .long _mdata + ALIAS_DELTA + N_MIX * PAGE_SZ
 ! Vector block (mmuwalk_common.inc). 0x42 is the one an inert MMU produces:
 ! an untranslated fetch of the alias window reads 0x0000.
 ! ===========================================================================
-        mmu_vec_handlers H, 0x42, 0x41
+        mmu_vec_handlers H, PAGE_SZ, 0x42, 0x41
 
         .balign 4
 ENTRY(_code_end)                        ! end of the identity-mapped driver

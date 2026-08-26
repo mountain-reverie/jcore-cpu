@@ -149,7 +149,14 @@ _fail:
         mov.l   r1, @\rmmucr            ! AT on -- the code pages re-walk in
         .endm
 
-        ! mmu_vec_handlers <pfx> <gen_code> <tlb_code>
+        ! mmu_vec_handlers <pfx> <pagealign> <gen_code> <tlb_code>
+        ! <pagealign> is a parameter for the same reason mmu_seed_routine's
+        ! <pagesz> is -- this file is #included, so a reference to the caller's
+        ! PAGE_SZ resolves at include time and breaks for a guard that defines
+        ! it afterwards. 4 KB is the architectural page size and nothing here
+        ! wants anything else today; the parameter is for consistency, not for
+        ! an anticipated caller.
+        !
         ! The VBR block for a guard that expects NO exception at all: _vecblk
         ! is PAGE-aligned, so `.space 0x100` lands the general handler exactly
         ! at VBR+0x100 and the `.balign 0x400` lands the TLB handler exactly at
@@ -158,8 +165,8 @@ _fail:
         !
         ! Both run with SR.RB=1. r9 is NOT banked, so the code survives into
         ! _fail; r0/r1 are, so bank 0's copies are untouched.
-        .macro  mmu_vec_handlers pfx, gen_code, tlb_code
-        .balign 0x1000
+        .macro  mmu_vec_handlers pfx, pagealign, gen_code, tlb_code
+        .balign \pagealign
 _vecblk:
         .space  0x100, 0
 _v_gen:                                 ! VBR + 0x100

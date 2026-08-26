@@ -21,7 +21,7 @@
 -- sets it. Both are intended, both are privileged, and both are new.
 --
 -- AREA. Against base a9ffac1 (SYNTH_VARIANT=j4, synth/cpu_synth.sh asic, both
--- arms built from a real commit into a throwaway `git archive` tree): +2431
+-- arms built from a real commit into a throwaway `git archive` tree): +2421
 -- generic cells and +264 flops on j4, and +0 flops / -4 generic cells on j2 --
 -- i.e. nothing, the g_no_mmu_counters tie-off doing its job. The +264 is
 -- EXACTLY 8*32 counters + 32 PMCR + 8 PMOVF - 32 for tlb_walk's removed 16-bit

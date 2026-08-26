@@ -451,15 +451,23 @@ on what else was in the tree.
 
 | variant | tree | generic cells | flops |
 |---------|------|--------------:|------:|
-| j4 | `a9ffac1` (branch base) | 36827 | 4520 |
-| j4 | `a3a57d5` (this branch)  | 39258 | 4784 |
-| j2 | `a9ffac1`               | 17473 | 1700 |
-| j2 | `a3a57d5`               | 17469 | 1700 |
+| j4 | `a9ffac1` (branch base)   | 36827 | 4520 |
+| j4 | `a3a57d5` (8-bit decode)  | 39258 | 4784 |
+| j4 | `30463ca` (12-bit decode) | 39248 | 4784 |
+| j2 | `a9ffac1`                 | 17473 | 1700 |
+| j2 | `a3a57d5`                 | 17469 | 1700 |
+| j2 | `30463ca`                 | 17469 | 1700 |
 
-**J4: +2431 generic cells (+6.6 %), +264 flops (+5.8 %).**
-Re-measured on the branch tip after the comment-only corrections in the final
-commits: **identical**, 39258 cells / 4784 flops — which is what a comment-only
-change must be, and is worth having checked rather than assumed.
+**J4: +2421 generic cells (+6.6 %), +264 flops (+5.8 %) against base.**
+
+Two things are worth reading off the middle rows rather than assumed. The
+comment-only commits between `a3a57d5` and the widening measured **identical**
+(39258 / 4784) — which is what a comment-only change must be, and was checked
+rather than trusted. And widening the PMU compares from 8 bits to 12 (§5) cost
+**−10 generic cells and zero flops**: not a saving worth claiming — it is far
+inside any sensible noise band for a generic-cell count — but firmly evidence
+that closing the alias hole is free. Tightening a compare removes downstream
+don't-cares, which is the direction that makes a small negative plausible.
 **J1/J2: +0 flops, −4 generic cells** — i.e. nothing, −4 being noise at this
 scale. That is the tie-off in `g_no_mmu_counters` doing its job; a build without
 the MMU pays nothing for the PMU.

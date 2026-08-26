@@ -602,40 +602,34 @@ package cpu2j0_components_pack is
     );
   end component shifter;
 
-  -- Kept in step with entity tlb_walk (core/tlb_walk.vhd) BY HAND. Nothing
-  -- currently elaborates through this declaration -- core/cpu.vhd instantiates
-  -- the walker directly (`entity work.tlb_walk`) -- so a mismatch here stays
-  -- silent until the day something does use it, and is then an elaboration
-  -- error a long way from its cause. `giveup_limit` had been added to the
-  -- entity and not here; see docs/mmu/pagemask-walker-contract.md R3.
-  component tlb_walk is
-    generic (
-      tsb_ways       : natural := 1;
-      entry_bytes    : natural := 16;
-      timeout_cycles : natural := 255;
-      giveup_limit   : natural := 4
-    );
-    port (
-      clk          : in    std_logic;
-      rst          : in    std_logic;
-      req          : in    std_logic;
-      req_va       : in    std_logic_vector(31 downto 0);
-      asidr        : in    std_logic_vector(15 downto 0);
-      tsbbr        : in    std_logic_vector(31 downto 0);
-      tsbcfg       : in    std_logic_vector(31 downto 0);
-      bus_a        : out   std_logic_vector(31 downto 0);
-      bus_en       : out   std_logic;
-      bus_d        : in    std_logic_vector(31 downto 0);
-      bus_ack      : in    std_logic;
-      install      : out   std_logic;
-      install_ptel : out   std_logic_vector(31 downto 0);
-      va_r         : out   std_logic_vector(31 downto 0);
-      busy         : out   std_logic;
-      arm          : out   std_logic;
-      cnt_walks    : out   unsigned(15 downto 0);
-      cnt_hits     : out   unsigned(15 downto 0)
-    );
-  end component tlb_walk;
+  -- `component tlb_walk` USED TO BE HERE AND WAS DELETED, NOT REPAIRED.
+  --
+  -- It was a hand-maintained mirror of entity tlb_walk that nothing
+  -- elaborated through -- core/cpu.vhd instantiates the walker directly
+  -- (`entity work.tlb_walk`), and a search of jcore-cpu and jcore-soc finds no
+  -- other instantiation and no configuration binding it. Its own comment
+  -- conceded all of that, and warned that a mismatch "stays silent until the
+  -- day something does use it, and is then an elaboration error a long way
+  -- from its cause".
+  --
+  -- It then drifted twice. First `giveup_limit` was added to the entity and
+  -- not here. Then the walker's `cnt_walks`/`cnt_hits` counter ports became
+  -- `ev_walk`/`ev_hit` (wave1/d0a: the counters moved into core/perf.vhd) and
+  -- this declaration still named the old two. Both times the warning was
+  -- present, correct, and did not help -- because a comment cannot fail a
+  -- build.
+  --
+  -- Repairing it a third time would buy nothing and re-arm the same trap, so
+  -- the trap is removed instead. A declaration with no users is not
+  -- documentation of an interface; core/tlb_walk.vhd is. If a VHDL
+  -- `configuration` ever needs to bind the walker by component, add the
+  -- declaration back THEN, when it will be checked by the thing that uses it.
+  --
+  -- (The reference the old comment carried, docs/mmu/pagemask-walker-contract.md
+  -- R3, could not be followed: that file does not exist in jcore-cpu or in
+  -- jcore-workspace, though four other sites still cite it. Separate rot,
+  -- flagged rather than fixed here.)
+
 
 end package cpu2j0_components_pack;
 

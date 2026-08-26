@@ -129,14 +129,13 @@ package perf_pack is
   -- that a build which sources only some events can say which.
   constant pmu_idr_magic : std_logic_vector(15 downto 0) := x"4A50"; -- "JP"
 
-  component perf is
-    port (
-      clk    : in    std_logic;
-      rst    : in    std_logic;
-      ev     : in    perf_ev_t := PERF_EV_ZERO;
-      wr     : in    perf_wr_t := PERF_WR_ZERO;
-      regs_o : out   perf_regs_t
-    );
-  end component perf;
+  -- NO `component perf` IS DECLARED HERE, DELIBERATELY. core/cpu.vhd
+  -- instantiates the block directly (`entity work.perf`), so a component
+  -- declaration would have no users -- and an unused, hand-maintained mirror
+  -- of a port list is exactly the trap that cost `component tlb_walk` its
+  -- place in core/components_pkg.vhd (see the note there: it drifted twice,
+  -- silently, with a correct warning comment sitting on top of it). Add one
+  -- here only when something binds it by component, so that the thing using
+  -- it is also the thing checking it.
 
 end package perf_pack;

@@ -5,6 +5,7 @@ library ieee;
   use work.decode_pack.all;
   use work.cpu2j0_components_pack.all;
   use work.mult_pkg.all;
+  use work.perf_pack.all;
 
 package datapath_pack is
 
@@ -42,7 +43,12 @@ package datapath_pack is
     p4_pteh, p4_ptel, p4_asidr, p4_tsbcnt,
     -- TLB install counters (P4 0x58). Anti-vacuity instrumentation for the
     -- I->D shadow fill; see core/cpu.vhd's p_tlb_install_cnt.
-    p4_tlbinst
+    p4_tlbinst,
+    -- PMU block, 0xFF001xxx -- a DIFFERENT 4 KB page from everything above;
+    -- see the decode in datapath.vhm and docs/pmu/perf-counters.md. p4_pmcnt
+    -- covers all eight counters at once, with the index carried alongside in
+    -- pmu_idx_v, so adding a counter does not widen this enum.
+    p4_pmcr, p4_pmovf, p4_pmidr, p4_pmcnt
   );
 
   function seg_decode (
@@ -206,8 +212,15 @@ package datapath_pack is
       tlb_exc_ifetch     : in    std_logic := '0';
       if_pc              : out   std_logic_vector(31 downto 0);
       ex_if_pc           : in    std_logic_vector(31 downto 0) := (others => '0');
-      walk_cnt_walks_i   : in    std_logic_vector(15 downto 0) := (others => '0');
-      walk_cnt_hits_i    : in    std_logic_vector(15 downto 0) := (others => '0');
+      -- PMU (core/perf.vhd). pmu_i is the whole counter file, published
+      -- unconditionally; the P4 read path selects from it with the same
+      -- `case p4_sel_v` it uses for every other CSR, so no read data ever
+      -- flows back INTO perf.vhd and the two blocks stay acyclic (perf_pkg
+      -- header). pmu_o is the write side: strobe, select, data, no reply.
+      -- P4_TSBCNT is served from the low halves of pmu_i.cnt(PMU_WLK) and
+      -- cnt(PMU_WHT) -- the walker's own 16-bit counters are gone.
+      pmu_i : in    perf_regs_t := PERF_REGS_ZERO;
+      pmu_o : out   perf_wr_t   := PERF_WR_ZERO;
       -- TLB install counters (P4_TLBINST, 0xFF000058). Must mirror the entity
       -- in core/datapath.vhm -- this component declaration is what cpu.vhd
       -- binds against, so a port added only to the .vhm fails to elaborate.

@@ -5,6 +5,7 @@ use work.cpu2j0_pack.all;
 use work.cpu2j0_components_pack.all;
 use work.datapath_pack.all;
 use work.decode_pack.all;
+use work.perf_pack.all;
 
 entity datapath is
 	generic (
@@ -167,13 +168,25 @@ entity datapath is
 		     -- components_pkg.vhd). '0' on non-MMU builds.
 		     if_pc          : out std_logic_vector(31 downto 0);
 		     ex_if_pc       : in  std_logic_vector(31 downto 0) := (others => '0');
-		     -- Walker counters (core/tlb_walk.vhd), read only via the P4
-		     -- P4_TSBCNT alias below (Phase 3 Task 1). The counters
-		     -- themselves still live in cpu.vhd/tlb_walk.vhd -- this is a
-		     -- pass-through read port, not a new copy of the state. '0' on
-		     -- non-MMU builds (J1/J2 bit-identical).
-		     walk_cnt_walks_i : in std_logic_vector(15 downto 0) := (others => '0');
-		     walk_cnt_hits_i  : in std_logic_vector(15 downto 0) := (others => '0');
+		     -- PMU register file (core/perf.vhd). Read-only pass-through:
+		     -- the counters live in perf.vhd, this port is not a second
+		     -- copy of the state. Published in FULL rather than pre-muxed
+		     -- by address, because handing perf.vhd the P4 address and
+		     -- taking its answer back would put a combinational edge into
+		     -- this process and one back out of it -- and yosys sees this
+		     -- whole process as ONE cell, so that is an SCC at cell
+		     -- granularity even though the logic is acyclic (perf_pkg.vhd
+		     -- header; synth/README.md on the slot_o false loop).
+		     --
+		     -- The two walker counters that used to arrive here as
+		     -- walk_cnt_walks_i/walk_cnt_hits_i are now pmu_i.cnt(PMU_WLK)
+		     -- and pmu_i.cnt(PMU_WHT); P4_TSBCNT is served from their low
+		     -- halves and its architected value is unchanged.
+		     -- PERF_REGS_ZERO on non-MMU builds (J1/J2 bit-identical).
+		     pmu_i : in perf_regs_t := PERF_REGS_ZERO;
+		     -- PMU write side. Strobe + select + data, no reply, so it adds
+		     -- no dependency edge back into this process.
+		     pmu_o : out perf_wr_t := PERF_WR_ZERO;
 		     -- TLB install counters, same pass-through arrangement as the
 		     -- walker counters above, read via P4_TLBINST. They count slots
 		     -- ACTUALLY written, so a speculative I->D shadow fill that finds
@@ -303,6 +316,13 @@ signal manip_sel : std_logic_vector(31 downto 0);
 	-- constant '0' with no consumer and prune away.
 	signal p4_viol_c    : std_logic;
 	signal p4_viol_wr_c : std_logic;
+	-- Combinational form of the PMU write, driven from inside the process for
+	-- the same reason as p4_viol_c above: the write arm is selected by
+	-- mid-evaluation variables (p4_serve_v, p4_sel_v, ma_dw) that no concurrent
+	-- assignment can re-express. Defaulted unconditionally at the top of the
+	-- process, so on J1/J2 it is a constant PERF_WR_ZERO with no consumer and
+	-- prunes away.
+	signal pmu_wr_c : perf_wr_t;
 	-- Registered tlb_squash, made readable INSIDE the process (this'register is
 	-- only usable in the concurrent assignments below). Used to suppress new
 	-- memory transactions issued in the fault shadow, symmetrically with the
@@ -1252,12 +1272,18 @@ end generate;
 
 	ibit <= sr.int_mask;
 
-	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, squash_arm, tlb_fault_va, tlb_exc_expevt, tlb_exc_fsr, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, inst_fault, inst_fault_prot, id_delay_slot, if_fault_cap, tlb_exc_is_i, tlb_exc_ifetch, ex_if_pc, tlb_squash_r, squash_ifetch_r)
+	datapath : process(this,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, squash_arm, tlb_fault_va, tlb_exc_expevt, tlb_exc_fsr, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, inst_fault, inst_fault_prot, id_delay_slot, if_fault_cap, tlb_exc_is_i, tlb_exc_ifetch, ex_if_pc, tlb_squash_r, squash_ifetch_r, pmu_i)
 	  register this when clk='1' and clk'event reset when rst='1';
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
           variable seg_v   : segment_t;
           variable p4_sel_v : p4_sel_t;
+          -- Which PMU counter a P4_PMCNT access selects. Carried alongside
+          -- p4_sel_v rather than folded into it so eight counters cost one
+          -- enum member and one 3-bit variable, not eight enum members and
+          -- eight decode arms. Defaulted every visit for the same
+          -- read-before-write reason p4_sel_v is.
+          variable pmu_idx_v : natural range 0 to PMU_NUM_CNT - 1;
           -- SINGLE SOURCE OF TRUTH for "this access is a P4 CSR access the
           -- privilege gate REFUSES / SERVES" (J4+PRIV_ARCH). THREE sites must
           -- agree on this one invariant -- the refusal arm, the serve arm, and
@@ -1285,6 +1311,13 @@ end generate;
           p4_viol_wr_c <= '0';
           p4_refuse_v  := false;
           p4_serve_v   := false;
+          -- Default for the PMU write export. The strobe is overridden ONLY
+          -- inside the SERVED P4 write arm, so a user-mode P4 store -- which
+          -- takes the REFUSE arm above it -- can never reach a counter. The
+          -- refusal arm has no read side effect either (unlike TSBVICT), so a
+          -- refused PMU access leaves no trace at all.
+          pmu_wr_c  <= PERF_WR_ZERO;
+          pmu_idx_v := 0;
 
           -- TLB fault hardware side-effects (J4): on the first cycle a
           -- fault is detected (tlb_exc_pend='1') capture TEA and PTEH[31:14] from
@@ -1760,6 +1793,38 @@ end generate;
                 -- these, never seg_v/sr.md again.
                 p4_refuse_v := seg_v = SEG_P4 and this.sr.md = '0';
                 p4_serve_v  := seg_v = SEG_P4 and this.sr.md = '1';
+                -- PMU BLOCK, 0xFF001xxx (docs/soc/p4-mmio-map.md 3, "PMU
+                -- (Performance Monitoring Unit)", the 4 KB per-CPU page
+                -- already allocated at 0xFF001000). NOT squeezed into free
+                -- offsets of the MMU page at 0xFF000xxx: 0x30 is CPUINFO,
+                -- 0x34 is reserved for the proposed PTEU, 0x3C/0x40 are
+                -- QACR0/QACR1, and 0x30/0x2C carry an unresolved documented
+                -- contradiction about where CPUINFO lives that another task
+                -- owns. The PMU has its own page; there was no need to
+                -- contend for those bytes.
+                --
+                -- TESTED FIRST, and on a WHOLE-PAGE match, because every arm
+                -- below matches on ma_ad(7 downto 0) ALONE. Without this arm
+                -- leading, 0xFF001010 would decode as MMUCR and the PMU would
+                -- be unreachable at any offset that collides with an MMU
+                -- register. Ordering it first also means NO address outside
+                -- 0xFF001xxx changes behaviour: the residual aliasing of the
+                -- MMU page across the rest of the 16 MB P4 window is
+                -- pre-existing and deliberately left alone here.
+                if ma_ad(23 downto 12) = x"001" then
+                  if    ma_ad(7 downto 0) = x"00" then p4_sel_v := P4_PMCR;
+                  elsif ma_ad(7 downto 0) = x"04" then p4_sel_v := P4_PMOVF;
+                  elsif ma_ad(7 downto 0) = x"08" then p4_sel_v := P4_PMIDR;
+                  -- The eight counters occupy 0x20..0x3C as one contiguous,
+                  -- naturally indexed block: bits [4:2] ARE the counter
+                  -- number and also the PMOVF bit number, so software has one
+                  -- numbering to get wrong instead of three. 0x0C..0x1C is
+                  -- left free on purpose -- that is where PMSEL0..3 go if this
+                  -- block ever grows programmable event select.
+                  elsif ma_ad(7 downto 5) = "001" and ma_ad(1 downto 0) = "00" then
+                    p4_sel_v  := P4_PMCNT;
+                    pmu_idx_v := to_integer(unsigned(ma_ad(4 downto 2)));
+                  end if;
                 -- PTEH/PTEL/ASIDR read-only aliases (Phase 3): stock SH-4
                 -- offsets for PTEH/PTEL, J-core-chosen 0x38 for ASIDR
                 -- (0x34 stays reserved for the proposed PTEU). These are now
@@ -1767,7 +1832,7 @@ end generate;
                 -- `STC PTEL,Rn` and `STC ASIDR,Rn` were retired and decode to
                 -- General Illegal. Writes are not decoded here: LDC remains
                 -- the only write path (design D7).
-                if    ma_ad(7 downto 0) = x"00" then p4_sel_v := P4_PTEH;
+                elsif ma_ad(7 downto 0) = x"00" then p4_sel_v := P4_PTEH;
                 elsif ma_ad(7 downto 0) = x"04" then p4_sel_v := P4_PTEL;
                 elsif ma_ad(7 downto 0) = x"38" then p4_sel_v := P4_ASIDR;
                 elsif ma_ad(7 downto 0) = x"08" then p4_sel_v := P4_TTB;
@@ -1875,6 +1940,26 @@ end generate;
                     -- read case. tsb_lfsr_next() self-heals an all-zero seed,
                     -- so writing 0 does not lock the selector to way 0.
                     when P4_TSBVSEED => this.mmu.vlfsr := ma_dw(15 downto 0);
+                    -- PMU writes. Counters ARE writable, and that is a design
+                    -- decision rather than an oversight: Linux perf programs a
+                    -- sampling period by preloading a counter, and -- decisively
+                    -- for this repo -- it is the only way a guard can reach a
+                    -- 32-bit counter's wrap inside a simulation stop-time.
+                    -- Without it the overflow flag would be untestable and
+                    -- would ship as an assertion nobody had ever seen fire.
+                    when P4_PMCR =>
+                      pmu_wr_c <= (en  => '1',
+                                   sel => std_logic_vector(to_unsigned(PMU_SEL_PMCR, 4)),
+                                   d   => ma_dw);
+                    when P4_PMOVF =>
+                      pmu_wr_c <= (en  => '1',
+                                   sel => std_logic_vector(to_unsigned(PMU_SEL_PMOVF, 4)),
+                                   d   => ma_dw);
+                    when P4_PMCNT =>
+                      pmu_wr_c <= (en  => '1',
+                                   sel => std_logic_vector(to_unsigned(pmu_idx_v, 4)),
+                                   d   => ma_dw);
+                    -- P4_PMIDR is READ-ONLY and falls to `others` below.
                     -- P4_TSBPTR / P4_EXPEVT / P4_INTEVT / P4_MMUFSR are
                     -- read-only: a write is silently ignored.
                     when others   => null;
@@ -1909,7 +1994,18 @@ end generate;
                     when P4_PTEL  => this.m_dr_next := this.mmu.ptel;
                     when P4_ASIDR => this.m_dr_next := this.mmu.asidr;
                     when P4_TSBCNT =>
-                      this.m_dr_next := walk_cnt_walks_i & walk_cnt_hits_i;
+                      -- Served from the PMU's walk counters, which ARE the
+                      -- walker counters now -- tlb_walk holds no state of its
+                      -- own. The low 16 bits of each, so the architected value
+                      -- of this register is bit-for-bit what it always was and
+                      -- the nine guards that assert exact TSBCNT deltas are
+                      -- the regression net for the move.
+                      this.m_dr_next := pmu_i.cnt(PMU_WLK)(15 downto 0)
+                                        & pmu_i.cnt(PMU_WHT)(15 downto 0);
+                    when P4_PMCR  => this.m_dr_next := pmu_i.pmcr;
+                    when P4_PMOVF => this.m_dr_next := pmu_i.ovf;
+                    when P4_PMIDR => this.m_dr_next := pmu_i.idr;
+                    when P4_PMCNT => this.m_dr_next := pmu_i.cnt(pmu_idx_v);
                     when P4_TLBINST =>
                       this.m_dr_next := tlb_cnt_iwr_i & tlb_cnt_dwr_i;
                     -- P4_TSBVSEED is WRITE-ONLY: no read case, so it falls to
@@ -2261,6 +2357,9 @@ end generate;
 	  squash_ifetch_r <= '0';
 	end generate;
 	tlb_squash_o <= tlb_squash_r;
+	-- PMU write side straight out (perf.vhd registers it, so it lands on the
+	-- same clock edge as the MMU CSR writes beside it in the serve arm).
+	pmu_o <= pmu_wr_c;
 	mac_s <= this'register.mac_s;
         db_lock <= this'register.data_o_lock;
         db_o <= this'register.data_o;

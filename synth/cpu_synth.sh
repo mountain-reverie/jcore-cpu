@@ -90,6 +90,11 @@ done
 FILES=(
   cpu2j0_pkg.vhd
   core/components_pkg.vhd
+  # perf_pkg declares the types datapath_pkg and cpu.vhd both use, so it has to
+  # be analysed before either; perf.vhd is instantiated by name from inside
+  # cpu.vhd's PRIV_ARCH generate, exactly like tlb_walk below.
+  core/perf_pkg.vhd
+  core/perf.vhd
   core/tlb.vhd
   # cpu.vhd instantiates tlb_walk directly (entity instantiation inside the
   # PRIV_ARCH generate), so the unit must be analysed before cpu.vhd even when

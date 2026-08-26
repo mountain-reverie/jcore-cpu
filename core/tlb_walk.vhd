@@ -124,10 +124,20 @@ entity tlb_walk is
     -- (older-instruction-first; guard mmuidorder).
     arm : out   std_logic;
 
-    -- Anti-vacuity counters (design spec section 8). Read via the debug
-    -- interface; not architectural.
-    cnt_walks : out   unsigned(15 downto 0);
-    cnt_hits  : out   unsigned(15 downto 0)
+    -- Walk EVENTS, one single-cycle pulse each: ev_walk when a walk is armed,
+    -- ev_hit when a probed way returns a usable PTE. The 16-bit counters that
+    -- used to live here (`walks_r`/`hits_r`) are gone -- they are now PMU
+    -- counters 6 and 7 in core/perf.vhd, 32 bits wide with an overflow flag,
+    -- and P4_TSBCNT is served from their low halves so its architected value is
+    -- unchanged. Exporting the events rather than the counts means there is one
+    -- counter implementation in the core instead of two, and it is what lets
+    -- these two events acquire overflow reporting without duplicating it here.
+    --
+    -- ev_walk is `arm` verbatim rather than a restatement of the ST_IDLE arming
+    -- branch: the two conditions were already identical and keeping them as one
+    -- expression is the only way they cannot drift.
+    ev_walk : out   std_logic;
+    ev_hit  : out   std_logic
   );
 end entity tlb_walk;
 
@@ -155,8 +165,14 @@ architecture rtl of tlb_walk is
   signal va_reg  : std_logic_vector(31 downto 0)     := (others => '0');
   signal timeout : natural range 0 to timeout_cycles := 0;
   signal ptel_r  : std_logic_vector(31 downto 0)     := (others => '0');
-  signal walks_r : unsigned(15 downto 0)             := (others => '0');
-  signal hits_r  : unsigned(15 downto 0)             := (others => '0');
+  -- Internal copy of ev_hit. VHDL-93 forbids reading an `out` port, and the
+  -- ST_DATA arm below uses it to choose ST_INSTALL vs ST_NEXT_WAY -- that is
+  -- the point: the "this way is usable" predicate exists exactly once, so the
+  -- counted event and the taken transition cannot disagree.
+  signal hit_ev : std_logic;
+  -- Internal copy of `arm`, for the same VHDL-93 reason: ev_walk must be the
+  -- SAME expression, not a copy of it.
+  signal arm_int : std_logic;
 
   -- Internal copies of the two bus outputs. VHDL-93 forbids reading an `out`
   -- port, and p_walk_read_order (bottom of this file) must observe exactly the
@@ -202,14 +218,20 @@ begin
                            or (req_va(31 downto 12) /= va_reg(31 downto 12)
                        and giveups < giveup_limit) else
                   '0';
-  arm          <= '1' when state = st_idle and req = '1' and may_arm = '1' else
+  arm_int      <= '1' when state = st_idle and req = '1' and may_arm = '1' else
                   '0';
+  arm          <= arm_int;
   install      <= '1' when state = st_install else
                   '0';
   install_ptel <= ptel_r;
   va_r         <= va_reg;
-  cnt_walks    <= walks_r;
-  cnt_hits     <= hits_r;
+  ev_walk      <= arm_int;
+  -- V=1 and STALE=0: the same predicate the ST_DATA arm applies to pick
+  -- ST_INSTALL. See the hit_ev declaration.
+  hit_ev       <= '1' when state = st_data and bus_ack = '1'
+                           and bus_d(0) = '1' and bus_d(1) = '0' else
+                  '0';
+  ev_hit       <= hit_ev;
 
   bus_en_int <= '1' when (state = st_tag_hi or state = st_tag_lo or state = st_data) else
                 '0';
@@ -232,8 +254,6 @@ begin
         giveups <= 0;
         way     <= 0;
         timeout <= 0;
-        walks_r <= (others => '0');
-        hits_r  <= (others => '0');
       else
 
         case state is
@@ -262,7 +282,6 @@ begin
               va_reg   <= req_va;
               way      <= 0;
               timeout  <= 0;
-              walks_r  <= walks_r + 1;
               state    <= st_tag_hi;
             end if;
 
@@ -335,10 +354,12 @@ begin
               ptel_r <= bus_d;
               -- V=1 and STALE=0 required. STALE would re-miss immediately and
               -- livelock; V distinguishes a real entry from a zeroed TSB,
-              -- which would otherwise alias VPN 0.
-              if (bus_d(0) = '1' and bus_d(1) = '0') then
-                hits_r <= hits_r + 1;
-                state  <= st_install;
+              -- which would otherwise alias VPN 0. The predicate is `hit_ev`,
+              -- the same signal driven onto ev_hit, so the event the PMU counts
+              -- and the transition the walker takes cannot come apart; inside
+              -- this arm its state/bus_ack terms are already true and fold out.
+              if (hit_ev = '1') then
+                state <= st_install;
               else
                 state <= st_next_way;
               end if;

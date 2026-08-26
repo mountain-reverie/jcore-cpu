@@ -22,9 +22,23 @@ library ieee;
 
 package perf_pack is
 
-  -- Number of hardware counters. Also the width of PMOVF's live field and the
-  -- width of PMIDR's implemented-counter mask, so all three move together.
-  constant pmu_num_cnt : natural := 8;
+  -- Number of hardware counters. Also the number of live bits in PMOVF and in
+  -- PMIDR's implemented-counter mask.
+  --
+  -- THE THREE DO NOT SCALE ALIKE, AND THE CEILING IS 8. PMOVF's live field
+  -- (ovf_r / ovf_pad in perf.vhd) is derived and scales to 32; PMIDR's mask is
+  -- a FIXED 8-bit field of a 32-bit register, so a ninth counter needs a PMIDR
+  -- layout change, not merely a wider constant. The subtype below makes
+  -- raising this past 8 an ELABORATION ERROR at this line rather than a silent
+  -- truncation later, inside perf.vhd's to_unsigned(2**pmu_num_cnt - 1, 8) --
+  -- numeric_std truncates with a warning, which is exactly the kind of thing
+  -- nobody sees. A range constraint rather than an `assert`, on purpose: the
+  -- area A/B for this block against a9ffac1 depends on the assertion count
+  -- being identical at both ends (synth/README.md, "Running an area A/B"), so
+  -- this file adds none.
+  subtype pmu_cnt_count_t is natural range 1 to 8;
+
+  constant pmu_num_cnt : pmu_cnt_count_t := 8;
 
   -- Counter width. 32, NOT 16 and NOT 64 -- see docs/pmu/perf-counters.md for
   -- the argument. Short version: a WRAPPING counter is exactly reconstructible

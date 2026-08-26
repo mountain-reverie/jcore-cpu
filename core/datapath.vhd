@@ -1758,12 +1758,11 @@ end generate;
                 -- PMU BLOCK, 0xFF001xxx (docs/soc/p4-mmio-map.md 3, "PMU
                 -- (Performance Monitoring Unit)", the 4 KB per-CPU page
                 -- already allocated at 0xFF001000). NOT squeezed into free
-                -- offsets of the MMU page at 0xFF000xxx: 0x30 is CPUINFO,
-                -- 0x34 is reserved for the proposed PTEU, 0x3C/0x40 are
-                -- QACR0/QACR1, and 0x30/0x2C carry an unresolved documented
-                -- contradiction about where CPUINFO lives that another task
-                -- owns. The PMU has its own page; there was no need to
-                -- contend for those bytes.
+                -- offsets of the MMU page at 0xFF000xxx: 0x34 is reserved for
+                -- the proposed PTEU and 0x3C/0x40 are QACR0/QACR1, so that
+                -- page has less room than a glance at the decode suggests.
+                -- The PMU has a page of its own; there was no need to contend
+                -- for those bytes.
                 --
                 -- TESTED FIRST, and on a WHOLE-PAGE match, because every arm
                 -- below matches on ma_ad(7 downto 0) ALONE. Without this arm
@@ -1773,17 +1772,48 @@ end generate;
                 -- 0xFF001xxx changes behaviour: the residual aliasing of the
                 -- MMU page across the rest of the 16 MB P4 window is
                 -- pre-existing and deliberately left alone here.
+                --
+                -- THE COMPARES BELOW ARE 12-BIT (ma_ad(11 downto 0)), NOT
+                -- 8-BIT LIKE EVERY OTHER ARM IN THIS CHAIN. Do not "tidy"
+                -- them back to ma_ad(7 downto 0) for symmetry -- that is a
+                -- silent double regression:
+                --
+                -- * It re-opens 16 writable ALIASES of every PMU register
+                -- across the page (0xFF001100 would be PMCR again,
+                -- 0xFF001120 PMCYC, ...), which would make the "0x040
+                -- onwards is reserved" line in the map a lie and put a
+                -- writable cycle counter at an address nothing documents.
+                -- Guard pmucnt check 0x03 fails if it comes back.
+                -- * It makes these three lines match the P4_DECODE_RE in
+                -- jcore-workspace scripts/check-doc-facts.py
+                -- (`p4-offsets-match-rtl`, Wave-1 task B0c), whose regex
+                -- is `ma_ad(7 downto 0) = x"NN" then p4_sel_v := P4_NAME`
+                -- and which reads that NN as a P4 offset. It would then
+                -- report PMCR at offset 0x000, PMOVF at 0x004 and PMIDR
+                -- at 0x008 -- addresses that belong to PTEH, PTEL and
+                -- TTB. Measured: the check parses 18 registers at
+                -- a9ffac1 and 21 with the 8-bit form, three of them
+                -- "absent from the map"; and they CANNOT be documented
+                -- away, because writing PMCR at 0x000 into the map's
+                -- table collides with PTEH there and trips that check's
+                -- duplicate-offset arm instead. The 12-bit form states
+                -- the truth (these are page-relative offsets in a
+                -- different page) and the regex correctly does not match
+                -- it.
                 if ma_ad(23 downto 12) = x"001" then
-                  if ma_ad(7 downto 0) = x"00" then p4_sel_v := P4_PMCR;
-                  elsif ma_ad(7 downto 0) = x"04" then p4_sel_v := P4_PMOVF;
-                  elsif ma_ad(7 downto 0) = x"08" then p4_sel_v := P4_PMIDR;
-                  -- The eight counters occupy 0x20..0x3C as one contiguous,
+                  if ma_ad(11 downto 0) = x"000" then p4_sel_v := P4_PMCR;
+                  elsif ma_ad(11 downto 0) = x"004" then p4_sel_v := P4_PMOVF;
+                  elsif ma_ad(11 downto 0) = x"008" then p4_sel_v := P4_PMIDR;
+                  -- The eight counters occupy 0x020..0x03C as one contiguous,
                   -- naturally indexed block: bits [4:2] ARE the counter
                   -- number and also the PMOVF bit number, so software has one
-                  -- numbering to get wrong instead of three. 0x0C..0x1C is
+                  -- numbering to get wrong instead of three. 0x00C..0x01C is
                   -- left free on purpose -- that is where PMSEL0..3 go if this
-                  -- block ever grows programmable event select.
-                  elsif ma_ad(7 downto 5) = "001" and ma_ad(1 downto 0) = "00" then
+                  -- block ever grows programmable event select. Bits [11:5]
+                  -- are fully compared, so 0x020..0x03C is the ONLY window
+                  -- that answers.
+                  elsif ma_ad(11 downto 5) = "0000001"
+                        and ma_ad(1 downto 0) = "00" then
                     p4_sel_v := P4_PMCNT;
                     pmu_idx_v := to_integer(unsigned(ma_ad(4 downto 2)));
                   end if;
@@ -1958,10 +1988,19 @@ end generate;
                     when P4_TSBCNT =>
                       -- Served from the PMU's walk counters, which ARE the
                       -- walker counters now -- tlb_walk holds no state of its
-                      -- own. The low 16 bits of each, so the architected value
-                      -- of this register is bit-for-bit what it always was and
-                      -- the 41 guard sources that read this address are the
-                      -- regression net for the move.
+                      -- own. The low 16 bits of each.
+                      --
+                      -- BIT-FOR-BIT WHAT IT ALWAYS WAS, FOR SOFTWARE THAT
+                      -- NEVER TOUCHES THE PMU PAGE -- which is the only
+                      -- software that existed before this change, and is why
+                      -- the 41 guard sources reading this address are a valid
+                      -- regression net for the move. It is NOT unconditional,
+                      -- and the two ways to change it are both deliberate and
+                      -- both privileged: clearing PMCR.EN freezes this
+                      -- register along with every other counter, and a write
+                      -- to 0xFF001038 / 0xFF00103C sets it. A hypervisor
+                      -- virtualizing TSBCNT must therefore virtualize the PMU
+                      -- page too, not just this offset.
                       this.m_dr_next := pmu_i.cnt(PMU_WLK)(15 downto 0)
                                         & pmu_i.cnt(PMU_WHT)(15 downto 0);
                     when P4_PMCR => this.m_dr_next := pmu_i.pmcr;

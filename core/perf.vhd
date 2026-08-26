@@ -16,6 +16,16 @@
 -- latency not merely unmeasured but unmeasurable. Those two walker counters are
 -- now counters 6 and 7 here -- tlb_walk exports the two event pulses instead of
 -- holding its own state, so there is one counter implementation, not two.
+--
+-- AREA. Against base a9ffac1 (SYNTH_VARIANT=j4, synth/cpu_synth.sh asic, both
+-- arms built from a real commit into a throwaway `git archive` tree): +2431
+-- generic cells and +264 flops on j4, and +0 flops / -4 generic cells on j2 --
+-- i.e. nothing, the g_no_mmu_counters tie-off doing its job. The +264 is
+-- EXACTLY 8*32 counters + 32 PMCR + 8 PMOVF - 32 for tlb_walk's removed 16-bit
+-- pair, which is the cross-check that the synthesised block is this block.
+-- ECP5 LUT4 is deliberately not quoted: its measured noise floor on this core
+-- is 368 (core/tlb.vhd's area note). Full table and method in
+-- docs/pmu/perf-counters.md section 8.3.
 
 library ieee;
   use ieee.std_logic_1164.all;

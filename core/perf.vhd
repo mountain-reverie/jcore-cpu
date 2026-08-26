@@ -94,7 +94,6 @@ begin
   p_perf : process (clk) is
 
     variable ovf_v : std_logic_vector(PMU_NUM_CNT - 1 downto 0);
-    variable sel_v : integer range 0 to 15;
 
   begin
 
@@ -104,10 +103,9 @@ begin
         ovf_r  <= (others => '0');
         pmcr_r <= PMCR_RESET;
       else
-        sel_v := to_integer(unsigned(wr.sel));
         ovf_v := ovf_r;
 
-        if wr.en = '1' and sel_v = PMU_SEL_PMCR then
+        if wr.tgt = pmu_wr_pmcr then
           pmcr_r <= wr.d;
         end if;
 
@@ -121,7 +119,7 @@ begin
           -- bounded by one count per write, and perf only writes a counter when
           -- it is (re)arming a sampling period, i.e. when it is discarding the
           -- old value anyway.
-          if wr.en = '1' and sel_v = i then
+          if wr.tgt = pmu_wr_cnt and wr.idx = i then
             cnt_r(i) <= wr.d;
           elsif pmcr_r(0) = '1' and ev(i) = '1' then
             cnt_r(i) <= std_logic_vector(unsigned(cnt_r(i)) + 1);
@@ -139,7 +137,7 @@ begin
         -- variable so that a wrap landing in the same cycle as the clearing
         -- write survives it. Write-1-to-clear rather than a plain write so two
         -- independent readers cannot silently clear each other's bits.
-        if wr.en = '1' and sel_v = PMU_SEL_PMOVF then
+        if wr.tgt = pmu_wr_pmovf then
           ovf_v := ovf_v and not wr.d(PMU_NUM_CNT - 1 downto 0);
         end if;
 

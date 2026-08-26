@@ -393,6 +393,11 @@ ENTRY(start)
 p_pmubase: .long 0xFF001000              ! PMU block base (P4, privileged)
 p_alias1:  .long 0xFF001100              ! must NOT alias PMCR  (check 0x03)
 p_alias2:  .long 0xFF001120              ! must NOT alias PMCYC (check 0x04)
+! HAND-MAINTAINED against core/perf_pkg.vhd -- assembly cannot be coupled to a
+! VHDL constant, so this literal is the one site in the PMU's parameterisation
+! that has no elaboration-time rail (perf_pkg lists all five). If pmu_num_cnt,
+! pmu_cnt_w or pmu_idr_magic changes, this must change with it; check 0x01 is
+! what makes that a loud failure rather than a quiet one.
 p_idr_exp: .long 0x4A5020FF              ! magic "JP", width 32, 8 counters
 p_scratch: .long 0x00002000              ! plain P0 RAM, backed by the cosim
 #endif

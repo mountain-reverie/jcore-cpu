@@ -1,5 +1,11 @@
 $(VHDLS) += cpu2j0_pkg.vhd
 $(VHDLS) += core/components_pkg.vhd
+# perf_pkg.vhd declares the PMU types that BOTH core/cpu.vhd and
+# core/datapath_pkg.vhd use, so it must precede them; perf.vhd is instantiated
+# by name from cpu.vhd's PRIV_ARCH generate, so it must precede cpu.vhd too --
+# same rule as core/tlb_walk.vhd below.
+$(VHDLS) += core/perf_pkg.vhd
+$(VHDLS) += core/perf.vhd
 $(VHDLS) += core/cpu.vhd
 $(VHDLS) += core/mult_pkg.vhd
 $(VHDLS) += core/mult.vhd

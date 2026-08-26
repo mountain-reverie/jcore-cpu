@@ -7,6 +7,7 @@ library ieee;
   use work.datapath_pack.all;
   use work.mult_pkg.all;
   use work.divider_pkg.all;
+  use work.perf_pack.all;
 
 entity cpu is
   generic (
@@ -209,8 +210,18 @@ architecture stru of cpu is
   -- '1' while the walk in progress is an I-SIDE walk. Registered at the arming
   -- cycle, when walk_i_miss/walk_d_miss are live and mutually exclusive.
   signal walk_side_i    : std_logic;
-  signal walk_cnt_walks : unsigned(15 downto 0);
-  signal walk_cnt_hits  : unsigned(15 downto 0);
+  -- Walk event pulses out of tlb_walk, counted by the PMU (counters PMU_WLK /
+  -- PMU_WHT). tlb_walk no longer holds counters of its own; see its ev_walk
+  -- comment and core/perf.vhd.
+  signal walk_ev_walk : std_logic;
+  signal walk_ev_hit  : std_logic;
+
+  -- PMU (core/perf.vhd). pmu_regs is what datapath.vhm's P4 read path selects
+  -- from -- including P4_TSBCNT, which is now served from the low halves of
+  -- counters PMU_WLK/PMU_WHT rather than from a separate 16-bit pair.
+  signal pmu_regs : perf_regs_t;
+  signal pmu_wr   : perf_wr_t;
+  signal pmu_ev   : perf_ev_t;
   -- TLB install-port write enables, one PER ARRAY: the hardware walker is the
   -- sole installer and installs only into the side that faulted.
   signal itlb_wr : std_logic;
@@ -325,11 +336,11 @@ begin
 
   -- Tie off the MMU-only counter signals when the MMU is absent.
   --
-  -- walk_cnt_walks/walk_cnt_hits (the walker's) and cnt_itlb_wr/cnt_dtlb_wr
-  -- (the TLB install counters) are driven inside g_mmu, but the datapath port
-  -- map above reads all four UNCONDITIONALLY -- it is a single instantiation,
-  -- not one per variant -- so on a PRIV_ARCH = false build they would have no
-  -- driver at all.
+  -- pmu_regs (the whole PMU register file, which now includes the walker
+  -- counters) and cnt_itlb_wr/cnt_dtlb_wr (the TLB install counters) are driven
+  -- inside g_mmu, but the datapath port map above reads them UNCONDITIONALLY --
+  -- it is a single instantiation, not one per variant -- so on a
+  -- PRIV_ARCH = false build they would have no driver at all.
   --
   -- A signal INITIALISER IS NOT A DRIVER. It settles simulation and nothing
   -- else: synthesis sees an undriven wire, i.e. a don't-care, not a constant
@@ -343,11 +354,17 @@ begin
   -- back exactly. The walker's two counters had the same latent defect before
   -- the install counters existed and are fixed here with them.
 
+  -- The PMU is compiled out on PRIV_ARCH = false along with the MMU, rather
+  -- than behind a generic of its own. Argued in docs/pmu/perf-counters.md: a
+  -- second, orthogonal generic doubles the configuration matrix and creates a
+  -- build that nothing in CI runs, and the counters exist precisely so the
+  -- variant we intend to tape out can be measured -- making them the first
+  -- thing dropped for area would be backwards. PMIDR then reads as a hard zero
+  -- here, which is the architected "no PMU present" answer.
   g_no_mmu_counters : if not PRIV_ARCH generate
-    walk_cnt_walks <= (others => '0');
-    walk_cnt_hits  <= (others => '0');
-    cnt_itlb_wr    <= (others => '0');
-    cnt_dtlb_wr    <= (others => '0');
+    pmu_regs    <= PERF_REGS_ZERO;
+    cnt_itlb_wr <= (others => '0');
+    cnt_dtlb_wr <= (others => '0');
   end generate g_no_mmu_counters;
 
   -- H-M3 defense-in-depth invariant: the banked exception state (RB=1) must
@@ -525,9 +542,11 @@ begin
       tlb_exc_ifetch     => tlb_exc_ifetch,
       if_pc              => dp_if_pc,
       ex_if_pc           => dec_ex_if_pc,
-      -- Walker counters' P4 alias (P4_TSBCNT at 0xFF000054).
-      walk_cnt_walks_i => std_logic_vector(walk_cnt_walks),
-      walk_cnt_hits_i  => std_logic_vector(walk_cnt_hits),
+      -- PMU register file (0xFF001000 block) AND the walker counters' P4 alias
+      -- P4_TSBCNT at 0xFF000054, which datapath serves from the low halves of
+      -- pmu_i.cnt(PMU_WLK)/cnt(PMU_WHT).
+      pmu_i => pmu_regs,
+      pmu_o => pmu_wr,
       -- TLB install counters' P4 alias (P4_TLBINST at 0xFF000058).
       tlb_cnt_iwr_i => std_logic_vector(cnt_itlb_wr),
       tlb_cnt_dwr_i => std_logic_vector(cnt_dtlb_wr)
@@ -728,8 +747,57 @@ begin
         va_r         => walk_va_r,
         busy         => walk_busy,
         arm          => walk_arm,
-        cnt_walks    => walk_cnt_walks,
-        cnt_hits     => walk_cnt_hits
+        ev_walk      => walk_ev_walk,
+        ev_hit       => walk_ev_hit
+      );
+
+    -- ==== Performance counters (PMU) ====================================
+    --
+    -- Every event below is sourced HERE, at the core boundary, and not from
+    -- inside the L1s: `entity cpu` has no cache port, the caches sit outside it
+    -- (icache_cacheable_mux / dcache_cacheable_mux, instantiated by the
+    -- testbench and by the SoC), and 140 of the ~155 guards in sim/tests run on
+    -- cpu_tb, which has no cache at all. A counter fed from inside the L1s
+    -- would therefore read a constant zero in the configuration almost every
+    -- guard uses -- the "reads zero, never faults, looks like the feature is
+    -- disabled" hazard docs/soc/p4-mmio-map.md calls normative. The reference
+    -- and wait-cycle pairs below measure the same traffic from a vantage point
+    -- that is correct with or without a cache. See docs/pmu/perf-counters.md
+    -- for what this does and does not let you compute, and for the plumbing a
+    -- follow-up would need to add true L1 miss counts.
+    --
+    -- PMU_CYC is a level, deliberately: it is the one event that is meant to
+    -- fire every cycle. PMU_IFW/PMU_DAW are levels for the same reason -- they
+    -- count CYCLES SPENT WAITING, not events. PMU_INS/PMU_IFR/PMU_DAR are
+    -- one-cycle pulses.
+    --
+    -- The reference counters use the DATAPATH-VISIBLE acks (dp_*_i.ack), not
+    -- the raw port acks: db_i.ack is also the walker's ack while the walker
+    -- owns the bus, and counting those would charge the core for accesses it
+    -- never made. The wait counters get the complement, so a walk's bus time
+    -- lands in PMU_DAW -- which is where it belongs, since that is exactly the
+    -- stall the core suffers.
+    --
+    -- en/ack is exactly-once by construction: datapath clears data_o/inst_o on
+    -- ack (`this.data_o := NULL_DATA_O`), so `en and ack` cannot be true twice
+    -- for one access, and en+ack partitions every outstanding-access cycle into
+    -- exactly one reference cycle and n wait cycles.
+    pmu_ev(PMU_CYC) <= '1';
+    pmu_ev(PMU_INS) <= slot and instr.issue;
+    pmu_ev(PMU_IFR) <= sig_inst_o.en and dp_inst_i.ack;
+    pmu_ev(PMU_IFW) <= sig_inst_o.en and not dp_inst_i.ack;
+    pmu_ev(PMU_DAR) <= sig_db_o.en and dp_db_i.ack;
+    pmu_ev(PMU_DAW) <= sig_db_o.en and not dp_db_i.ack;
+    pmu_ev(PMU_WLK) <= walk_ev_walk;
+    pmu_ev(PMU_WHT) <= walk_ev_hit;
+
+    u_perf : entity work.perf
+      port map (
+        clk    => clk,
+        rst    => rst,
+        ev     => pmu_ev,
+        wr     => pmu_wr,
+        regs_o => pmu_regs
       );
 
     -- Miss-exception suppression. A walk suppresses the miss arms for its

@@ -1960,8 +1960,8 @@ end generate;
                       -- walker counters now -- tlb_walk holds no state of its
                       -- own. The low 16 bits of each, so the architected value
                       -- of this register is bit-for-bit what it always was and
-                      -- the nine guards that assert exact TSBCNT deltas are
-                      -- the regression net for the move.
+                      -- the 41 guard sources that read this address are the
+                      -- regression net for the move.
                       this.m_dr_next := pmu_i.cnt(PMU_WLK)(15 downto 0)
                                         & pmu_i.cnt(PMU_WHT)(15 downto 0);
                     when P4_PMCR => this.m_dr_next := pmu_i.pmcr;

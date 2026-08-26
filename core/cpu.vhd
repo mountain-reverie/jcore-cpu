@@ -756,15 +756,18 @@ begin
     -- Every event below is sourced HERE, at the core boundary, and not from
     -- inside the L1s: `entity cpu` has no cache port, the caches sit outside it
     -- (icache_cacheable_mux / dcache_cacheable_mux, instantiated by the
-    -- testbench and by the SoC), and 140 of the ~155 guards in sim/tests run on
-    -- cpu_tb, which has no cache at all. A counter fed from inside the L1s
-    -- would therefore read a constant zero in the configuration almost every
-    -- guard uses -- the "reads zero, never faults, looks like the feature is
-    -- disabled" hazard docs/soc/p4-mmio-map.md calls normative. The reference
-    -- and wait-cycle pairs below measure the same traffic from a vantage point
-    -- that is correct with or without a cache. See docs/pmu/perf-counters.md
-    -- for what this does and does not let you compute, and for the plumbing a
-    -- follow-up would need to add true L1 miss counts.
+    -- testbench and by the SoC), and only 15 of the 157 guard sources in
+    -- sim/tests run under cpu_cache_tb (counted: `ls sim/tests/*.S | wc -l` and
+    -- `grep -c 'run_guard.*cpu_cache_tb' sim/mmu_sim.sh`). Every other guard
+    -- runs on cpu_tb, which has no cache at all. A counter fed from inside the
+    -- L1s would therefore read a constant zero in the configuration almost
+    -- every guard uses -- the "reads zero, never faults, looks like the
+    -- feature is disabled" hazard docs/soc/p4-mmio-map.md calls normative.
+    -- The reference and wait-cycle pairs below measure the same traffic from a
+    -- vantage point that is correct with or without a cache. See
+    -- docs/pmu/perf-counters.md for what this does and does not let you
+    -- compute, and for the plumbing a follow-up would need to add true L1 miss
+    -- counts.
     --
     -- PMU_CYC is a level, deliberately: it is the one event that is meant to
     -- fire every cycle. PMU_IFW/PMU_DAW are levels for the same reason -- they

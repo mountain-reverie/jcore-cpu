@@ -681,6 +681,19 @@ _p4tab:
         ! And P4 is the whole 0xFF------ (datapath_pkg.vhd seg_decode: VA[31:24]
         ! = 0xFF), not just the 0xFF0000-- CSR window. Pin that too.
         .long 0xFFFFFFF0                ! top of P4, nowhere near the decode
+        ! PMU block (0xFF001xxx; core/perf.vhd, docs/pmu/perf-counters.md).
+        ! The FIRST P4 register outside the 0xFF0000-- window that
+        ! core/datapath.vhm decodes, and its arm is tested AHEAD of the MMU
+        ! chain (it has to be -- the MMU chain matches on VA[7:0] alone, so
+        ! 0xFF001010 would otherwise decode as MMUCR). "Ahead of the MMU chain"
+        ! is one edit away from "ahead of the privilege gate", which is why the
+        ! PMU is probed here rather than trusted to inherit the gate. A cycle
+        ! counter reachable from user mode is a timing-attack primitive; a
+        ! WRITABLE cycle counter reachable from user mode also lets unprivileged
+        ! code forge whatever the kernel's own profiler reports.
+        .long 0xFF001000                ! PMCR   (read/write)
+        .long 0xFF001008                ! PMIDR  (read-only)
+        .long 0xFF001020                ! PMCYC  (read/write)
         ! KEEP TSBCNT LAST: check 7 asserts TEA holds p_p4last after the final
         ! probe of pass 2, so appending past this line breaks it.
         .long 0xFF000054                ! TSBCNT  (= p_p4last, for check 7)

@@ -62,13 +62,14 @@
 # list at the time that paragraph was written, not a capture. When the number
 # is wanted, count it and say so: `... | grep -c '^  PASS'`.
 #
-# THAT 107 IS NOW STALE, and the sentence that used to follow it here --
-# "this branch adds no run_guard call here" -- belonged to a branch that has
-# since merged; it is not a claim about whatever branch you are reading. The
-# D0b capacity suite adds three run_guard calls to the loop below (mmucapd,
-# mmucapsub, mmucapi), so any count quoted from before it landed is three
-# short. Do not carry a number forward from a comment. Take it from the run
-# you actually did, with the grep above, and say that is what you did.
+# THAT 107 IS NOW STALE TWICE OVER, and the sentence that used to follow it
+# here -- "this branch adds no run_guard call here" -- was inherited from a
+# branch for which it was true and is false for every branch since. The D0b
+# capacity suite added three calls to the loop below (mmucapd, mmucapsub,
+# mmucapi) and wave1/d0a adds two more (pmucnt, pmuovf), so a count quoted
+# from before either landed is five short. Do not repair the tally; that is
+# the trap this whole paragraph is about. Take the number from the run you
+# actually did, with the grep above, and say that is what you did.
 #
 # Neither a commit SHA nor a line number is cited above, on purpose: a rebase,
 # a reword or an edit invalidates either one silently. Cite the subject line,

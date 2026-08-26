@@ -27,6 +27,11 @@
 !   0x01  PMIDR != 0x4A5020FF -- the block is absent, or its identity register
 !         disagrees with PMU_NUM_CNT/PMU_CNT_W in core/perf_pkg.vhd
 !   0x02  PMCR does not read 0x00000001 out of reset (EN must reset SET)
+!   0x03  0xFF001100 does not read as zero -- bits [11:8] of the PMU page are
+!         not being decoded, so every register has 16 writable aliases
+!   0x04  0xFF001120 does not read as zero -- same defect, counter window
+!   0x05  PMCYC itself reads zero -- reserved anti-vacuity partner for 0x03
+!         and 0x04, which would both pass on a block that answers nowhere
 !   0x10  PMINS delta over an 8-nop block is not exactly 8 (window 2)
 !   0x11  PMINS delta over an 8-nop block is not exactly 8 (window 3)
 !   0x20  PMCYC delta is zero -- reserved anti-vacuity
@@ -144,6 +149,36 @@ ENTRY(start)
         cmp/eq  r1, r2
         mov     #0x02, r9
         bf      _fail
+
+        ! ================= 3: the page decodes 12 bits, not 8 =============
+        ! Every other arm of the P4 chain in core/datapath.vhm matches on
+        ! ma_ad(7 downto 0) alone; the PMU arm deliberately matches on
+        ! ma_ad(11 downto 0). If it is ever "tidied" back to 8 bits for
+        ! symmetry, 0xFF001100 becomes a second, WRITABLE PMCR and 0xFF001120
+        ! a second, WRITABLE PMCYC -- addresses the P4 map records as
+        ! reserved. The same edit also makes the three PMU decode lines match
+        ! the P4_DECODE_RE in jcore-workspace scripts/check-doc-facts.py,
+        ! which would then read them as P4 offsets 0x000/0x004/0x008 -- which
+        ! belong to PTEH, PTEL and TTB. This check is what turns both of those
+        ! from a review catch into a test failure.
+        mov.l   p_alias1, r1            ! 0xFF001100 = PMCR + 0x100
+        mov.l   @r1, r2
+        tst     r2, r2
+        mov     #0x03, r9
+        bf      _fail
+        mov.l   p_alias2, r1            ! 0xFF001120 = PMCYC + 0x100
+        mov.l   @r1, r2
+        tst     r2, r2
+        mov     #0x04, r9
+        bf      _fail
+        ! Anti-vacuity partner. "Reads zero" is what an UNDECODED P4 offset
+        ! does -- and also what a completely dead block does, so the two checks
+        ! above are worth nothing without a live register to contrast against.
+        ! PMCYC has been free-running since reset and cannot be zero here.
+        mov.l   @(O_PMCYC,r8), r2
+        tst     r2, r2
+        mov     #0x05, r9
+        bt      _fail
 
         ! ================= Phase 1: PMCYC and PMINS linearity =============
         ! Four snapshots, three windows: 0 nops, 8 nops, 16 nops.
@@ -356,6 +391,8 @@ ENTRY(start)
 
         .align 2
 p_pmubase: .long 0xFF001000              ! PMU block base (P4, privileged)
+p_alias1:  .long 0xFF001100              ! must NOT alias PMCR  (check 0x03)
+p_alias2:  .long 0xFF001120              ! must NOT alias PMCYC (check 0x04)
 p_idr_exp: .long 0x4A5020FF              ! magic "JP", width 32, 8 counters
 p_scratch: .long 0x00002000              ! plain P0 RAM, backed by the cosim
 #endif

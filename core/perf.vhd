@@ -16,6 +16,9 @@
 -- latency not merely unmeasured but unmeasurable. Those two walker counters are
 -- now counters 6 and 7 here -- tlb_walk exports the two event pulses instead of
 -- holding its own state, so there is one counter implementation, not two.
+-- P4_TSBCNT keeps its architected value bit-for-bit FOR SOFTWARE THAT NEVER
+-- TOUCHES THE PMU PAGE; clearing PMCR.EN freezes it, and writing counter 6 or 7
+-- sets it. Both are intended, both are privileged, and both are new.
 --
 -- AREA. Against base a9ffac1 (SYNTH_VARIANT=j4, synth/cpu_synth.sh asic, both
 -- arms built from a real commit into a throwaway `git archive` tree): +2431

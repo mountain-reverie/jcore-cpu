@@ -66,6 +66,13 @@ The counters occupy `0x20`–`0x3C` as one contiguous, naturally indexed block:
 **address bits `[4:2]` are the counter number and also the PMOVF bit number**, so
 software has one numbering to get wrong instead of three.
 
+**All 12 offset bits are decoded.** Unlike the MMU page at `0xFF000000` — which
+matches on `[7:0]` alone and therefore repeats across its page and beyond — the
+PMU page has **no aliases**: `0xFF001100` is not a second PMCR, `0xFF001120` is
+not a second PMCYC, and everything from `0x040` up reads as a hard zero. §5
+explains why this is worth the extra four bits of compare, and `pmucnt.S` checks
+`0x03`–`0x05` hold it in place.
+
 `P4_TSBCNT` (`0xFF000054`) is unchanged as an architected register and is now
 served from `PMWLK[15:0] & PMWHT[15:0]`. `core/tlb_walk.vhd` holds no counter
 state at all; it exports two event pulses (`ev_walk`, `ev_hit`) and the PMU does
@@ -191,23 +198,59 @@ roles `j32ooo-spec.md` §12 gives them, and `0x00C`–`0x01C` is left empty for
 
 **Its own allocated page, `0xFF001000`.** `p4-mmio-map.md` §3 already reserves a
 4 KB per-CPU PMU page there; the MMU page at `0xFF000000` is not the right home
-and, on inspection, does not have the room the free-offset list suggests:
+and, on inspection, does not have the room a glance at the decode suggests:
 `0x30` is CPUINFO, `0x34` is reserved for the proposed PTEU, and `0x3C`/`0x40`
-are QACR0/QACR1 (store-queue). `0x30`/`0x2C` additionally carry an unresolved
-contradiction inside `p4-mmio-map.md` itself — §3.2 and its "Decision" paragraph
-put CPUINFO at `0x030`, while §7 open question 4 says "CPUINFO moves to `0x02C`",
-which is MMUFSR. That contradiction is another task's to resolve; using the PMU's
-own page means this change does not depend on the answer either way.
+are QACR0/QACR1 (store queue). Only `0x44` and `0x5C` upward are genuinely
+unallocated there — not enough for eleven registers, and taking them would have
+scattered the block.
 
-**One decode consequence had to be handled.** Every existing P4 arm in
-`datapath.vhm` matches on `ma_ad(7 downto 0)` **alone** — `seg_decode` returns
-`SEG_P4` for the whole of `0xFF------`, so `0xFF001010` would have decoded as
-`MMUCR` and the PMU would have been unreachable at every offset colliding with an
-MMU register. The PMU arm is therefore tested **first** and on a whole-page match
+> An earlier revision of this section, and of the `datapath.vhm` decode comment
+> and commit `e208745`'s message, also cited an *unresolved contradiction* about
+> whether CPUINFO lives at `0x030` or `0x02C`. **That is no longer true and the
+> claim is withdrawn**: `p4-mmio-map.md` §7 item 4 was corrected on 2026-08-25
+> (it now records that its own "moves to `0x02C`" was wrong, `0x02C` being
+> MMUFSR, and that CPUINFO is at `0x030`). The decision here never rested on it
+> — the three allocations above are independent grounds — but the premise was
+> stale and is corrected rather than quietly dropped.
+
+**Two decode consequences had to be handled.**
+
+*Ordering.* Every existing P4 arm in `datapath.vhm` matches on
+`ma_ad(7 downto 0)` **alone** — `seg_decode` returns `SEG_P4` for the whole of
+`0xFF------`, so `0xFF001010` would have decoded as `MMUCR` and the PMU would
+have been unreachable at every offset colliding with an MMU register. The PMU arm
+is therefore tested **first** and on a whole-page match
 (`ma_ad(23 downto 12) = x"001"`). Ordering it first means **no address outside
 `0xFF001xxx` changes behaviour**: the residual aliasing of the MMU page across
 the rest of the 16 MB P4 window is pre-existing and deliberately left alone here
 rather than fixed as a side effect of an unrelated change.
+
+*Width.* The offset compares inside the page are **12-bit**
+(`ma_ad(11 downto 0)`), not 8-bit like every other arm in the chain. This is not
+stylistic, and it must not be "tidied" for symmetry — it is load-bearing twice:
+
+1. **It closes an aliasing hole.** With 8-bit compares, bits `[11:8]` are
+   undecoded and every PMU register acquires 15 further aliases across the page:
+   `0xFF001100` would be a second, *writable* PMCR, `0xFF001120` a second,
+   *writable* PMCYC, and so on — at addresses the map records as reserved. The
+   MMU page aliases this way too, but *that* aliasing is documented and covered
+   by `mmup4alias`; a new block should not inherit an old block's undocumented
+   habits. Guard `pmucnt.S` checks `0x03`/`0x04` assert `0xFF001100` and
+   `0xFF001120` read as hard zero, with check `0x05` (PMCYC is non-zero) as the
+   anti-vacuity partner so "reads zero" cannot pass on a dead block.
+2. **It keeps `p4-offsets-match-rtl` honest.** That check (Wave-1 task B0c,
+   `jcore-workspace/scripts/check-doc-facts.py`) finds decoded registers with
+   `ma_ad(7 downto 0) = x"NN" then p4_sel_v := P4_NAME` and reads `NN` as a P4
+   offset. With 8-bit compares the three PMU control lines match it, and it
+   reports PMCR at `0x000`, PMOVF at `0x004` and PMIDR at `0x008` — offsets that
+   belong to PTEH, PTEL and TTB. Measured with the check's own parsing logic:
+   **18 decoded registers at `a9ffac1`, 21 with the 8-bit form**, the three
+   extra ones "absent from the map". They cannot be documented away either —
+   writing `PMCR` at `0x000` into the map's register table collides with PTEH
+   and trips the same check's *duplicate offset* arm instead. The 12-bit form
+   states the truth (these are offsets in a *different page*), the regex
+   correctly does not match it, and the check sees exactly the 18 registers it
+   saw at base.
 
 ---
 
@@ -308,7 +351,16 @@ it belongs, since that is exactly the stall the core suffers.
 
 ### 8.1 What you can compute
 
-* **IPC** = `PMINS / PMCYC`.
+* **IPC** = `PMINS / PMCYC` — with one caveat that must travel with the number.
+  `PMINS` counts instruction **dispatches**, not retirements, and this core has
+  no retirement stage to count instead. The two differ only when an instruction
+  is restarted: a TLB fault, a P4 privilege refusal or any other precise
+  exception re-runs its instruction, and the counter charges for each attempt.
+  So **IPC is optimistic under heavy faulting**, in exactly the workload where
+  the walk counters are most interesting, and IPC read next to a large `PMWLK`
+  should be treated as an upper bound. On fault-free straight-line code
+  dispatches and retirements coincide exactly — `pmucnt.S` check `0x10` pins
+  that to the instruction.
 * **Average fetch latency** = `(PMIFR + PMIFW) / PMIFR`; likewise for data.
 * **Stall attribution**: `PMIFW` and `PMDAW` are the memory-system share of
   `PMCYC` directly.
@@ -324,11 +376,19 @@ decision, not an oversight. Three facts drove it:
    caches are instantiated by `icache_cacheable_mux` / `dcache_cacheable_mux`
    above the CPU, in the testbench and in the SoC. The hit/miss state lives in
    `cache/icache_ccl.vhm` and `cache/dcache_ccl.vhm`.
-2. **The plumbing crosses a repo boundary.** Reaching the CPU means new output
-   ports on `icache_ccl` → `icache` → `icache_adapter` → `icache_cacheable_mux`
-   (and the `dcache` mirror), matching `component` declarations in
-   `cache/cache_pkg.vhd`, and updates to every instantiation — including board
-   tops in `jcore-soc`, which cannot be built or tested from here.
+2. **The plumbing crosses a repo boundary, and it does so on the *input* side
+   of `cpu`.** The signal has to travel *down*, not up: the caches sit **above**
+   `entity cpu`, so the miss pulse must leave `icache_ccl` (through `icache`,
+   `icache_adapter`, `icache_cacheable_mux`, and the `dcache` mirror) and then
+   **enter** `cpu` as a new **input port**. The output ports on the way up are
+   the cheap half — an unassociated formal `out` is legal VHDL, so existing
+   instantiations need not change for those. The expensive half is the `cpu`
+   input: **every** instantiation of `cpu` must drive it, including `jcore-soc`'s
+   target tops, which cannot be built or tested from here. And an input left
+   undriven is not a benign default — it is precisely the don't-care hazard
+   `core/cpu.vhd` measures at **+526 LUT4 on j2**, propagating out of the dead
+   port into unrelated blocks, which is why `perf_pkg.vhd`'s `PERF_REGS_ZERO`
+   exists at all.
 3. **Decisively: the default testbench has no cache.** `sim/tests` holds 157
    `.S` guard sources and `sim/mmu_sim.sh` names `cpu_cache_tb` on exactly 15
    `run_guard` lines (counted, not estimated:
@@ -337,12 +397,25 @@ decision, not an oversight. Three facts drove it:
    with no cache RTL at all. A miss counter would therefore read a constant
    zero in the configuration almost every guard uses — a P4 register that reads
    zero and never faults, which is precisely the hazard `p4-mmio-map.md` calls
-   normative, and it would ship with no non-vacuous guard covering it.
+   normative, and it would ship **with no non-vacuous guard in the default
+   configuration**. Note the qualifier: a guard *was* available. Fifteen guards
+   already run under `cpu_cache_tb` and a sixteenth could have been written, so
+   "untestable" would be false. What is true is narrower and still decisive —
+   the counter would be dead in the configuration that runs on nearly every
+   invocation of the suite, and a register that reads zero for almost everyone
+   is worse than a register that is absent.
 
 `PMIFR`/`PMIFW` and `PMDAR`/`PMDAW` measure the same traffic from a vantage point
 that is correct **with or without** a cache, and are exactly testable in the
-default configuration. Under `cpu_cache_tb` the wait counters *are* the L1 miss
-cost; what they do not give you is the miss *count* independent of its penalty.
+default configuration.
+
+**Under `cpu_cache_tb` they are more than a proxy.** With the L1s present, the
+CPU's fetch and data ports go *to the caches*, so `PMIFR` and `PMDAR` count
+exactly the I-side and D-side **L1 reference streams** — that is, `L1_I_ACCESSES`
+and `L1_D_ACCESSES` in `j32ooo-spec.md` §12.2's inventory, delivered rather than
+deferred — and `PMIFW`/`PMDAW` are the L1 miss *cost* in cycles. The single
+quantity still missing is the miss **count** independent of its penalty; miss
+*rate* is recoverable from average latency given the hit and miss latencies.
 
 When the miss counters are added, `PMIDR[7:0]` is the mechanism that keeps
 software honest: the implemented-counter bitmask widens, and a driver on an older
@@ -412,8 +485,39 @@ multi-driver net, and no combinational loop through `datapath`'s process.
 ## 9. Amendment required in `docs/soc/p4-mmio-map.md`
 
 That map lives in `jcore-workspace`, not in `jcore-cpu`, so this change cannot
-carry it. The amendment is a new sub-section under §3, and the §3 table's PMU row
-should gain a spec link to this document:
+carry it.
+
+> **This section is NOT paste-ready, and an earlier revision wrongly said it
+> was.** The obvious form — a new §3.4 with its own `Offset | Register |
+> Description` table — does not work, for a reason worth writing down because it
+> will catch the next person too. `p4-offsets-match-rtl`
+> (`scripts/check-doc-facts.py`, Wave-1 task B0c) locates the register table
+> with `find_table_by_header`, which returns the **first** table carrying those
+> headers, and the map has **exactly one** today (verified by running
+> `find_tables_by_header` against the current map: one match, 21 parsed
+> name/offset pairs). A second table with the same headers is therefore never
+> read.
+>
+> Nor can the PMU rows simply be appended to §3.2, the table that *is* parsed:
+> its offset column is matched by `` ^`0x([0-9A-Fa-f]{2,3})`$ ``, so a row
+> written `` `0xFF001000` `` is skipped as unparseable, while a row written
+> `` `0x000` `` for PMCR **collides with PTEH at `0x000`** and trips the check's
+> duplicate-offset arm. Both were confirmed by running the check's own parsing
+> logic, not inferred.
+>
+> **Nothing in `jcore-cpu` is blocked by this.** The RTL's 12-bit PMU compares
+> (§5) mean the check parses exactly the 18 registers it parsed at `a9ffac1`,
+> so it stays green when this branch lands. What remains is a *documentation*
+> gap, not a red check: the PMU page is allocated in §3 but its registers are
+> undocumented. Closing it properly needs one of — a second parsed table
+> (`find_table_by_header` → `find_tables_by_header`, plus per-table base
+> offsets), or a `Base | Offset | Register | Description` shape, or an explicit
+> per-block scoping key. That is a change to B0c's own check and is its owner's
+> call, which is why the table below is offered as **content for whatever shape
+> they choose** rather than as a patch.
+
+The §3 top-level table's PMU row should also gain a spec link to this document.
+The content to place, once the parser can carry it:
 
 ```markdown
 ### 3.4 PMU sub-allocation (`0xFF001000`–`0xFF001FFF`)
@@ -437,11 +541,13 @@ Spec: `jcore-cpu/docs/pmu/perf-counters.md`.
 | `0x034` | PMDAW  | data-access wait cycles. RW. |
 | `0x038` | PMWLK  | TSB walks armed. RW. |
 | `0x03C` | PMWHT  | TSB walks that hit. RW. |
-| `0x040`–`0xFFF` | reserved | |
+| `0x040`–`0xFFF` | reserved | genuinely undecoded: the decode compares all 12 offset bits, so these read as hard zero and are NOT aliases of the registers above |
 
 Counters are 32-bit, free-running and WRAPPING, and are **writable** (Linux
 `perf` programs a sampling period by preloading one). `0xFF000054` TSBCNT is
-unchanged and is now served from `PMWLK[15:0] & PMWHT[15:0]`.
+unchanged **for software that does not touch this page** and is now served from
+`PMWLK[15:0] & PMWHT[15:0]`; clearing `PMCR.EN` freezes it and writing `0x038`
+or `0x03C` sets it.
 ```
 
 The §3.2 note on TSBCNT should also record that the walker no longer holds its
@@ -463,6 +569,21 @@ anti-vacuity guards assert on it") rather than measured. Counted here:
 sentence drew is unaffected — the regression net is larger than claimed, not
 smaller, and the whole suite passes — but the figure in that commit message
 should not be quoted. `p4-mmio-map.md` §3.2 should be corrected too.
+
+Two further claims in `e208745`'s message need the same treatment, because a
+commit message cannot be edited after the fact and leaving them unqualified is
+how they get quoted:
+
+* **"its architected value is bit-for-bit unchanged"** (of `P4_TSBCNT`) is true
+  only for software that never touches the PMU page. Clearing `PMCR.EN` freezes
+  the register, and a write to `0xFF001038`/`0xFF00103C` sets it. Both are
+  intended and both are privileged, but both are new, and a hypervisor
+  virtualizing TSBCNT must virtualize the PMU page with it.
+* **the CPUINFO `0x030`/`0x02C` contradiction** it cites as a reason not to use
+  the MMU page was **resolved in `p4-mmio-map.md` before that commit was
+  written** (§7 item 4, corrected 2026-08-25). The address decision stands on
+  the other three grounds in §5; the premise does not. Withdrawn there and in
+  the `datapath.vhm` decode comment.
 
 ---
 

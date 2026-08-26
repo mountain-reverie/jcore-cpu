@@ -1812,10 +1812,20 @@ end generate;
                   -- block ever grows programmable event select. Bits [11:5]
                   -- are fully compared, so 0x020..0x03C is the ONLY window
                   -- that answers.
-                  elsif ma_ad(11 downto 5) = "0000001"
+                  -- The window and the index slice are DERIVED from
+                  -- perf_pkg's pmu_cnt_tag / pmu_cnt_idx_bits rather than
+                  -- spelled out here, so this decode and the counter count
+                  -- cannot drift apart: shrinking pmu_num_cnt without
+                  -- narrowing the index, or widening the index without
+                  -- restating the tag, is an elaboration error rather than a
+                  -- window that decodes addresses onto counters that do not
+                  -- exist. With pmu_cnt_idx_bits = 3 this reads exactly
+                  -- ma_ad(11 downto 5) = "0000001" and ma_ad(4 downto 2).
+                  elsif ma_ad(11 downto 2 + PMU_CNT_IDX_BITS) = PMU_CNT_TAG
                         and ma_ad(1 downto 0) = "00" then
                     p4_sel_v := P4_PMCNT;
-                    pmu_idx_v := to_integer(unsigned(ma_ad(4 downto 2)));
+                    pmu_idx_v := to_integer(unsigned(
+                                   ma_ad(1 + PMU_CNT_IDX_BITS downto 2)));
                   end if;
                 -- PTEH/PTEL/ASIDR read-only aliases (Phase 3): stock SH-4
                 -- offsets for PTEH/PTEL, J-core-chosen 0x38 for ASIDR
@@ -1940,16 +1950,12 @@ end generate;
                     -- Without it the overflow flag would be untestable and
                     -- would ship as an assertion nobody had ever seen fire.
                     when P4_PMCR =>
-                      pmu_wr_c <= (en => '1',
-                                   sel => std_logic_vector(to_unsigned(PMU_SEL_PMCR, 4)),
-                                   d => ma_dw);
+                      pmu_wr_c <= (tgt => pmu_wr_pmcr, idx => 0, d => ma_dw);
                     when P4_PMOVF =>
-                      pmu_wr_c <= (en => '1',
-                                   sel => std_logic_vector(to_unsigned(PMU_SEL_PMOVF, 4)),
-                                   d => ma_dw);
+                      pmu_wr_c <= (tgt => pmu_wr_pmovf, idx => 0, d => ma_dw);
                     when P4_PMCNT =>
-                      pmu_wr_c <= (en => '1',
-                                   sel => std_logic_vector(to_unsigned(pmu_idx_v, 4)),
+                      pmu_wr_c <= (tgt => pmu_wr_cnt,
+                                   idx => pmu_idx_v,
                                    d => ma_dw);
                     -- P4_PMIDR is READ-ONLY and falls to `others` below.
                     -- P4_TSBPTR / P4_EXPEVT / P4_INTEVT / P4_MMUFSR are

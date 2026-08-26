@@ -400,7 +400,14 @@ jobs:
       # the baseline may only shrink, and a stale entry fails too.
       - name: No new same-variant encoding collision
         working-directory: jcore-cpu
-        run: python3 scripts/insns-collision-sweep.py
+        run: |
+          # The sweep's own fixtures run first, for the same reason the
+          # workspace gate runs its suite before its checks: a green sweep
+          # underneath a broken sweep is the reassuring-but-empty result this
+          # effort keeps producing. Ten cases, each asserting exit status AND
+          # which message fired, including every fail-closed path.
+          python3 scripts/test-insns-collision-sweep.py
+          python3 scripts/insns-collision-sweep.py
 
   cache-sim:
     name: dcache scoreboard (${{ matrix.mode }})

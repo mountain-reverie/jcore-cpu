@@ -264,6 +264,12 @@ mmudspcprobe_latemw.elf: mmudspcprobe_latemw.o
 mmuimissrest.elf: mmuimissrest.o
 mmusmep.elf: mmusmep.o
 
+# PMU guards (wave1/d0a). J4-only -- deliberately NOT in BASE_IMGS: the PMU is
+# PRIV_ARCH-gated, so on base-J2 the whole body is #if'd out and the image would
+# pass without testing anything.
+pmucnt.elf: pmucnt.o
+pmuovf.elf: pmuovf.o
+
 
 # ---------------------------------------------------------------------------
 # CPU_VARIANT stamp. CFLAGS carries -DCONFIG_PRIV_ARCH / -DCONFIG_SH2A_ARCH,

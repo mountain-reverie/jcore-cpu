@@ -283,44 +283,100 @@ constraints on the values:
   exceed it strictly. Every mapping costs exactly one TLB entry whatever
   `CAP_PM` is, because a superpage is one entry, so this is arithmetic on
   mapping COUNT and is independent of size.
+* **THE LINKER'S 2 MB `ram` REGION, which is what actually binds first.**
+  `sim/tests/sh32.x` declares `ram : o = 0x00000000, l = 0x200000`, and the
+  frames are `.space`-filled into `.text`, so the whole image must fit in 2 MB.
+  This is the constraint a wrapper author will actually hit, and it was missing
+  from every earlier version of this list. Measured practical maxima:
+
+  | `CAP_PM` | mapping | largest `N_LARGE` that links | what binds |
+  |---|---|---|---|
+  | 0 | 4 KB | 127 | `mov #imm` (the image is only ~0.5 MB there) |
+  | 1 | 16 KB | 126 | `ram`, just under the `mov #imm` cap |
+  | 2 | 64 KB | **30** | `ram` |
+  | 3 | 256 KB | ~7 | `ram` |
+
+  At `CAP_PM = 2`, `N_LARGE = 31` assembles **clean** — it passes all six
+  `.error` checks — and then dies with ``section `.text' will not fit in region
+  `ram'``. So the `.error` block's allowance is far looser than reality; do not
+  read a silent assembly as "this configuration is fine".
 * **The alias window must clear the image**, i.e. `N_LARGE * MAP_SPAN <=
-  ALIAS_DELTA`. This is the constraint an earlier revision of this section
-  missed, and it is the one that keeps §2.1's inert-MMU tripwire alive: an
+  ALIAS_DELTA`. This keeps §2.1's inert-MMU tripwire alive in principle: an
   untranslated read only returns 0 while the VA lands in the cosim's anonymous
-  zero-filled backing rather than back inside the loaded image. At the default
-  `N_LARGE = 24` and `ALIAS_DELTA = 4 MB`: `CAP_PM = 2` (64 KB) needs 1.5 MB
-  and is fine, `CAP_PM = 3` (256 KB) needs 6 MB and **is rejected** — the
-  earlier text called it "fits but unwieldy", which was wrong, because 6 MB
-  exceeds `ALIAS_DELTA` and the window would land back on top of the image.
-  `CAP_PM = 4` needs 24 MB and fails this and P5 both. **`N_LARGE` is the
-  remedy in every one of those cases, which is exactly why it is
-  overridable** — a size knob whose only escape hatch a wrapper could not
-  reach would be no escape hatch.
+  zero-filled backing rather than back inside the loaded image.
+
+  **It is unreachable today, and belongs in the same "kept for the future"
+  category as the P5 bound below** — an earlier revision of this section framed
+  it as a live hazard, which was wrong. `ALIAS_DELTA` is 4 MB and the `ram`
+  ceiling above caps the image at 2 MB, so *nothing that links can overlap the
+  window*, and the tripwire cannot die on a configuration that builds. The
+  check is still worth keeping: it is the right condition, it fires a stage
+  earlier than the linker with a message naming the consequence rather than the
+  symptom, and it becomes load-bearing the moment `ram` grows past
+  `ALIAS_DELTA`.
 * **P5.** Every VA touched under `AT=1` must lie in `[0, 0x0100_0000)`, because
   the raw VA reaches the bus while a miss is walked and the cosim backs only
-  16 MB. At the shipped `ALIAS_DELTA` the constraint above is strictly
-  tighter, so P5 never binds on its own; it becomes the binding one as soon as
-  `ALIAS_DELTA` is raised.
+  16 MB. Unreachable for the same reason, one step further out: it needs a
+  window past 0x00B0_0000 where the overlap check needs only 0x0040_0000, and
+  that in turn is behind the 2 MB `ram` cap. It becomes binding once
+  `ALIAS_DELTA` exceeds 0x0078_0000.
 * **Image size.** The frames are `.space`-filled in the image, so the `.img`
   grows as `N_LARGE * MAP_SPAN`. Measured: 108 KB at `CAP_PM=0`/`N_LARGE=24`,
   416 KB at `CAP_PM=1`/`N_LARGE=24`, 1.375 MB at `CAP_PM=2`/`N_LARGE=20`.
 
-**All four are now checked at ASSEMBLY time**, in the `.if`/`.error` block
-beside the `#ifndef`s, and this list is no longer the only place they live.
-That block exists because every violation used to reach run time and land on
-`Result=0x41` — whose text says *"a fault means the walker did not resolve one
-it could have"*, so a harness mistake read as an RTL defect. Two that used to
-assemble and link silently: `CAP_FIRSTSUB=4` at `CAP_PM=1` (the index leaves
-the mapping, so every first touch slides up one whole mapping and leg L's last
-one falls off the seeded window) and `N_LARGE=130` (`mov #N_LARGE, r13`
-sign-extends; `objdump` shows `mov #-126,r13`).
+**Most of these are checked at ASSEMBLY time**, in the `.if`/`.error` blocks
+beside the `#ifndef`s — the `ram` ceiling is the exception, and is enforced by
+the linker rather than by the guard. Those blocks exist because a violation
+otherwise reached run time and landed on `Result=0x41`, whose text says *"a
+fault means the walker did not resolve one it could have"* — so a harness
+mistake read as an RTL defect. Two that used to assemble and link silently:
+`CAP_FIRSTSUB=4` at `CAP_PM=1` (the index leaves the mapping, so every first
+touch slides up one whole mapping and leg L's last one falls off the seeded
+window) and `N_LARGE=130` (`mov #N_LARGE, r13` sign-extends; `objdump` shows
+`mov #-126,r13`).
 
-Six of the seven checks were **demonstrated firing** by building a deliberately
-violating wrapper — `CAP_FIRSTSUB=4`, `N_LARGE=130`, `N_SMALL=200`,
-`N_SMALL >= N_LARGE`, `CAP_PM=3`, and on the I-side guard `N_SMALL_I >=
-N_LARGE_I` and `N_MIX=900` — while all three shipped parameterisations
-assemble clean. The seventh, the bare P5 bound, is unreachable at the shipped
-`ALIAS_DELTA` and is labelled as such in the source rather than claimed.
+### What the checks are actually worth
+
+There are **twelve** `.if` directives, six in each guard — not seven, as two
+earlier revisions of this section said. Each was given a violating wrapper and
+**every** `.error` it produced was recorded, not just the one being aimed at:
+
+| check | status |
+|---|---|
+| `mmucapd` `CAP_FIRSTSUB >= CAP_NSUB` | isolated (`CAP_PM=1, CAP_FIRSTSUB=4`) |
+| `mmucapd` `N_LARGE > 127` | isolated (`N_LARGE=130`) |
+| `mmucapd` `N_SMALL >= N_LARGE` | isolated (`N_SMALL=30`) |
+| `mmucapd` window overlap | isolated (`CAP_PM=3`) — but unreachable, see above |
+| `mmucapd` `N_SMALL > 127` | **never alone** |
+| `mmucapd` P5 bound | **unreachable** |
+| `mmucapi` `N_LARGE_I > 127` | isolated (`N_LARGE_I=200`) |
+| `mmucapi` `N_MIX > 127` | isolated (`N_MIX=200`) |
+| `mmucapi` `N_SMALL_I >= N_LARGE_I` | isolated (`N_SMALL_I=20`) |
+| `mmucapi` `N_SMALL_I > 127` | **never alone** |
+| `mmucapi` window overlap | **unreachable** |
+| `mmucapi` P5 bound | **unreachable** |
+
+Seven isolated, two that cannot be isolated even in principle, three
+unreachable. All three shipped parameterisations assemble clean.
+
+The two `N_SMALL* > 127` checks are **structurally redundant**: `N_SMALL > 127`
+implies either `N_LARGE > 127` or `N_SMALL >= N_LARGE`, so one of those always
+fires alongside it. Measured both ways. They are defence in depth, not
+diagnostics.
+
+`mmucapi`'s overlap check is unreachable by arithmetic rather than by the
+linker: `ALIAS_PAGES = N_SMALL_I + N_LARGE_I + 2*N_MIX + 3`, and the four
+counter checks cap every term at 127, so it maxes out at 510 pages — 0x1FE000
+bytes against a 4 MB `ALIAS_DELTA`. It does fire at `N_MIX=900`, but only
+beside the `N_MIX > 127` error that already rejects that value (plus three
+`offset out of range` errors from the literal pools the oversized `.rept`
+pushes apart). That is a co-firing, not an isolation, and an earlier revision
+of this section wrongly counted it as a demonstration.
+
+Those earlier `mmucapi` "demonstrations" were also produced by editing the file
+with `sed`, not by a wrapper: its three counters were bare `#define`s, so a
+wrapper's `#define` lost to the file's own and nothing fired. They are
+`#ifndef`-guarded now and the table above was re-measured with real wrappers.
 
 **DEMONSTRATED, not asserted.** A throwaway fourth wrapper was written, built,
 run and deleted:

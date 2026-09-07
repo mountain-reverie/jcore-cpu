@@ -535,20 +535,37 @@ on what else was in the tree.
 | j4 | `a9ffac1` (branch base)   | 36827 | 4520 |
 | j4 | `a3a57d5` (8-bit decode)  | 39258 | 4784 |
 | j4 | `30463ca` (12-bit decode) | 39248 | 4784 |
+| j4 | `0b0e48b8` (**HEAD**)      | 39246 | 4784 |
 | j2 | `a9ffac1`                 | 17473 | 1700 |
 | j2 | `a3a57d5`                 | 17469 | 1700 |
 | j2 | `30463ca`                 | 17469 | 1700 |
+| j2 | `0b0e48b8` (**HEAD**)      | 17469 | 1700 |
 
-**J4: +2421 generic cells (+6.6 %), +264 flops (+5.8 %) against base.**
+**J4: +2419 generic cells (+6.6 %), +264 flops (+5.8 %) against base.**
+**J1/J2: +0 flops, −4 generic cells** — nothing, which is the tie-off working.
 
-Two things are worth reading off the middle rows rather than assumed. The
-comment-only commits between `a3a57d5` and the widening measured **identical**
-(39258 / 4784) — which is what a comment-only change must be, and was checked
-rather than trusted. And widening the PMU compares from 8 bits to 12 (§5) cost
-**−10 generic cells and zero flops**: not a saving worth claiming — it is far
-inside any sensible noise band for a generic-cell count — but firmly evidence
-that closing the alias hole is free. Tightening a compare removes downstream
-don't-cares, which is the direction that makes a small negative plausible.
+The base row reproduced to the cell across every re-measurement in this table
+(36827 / 4520 each time), which is the check that the measurement pipeline
+itself is stable rather than the numbers being drift.
+
+Three things are worth reading off the intermediate rows rather than assumed.
+The comment-only commits between `a3a57d5` and the widening measured
+**identical** (39258 / 4784) — what a comment-only change must be, and checked
+rather than trusted. Widening the PMU compares from 8 bits to 12 (§5) cost
+**−10 generic cells and zero flops**. And the write-target enum, the page-first
+`case`, and the overflow-ordering fix together cost a further **−2 cells and
+zero flops**. None of those three deltas is a saving worth claiming — all are
+far inside any sensible noise band for a generic-cell count — but together they
+settle that closing the alias hole, removing the selector collision and fixing
+the overflow ordering were all free. A tighter compare and a resolved
+`case` both remove downstream don't-cares, which is the direction that makes
+small negatives plausible.
+
+> **Refresh this table when logic changes, not when it feels stale.** It has now
+> been wrong twice by exactly this route: figures measured at one commit, then
+> two commits that changed logic, and the table still describing the older tree.
+> `f61e0619` exists solely to record that a comment-only change moved nothing —
+> which is the same discipline pointing the other way.
 **J1/J2: +0 flops, −4 generic cells** — i.e. nothing, −4 being noise at this
 scale. That is the tie-off in `g_no_mmu_counters` doing its job; a build without
 the MMU pays nothing for the PMU.

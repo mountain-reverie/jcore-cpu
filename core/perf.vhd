@@ -103,7 +103,33 @@ begin
         ovf_r  <= (others => '0');
         pmcr_r <= PMCR_RESET;
       else
+        -- PMOVF write-1-to-clear, applied to the OLD bits FIRST so that the
+        -- wrap capture inside the loop below folds in AFTERWARDS and a wrap
+        -- landing in the same cycle as a clearing write SURVIVES it.
+        --
+        -- THE ORDER IS THE WHOLE BEHAVIOUR, AND IT WAS WRONG UNTIL 2026-08-26.
+        -- This block used to sit after the loop, which reads as "the clear is
+        -- folded in after the set" -- a true sentence about the mechanism, and
+        -- the exact opposite of the required result: applying the clear last
+        -- means the CLEAR WINS and the coincident wrap is LOST. Measured at
+        -- entity level: wrap alone gave PMOVF = 0x1, wrap in the same cycle as
+        -- the W1C gave 0x0. Losing a wrap notification is precisely what this
+        -- register exists to prevent, so "set wins" is not a preference here,
+        -- it is the contract (docs/pmu/perf-counters.md section 3).
+        --
+        -- The coincidence is reachable, not theoretical: the counter-write arm
+        -- that suppresses an increment is guarded on wr.tgt = pmu_wr_cnt,
+        -- which is false during a PMOVF write, so the increment arm still
+        -- fires; nothing gates EN off during a store; and the sampling
+        -- protocol in section 3.1 does its W1C with the counters running.
+        --
+        -- Write-1-to-clear rather than a plain write so that two independent
+        -- readers cannot silently clear each other's bits.
         ovf_v := ovf_r;
+
+        if wr.tgt = pmu_wr_pmovf then
+          ovf_v := ovf_v and not wr.d(PMU_NUM_CNT - 1 downto 0);
+        end if;
 
         if wr.tgt = pmu_wr_pmcr then
           pmcr_r <= wr.d;
@@ -133,14 +159,10 @@ begin
 
         end loop;
 
-        -- PMOVF write-1-to-clear, folded in AFTER the set above via the
-        -- variable so that a wrap landing in the same cycle as the clearing
-        -- write survives it. Write-1-to-clear rather than a plain write so two
-        -- independent readers cannot silently clear each other's bits.
-        if wr.tgt = pmu_wr_pmovf then
-          ovf_v := ovf_v and not wr.d(PMU_NUM_CNT - 1 downto 0);
-        end if;
-
+        -- The wrap capture in the loop above has folded into ovf_v after the
+        -- clear, so this commits "clear the bits software named, then set any
+        -- bit that wrapped this cycle" -- set wins on a tie. See the header of
+        -- the clear block for why that ordering is the contract.
         ovf_r <= ovf_v;
       end if;
     end if;

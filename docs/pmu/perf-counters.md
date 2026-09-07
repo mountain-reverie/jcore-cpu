@@ -192,10 +192,22 @@ all:
     set   PMCR.EN                  # resume
 ```
 
-Overflow is captured *at the wrap*, and the write-1-to-clear is folded in
-**after** the set within one cycle, so a wrap landing in the same cycle as the
-clearing write survives it. That ordering is what makes the sequence above safe
-to run at any time rather than only while frozen.
+Overflow is captured *at the wrap*, and the write-1-to-clear is applied to the
+**old** bits first so the capture folds in afterwards — **set wins on a tie**, so
+a wrap landing in the same cycle as a clearing write survives it. That is what
+makes a W1C safe to issue with the counters running, which §3.1's sampling loop
+depends on.
+
+> **This paragraph was wrong until 2026-08-26, and the shape of the error is
+> worth keeping.** The RTL applied the clear *after* the capture, so the clear
+> won and the coincident wrap was **lost** — the exact failure PMOVF exists to
+> prevent. The sentence describing the mechanism ("folded in after the set") was
+> *accurate*; only the conclusion drawn from it was inverted, which is why it
+> read as correct, survived a review, and was then promoted from an RTL comment
+> into this spec with a stronger claim attached. Measured at entity level, wrap
+> alone vs wrap in the W1C cycle: `PMOVF = 01000000` / `00000000` before the
+> fix, `01000000` / `01000000` after. If you are checking a claim in this
+> document, check the conclusion separately from the mechanism.
 
 ### 3.2 The sampling boundary — a measured property, not a bug
 

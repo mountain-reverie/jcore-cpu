@@ -54,9 +54,14 @@ hardware block view and synthesis cost see [j4.md](j4.md); the RTL is
 > `LDC Rm,{PTEH,PTEL,ASIDR}` writes (design D7 — the write side has no MMIO
 > equivalent). The CSRs are now **read** through read-only P4 aliases: `PTEH`
 > `0xFF000000`, `PTEL` `0xFF000004`, `ASIDR` `0xFF000038`, `TSBPTR`
-> `0xFF00001C`. The walker's `cnt_walks`/`cnt_hits` counters moved to P4
-> `0xFF000054` (and are guest-observable — see
-> `../../../docs/hypervisor/design-spec.md` §6). The encoding family
+> `0xFF00001C`. The walker's walk/hit counters are read at P4 `0xFF000054`
+> (`TSBCNT`, and guest-observable — see
+> `../../../docs/hypervisor/design-spec.md` §6). **They are no longer 16-bit
+> counters inside `tlb_walk.vhd`**: `cnt_walks`/`cnt_hits` were removed with
+> wave1/d0a, the walker exports two event pulses instead, and the counting is
+> done by the 32-bit PMU counters `PMWLK`/`PMWHT` (`core/perf.vhd`). `TSBCNT`
+> serves their low halves, so its architected value is unchanged for software
+> that does not touch the PMU page — see [../pmu/perf-counters.md](../pmu/perf-counters.md). The encoding family
 > `0000 nnnn xxxx 1011` is empty: **8 free slots, all virgin.** Anything below
 > that still shows a retired mnemonic is describing history, not the ISA.
 >

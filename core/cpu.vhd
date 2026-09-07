@@ -556,10 +556,13 @@ begin
   -- sig_db_o.en asserted, so the faulting access is held stable and replays
   -- when ack is restored. Data is passed through unconditionally; only the
   -- handshake is gated.
-  -- The walker counters are read through their P4 alias (P4_TSBCNT,
-  -- 0xFF000054), served inside datapath.vhm from walk_cnt_walks_i /
-  -- walk_cnt_hits_i above. The old P2 debug window at 0xABCD0F00 that decoded
-  -- them here has been retired.
+  -- The walk counters are read through their P4 alias (P4_TSBCNT,
+  -- 0xFF000054), served inside datapath.vhm from the low halves of
+  -- pmu_i.cnt(PMU_WLK) and pmu_i.cnt(PMU_WHT) -- the pmu_i port in the map
+  -- above. The walk_cnt_walks_i / walk_cnt_hits_i formals this comment used to
+  -- name are gone: tlb_walk holds no counters now, it exports ev_walk/ev_hit
+  -- and core/perf.vhd does the counting. The old P2 debug window at
+  -- 0xABCD0F00 that decoded them here has been retired.
   dp_db_i.d   <= db_i.d;
   dp_db_i.ack <= db_i.ack and not walk_busy;
 

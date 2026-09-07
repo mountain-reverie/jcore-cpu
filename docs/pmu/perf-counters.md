@@ -535,14 +535,19 @@ on what else was in the tree.
 | j4 | `a9ffac1` (branch base)   | 36827 | 4520 |
 | j4 | `a3a57d5` (8-bit decode)  | 39258 | 4784 |
 | j4 | `30463ca` (12-bit decode) | 39248 | 4784 |
-| j4 | `0b0e48b8` (**HEAD**)      | 39246 | 4784 |
+| j4 | `0b0e48b8` (last logic change) | 39246 | 4784 |
+| j4 | `bdc41d6b` (branch tip)   | 39246 | 4784 |
 | j2 | `a9ffac1`                 | 17473 | 1700 |
 | j2 | `a3a57d5`                 | 17469 | 1700 |
 | j2 | `30463ca`                 | 17469 | 1700 |
-| j2 | `0b0e48b8` (**HEAD**)      | 17469 | 1700 |
+| j2 | `0b0e48b8` (last logic change) | 17469 | 1700 |
 
 **J4: +2419 generic cells (+6.6 %), +264 flops (+5.8 %) against base.**
 **J1/J2: +0 flops, −4 generic cells** — nothing, which is the tie-off working.
+
+The tip row is a comment-only commit after the last logic change and measures
+identically, which was checked rather than assumed — the same discipline
+`f61e0619` exists for.
 
 The base row reproduced to the cell across every re-measurement in this table
 (36827 / 4520 each time), which is the check that the measurement pipeline

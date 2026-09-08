@@ -110,6 +110,13 @@ arm).
   datapath; the multiplier output is already registered) — deferred to a future
   pipelining project. (A residual lighter-`opt` SCC not involving slot_o may
   remain; abc9 resolves it, and CI synthesizes via `synth_ecp5`.)
+- The representative-timing P&R (and `scripts/fmax_ab.sh`) pass
+  `--placer-heap-timingweight 100`; the bare-cpu **fit** gate deliberately does
+  not. Both choices, the sweep behind the value, and the reason the gain is a
+  property of the netlist rather than a constant offset are in the comments on
+  those two steps in `.github/workflows/synth-cpu.yml`. **Do not shift a
+  per-variant Fmax floor by the measured delta** — re-derive it on the variant
+  (on `origin/master`'s netlist the same flag measures a null).
 
 ## Synthesis metrics dashboard
 

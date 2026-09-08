@@ -158,10 +158,25 @@ SEEDS="${FMAX_AB_SEEDS:-6}"
 mkdir -p build/pnr-$LABEL
 fmax_vals=()
 
+# --placer-heap-timingweight 100 MIRRORS the CI representative-timing P&R
+# (.github/workflows/synth-cpu.yml), and mirroring it is the point: an A/B run
+# under different placer settings than the flow it is supposed to predict can
+# report a delta that does not reproduce in CI. See that workflow's comment for
+# the sweep the value comes from (j4 timing harness: default 30.97 +/- 0.61 over
+# 16 seeds, tw100 32.51 +/- 0.41 over 16) and for why the gain is netlist-
+# specific: on origin/master's PMU-free netlist the same flag is a null.
+#
+# THE ABSOLUTE NUMBERS THIS SCRIPT PRINTS MOVED WHEN THIS FLAG WAS ADDED, and
+# by an amount that was NOT measured here: this script builds j4c (cpu+MMU+
+# cache), a different and much harder netlist than the j4 bare-core harness the
+# sweep above ran on, and the flag's effect is a property of the netlist. Any
+# j4c figure quoted from a run before 2026-09-08 is not comparable with one
+# after it, and any j4c floor must be re-derived from its own sweep.
 for seed in $(seq 1 "$SEEDS"); do
   seed_log="build/pnr-$LABEL/nextpnr_seed$seed.log"
   nextpnr-ecp5 --85k --package CABGA381 --json build/cpu_timing.json \
     --lpf synth/ulx3s_cpu.lpf --lpf-allow-unconstrained --timing-allow-fail \
+    --placer-heap-timingweight 100 \
     --seed "$seed" \
     --textcfg "build/pnr-$LABEL/cpu_timing_seed$seed.config" > "$seed_log" 2>&1
   v=$(grep -oE "Max frequency for clock '[^']*': [0-9.]+ MHz" "$seed_log" \

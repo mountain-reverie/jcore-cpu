@@ -82,7 +82,11 @@ func Collisions(d *Doc) (*CollisionReport, error) {
 		row  *Row
 		form string
 	}
+	// order records each key's first appearance so the walk below is
+	// document-ordered rather than map-ordered: one pair reported at two
+	// encodings must not pick a different one to name on each run.
 	byKey := map[Key][]keyed{}
+	var order []Key
 	for _, r := range d.Rows {
 		code := strings.TrimSpace(rowString(r, "code"))
 		form := strings.TrimSpace(strings.ReplaceAll(rowString(r, "format"), "\t", " "))
@@ -95,6 +99,9 @@ func Collisions(d *Doc) (*CollisionReport, error) {
 				"it cannot be compared against anything, so the sweep would skip it silently",
 				form, code)
 		}
+		if _, seen := byKey[k]; !seen {
+			order = append(order, k)
+		}
 		byKey[k] = append(byKey[k], keyed{r, form})
 		rep.Swept++
 	}
@@ -106,7 +113,8 @@ func Collisions(d *Doc) (*CollisionReport, error) {
 	// Keyed by the format pair, so one pair is reported once however many
 	// encodings it shares.
 	found := map[[2]string]Collision{}
-	for _, entries := range byKey {
+	for _, k := range order {
+		entries := byKey[k]
 		for i := range entries {
 			for j := i + 1; j < len(entries); j++ {
 				a, b := entries[i], entries[j]

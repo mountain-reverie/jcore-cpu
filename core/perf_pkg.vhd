@@ -28,7 +28,7 @@ package perf_pack is
   -- Listed in full because an earlier revision of this comment named only the
   -- first two and the most dangerous one was invisible:
   --
-  --   1. PMOVF's live field (ovf_r / ovf_pad in perf.vhd) -- DERIVED, scales
+  --   1. PMOVF's live field (ovf_r / OVF_PAD in perf.vhd) -- DERIVED, scales
   --      to 32 on its own.
   --   2. PMIDR's implemented-counter mask -- a FIXED 8-bit field of a 32-bit
   --      register. This is what sets the ceiling at 8: a ninth counter needs a
@@ -58,6 +58,7 @@ package perf_pack is
   -- this block against a9ffac1 depends on the assertion count being identical
   -- at both ends (synth/README.md, "Running an area A/B"), so this file adds
   -- none.
+
   subtype pmu_cnt_count_t is natural range 1 to 8;
 
   constant pmu_num_cnt : pmu_cnt_count_t := 8;
@@ -114,9 +115,9 @@ package perf_pack is
   -- the harness only as `FAIL pmucnt`. Whether that check is the subtype
   -- itself or an array access downstream of it was not determined; what was
   -- observed is that it stops, not where.)
-  constant pmu_cnt_idx_bits : natural := 3;
-  constant pmu_cnt_tag      : std_logic_vector(11 - (2 + pmu_cnt_idx_bits) downto 0)
-    := "0000001";
+  constant pmu_cnt_idx_bits : natural                                                := 3;
+  constant pmu_cnt_tag      : std_logic_vector(11 - (2 + pmu_cnt_idx_bits) downto 0) :=
+                                                                                        "0000001";
 
   type perf_cnt_array_t is array (0 to PMU_NUM_CNT - 1)
     of std_logic_vector(PMU_CNT_W - 1 downto 0);
@@ -165,8 +166,11 @@ package perf_pack is
   --
   -- There is also no separate `en` bit: pmu_wr_none IS the idle state, so
   -- "a write is happening" and "what it targets" cannot disagree.
-  type perf_wr_target_t is (pmu_wr_none, pmu_wr_cnt, pmu_wr_pmcr,
-                            pmu_wr_pmovf);
+
+  type perf_wr_target_t is (
+    pmu_wr_none, pmu_wr_cnt, pmu_wr_pmcr,
+    pmu_wr_pmovf
+  );
 
   type perf_wr_t is record
     tgt : perf_wr_target_t;
@@ -200,13 +204,13 @@ package perf_pack is
   -- that a build which sources only some events can say which.
   constant pmu_idr_magic : std_logic_vector(15 downto 0) := x"4A50"; -- "JP"
 
-  -- NO `component perf` IS DECLARED HERE, DELIBERATELY. core/cpu.vhd
-  -- instantiates the block directly (`entity work.perf`), so a component
-  -- declaration would have no users -- and an unused, hand-maintained mirror
-  -- of a port list is exactly the trap that cost `component tlb_walk` its
-  -- place in core/components_pkg.vhd (see the note there: it drifted twice,
-  -- silently, with a correct warning comment sitting on top of it). Add one
-  -- here only when something binds it by component, so that the thing using
-  -- it is also the thing checking it.
+-- NO `component perf` IS DECLARED HERE, DELIBERATELY. core/cpu.vhd
+-- instantiates the block directly (`entity work.perf`), so a component
+-- declaration would have no users -- and an unused, hand-maintained mirror
+-- of a port list is exactly the trap that cost `component tlb_walk` its
+-- place in core/components_pkg.vhd (see the note there: it drifted twice,
+-- silently, with a correct warning comment sitting on top of it). Add one
+-- here only when something binds it by component, so that the thing using
+-- it is also the thing checking it.
 
 end package perf_pack;

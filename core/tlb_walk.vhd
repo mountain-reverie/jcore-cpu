@@ -228,10 +228,10 @@ begin
   ev_walk      <= arm_int;
   -- V=1 and STALE=0: the same predicate the ST_DATA arm applies to pick
   -- ST_INSTALL. See the hit_ev declaration.
-  hit_ev       <= '1' when state = st_data and bus_ack = '1'
-                           and bus_d(0) = '1' and bus_d(1) = '0' else
-                  '0';
-  ev_hit       <= hit_ev;
+  hit_ev <= '1' when state = st_data and bus_ack = '1'
+                     and bus_d(0) = '1' and bus_d(1) = '0' else
+            '0';
+  ev_hit <= hit_ev;
 
   bus_en_int <= '1' when (state = st_tag_hi or state = st_tag_lo or state = st_data) else
                 '0';

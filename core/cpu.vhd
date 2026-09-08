@@ -209,7 +209,7 @@ architecture stru of cpu is
   signal walk_bus_en     : std_logic;
   -- '1' while the walk in progress is an I-SIDE walk. Registered at the arming
   -- cycle, when walk_i_miss/walk_d_miss are live and mutually exclusive.
-  signal walk_side_i    : std_logic;
+  signal walk_side_i : std_logic;
   -- Walk event pulses out of tlb_walk, counted by the PMU (counters PMU_WLK /
   -- PMU_WHT). tlb_walk no longer holds counters of its own; see its ev_walk
   -- comment and core/perf.vhd.
@@ -361,6 +361,7 @@ begin
   -- variant we intend to tape out can be measured -- making them the first
   -- thing dropped for area would be backwards. PMIDR then reads as a hard zero
   -- here, which is the architected "no PMU present" answer.
+
   g_no_mmu_counters : if not PRIV_ARCH generate
     pmu_regs    <= PERF_REGS_ZERO;
     cnt_itlb_wr <= (others => '0');

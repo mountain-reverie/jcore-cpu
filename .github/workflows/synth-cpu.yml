@@ -233,6 +233,15 @@ jobs:
           # Always surface the nextpnr log, even on a hard P&R/fit error -- the
           # redirect would otherwise swallow it (set -e kills the step before the
           # tail), leaving the CI log empty. Tail then re-raise the real rc.
+          #
+          # DELIBERATELY WITHOUT --placer-heap-timingweight, unlike the
+          # representative-timing P&R further below. This run gates FIT, not
+          # frequency: its Fmax is the unconstrained-IO artifact (the bare cpu
+          # exposes ~348 pads), so a timing-weighted placement optimises a
+          # number nothing consumes, while changing the placement this gate
+          # fits with and breaking the continuity of the bare-cpu Fmax series
+          # on the dashboard. Add it here only if this gate ever starts
+          # gating on frequency.
           nextpnr-ecp5 --85k --package CABGA381 \
             --json build/cpu_ecp5.json \
             --lpf synth/ulx3s_cpu.lpf --lpf-allow-unconstrained \
@@ -260,11 +269,42 @@ jobs:
         # build/nextpnr_timing.log, which both the metric emit (below) and the
         # regression gate (further below) consume. The gate runs AFTER emit so
         # the dashboard still captures the data point on a real regression.
+        #
+        # --placer-heap-timingweight 100 (nextpnr's default is 10) weights
+        # HeAP's analytic placement by timing criticality. MEASURED on THIS
+        # netlist -- SYNTH_VARIANT=j4, LFE5U-85F CABGA381, ONE netlist P&Rd N
+        # times (synthesis is deterministic), summarised over seeds:
+        #
+        #   default (10)   30.97 +/- 0.61   (16 seeds)
+        #   tw40           32.27 +/- 0.63   (12 seeds)
+        #   tw100          32.51 +/- 0.41   (16 seeds)   <- chosen
+        #   tw200          32.13 +/- 0.21   (12 seeds)
+        #
+        # (+/- is the 95% CI of the mean. Seed-to-seed sd on this design is
+        # ~1.2 MHz, which is why every arm above is a sweep and not a run.)
+        #
+        # 100 is the best mean AND among the tightest spreads, and the spread
+        # is the second reason to pick it: the regression gate below reads ONE
+        # nextpnr seed, so a narrower band is worth as much to it as a higher
+        # mean. At the default the 16-seed minimum was 28.69 MHz, i.e. below
+        # the j4 floor of 30; at tw100 the 16-seed minimum was 31.15.
+        #
+        # THE GAIN IS NETLIST-SPECIFIC. FLOORS MUST NOT BE SHIFTED BY IT.
+        # On origin/master's netlist (a9ffac12, no PMU) the same flag measures
+        # 36.15 +/- 0.87 against 35.90 +/- 0.40 -- a null, 12 seeds each. It
+        # buys placement quality on a netlist HeAP is struggling with and
+        # nothing on one it is not, so a floor below must be re-derived from
+        # its own sweep rather than moved by a constant.
+        #
+        # --placer-heap-critexp was swept alongside (1/2/4/6/8) and is INERT
+        # here: bit-identical nextpnr output, i.e. not a null result but no
+        # effect on the algorithm at all. Do not add it back.
         run: |
           set -uo pipefail
           SYNTH_VARIANT=${{ matrix.variant }} synth/cpu_synth.sh timing
           nextpnr-ecp5 --85k --package CABGA381 --json build/cpu_timing.json \
             --lpf synth/ulx3s_cpu.lpf --lpf-allow-unconstrained --timing-allow-fail \
+            --placer-heap-timingweight 100 \
             --textcfg build/cpu_timing.config > build/nextpnr_timing.log 2>&1 || true
           fmax=$(grep -oE "Max frequency for clock '[^']*': [0-9.]+ MHz" build/nextpnr_timing.log \
                  | tail -1 | grep -oE '[0-9.]+ MHz' | grep -oE '[0-9.]+' || true)

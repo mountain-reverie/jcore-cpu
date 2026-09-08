@@ -42,9 +42,9 @@ entity perf is
     clk : in    std_logic;
     rst : in    std_logic;
     -- One pulse per event, except ev(PMU_CYC) which is a level. See perf_pkg.
-    ev  : in    perf_ev_t := PERF_EV_ZERO;
+    ev : in    perf_ev_t := PERF_EV_ZERO;
     -- P4 write side (privileged; the SR.MD gate is in datapath.vhm).
-    wr  : in    perf_wr_t := PERF_WR_ZERO;
+    wr : in    perf_wr_t := PERF_WR_ZERO;
 
     regs_o : out   perf_regs_t
   );
@@ -64,31 +64,30 @@ architecture rtl of perf is
   -- as a normative hazard. EN's purpose is therefore to FREEZE, not to arm: a
   -- reader clears it to take a coherent snapshot across all eight counters and
   -- sets it again afterwards.
-  constant PMCR_RESET : std_logic_vector(31 downto 0) := x"00000001";
+  constant pmcr_reset : std_logic_vector(31 downto 0) := x"00000001";
 
-  constant CNT_ONES : std_logic_vector(PMU_CNT_W - 1 downto 0) := (others => '1');
-  constant OVF_PAD  : std_logic_vector(31 downto PMU_NUM_CNT) := (others => '0');
+  constant cnt_ones : std_logic_vector(PMU_CNT_W - 1 downto 0) := (others => '1');
+  constant ovf_pad  : std_logic_vector(31 downto PMU_NUM_CNT)  := (others => '0');
 
   -- Implemented-counter bitmask for PMIDR, one bit per counter.
-  constant IDR_MASK : std_logic_vector(7 downto 0) :=
-    std_logic_vector(to_unsigned(2 ** PMU_NUM_CNT - 1, 8));
+  constant idr_mask : std_logic_vector(7 downto 0) :=
+                                                      std_logic_vector(to_unsigned(2 ** PMU_NUM_CNT - 1, 8));
 
-  signal cnt_r  : perf_cnt_array_t := (others => (others => '0'));
+  signal cnt_r  : perf_cnt_array_t                           := (others => (others => '0'));
   signal ovf_r  : std_logic_vector(PMU_NUM_CNT - 1 downto 0) := (others => '0');
-  signal pmcr_r : std_logic_vector(31 downto 0) := PMCR_RESET;
+  signal pmcr_r : std_logic_vector(31 downto 0)              := pmcr_reset;
 
 begin
 
   -- One aggregate, not four per-field assignments: separate concurrent
   -- assignments to separate fields of one output port are legal VHDL but give
   -- the port several drivers, and yosys `check -assert` is run on this design.
-  regs_o <= (
+  regs_o <=
+  (
     cnt  => cnt_r,
-    ovf  => OVF_PAD & ovf_r,
+    ovf  => ovf_pad & ovf_r,
     pmcr => pmcr_r,
-    idr  => PMU_IDR_MAGIC
-            & std_logic_vector(to_unsigned(PMU_CNT_W, 8))
-            & IDR_MASK
+    idr  => PMU_IDR_MAGIC & std_logic_vector(to_unsigned(PMU_CNT_W, 8)) & idr_mask
   );
 
   p_perf : process (clk) is
@@ -98,10 +97,10 @@ begin
   begin
 
     if rising_edge(clk) then
-      if rst = '1' then
+      if (rst = '1') then
         cnt_r  <= (others => (others => '0'));
         ovf_r  <= (others => '0');
-        pmcr_r <= PMCR_RESET;
+        pmcr_r <= pmcr_reset;
       else
         -- PMOVF write-1-to-clear, applied to the OLD bits FIRST so that the
         -- wrap capture inside the loop below folds in AFTERWARDS and a wrap
@@ -127,11 +126,11 @@ begin
         -- readers cannot silently clear each other's bits.
         ovf_v := ovf_r;
 
-        if wr.tgt = pmu_wr_pmovf then
+        if (wr.tgt = pmu_wr_pmovf) then
           ovf_v := ovf_v and not wr.d(PMU_NUM_CNT - 1 downto 0);
         end if;
 
-        if wr.tgt = pmu_wr_pmcr then
+        if (wr.tgt = pmu_wr_pmcr) then
           pmcr_r <= wr.d;
         end if;
 
@@ -145,14 +144,14 @@ begin
           -- bounded by one count per write, and perf only writes a counter when
           -- it is (re)arming a sampling period, i.e. when it is discarding the
           -- old value anyway.
-          if wr.tgt = pmu_wr_cnt and wr.idx = i then
+          if (wr.tgt = pmu_wr_cnt and wr.idx = i) then
             cnt_r(i) <= wr.d;
-          elsif pmcr_r(0) = '1' and ev(i) = '1' then
+          elsif (pmcr_r(0) = '1' and ev(i) = '1') then
             cnt_r(i) <= std_logic_vector(unsigned(cnt_r(i)) + 1);
             -- Overflow is captured HERE, at the wrap, and not by comparing
             -- values later: the whole point of the bit is that a reader which
             -- MISSED the wrap can still find out it happened.
-            if cnt_r(i) = CNT_ONES then
+            if (cnt_r(i) = cnt_ones) then
               ovf_v(i) := '1';
             end if;
           end if;

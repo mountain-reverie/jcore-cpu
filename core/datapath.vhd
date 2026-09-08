@@ -167,22 +167,31 @@ entity datapath is
        -- components_pkg.vhd). '0' on non-MMU builds.
        if_pc : out std_logic_vector(31 downto 0);
        ex_if_pc : in std_logic_vector(31 downto 0) := (others => '0');
-       -- PMU register file (core/perf.vhd). Read-only pass-through:
-       -- the counters live in perf.vhd, this port is not a second
-       -- copy of the state. Published in FULL rather than pre-muxed
-       -- by address, because handing perf.vhd the P4 address and
-       -- taking its answer back would put a combinational edge into
-       -- this process and one back out of it -- and yosys sees this
-       -- whole process as ONE cell, so that is an SCC at cell
-       -- granularity even though the logic is acyclic (perf_pkg.vhd
-       -- header; synth/README.md on the slot_o false loop).
+       -- PMU read interface (core/perf.vhd). PRE-MUXED BY ADDRESS, not
+       -- the whole register file: pmu_idx_o names the counter this
+       -- cycle's data address selects and pmu_i.cnt is that counter,
+       -- already selected inside perf.vhd. 160 bits cross instead of
+       -- 352, and the 8:1 32-bit counter mux is no longer part of this
+       -- process.
+       --
+       -- WHY THIS IS NOT THE CELL-LEVEL SCC IT LOOKS LIKE. pmu_idx_o is
+       -- NOT driven from inside the process. It is a slice of ma_ad_c --
+       -- the concurrent form of the data address, a mux of xbus/ybus/
+       -- zbus (architecture signals, all register-sourced) selected by
+       -- mem.addr_sel from decode. So the dependency yosys sees is
+       -- registers -> ma_ad_c -> perf.vhd -> this process, which is not
+       -- a cycle. Handing perf.vhd an address computed INSIDE the
+       -- process would be one, because yosys treats this whole process
+       -- as a single cell, and this design has already paid for one
+       -- false SCC (perf_pkg.vhd header; synth/README.md, slot_o).
        --
        -- The two walker counters that used to arrive here as
-       -- walk_cnt_walks_i/walk_cnt_hits_i are now pmu_i.cnt(PMU_WLK)
-       -- and pmu_i.cnt(PMU_WHT); P4_TSBCNT is served from their low
-       -- halves and its architected value is unchanged.
-       -- PERF_REGS_ZERO on non-MMU builds (J1/J2 bit-identical).
-       pmu_i : in perf_regs_t := PERF_REGS_ZERO;
+       -- walk_cnt_walks_i/walk_cnt_hits_i are now PMU counters WLK and
+       -- WHT; P4_TSBCNT is served from pmu_i.tsbcnt, which perf.vhd
+       -- packs from their low halves, and its architected value is
+       -- unchanged. PERF_P4_ZERO on non-MMU builds (J1/J2 unaffected).
+       pmu_idx_o : out pmu_idx_t := (others => '0');
+       pmu_i : in perf_p4_t := PERF_P4_ZERO;
        -- PMU write side. Strobe + select + data, no reply, so it adds
        -- no dependency edge back into this process.
        pmu_o : out perf_wr_t := PERF_WR_ZERO;
@@ -320,6 +329,27 @@ signal manip_sel : std_logic_vector(31 downto 0);
  -- process, so on J1/J2 it is a constant PERF_WR_ZERO with no consumer and
  -- prunes away.
  signal pmu_wr_c : perf_wr_t;
+ -- THE DATA-ACCESS ADDRESS, hoisted OUT of the process.
+ --
+ -- It used to be a `case mem.addr_sel` over xbus/ybus/zbus written straight
+ -- into the ma_ad variable. It is exactly the same three-way mux, moved to a
+ -- concurrent assignment, and the process still reads it through ma_ad -- so
+ -- there is one address mux in this file, not two, and the PMU counter index
+ -- below is a slice of the SAME net the P4 decode and the bus launch use.
+ --
+ -- THAT IS THE WHOLE REASON IT IS OUT HERE. pmu_idx_o has to be produced by
+ -- concurrent logic (see the port's comment), and the alternative -- a second
+ -- copy of the mux next to the first -- is a duplicated address decode that
+ -- nothing forces to stay in step. Hoisting removes the duplicate instead of
+ -- documenting it, and it also puts the mux where the whole suite exercises
+ -- it: every load and store in sim/tests/ goes through this net, so getting
+ -- the SEL_XBUS/SEL_YBUS/SEL_ZBUS arms wrong breaks everything rather than
+ -- just the PMU (which is addressed @(disp,Rn), i.e. SEL_ZBUS only, and would
+ -- not have caught an x/y swap on its own).
+ --
+ -- All three sources are register-sourced combinational signals, so this net
+ -- carries no dependency on any output of the process.
+ signal ma_ad_c : std_logic_vector(31 downto 0);
  -- Registered tlb_squash, made readable INSIDE the process (this_r is
  -- only usable in the concurrent assignments below). Used to suppress new
  -- memory transactions issued in the fault shadow, symmetrically with the
@@ -1245,7 +1275,34 @@ end generate;
  with mac.sel1 select macin1 <= xbus when SEL_XBUS, zbus_mac when SEL_ZBUS, wbus when others;
  with mac.sel2 select macin2 <= ybus when SEL_YBUS, zbus_mac when SEL_ZBUS, wbus when others;
  ibit <= sr.int_mask;
- datapath : process(this_r,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, squash_arm, tlb_fault_va, tlb_exc_expevt, tlb_exc_fsr, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, inst_fault, inst_fault_prot, id_delay_slot, if_fault_cap, tlb_exc_is_i, tlb_exc_ifetch, ex_if_pc, tlb_squash_r, squash_ifetch_r, pmu_i)
+ -- The data-access address (see ma_ad_c's declaration). Byte-for-byte the
+ -- `case mem.addr_sel` this replaced: mem_addr_sel_t has exactly the three
+ -- values, so the trailing `else` is SEL_ZBUS and not a fallback.
+ ma_ad_c <= xbus when mem.addr_sel = SEL_XBUS else
+            ybus when mem.addr_sel = SEL_YBUS else
+            zbus;
+ -- THE PMU COUNTER INDEX, on its way to perf.vhd's read mux.
+ --
+ -- HAZARD, NAMED AT BOTH ENDS: this slice and the one in the P4_PMCNT decode
+ -- arm inside the process (search PMU_CNT_IDX_BITS) must stay identical. Both
+ -- are derived from perf_pkg's PMU_CNT_IDX_BITS and both index ma_ad_c, so
+ -- there is no literal and no address mux duplicated between them -- but they
+ -- are still two expressions and GHDL checks neither against the other.
+ --
+ -- The backstop is guard sim/tests/pmucnt.S, and it works because the two
+ -- ends are INDEPENDENT: the WRITE index stays in the process (pmu_idx_v,
+ -- into pmu_o.idx) while the READ index comes from here. A divergence
+ -- therefore writes counter n and reads counter m, which pmucnt's exact-delta
+ -- checks and pmuovf's 0x01 write/read-back check both fail on. Wiring the
+ -- write index from this net too would look tidier and would MASK exactly
+ -- that: both halves would drift together and a write-then-read would still
+ -- agree with itself.
+ --
+ -- Unconditional, and harmless when the access is not a PMU read: perf.vhd's
+ -- select has no side effect and the process ignores pmu_i.cnt unless
+ -- p4_sel_v = P4_PMCNT.
+ pmu_idx_o <= ma_ad_c(1 + PMU_CNT_IDX_BITS downto 2);
+ datapath : process(this_r,pc_ctrl,wbus,zbus,sr_ctrl, xbus, ybus, mac,mem, instr, db_i, inst_i, debug, debug_i,reg_wr_data_o, logic_out, arith_out, arith_func, func, sfto, coproc, cop_i, shift_busy, mult_stall, tlb_exc_pend, squash_arm, tlb_fault_va, tlb_exc_expevt, tlb_exc_fsr, reg, num_x_r, mem_autoupd, mem_autoinc1, mem_predec, restore_fire, delay_slot, inst_fault, inst_fault_prot, id_delay_slot, if_fault_cap, tlb_exc_is_i, tlb_exc_ifetch, ex_if_pc, tlb_squash_r, squash_ifetch_r, pmu_i, ma_ad_c)
    variable this : datapath_reg_t;
           variable if_ad : std_logic_vector(31 downto 0);
           variable ma_ad, ma_dw : std_logic_vector(31 downto 0);
@@ -1717,12 +1774,12 @@ end generate;
             if (mem.issue = '1' and this.data_o.en = '0'
                 and (tlb_squash_r = '0' or squash_ifetch_r = '1')) or
                (coproc.coproc_cmd = LDS) then
-              -- start new data request
-              case mem.addr_sel is
-                when SEL_XBUS => ma_ad := xbus;
-                when SEL_YBUS => ma_ad := ybus;
-                when SEL_ZBUS => ma_ad := zbus;
-              end case;
+              -- start new data request. The address mux itself is the
+              -- concurrent ma_ad_c above (see its declaration): the counter
+              -- index perf.vhd needs has to come from concurrent logic, and
+              -- one shared net is better than this mux and a copy of it.
+              -- Kept in a variable so every reader below is unchanged.
+              ma_ad := ma_ad_c;
               case mem.wdata_sel is
                 when SEL_YBUS => ma_dw := ybus;
                 when SEL_ZBUS => ma_dw := zbus;
@@ -1840,6 +1897,17 @@ end generate;
                     -- The agreement with pmu_num_cnt is hand-maintained, NOT
                     -- compiler-checked -- perf_pkg's comment records what was
                     -- measured, and guard pmucnt is the backstop.
+                    --
+                    -- HAZARD, NAMED AT BOTH ENDS: pmu_idx_v below is the WRITE
+                    -- index only. The READ index is the concurrent pmu_idx_o
+                    -- near the top of the architecture, and the two slice
+                    -- expressions must not drift apart. They share ma_ad_c and
+                    -- PMU_CNT_IDX_BITS, so no address mux and no literal is
+                    -- duplicated -- but they are two expressions and nothing in
+                    -- the language couples them. That they are INDEPENDENT is
+                    -- deliberate: it is what makes a divergence write counter n
+                    -- and read counter m, which pmucnt's exact deltas and
+                    -- pmuovf check 0x01 fail on. See pmu_idx_o's comment.
                     elsif ma_ad(11 downto 2 + PMU_CNT_IDX_BITS) = PMU_CNT_TAG
                           and ma_ad(1 downto 0) = "00" then
                       p4_sel_v := P4_PMCNT;
@@ -2015,7 +2083,8 @@ end generate;
                     when P4_TSBCNT =>
                       -- Served from the PMU's walk counters, which ARE the
                       -- walker counters now -- tlb_walk holds no state of its
-                      -- own. The low 16 bits of each.
+                      -- own. The low 16 bits of each, packed in perf.vhd (the
+                      -- two counters do not cross the boundary in full).
                       --
                       -- BIT-FOR-BIT WHAT IT ALWAYS WAS, FOR SOFTWARE THAT
                       -- NEVER TOUCHES THE PMU PAGE -- which is the only
@@ -2028,12 +2097,14 @@ end generate;
                       -- to 0xFF001038 / 0xFF00103C sets it. A hypervisor
                       -- virtualizing TSBCNT must therefore virtualize the PMU
                       -- page too, not just this offset.
-                      this.m_dr_next := pmu_i.cnt(PMU_WLK)(15 downto 0)
-                                        & pmu_i.cnt(PMU_WHT)(15 downto 0);
+                      this.m_dr_next := pmu_i.tsbcnt;
                     when P4_PMCR => this.m_dr_next := pmu_i.pmcr;
                     when P4_PMOVF => this.m_dr_next := pmu_i.ovf;
                     when P4_PMIDR => this.m_dr_next := pmu_i.idr;
-                    when P4_PMCNT => this.m_dr_next := pmu_i.cnt(pmu_idx_v);
+                    -- Already selected, by pmu_idx_o -> perf.vhd -> pmu_i.cnt.
+                    -- pmu_idx_v is NOT read here: it is the write index (see
+                    -- the decode arm above for why the two are kept apart).
+                    when P4_PMCNT => this.m_dr_next := pmu_i.cnt;
                     when P4_TLBINST =>
                       this.m_dr_next := tlb_cnt_iwr_i & tlb_cnt_dwr_i;
                     -- P4_TSBVSEED is WRITE-ONLY: no read case, so it falls to

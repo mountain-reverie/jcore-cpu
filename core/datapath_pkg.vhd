@@ -212,15 +212,17 @@ package datapath_pack is
       tlb_exc_ifetch     : in    std_logic := '0';
       if_pc              : out   std_logic_vector(31 downto 0);
       ex_if_pc           : in    std_logic_vector(31 downto 0) := (others => '0');
-      -- PMU (core/perf.vhd). pmu_i is the whole counter file, published
-      -- unconditionally; the P4 read path selects from it with the same
-      -- `case p4_sel_v` it uses for every other CSR, so no read data ever
-      -- flows back INTO perf.vhd and the two blocks stay acyclic (perf_pkg
-      -- header). pmu_o is the write side: strobe, select, data, no reply.
-      -- P4_TSBCNT is served from the low halves of pmu_i.cnt(PMU_WLK) and
-      -- cnt(PMU_WHT) -- the walker's own 16-bit counters are gone.
-      pmu_i : in    perf_regs_t := PERF_REGS_ZERO;
-      pmu_o : out   perf_wr_t   := PERF_WR_ZERO;
+      -- PMU (core/perf.vhd). pmu_idx_o is the counter number this cycle's data
+      -- address selects; it is driven by CONCURRENT logic in datapath.vhm, not
+      -- from inside its process, which is what keeps the pair acyclic at cell
+      -- granularity (perf_pkg header). pmu_i.cnt comes back ALREADY SELECTED,
+      -- so the 8:1 mux is in perf.vhd and 160 bits cross rather than 352.
+      -- pmu_o is the write side: strobe, select, data, no reply. P4_TSBCNT is
+      -- served from pmu_i.tsbcnt, which perf.vhd packs from the low halves of
+      -- counters WLK and WHT -- the walker's own 16-bit counters are gone.
+      pmu_idx_o : out   pmu_idx_t := (others => '0');
+      pmu_i     : in    perf_p4_t := PERF_P4_ZERO;
+      pmu_o     : out   perf_wr_t := PERF_WR_ZERO;
       -- TLB install counters (P4_TLBINST, 0xFF000058). Must mirror the entity
       -- in core/datapath.vhm -- this component declaration is what cpu.vhd
       -- binds against, so a port added only to the .vhm fails to elaborate.

@@ -216,12 +216,16 @@ architecture stru of cpu is
   signal walk_ev_walk : std_logic;
   signal walk_ev_hit  : std_logic;
 
-  -- PMU (core/perf.vhd). pmu_regs is what datapath.vhm's P4 read path selects
-  -- from -- including P4_TSBCNT, which is now served from the low halves of
-  -- counters PMU_WLK/PMU_WHT rather than from a separate 16-bit pair.
-  signal pmu_regs : perf_regs_t;
-  signal pmu_wr   : perf_wr_t;
-  signal pmu_ev   : perf_ev_t;
+  -- PMU (core/perf.vhd). The read path is PRE-MUXED: datapath exports the
+  -- counter index its P4 decode is looking at (pmu_idx), perf.vhd does the 8:1
+  -- select, and pmu_p4 carries back five 32-bit words -- the selected counter,
+  -- the packed P4_TSBCNT pair, PMOVF, PMCR, PMIDR. That is 160 bits rather than
+  -- the 352 the whole register file used to cost, and the mux is out of
+  -- datapath's process; perf_pkg.vhd's header has the argument and the numbers.
+  signal pmu_idx : pmu_idx_t;
+  signal pmu_p4  : perf_p4_t;
+  signal pmu_wr  : perf_wr_t;
+  signal pmu_ev  : perf_ev_t;
   -- TLB install-port write enables, one PER ARRAY: the hardware walker is the
   -- sole installer and installs only into the side that faulted.
   signal itlb_wr : std_logic;
@@ -336,8 +340,8 @@ begin
 
   -- Tie off the MMU-only counter signals when the MMU is absent.
   --
-  -- pmu_regs (the whole PMU register file, which now includes the walker
-  -- counters) and cnt_itlb_wr/cnt_dtlb_wr (the TLB install counters) are driven
+  -- pmu_p4 (the PMU's pre-muxed P4 read bundle) and cnt_itlb_wr/cnt_dtlb_wr
+  -- (the TLB install counters) are driven
   -- inside g_mmu, but the datapath port map above reads them UNCONDITIONALLY --
   -- it is a single instantiation, not one per variant -- so on a
   -- PRIV_ARCH = false build they would have no driver at all.
@@ -363,7 +367,7 @@ begin
   -- here, which is the architected "no PMU present" answer.
 
   g_no_mmu_counters : if not PRIV_ARCH generate
-    pmu_regs    <= PERF_REGS_ZERO;
+    pmu_p4      <= PERF_P4_ZERO;
     cnt_itlb_wr <= (others => '0');
     cnt_dtlb_wr <= (others => '0');
   end generate g_no_mmu_counters;
@@ -543,11 +547,15 @@ begin
       tlb_exc_ifetch     => tlb_exc_ifetch,
       if_pc              => dp_if_pc,
       ex_if_pc           => dec_ex_if_pc,
-      -- PMU register file (0xFF001000 block) AND the walker counters' P4 alias
-      -- P4_TSBCNT at 0xFF000054, which datapath serves from the low halves of
-      -- pmu_i.cnt(PMU_WLK)/cnt(PMU_WHT).
-      pmu_i => pmu_regs,
-      pmu_o => pmu_wr,
+      -- PMU (0xFF001000 block) AND the walker counters' P4 alias P4_TSBCNT at
+      -- 0xFF000054. datapath exports the counter index (pmu_idx) and gets the
+      -- selected word back in pmu_p4.cnt; P4_TSBCNT arrives pre-packed as
+      -- pmu_p4.tsbcnt. The index leaves datapath from CONCURRENT logic, not
+      -- from its process -- see perf_pkg.vhd's header for why that is the whole
+      -- difference between this and a cell-level combinational loop.
+      pmu_idx_o => pmu_idx,
+      pmu_i     => pmu_p4,
+      pmu_o     => pmu_wr,
       -- TLB install counters' P4 alias (P4_TLBINST at 0xFF000058).
       tlb_cnt_iwr_i => std_logic_vector(cnt_itlb_wr),
       tlb_cnt_dwr_i => std_logic_vector(cnt_dtlb_wr)
@@ -558,8 +566,9 @@ begin
   -- when ack is restored. Data is passed through unconditionally; only the
   -- handshake is gated.
   -- The walk counters are read through their P4 alias (P4_TSBCNT,
-  -- 0xFF000054), served inside datapath.vhm from the low halves of
-  -- pmu_i.cnt(PMU_WLK) and pmu_i.cnt(PMU_WHT) -- the pmu_i port in the map
+  -- 0xFF000054), served inside datapath.vhm from pmu_i.tsbcnt -- the low
+  -- halves of PMU counters WLK and WHT, packed in perf.vhd and arriving on
+  -- the pmu_i port in the map
   -- above. The walk_cnt_walks_i / walk_cnt_hits_i formals this comment used to
   -- name are gone: tlb_walk holds no counters now, it exports ev_walk/ev_hit
   -- and core/perf.vhd does the counting. The old P2 debug window at
@@ -804,7 +813,8 @@ begin
         rst    => rst,
         ev     => pmu_ev,
         wr     => pmu_wr,
-        regs_o => pmu_regs
+        p4_idx => pmu_idx,
+        p4_o   => pmu_p4
       );
 
     -- Miss-exception suppression. A walk suppresses the miss arms for its

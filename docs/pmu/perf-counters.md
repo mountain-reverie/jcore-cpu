@@ -339,7 +339,7 @@ stylistic, and it must not be "tidied" for symmetry — it is load-bearing twice
 
 **The PMU is gated on the existing `PRIV_ARCH` generic and gets no generic of its
 own.** On `PRIV_ARCH = false` (J1/J2) the block is not instantiated and
-`datapath`'s `pmu_i` port is tied to `PERF_REGS_ZERO` in the same
+`datapath`'s `pmu_i` port is tied to `PERF_P4_ZERO` in the same
 `g_no_mmu_counters` generate that already ties off the install counters — a hard
 constant, not an open port, because `core/cpu.vhd` records **+526 LUT4 measured
 on j2** from leaving counter inputs undriven (an undriven wire is a don't-care to
@@ -468,7 +468,7 @@ decision, not an oversight. Three facts drove it:
    target tops, which cannot be built or tested from here. And an input left
    undriven is not a benign default — it is precisely the don't-care hazard
    `core/cpu.vhd` measures at **+526 LUT4 on j2**, propagating out of the dead
-   port into unrelated blocks, which is why `perf_pkg.vhd`'s `PERF_REGS_ZERO`
+   port into unrelated blocks, which is why `perf_pkg.vhd`'s `PERF_P4_ZERO`
    exists at all.
 3. **Decisively: the default testbench has no cache.** `sim/tests` holds 157
    `.S` guard sources and `sim/mmu_sim.sh` names `cpu_cache_tb` on exactly 15
@@ -590,6 +590,100 @@ specifies, which is the cross-check that the synthesised block is the block:
 `synth` exit status was 0 on all four arms, which includes `check -assert` — so
 the record-and-select structure in §3 introduces no inferred latch, no
 multi-driver net, and no combinational loop through `datapath`'s process.
+
+---
+
+## 8.4 The read interface into the datapath, and what it cost
+
+**Half of everything the PMU added to this core was the way it was READ, not the
+counters.** Measured on the ECP5 representative harness (`SYNTH_VARIANT=j4`,
+`cpu_timing_top`, LFE5U-85F CABGA381), mapped cell counts from the same netlist
+the Fmax sweeps below used:
+
+| netlist | cells | flops |
+|---------|------:|------:|
+| PMU publishing the whole register file | 21541 | 3511 |
+| PMU with the read interface narrowed    | 20003 | 3511 |
+| PMU deleted outright                    | 18534 | 3215 |
+| `origin/master`, no PMU at all          | 16800 | 3247 |
+
+The flop count is the mutation check and it is the point of the middle row: it
+is **identical** across the first two, so all eight counters are still
+instantiated and still counting. Only the interface changed.
+
+### What the old shape was
+
+`perf.vhd` published `perf_regs_t` — eight 32-bit counters, PMOVF, PMCR, PMIDR,
+**352 bits** — and `datapath.vhm` selected inside its process, which put an 8:1
+32-bit mux in the middle of the largest combinational block in the design. The
+reason given (§3, and `perf_pkg.vhd`'s header) was real: handing `perf.vhd` the
+P4 address and taking the answer back is a combinational cycle **at cell
+granularity**, because yosys treats that whole process as one cell, and this
+design has already paid for one false SCC.
+
+### Why that was avoidable
+
+The counter index is three bits of the **data address**, and the data address is
+a mux of `xbus`/`ybus`/`zbus` — architecture-level *signals*, every one of them
+register-sourced — selected by `mem.addr_sel`, which comes from decode. None of
+that is inside the process. So the address is computed **concurrently**
+(`ma_ad_c`), the process consumes it through the same `ma_ad` variable as
+before, `pmu_idx_o` is a slice of that same net, and `perf.vhd` returns one
+selected word. The dependency is registers → `ma_ad_c` → `perf.vhd` → process,
+which is acyclic at cell granularity too. `synth/cpu_synth.sh scc` reports
+**0 SCCs**, and `check -assert` passes.
+
+`perf_p4_t` carries five words — selected counter, pre-packed `P4_TSBCNT`,
+PMOVF, PMCR, PMIDR — 160 bits instead of 352.
+
+### Fmax
+
+16 nextpnr seeds per arm, one netlist P&Rd 16 times, `+/-` is the 95% CI of the
+mean:
+
+| arm | Fmax (MHz) | logic / routing |
+|-----|-----------:|-----------------|
+| whole register file, default placer | 30.97 +/- 0.61 | 7.34 / 25.02 ns |
+| narrowed, default placer            | 32.91 +/- 0.85 | 6.69 / 23.79 ns |
+| whole register file, `--placer-heap-timingweight 100` | 32.51 +/- 0.41 | 7.50 / 23.27 ns |
+| narrowed + timingweight             | 33.85 +/- 0.67 | 6.98 / 22.61 ns |
+| `origin/master` for reference (no PMU) | 35.87 +/- 0.40 | 6.04 / 21.85 ns |
+
+**+1.94 MHz** for the narrowing alone, and the 0.65 ns that comes off the LOGIC
+half of the path is the mux leaving. The two changes are **sub-additive**
+(+1.54 and +1.94 separately, +2.88 together): they are partly the same win seen
+twice, since a netlist with 1538 fewer cells is also a netlist the placer finds
+easier.
+
+**2.02 MHz of the gap to `origin/master` is still open**, and it is not this
+interface: 1734 mapped cells and most of the remaining depth survive deleting
+the PMU entirely (the third row of the area table above), so what is left is on
+the datapath side of the P4 read path, not in `perf.vhd`.
+
+The critical path no longer touches this interface at all. In both narrowed
+arms it runs from a `datapath` state flop into `tlb_walk`'s retry logic and the
+debug port.
+
+### The one hazard this shape creates
+
+The **read** index is the concurrent `pmu_idx_o`; the **write** index is still
+`pmu_idx_v` inside the process. Two expressions, sharing `ma_ad_c` and
+`PMU_CNT_IDX_BITS` so that neither the address mux nor the offset literal is
+duplicated — but nothing in the language couples them, and both sites say so.
+
+Keeping them independent is deliberate, and wiring the write index from the
+concurrent net too would look tidier while **masking** the failure: both halves
+would drift together and a write-then-read would still agree with itself.
+Verified by mutation — shifting the concurrent slice by one bit fails
+`pmucnt` with result `0x10` (PMINS delta over an 8-nop window is not 8) and
+`pmuovf` with result `0x01` (PMWLK does not read back what was written), each
+with its own code and neither by timeout.
+
+The sampling boundary of §3.2 is **unchanged**: the read is still served in the
+cycle the access is decoded. A variant that registered the index and returned
+the counter one cycle later was considered and rejected for exactly that reason
+— it would have moved an architecturally visible, documented and guard-pinned
+property to save nothing the concurrent form does not already save.
 
 ---
 

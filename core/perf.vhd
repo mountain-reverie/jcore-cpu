@@ -45,8 +45,22 @@ entity perf is
     ev : in    perf_ev_t := PERF_EV_ZERO;
     -- P4 write side (privileged; the SR.MD gate is in datapath.vhm).
     wr : in    perf_wr_t := PERF_WR_ZERO;
+    -- P4 READ SIDE. p4_idx is the counter number of the access datapath is
+    -- decoding THIS cycle, taken from the CONCURRENT form of the data address
+    -- (core/datapath.vhm's ma_ad_c) and not from inside its process -- that
+    -- distinction is what keeps the two blocks acyclic at cell granularity,
+    -- see perf_pkg.vhd's header. The 8:1 select it drives lives here so that
+    -- one 32-bit word crosses back into the datapath process, not eight.
+    --
+    -- It is NOT qualified by "is this really a PMCNT access". The select runs
+    -- every cycle and datapath ignores the answer unless p4_sel_v = P4_PMCNT;
+    -- qualifying it would need the decode, which is the one thing that cannot
+    -- leave the process. Reads have no side effect, so an unused select is
+    -- unobservable -- unlike TSBVICT, whose LFSR step is why THAT register is
+    -- served inside the guarded arm.
+    p4_idx : in    pmu_idx_t := (others => '0');
 
-    regs_o : out   perf_regs_t
+    p4_o : out   perf_p4_t
   );
 end entity perf;
 
@@ -79,15 +93,30 @@ architecture rtl of perf is
 
 begin
 
-  -- One aggregate, not four per-field assignments: separate concurrent
+  -- One aggregate, not five per-field assignments: separate concurrent
   -- assignments to separate fields of one output port are legal VHDL but give
   -- the port several drivers, and yosys `check -assert` is run on this design.
-  regs_o <=
+  --
+  -- `cnt` IS the 8:1 read mux that used to sit in datapath's process. `tsbcnt`
+  -- is the P4_TSBCNT pack: the low halves of the two walker counters, in that
+  -- order, bit-for-bit what 0xFF000054 has always returned -- see the P4_TSBCNT
+  -- arm in core/datapath.vhm for what is and is not guaranteed about it now
+  -- that the PMU owns those counters.
+  --
+  -- p4_idx is unconstrained by pmu_num_cnt: it is pmu_cnt_idx_bits wide, so
+  -- with pmu_cnt_idx_bits = 3 it spans 0..7 and cnt_r is 0..pmu_num_cnt-1.
+  -- The two agree only because both are 8, and that agreement is the SAME
+  -- hand-maintained one perf_pkg.vhd's pmu_num_cnt comment describes (item 3);
+  -- lowering pmu_num_cnt without lowering pmu_cnt_idx_bits raises
+  -- CONSTRAINT_ERROR here at the first out-of-range access rather than
+  -- silently, and guard pmucnt is the backstop that reaches it.
+  p4_o <=
   (
-    cnt  => cnt_r,
-    ovf  => ovf_pad & ovf_r,
-    pmcr => pmcr_r,
-    idr  => PMU_IDR_MAGIC & std_logic_vector(to_unsigned(PMU_CNT_W, 8)) & idr_mask
+    cnt    => cnt_r(to_integer(unsigned(p4_idx))),
+    tsbcnt => cnt_r(PMU_WLK)(15 downto 0) & cnt_r(PMU_WHT)(15 downto 0),
+    ovf    => ovf_pad & ovf_r,
+    pmcr   => pmcr_r,
+    idr    => PMU_IDR_MAGIC & std_logic_vector(to_unsigned(PMU_CNT_W, 8)) & idr_mask
   );
 
   p_perf : process (clk) is

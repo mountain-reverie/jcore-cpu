@@ -687,6 +687,65 @@ property to save nothing the concurrent form does not already save.
 
 ---
 
+## 8.5 The follow-up that did NOT work, and what it settles
+
+**Unwidening the P4 read mux is a null. Measured, 16 seeds, and recorded here so
+nobody spends the seeds again.**
+
+§8.4 leaves 2.02 MHz open against `origin/master`, and it is not the PMU:
+deleting the PMU outright from the narrowed tree measures **33.49 ± 0.48**
+against **33.85 ± 0.67** with it — the counters and their read path now cost
+nothing. So the gap is the datapath-side P4 decode, and the visible suspect was
+that the PMU spends **four** `p4_sel_t` members. Every member of that enum is an
+input to the 32-bit read mux `datapath.vhm`'s process builds over
+`case p4_sel_v`, in the largest combinational block in the design.
+
+The arm: give the whole PMU page **one** `p4_sel_t` member and merge its four
+registers with a small concurrent mux outside the process, leaving that read mux
+the size `master` had it. `--placer-heap-timingweight 100`, the shipped flow:
+
+| arm | Fmax (MHz) | logic / routing | path stages | cells |
+|-----|-----------:|-----------------|------------:|------:|
+| narrowed interface (§8.4) | 33.85 ± 0.67 | 6.98 / 22.61 ns | 39.4 | 20003 |
+| + PMU page as one selector | 34.00 ± 0.50 | 6.16 / 23.29 ns | 24.7 | 19485 |
+| `origin/master` | 35.87 ± 0.40 | 6.04 / 21.85 ns | 24.9 | 16800 |
+
+**+0.15 MHz, confidence intervals on top of each other.**
+
+**The mechanism worked; the router took it back.** Logic delay fell 0.82 ns to
+within 0.12 ns of master's, and the critical path's stage count fell from 39.4
+to 24.7 — master's is 24.9. The depth that change targeted is *gone*. Routing
+then rose 0.68 ns and cancelled it.
+
+### What this settles for anything that adds P4/CSR state
+
+This is the measurement that says **the remaining gap is routing-bound, not
+depth-bound**, and it changes what is worth trying next.
+
+`synth/probes/pnr_stats.py`'s header measured this device at ~0.45 ns to enter
+the routing fabric plus only ~0.055 ns per tile of distance, against ~0.22 ns
+for a LUT. On a path with ~16 routed hops, **removing logic stages buys less
+than the hops that remain cost.** §8.4 won +1.94 MHz because it removed a mux
+*and* 192 bits of interconnect; §8.5 removed depth alone and won nothing.
+
+So for the hypervisor, or anything else that grows this decode:
+
+* **Narrowing what CROSSES into the datapath process is what pays.** Wide state
+  published into it, and muxes built inside it, cost both depth and the
+  interconnect that dominates. That is the §8.4 result and it is worth repeating.
+* **Reshaping the decode INSIDE the process, at constant interconnect, is not.**
+  Measured null. Do not spend a redesign on `p4_sel_t`'s width.
+* Hoisting the rest of the P4 decode (`p4_sel_v` is now a pure function of the
+  concurrent `ma_ad_c`) is predicted to be a null for the same reason and was
+  deliberately **not** measured: `synth_ecp5` flattens, so a hierarchy boundary
+  is not where the cost is. If someone measures it anyway, that prediction is
+  the thing to check it against.
+* The ~2 MHz that remains is worth attacking as **routing/placement or
+  pipelining**, not as P4 decode logic — consistent with `synth/README.md`'s
+  standing note that reaching 50 MHz needs microarchitectural work.
+
+---
+
 ## 9. Amendment required in `docs/soc/p4-mmio-map.md`
 
 That map lives in `jcore-workspace`, not in `jcore-cpu`, so this change cannot

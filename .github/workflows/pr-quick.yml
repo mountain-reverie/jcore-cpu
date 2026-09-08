@@ -396,18 +396,21 @@ jobs:
       # case where there is no defensible answer -- two instructions with an
       # IDENTICAL encoding that share an ENABLED variant, which no decoder can
       # tell apart -- and prints the freespace invocation that fixes it. Two
-      # such pairs exist today, both DSP, both baselined by name in the script;
-      # the baseline may only shrink, and a stale entry fails too.
+      # such pairs exist today, both DSP, both baselined by name in
+      # decode/gen-go/cmd/cpugen/collisions.go; the baseline may only shrink,
+      # and a stale entry fails too.
       - name: No new same-variant encoding collision
-        working-directory: jcore-cpu
+        working-directory: jcore-cpu/decode/gen-go
         run: |
           # The sweep's own fixtures run first, for the same reason the
           # workspace gate runs its suite before its checks: a green sweep
           # underneath a broken sweep is the reassuring-but-empty result this
           # effort keeps producing. Ten cases, each asserting exit status AND
-          # which message fired, including every fail-closed path.
-          python3 scripts/test-insns-collision-sweep.py
-          python3 scripts/insns-collision-sweep.py
+          # which message fired, including every fail-closed path. Step 1's
+          # `go test ./...` already covers them; naming the package here keeps
+          # the ordering a property of THIS step rather than of step order.
+          go test ./cmd/cpugen/
+          go run ./cmd/cpugen collisions
 
   cache-sim:
     name: dcache scoreboard (${{ matrix.mode }})

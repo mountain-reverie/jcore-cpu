@@ -179,21 +179,11 @@ func VariantColumns() []string {
 }
 
 // sharesVariant reports whether two rows are both present in at least one
-// variant, i.e. whether any single CPU faces both instructions at once.
+// variant, i.e. whether any single CPU faces both instructions at once. It is
+// the same predicate the collision sweep applies (see collide.go), so the
+// annotation and the verdict cannot drift apart.
 func sharesVariant(a, b *Row) bool {
-	for _, v := range variantColumns {
-		av, aok := a.Get(v)
-		bv, bok := b.Get(v)
-		if !aok || !bok {
-			continue
-		}
-		aOn, _ := av.(bool)
-		bOn, _ := bv.(bool)
-		if aOn && bOn {
-			return true
-		}
-	}
-	return false
+	return len(sharedVariants(a, b)) > 0
 }
 
 // annotateCollides records, on each row, the formats of other rows whose

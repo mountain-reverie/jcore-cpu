@@ -83,6 +83,9 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "variants" {
 		os.Exit(runVariants(os.Args[2:]))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "collisions" {
+		os.Exit(runCollisions(os.Args[2:]))
+	}
 	specDir := flag.String("spec", "spec", "directory of TOML instruction set files")
 	width := flag.Int("w", 72, "ROM width: 64 or 72")
 	outDir := flag.String("o", "", "output directory; if empty, validate only and exit")

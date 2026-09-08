@@ -9,9 +9,27 @@
 -- read data) feed datapath. Yosys sees that whole process as ONE cell, so that
 -- is a combinational SCC at cell granularity even though the logic is acyclic.
 -- This design has already paid for a false SCC once (synth/README.md, the
--- slot_o/instr.issue note), so instead perf.vhd publishes ALL counters
--- unconditionally as a record and datapath selects among them with the same
--- `case p4_sel_v` it already uses for TSBCNT. Nothing flows back.
+-- slot_o/instr.issue note).
+--
+-- HOW THE SELECTED WORD COMES BACK ANYWAY, without that cycle. The counter
+-- index does NOT have to leave the process: it is three bits of the data
+-- address, and the data address is a mux of xbus/ybus/zbus -- architecture-
+-- level SIGNALS, all sourced from registers -- selected by mem.addr_sel, which
+-- comes from decode. So datapath computes the address CONCURRENTLY (ma_ad_c,
+-- core/datapath.vhm), the process consumes it as a variable exactly as before,
+-- and pmu_idx_o is a slice of that same concurrent net. perf.vhd does the 8:1
+-- select and returns ONE 32-bit word. The dependency runs
+-- registers -> ma_ad_c -> perf.vhd -> process, which is acyclic at CELL
+-- granularity too, because the index is produced by small concurrent logic and
+-- not by the process cell.
+--
+-- WHAT THAT IS WORTH, since the earlier shape was chosen on a cost that was
+-- never measured: publishing the whole register file put 352 bits across the
+-- boundary and an 8:1 32-bit mux inside the datapath process. That interface
+-- was HALF of everything the PMU added to this core -- 21534 cells with it,
+-- 19257 with it narrowed and all eight counters still instantiated and
+-- counting, 18534 with the PMU deleted outright. See the commit that
+-- introduced perf_p4_t for the Fmax measurement.
 --
 -- WHY THE COUNTERS ARE NOT IN cpu.vhd EITHER: they need a reset, a write port
 -- and overflow capture, and cpu.vhd is structural. A separate entity is also
@@ -122,29 +140,45 @@ package perf_pack is
   type perf_cnt_array_t is array (0 to PMU_NUM_CNT - 1)
     of std_logic_vector(PMU_CNT_W - 1 downto 0);
 
-  -- Everything perf.vhd publishes to the P4 read path. Read-only from
-  -- datapath's point of view; nothing in here depends on the P4 address, which
-  -- is what keeps the two blocks acyclic (see the header).
+  -- The counter index carried from datapath to perf.vhd. Same width as the
+  -- index slice of the P4 offset, from the same constant, so the port and the
+  -- decode cannot be widened apart.
 
-  type perf_regs_t is record
-    cnt  : perf_cnt_array_t;
-    ovf  : std_logic_vector(31 downto 0);
-    pmcr : std_logic_vector(31 downto 0);
-    idr  : std_logic_vector(31 downto 0);
-  end record perf_regs_t;
+  subtype pmu_idx_t is std_logic_vector(pmu_cnt_idx_bits - 1 downto 0);
+
+  -- WHAT perf.vhd PUBLISHES TO THE P4 READ PATH -- five 32-bit words, not the
+  -- whole 352-bit register file. `cnt` is ALREADY SELECTED by the pmu_idx_o
+  -- datapath exports this cycle, which is the entire point: it moves the 8:1
+  -- mux out of datapath's process (see the header). `tsbcnt` is pre-packed for
+  -- the same reason -- P4_TSBCNT reads the low halves of counters WLK and WHT,
+  -- and packing them here keeps those two counters from having to cross the
+  -- boundary in full.
+  --
+  -- Read-only from datapath's point of view. Note what "acyclic" now rests on:
+  -- not that nothing in here depends on the P4 address (cnt does), but that the
+  -- address it depends on is produced by concurrent logic outside the process.
+
+  type perf_p4_t is record
+    cnt    : std_logic_vector(PMU_CNT_W - 1 downto 0);
+    tsbcnt : std_logic_vector(31 downto 0);
+    ovf    : std_logic_vector(31 downto 0);
+    pmcr   : std_logic_vector(31 downto 0);
+    idr    : std_logic_vector(31 downto 0);
+  end record perf_p4_t;
 
   -- Tie-off for builds with no PMU (PRIV_ARCH = false). A hard zero, not an
-  -- open port: core/cpu.vhd:326 records +526 LUT4 measured on j2 from leaving
+  -- open port: core/cpu.vhd records +526 LUT4 measured on j2 from leaving
   -- counter inputs undriven, because an undriven wire is a don't-care to
-  -- synthesis and the don't-care propagates out of the dead port into blocks
-  -- that have nothing to do with it. PMIDR = 0 is also the architectural
+  -- the synthesiser and the don't-care propagates out of the dead port into
+  -- blocks that have nothing to do with it. PMIDR = 0 is also the architectural
   -- "no PMU present" answer software tests for.
-  constant perf_regs_zero : perf_regs_t :=
+  constant perf_p4_zero : perf_p4_t :=
   (
-    cnt  => (others => (others => '0')),
-    ovf  => (others => '0'),
-    pmcr => (others => '0'),
-    idr  => (others => '0')
+    cnt    => (others => '0'),
+    tsbcnt => (others => '0'),
+    ovf    => (others => '0'),
+    pmcr   => (others => '0'),
+    idr    => (others => '0')
   );
 
   -- The P4 write side, exported by datapath. Target + index + data; no read
